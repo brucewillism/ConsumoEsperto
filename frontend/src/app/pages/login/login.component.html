@@ -1,0 +1,148 @@
+<div class="login-container">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="logo">
+        <i class="fas fa-chart-line"></i>
+        <h1>ConsumoEsperto</h1>
+      </div>
+      <p class="subtitle">Gestão Financeira Inteligente</p>
+    </div>
+
+    <div class="login-form">
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+        <div class="form-group">
+          <label for="email" class="form-label">E-mail</label>
+          <div class="input-group">
+            <div class="input-icon">
+              <i class="fas fa-envelope"></i>
+            </div>
+            <input
+              type="email"
+              id="email"
+              formControlName="email"
+              class="form-control"
+              placeholder="Digite seu e-mail"
+              [class.is-invalid]="isFieldInvalid('email')"
+            />
+          </div>
+          <div class="invalid-feedback" *ngIf="isFieldInvalid('email')">
+            <span *ngIf="loginForm.get('email')?.errors?.['required']">
+              E-mail é obrigatório
+            </span>
+            <span *ngIf="loginForm.get('email')?.errors?.['email']">
+              Digite um e-mail válido
+            </span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password" class="form-label">Senha</label>
+          <div class="input-group">
+            <div class="input-icon">
+              <i class="fas fa-lock"></i>
+            </div>
+            <input
+              [type]="showPassword ? 'text' : 'password'"
+              id="password"
+              formControlName="password"
+              class="form-control"
+              placeholder="Digite sua senha"
+              [class.is-invalid]="isFieldInvalid('password')"
+            />
+            <button
+              type="button"
+              class="password-toggle"
+              (click)="togglePassword()"
+              [attr.aria-label]="showPassword ? 'Ocultar senha' : 'Mostrar senha'"
+            >
+              <i [class]="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+            </button>
+          </div>
+          <div class="invalid-feedback" *ngIf="isFieldInvalid('password')">
+            <span *ngIf="loginForm.get('password')?.errors?.['required']">
+              Senha é obrigatória
+            </span>
+            <span *ngIf="loginForm.get('password')?.errors?.['minlength']">
+              Senha deve ter pelo menos 6 caracteres
+            </span>
+          </div>
+        </div>
+
+        <div class="form-options">
+          <label class="checkbox-container">
+            <input
+              type="checkbox"
+              formControlName="rememberMe"
+              class="form-checkbox"
+            />
+            <span class="checkmark"></span>
+            Lembrar de mim
+          </label>
+          <a href="#" class="forgot-password">Esqueceu a senha?</a>
+        </div>
+
+        <button
+          type="submit"
+          class="btn btn-primary btn-block login-btn"
+          [disabled]="loginForm.invalid || isLoading"
+        >
+          <span *ngIf="!isLoading">
+            <i class="fas fa-sign-in-alt"></i>
+            Entrar
+          </span>
+          <span *ngIf="isLoading" class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            Entrando...
+          </span>
+        </button>
+      </form>
+
+      <div class="divider">
+        <span>ou</span>
+      </div>
+
+      <button
+        type="button"
+        class="btn btn-google btn-block"
+        (click)="loginWithGoogle()"
+        [disabled]="isLoading"
+      >
+        <i class="fab fa-google"></i>
+        Continuar com Google
+      </button>
+
+      <div class="register-link">
+        <p>
+          Não tem uma conta?
+          <a routerLink="/register">Cadastre-se</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert Messages -->
+  <div class="alert-container" *ngIf="alertMessage">
+    <div class="alert" [class]="'alert-' + alertType">
+      <div class="alert-content">
+        <i [class]="getAlertIcon()"></i>
+        <span>{{ alertMessage }}</span>
+      </div>
+      <button
+        type="button"
+        class="alert-close"
+        (click)="closeAlert()"
+        aria-label="Fechar alerta"
+      >
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" *ngIf="isLoading">
+    <div class="loading-content">
+      <div class="loading-spinner-large"></div>
+      <p>Autenticando...</p>
+    </div>
+  </div>
+</div>

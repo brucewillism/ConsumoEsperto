@@ -1,0 +1,508 @@
+import { Component, OnInit } from '@angular/core';
+import { BankApiService, CreditCard, Invoice, BankConnection } from '../../services/bank-api.service';
+import { CommonModule } from '@angular/common';
+import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatNativeDateModule } from '@angular/material/core';
+
+@Component({
+  selector: 'app-cartoes',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule, 
+    ReactiveFormsModule,
+    MatButtonModule,
+    MatCardModule,
+    MatChipsModule,
+    MatDatepickerModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatSelectModule,
+    MatProgressSpinnerModule,
+    MatNativeDateModule
+  ],
+  templateUrl: './cartoes.component.html',
+  styleUrls: ['./cartoes.component.scss']
+})
+export class CartoesComponent implements OnInit {
+  
+  creditCards: CreditCard[] = [];
+  invoices: Invoice[] = [];
+  connectedBanks: BankConnection[] = [];
+  loading = false;
+  error: string | null = null;
+  
+  // Form properties
+  novoCartaoForm!: FormGroup;
+  showForm = false;
+
+  // Data properties
+  cartoes: any[] = [];
+  contas: any[] = [];
+  
+  // Filtros
+  selectedBank: string = 'all';
+  selectedStatus: string = 'all';
+  searchTerm: string = '';
+
+  constructor(
+    public bankApiService: BankApiService,
+    private fb: FormBuilder
+  ) {
+    this.initForm();
+  }
+
+  ngOnInit(): void {
+    this.loadData();
+  }
+
+  /**
+   * Inicializa o formulário
+   */
+  private initForm(): void {
+    this.novoCartaoForm = this.fb.group({
+      banco: ['', Validators.required],
+      numero: ['', [Validators.required, Validators.minLength(13)]],
+      titular: ['', Validators.required],
+      limite: [0, [Validators.required, Validators.min(0.01)]],
+      vencimento: ['', Validators.required],
+      fechamento: ['', Validators.required]
+    });
+  }
+
+  /**
+   * Carrega todos os dados necessários
+   */
+  loadData(): void {
+    this.loading = true;
+    this.error = null;
+
+    // Carrega bancos conectados
+    this.bankApiService.getConnectedBanks().subscribe({
+      next: (banks) => {
+        this.connectedBanks = banks;
+        console.log('Bancos conectados:', banks);
+      },
+      error: (err) => {
+        console.error('Erro ao carregar bancos:', err);
+        this.error = 'Erro ao carregar bancos conectados';
+      }
+    });
+
+    // Carrega cartões de crédito
+    this.bankApiService.getCreditCards().subscribe({
+      next: (cards) => {
+        this.creditCards = cards;
+        this.cartoes = cards; // Mapeia para a propriedade usada no template
+        console.log('Cartões carregados:', cards);
+      },
+      error: (err) => {
+        console.error('Erro ao carregar cartões:', err);
+        this.error = 'Erro ao carregar cartões de crédito';
+      }
+    });
+
+    // Carrega faturas
+    this.bankApiService.getInvoices().subscribe({
+      next: (invoices) => {
+        this.invoices = invoices;
+        console.log('Faturas carregadas:', invoices);
+      },
+      error: (err) => {
+        console.error('Erro ao carregar faturas:', err);
+        this.error = 'Erro ao carregar faturas';
+      },
+      complete: () => {
+        this.loading = false;
+      }
+    });
+
+    // Carrega contas (placeholder - implementar quando disponível)
+    this.contas = [];
+  }
+
+  /**
+   * Sincroniza dados de um banco específico
+   */
+  syncBank(bankId: number): void {
+    this.loading = true;
+    this.bankApiService.syncBankData(bankId).subscribe({
+      next: (result) => {
+        console.log('Sincronização concluída:', result);
+        // Recarrega os dados após sincronização
+        this.loadData();
+      },
+      error: (err) => {
+        console.error('Erro na sincronização:', err);
+        this.error = 'Erro ao sincronizar dados do banco';
+          this.loading = false;
+        },
+      complete: () => {
+          this.loading = false;
+        }
+      });
+  }
+
+  /**
+   * Sincroniza dados de todos os bancos
+   */
+  syncAllBanks(): void {
+    this.loading = true;
+    this.bankApiService.syncAllBanks().subscribe({
+      next: (result) => {
+        console.log('Sincronização geral concluída:', result);
+        // Recarrega os dados após sincronização
+        this.loadData();
+      },
+      error: (err) => {
+        console.error('Erro na sincronização geral:', err);
+        this.error = 'Erro ao sincronizar dados dos bancos';
+        this.loading = false;
+      },
+      complete: () => {
+        this.loading = false;
+      }
+      });
+  }
+
+  /**
+   * Conecta um novo banco
+   */
+  connectBank(bankType: string): void {
+    this.bankApiService.getBankAuthUrl(bankType).subscribe({
+        next: (response) => {
+        if (response.authUrl) {
+          // Abre a URL de autorização em uma nova janela
+          window.open(response.authUrl, '_blank', 'width=600,height=700');
+        }
+      },
+      error: (err) => {
+        console.error('Erro ao obter URL de autorização:', err);
+        this.error = 'Erro ao conectar banco';
+      }
+    });
+  }
+
+  /**
+   * Desconecta um banco
+   */
+  disconnectBank(bankId: number): void {
+    if (confirm('Tem certeza que deseja desconectar este banco?')) {
+      this.bankApiService.disconnectBank(bankId).subscribe({
+        next: () => {
+          console.log('Banco desconectado com sucesso');
+          this.loadData(); // Recarrega os dados
+        },
+        error: (err) => {
+          console.error('Erro ao desconectar banco:', err);
+          this.error = 'Erro ao desconectar banco';
+        }
+      });
+    }
+  }
+
+  /**
+   * Adiciona um novo cartão
+   */
+  adicionarCartao(): void {
+    if (this.novoCartaoForm.valid) {
+      const cartao = this.novoCartaoForm.value;
+      console.log('Adicionando cartão:', cartao);
+      // TODO: Implementar chamada para API
+      this.showForm = false;
+      this.novoCartaoForm.reset();
+      this.loadData();
+    }
+  }
+
+  /**
+   * Atualiza dados
+   */
+  atualizarDados(): void {
+    this.loadData();
+  }
+
+  /**
+   * Obtém cor do banco
+   */
+  getBancoColor(banco: string): string {
+    const cores: { [key: string]: string } = {
+      'itau': '#EC7000',
+      'nubank': '#8A05BE',
+      'inter': '#FF7A00',
+      'mercadopago': '#009EE3'
+    };
+    return cores[banco.toLowerCase()] || '#666';
+  }
+
+  /**
+   * Obtém nome do banco
+   */
+  getBancoNome(banco: string): string {
+    const nomes: { [key: string]: string } = {
+      'itau': 'Itaú',
+      'nubank': 'Nubank',
+      'inter': 'Banco Inter',
+      'mercadopago': 'Mercado Pago'
+    };
+    return nomes[banco.toLowerCase()] || banco;
+  }
+
+  /**
+   * Conecta banco
+   */
+  conectarBanco(banco: any): void {
+    this.connectBank(banco.bankName);
+  }
+
+  /**
+   * Obtém cor do status
+   */
+  getStatusColor(status: string): string {
+    switch (status.toLowerCase()) {
+      case 'active':
+      case 'ativo':
+        return 'primary';
+      case 'inactive':
+      case 'inativo':
+      case 'blocked':
+      case 'bloqueado':
+        return 'warn';
+      case 'pending':
+      case 'pendente':
+        return 'accent';
+      default:
+        return 'primary';
+    }
+  }
+
+  /**
+   * Obtém status do cartão
+   */
+  getStatusCartao(cartao: any): string {
+    return cartao.status || 'Ativo';
+  }
+
+  /**
+   * Formata moeda
+   */
+  formatarMoeda(value: number): string {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  }
+
+  /**
+   * Obtém limite utilizado
+   */
+  getLimiteUtilizado(cartao: any): number {
+    return cartao.limit - cartao.availableLimit;
+  }
+
+  /**
+   * Formata percentual
+   */
+  formatarPercentual(value: number): string {
+    return `${value.toFixed(1)}%`;
+  }
+
+  /**
+   * Obtém percentual de uso
+   */
+  getPercentualUso(cartao: any): number {
+    if (cartao.limit <= 0) return 0;
+    return ((cartao.limit - cartao.availableLimit) / cartao.limit) * 100;
+  }
+
+  /**
+   * Visualiza faturas
+   */
+  visualizarFaturas(cartao: any): void {
+    console.log('Visualizando faturas do cartão:', cartao);
+    // TODO: Implementar navegação para faturas
+  }
+
+  /**
+   * Edita cartão
+   */
+  editarCartao(cartao: any): void {
+    console.log('Editando cartão:', cartao);
+    // TODO: Implementar edição
+  }
+
+  /**
+   * Exclui cartão
+   */
+  excluirCartao(cartao: any): void {
+    if (confirm('Tem certeza que deseja excluir este cartão?')) {
+      console.log('Excluindo cartão:', cartao);
+      // TODO: Implementar exclusão
+      this.loadData();
+    }
+  }
+
+  /**
+   * Formata data
+   */
+  formatarData(dateString: string): string {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('pt-BR');
+  }
+
+  /**
+   * Filtra cartões por banco
+   */
+  getFilteredCards(): CreditCard[] {
+    let filtered = this.creditCards;
+
+    // Filtro por banco
+    if (this.selectedBank !== 'all') {
+      filtered = filtered.filter(card => card.bank === this.selectedBank);
+    }
+
+    // Filtro por status
+    if (this.selectedStatus !== 'all') {
+      filtered = filtered.filter(card => card.status === this.selectedStatus);
+    }
+
+    // Filtro por termo de busca
+    if (this.searchTerm.trim()) {
+      const term = this.searchTerm.toLowerCase();
+      filtered = filtered.filter(card => 
+        card.name.toLowerCase().includes(term) ||
+        card.number.includes(term) ||
+        card.bank.toLowerCase().includes(term)
+      );
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Filtra faturas por cartão
+   */
+  getFilteredInvoices(): Invoice[] {
+    let filtered = this.invoices;
+
+    // Filtro por banco (se aplicável)
+    if (this.selectedBank !== 'all') {
+      filtered = filtered.filter(invoice => {
+        const card = this.creditCards.find(c => c.id === invoice.id);
+        return card && card.bank === this.selectedBank;
+      });
+    }
+
+    // Filtro por status
+    if (this.selectedStatus !== 'all') {
+      filtered = filtered.filter(invoice => invoice.status === this.selectedStatus);
+    }
+
+    // Filtro por termo de busca
+    if (this.searchTerm.trim()) {
+      const term = this.searchTerm.toLowerCase();
+      filtered = filtered.filter(invoice => 
+        invoice.number.toLowerCase().includes(term) ||
+        invoice.cardName.toLowerCase().includes(term)
+      );
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Obtém total de limite de crédito
+   */
+  getTotalCreditLimit(): number {
+    return this.creditCards.reduce((total, card) => total + card.limit, 0);
+  }
+
+  /**
+   * Obtém total de limite disponível
+   */
+  getTotalAvailableCredit(): number {
+    return this.creditCards.reduce((total, card) => total + card.available, 0);
+  }
+
+  /**
+   * Obtém total de faturas
+   */
+  getTotalInvoices(): number {
+    return this.invoices.reduce((total, invoice) => total + invoice.amount, 0);
+  }
+
+  /**
+   * Obtém faturas vencidas
+   */
+  getOverdueInvoices(): Invoice[] {
+    const today = new Date();
+    return this.invoices.filter(invoice => {
+      const dueDate = new Date(invoice.dueDate);
+      return dueDate < today && invoice.status !== 'PAID';
+    });
+  }
+
+  /**
+   * Formata valor monetário
+   */
+  formatCurrency(value: number): string {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  }
+
+  /**
+   * Formata data
+   */
+  formatDate(dateString: string): string {
+    return new Date(dateString).toLocaleDateString('pt-BR');
+  }
+
+  /**
+   * Obtém classe CSS para status
+   */
+  getStatusClass(status: string): string {
+    switch (status.toLowerCase()) {
+      case 'active':
+      case 'ativo':
+        return 'status-active';
+      case 'inactive':
+      case 'inativo':
+      case 'blocked':
+      case 'bloqueado':
+        return 'status-inactive';
+      case 'pending':
+      case 'pendente':
+        return 'status-pending';
+      default:
+        return 'status-default';
+    }
+  }
+
+  /**
+   * Limpa filtros
+   */
+  clearFilters(): void {
+    this.selectedBank = 'all';
+    this.selectedStatus = 'all';
+    this.searchTerm = '';
+  }
+
+  /**
+   * Recarrega dados
+   */
+  refreshData(): void {
+    this.loadData();
+  }
+}

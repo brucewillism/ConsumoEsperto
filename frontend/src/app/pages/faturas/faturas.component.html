@@ -1,0 +1,322 @@
+<div class="faturas-container">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1>Faturas de Cartão</h1>
+      <p class="subtitle">Gerencie suas faturas e acompanhe vencimentos</p>
+    </div>
+    <div class="header-actions">
+      <button mat-raised-button color="accent" (click)="loadData()" [disabled]="loading">
+        <mat-icon>refresh</mat-icon>
+        {{ loading ? 'Atualizando...' : 'Atualizar' }}
+      </button>
+      <button mat-raised-button color="primary" (click)="showForm = !showForm">
+        <mat-icon>add</mat-icon>
+        {{ showForm ? 'Cancelar' : 'Nova Fatura' }}
+      </button>
+    </div>
+  </div>
+
+  
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="loading-container">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Carregando faturas...</p>
+  </div>
+
+  <!-- Resumo das Faturas -->
+  <div class="resumo-grid" *ngIf="!loading">
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="card-icon">
+          <mat-icon>receipt</mat-icon>
+        </div>
+        <div class="card-content">
+          <h3>Total Faturas</h3>
+          <p class="valor">{{ formatarMoeda(totalFaturas) }}</p>
+          <small>{{ faturasFiltradas.length }} fatura{{ faturasFiltradas.length !== 1 ? 's' : '' }}</small>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="card-icon">
+          <mat-icon>check_circle</mat-icon>
+        </div>
+        <div class="card-content">
+          <h3>Faturas Pagas</h3>
+          <p class="valor positivo">{{ formatarMoeda(totalFaturasPagas) }}</p>
+          <small>Total pago</small>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="card-icon">
+          <mat-icon>schedule</mat-icon>
+        </div>
+        <div class="card-content">
+          <h3>Faturas Pendentes</h3>
+          <p class="valor">{{ formatarMoeda(totalFaturasPendentes) }}</p>
+          <small>Aguardando pagamento</small>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="card-icon">
+          <mat-icon>warning</mat-icon>
+        </div>
+        <div class="card-content">
+          <h3>Faturas Vencidas</h3>
+          <p class="valor negativo">{{ formatarMoeda(totalFaturasVencidas) }}</p>
+          <small>Pagamento atrasado</small>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Formulário para Nova Fatura -->
+  <mat-card *ngIf="showForm" class="form-card">
+    <mat-card-header>
+      <mat-card-title>Adicionar Nova Fatura</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="novaFaturaForm" (ngSubmit)="adicionarFatura()">
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Banco</mat-label>
+            <mat-select formControlName="banco" required>
+              <mat-option value="itau">Itaú</mat-option>
+              <mat-option value="nubank">Nubank</mat-option>
+              <mat-option value="inter">Banco Inter</mat-option>
+              <mat-option value="mercadopago">Mercado Pago</mat-option>
+            </mat-select>
+            <mat-error *ngIf="novaFaturaForm.get('banco')?.hasError('required')">
+              Banco é obrigatório
+            </mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Valor</mat-label>
+            <input matInput type="number" formControlName="valor" placeholder="0,00" step="0.01" required>
+            <mat-error *ngIf="novaFaturaForm.get('valor')?.hasError('required')">
+              Valor é obrigatório
+            </mat-error>
+            <mat-error *ngIf="novaFaturaForm.get('valor')?.hasError('min')">
+              Valor deve ser maior que zero
+            </mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Data de Vencimento</mat-label>
+            <input matInput [matDatepicker]="vencimentoPicker" formControlName="vencimento" required>
+            <mat-datepicker-toggle matSuffix [for]="vencimentoPicker"></mat-datepicker-toggle>
+            <mat-datepicker #vencimentoPicker></mat-datepicker>
+            <mat-error *ngIf="novaFaturaForm.get('vencimento')?.hasError('required')">
+              Data de vencimento é obrigatória
+            </mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Data de Fechamento</mat-label>
+            <input matInput [matDatepicker]="fechamentoPicker" formControlName="fechamento" required>
+            <mat-datepicker-toggle matSuffix [for]="fechamentoPicker"></mat-datepicker-toggle>
+            <mat-datepicker #fechamentoPicker></mat-datepicker>
+            <mat-error *ngIf="novaFaturaForm.get('fechamento')?.hasError('required')">
+              Data de fechamento é obrigatória
+            </mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Status</mat-label>
+            <mat-select formControlName="status" required>
+              <mat-option value="PENDING">Pendente</mat-option>
+              <mat-option value="PAID">Paga</mat-option>
+              <mat-option value="OVERDUE">Vencida</mat-option>
+            </mat-select>
+            <mat-error *ngIf="novaFaturaForm.get('status')?.hasError('required')">
+              Status é obrigatório
+            </mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="form-actions">
+          <button mat-button type="button" (click)="showForm = false">Cancelar</button>
+          <button mat-raised-button color="primary" type="submit" [disabled]="novaFaturaForm.invalid">
+            <mat-icon>save</mat-icon>
+            Adicionar Fatura
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Filtros -->
+  <mat-card class="filtros-card" *ngIf="!loading">
+    <mat-card-header>
+      <mat-card-title>Filtros</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="filtros-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Status</mat-label>
+          <mat-select [(ngModel)]="filtroStatus">
+            <mat-option value="">Todos</mat-option>
+            <mat-option value="PENDING">Pendente</mat-option>
+            <mat-option value="PAID">Paga</mat-option>
+            <mat-option value="OVERDUE">Vencida</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Banco</mat-label>
+          <mat-select [(ngModel)]="filtroBanco">
+            <mat-option value="">Todos</mat-option>
+            <mat-option value="itau">Itaú</mat-option>
+            <mat-option value="nubank">Nubank</mat-option>
+            <mat-option value="inter">Banco Inter</mat-option>
+            <mat-option value="mercadopago">Mercado Pago</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Mês/Ano</mat-label>
+          <input matInput type="month" [(ngModel)]="filtroMes">
+        </mat-form-field>
+
+        <div class="filtros-actions">
+          <button mat-button color="accent" (click)="limparFiltros()">
+            <mat-icon>clear</mat-icon>
+            Limpar
+          </button>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Lista de Faturas -->
+  <mat-card class="faturas-card" *ngIf="!loading">
+    <mat-card-header>
+      <mat-card-title>Suas Faturas</mat-card-title>
+      <mat-card-subtitle>{{ faturasFiltradas.length }} fatura{{ faturasFiltradas.length !== 1 ? 's' : '' }} encontrada{{ faturasFiltradas.length !== 1 ? 's' : '' }}</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div *ngIf="faturasFiltradas.length === 0" class="empty-state">
+        <mat-icon>receipt_long</mat-icon>
+        <h3>Nenhuma fatura encontrada</h3>
+        <p>Adicione sua primeira fatura ou ajuste os filtros</p>
+        <button mat-raised-button color="primary" (click)="showForm = true">
+          <mat-icon>add</mat-icon>
+          Adicionar Fatura
+        </button>
+      </div>
+
+      <div *ngIf="faturasFiltradas.length > 0" class="faturas-grid">
+        <mat-card *ngFor="let fatura of faturasFiltradas" 
+                  class="fatura-item"
+                  [class.vencendo]="isVencendo(fatura)"
+                  [class.vencida]="isVencida(fatura)">
+          <mat-card-header>
+            <div class="fatura-header">
+              <div class="fatura-banco">
+                <div class="banco-logo" [style.background-color]="getBancoColor(fatura.bankName)">
+                  <span>{{ getBancoNome(fatura.bankName).charAt(0) }}</span>
+                </div>
+                <div class="banco-info">
+                  <h4>{{ getBancoNome(fatura.bankName) }}</h4>
+                  <p>Fatura {{ formatarData(fatura.closingDate) }}</p>
+                </div>
+              </div>
+              <div class="fatura-status">
+                <mat-chip [color]="getStatusColor(fatura.status)" selected>
+                  {{ getStatusText(fatura.status) }}
+                </mat-chip>
+                <div *ngIf="fatura.status === 'PENDING'" class="vencimento-info">
+                  <span *ngIf="isVencendo(fatura)" class="vencendo">
+                    <mat-icon>schedule</mat-icon>
+                    Vence em {{ getDiasVencimento(fatura) }} dia{{ getDiasVencimento(fatura) !== 1 ? 's' : '' }}
+                  </span>
+                  <span *ngIf="!isVencendo(fatura) && !isVencida(fatura)" class="pendente">
+                    <mat-icon>event</mat-icon>
+                    Vence em {{ getDiasVencimento(fatura) }} dia{{ getDiasVencimento(fatura) !== 1 ? 's' : '' }}
+                  </span>
+                </div>
+                <div *ngIf="fatura.status === 'OVERDUE'" class="vencimento-info">
+                  <span class="vencida">
+                    <mat-icon>warning</mat-icon>
+                    Vencida há {{ Math.abs(getDiasVencimento(fatura)) }} dia{{ Math.abs(getDiasVencimento(fatura)) !== 1 ? 's' : '' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </mat-card-header>
+          
+          <mat-card-content>
+            <div class="fatura-detalhes">
+              <div class="detalhe-item">
+                <span class="label">Valor:</span>
+                <span class="value">{{ formatarMoeda(fatura.amount) }}</span>
+              </div>
+              
+              <div class="detalhe-item">
+                <span class="label">Vencimento:</span>
+                <span class="value">{{ formatarData(fatura.dueDate) }}</span>
+              </div>
+              
+              <div class="detalhe-item">
+                <span class="label">Fechamento:</span>
+                <span class="value">{{ formatarData(fatura.closingDate) }}</span>
+              </div>
+              
+              <div class="detalhe-item">
+                <span class="label">Transações:</span>
+                <span class="value">{{ fatura.transactions.length }} transação{{ fatura.transactions.length !== 1 ? 'ões' : '' }}</span>
+              </div>
+            </div>
+
+            <!-- Alertas -->
+            <div *ngIf="isVencendo(fatura)" class="alerta vencendo">
+              <mat-icon>schedule</mat-icon>
+              <span>Fatura vence em {{ getDiasVencimento(fatura) }} dia{{ getDiasVencimento(fatura) !== 1 ? 's' : '' }}!</span>
+            </div>
+
+            <div *ngIf="isVencida(fatura)" class="alerta vencida">
+              <mat-icon>warning</mat-icon>
+              <span>Fatura vencida há {{ Math.abs(getDiasVencimento(fatura)) }} dia{{ Math.abs(getDiasVencimento(fatura)) !== 1 ? 's' : '' }}!</span>
+            </div>
+          </mat-card-content>
+          
+          <mat-card-actions>
+            <button mat-button color="primary" (click)="visualizarTransacoes(fatura)">
+              <mat-icon>list</mat-icon>
+              Transações
+            </button>
+            <button *ngIf="fatura.status === 'PENDING'" 
+                    mat-button color="accent" 
+                    (click)="marcarComoPaga(fatura)">
+              <mat-icon>check</mat-icon>
+              Marcar Paga
+            </button>
+            <button mat-button color="warn" (click)="editarFatura(fatura)">
+              <mat-icon>edit</mat-icon>
+              Editar
+            </button>
+            <button mat-button color="warn" (click)="excluirFatura(fatura)">
+              <mat-icon>delete</mat-icon>
+              Excluir
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

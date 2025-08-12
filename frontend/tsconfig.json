@@ -1,0 +1,95 @@
+/* ============================================================================= */
+/* CONFIGURAÇÃO TYPESCRIPT - CONSUMO ESPERTO FRONTEND */
+/* ============================================================================= */
+/* Para mais informações sobre configuração TypeScript: */
+/* https://www.typescriptlang.org/docs/handbook/tsconfig-json.html */
+/* Para mais informações sobre opções do compilador Angular: */
+/* https://angular.dev/reference/configs/angular-compiler-options */
+/* ============================================================================= */
+
+{
+  // =============================================================================
+  // CONFIGURAÇÕES GERAIS
+  // =============================================================================
+  
+  // Compila automaticamente quando arquivos são salvos (desabilitado para melhor performance)
+  "compileOnSave": false,
+  
+  // =============================================================================
+  // OPÇÕES DO COMPILADOR TYPESCRIPT
+  // =============================================================================
+  
+  "compilerOptions": {
+    // Diretório de saída para arquivos JavaScript compilados
+    "outDir": "./dist/out-tsc",
+    
+    // =============================================================================
+    // CONFIGURAÇÕES DE RIGOR (STRICT MODE)
+    // =============================================================================
+    
+    // Habilita todas as verificações rigorosas de tipo
+    "strict": true,
+    
+    // Exige uso explícito de 'override' ao sobrescrever métodos
+    "noImplicitOverride": true,
+    
+    // Impede acesso a propriedades não declaradas em índices
+    "noPropertyAccessFromIndexSignature": true,
+    
+    // Exige return explícito em todas as funções
+    "noImplicitReturns": true,
+    
+    // Exige break/return em todos os casos de switch
+    "noFallthroughCasesInSwitch": true,
+    
+    // =============================================================================
+    // CONFIGURAÇÕES DE MÓDULOS E IMPORTS
+    // =============================================================================
+    
+    // Pula verificação de tipos em arquivos de bibliotecas (melhora performance)
+    "skipLibCheck": true,
+    
+    // Garante que cada arquivo seja um módulo independente
+    "isolatedModules": true,
+    
+    // Permite import/export padrão do CommonJS
+    "esModuleInterop": true,
+    
+    // Habilita decorators experimentais (necessário para Angular)
+    "experimentalDecorators": true,
+    
+    // Estratégia de resolução de módulos (bundler para Angular)
+    "moduleResolution": "bundler",
+    
+    // Inclui helpers de compatibilidade ES5
+    "importHelpers": true,
+    
+    // =============================================================================
+    // CONFIGURAÇÕES DE VERSÃO
+    // =============================================================================
+    
+    // Versão do JavaScript de saída (ES2022 = suporte moderno)
+    "target": "ES2022",
+    
+    // Sistema de módulos de saída (ES2022 = ES modules)
+    "module": "ES2022"
+  },
+  
+  // =============================================================================
+  // OPÇÕES ESPECÍFICAS DO COMPILADOR ANGULAR
+  // =============================================================================
+  
+  "angularCompilerOptions": {
+    // Desabilita formato legado de IDs de mensagens de internacionalização
+    "enableI18nLegacyMessageIdFormat": false,
+    
+    // Verificação rigorosa de parâmetros de injeção de dependência
+    "strictInjectionParameters": true,
+    
+    // Verificação rigorosa de modificadores de acesso em inputs
+    "strictInputAccessModifiers": true,
+    
+    // Verificação rigorosa de templates (HTML) para detectar erros
+    "strictTemplates": true
+  }
+}

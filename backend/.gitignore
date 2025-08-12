@@ -1,0 +1,231 @@
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Virtual machine crash logs
+hs_err_pid*
+replay_pid*
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# VS Code
+.vscode/
+
+# Mac
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# JDK and JRE
+tools/
+jdk*/
+jre*/
+*.jdk
+*.jre
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Application properties with sensitive data
+application-prod.properties
+application-prod.yml
+application-prod.yaml
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE specific files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Build outputs
+target/
+build/
+out/
+dist/
+
+# Dependencies
+vendor/
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Test results
+test-results/
+coverage/
+
+# Spring Boot specific
+*.pid
+*.pid.lock
+
+# Oracle database files
+*.ora
+*.dmp
+*.exp
+*.imp
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Large binary files
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+*.iso
+*.img
+*.bin
+*.exe
+*.dll
+*.so
+*.dylib
+*.jar
+*.war
+*.ear
+*.nar
+
+# Database dumps
+*.sql
+*.dump
+*.backup
+
+# Configuration files with secrets
+config/
+secrets/
+credentials/
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+
+# Cache directories
+.cache/
+cache/
+tmp/
+temp/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Including or excluding files
+# Include specific files if needed
+!**/src/main/resources/application.properties
+!**/src/main/resources/application.yml
+!**/src/main/resources/application.yaml
+!**/src/main/resources/application-h2.properties
+!**/src/main/resources/bank-apis-config.properties
+!**/src/main/resources/mercadopago-config.properties
+
+# Exclude large files and directories
+tools/
+jdk*/
+jre*/
+*.jdk
+*.jre
+*.jar
+*.war
+*.ear
+*.nar
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+*.iso
+*.img
+*.bin
+*.exe
+*.dll
+*.so
+*.dylib

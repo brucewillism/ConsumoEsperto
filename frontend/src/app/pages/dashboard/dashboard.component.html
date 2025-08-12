@@ -1,0 +1,218 @@
+<!-- Dashboard - ConsumoEsperto -->
+<div class="dashboard-container">
+  <!-- Header do Dashboard -->
+  <div class="dashboard-header">
+    <div class="header-content">
+      <h1>Dashboard</h1>
+      <p>Visão geral das suas finanças</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-primary" routerLink="/transacoes">
+        <i class="fas fa-plus"></i>
+        Nova Transação
+      </button>
+      <button class="btn btn-secondary" routerLink="/relatorios">
+        <i class="fas fa-chart-bar"></i>
+        Ver Relatórios
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="isLoading">
+    <div class="loading-spinner">
+      <i class="fas fa-spinner fa-spin"></i>
+    </div>
+    <p>Carregando dados...</p>
+  </div>
+
+  <!-- Conteúdo do Dashboard -->
+  <div class="dashboard-content" *ngIf="!isLoading">
+    <!-- Cards Informativos -->
+    <div class="dashboard-cards">
+      <div class="card" *ngFor="let card of dashboardCards" [style.border-left-color]="card.color">
+        <div class="card-icon" [style.background-color]="card.color">
+          <i [class]="card.icon"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">{{ card.title }}</h3>
+          <div class="card-value">{{ card.value }}</div>
+          <div class="card-change" [class]="card.changeType">
+            <i [class]="card.icon"></i>
+            {{ card.change }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráficos e Estatísticas -->
+    <div class="dashboard-charts">
+      <!-- Gráfico de Gastos Mensais -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>Gastos Mensais</h3>
+          <div class="chart-legend">
+            <span class="legend-item">
+              <span class="legend-color" style="background-color: #3699ff"></span>
+              Gastos
+            </span>
+          </div>
+        </div>
+        <div class="chart-container">
+          <div class="chart-placeholder">
+            <i class="fas fa-chart-line"></i>
+            <p>Gráfico de gastos mensais</p>
+            <small>Dados dos últimos 6 meses</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gráfico de Gastos por Categoria -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>Gastos por Categoria</h3>
+          <div class="chart-legend">
+            <span class="legend-item" *ngFor="let label of categoryChartData?.labels; let i = index">
+              <span class="legend-color" [style.background-color]="categoryChartData?.datasets?.[0]?.backgroundColor?.[i]"></span>
+              {{ label }}
+            </span>
+          </div>
+        </div>
+        <div class="chart-container">
+          <div class="chart-placeholder">
+            <i class="fas fa-chart-pie"></i>
+            <p>Gráfico de gastos por categoria</p>
+            <small>Distribuição dos gastos</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Estatísticas Detalhadas -->
+    <div class="dashboard-stats">
+      <!-- Resumo Financeiro -->
+      <div class="stats-card">
+        <h3>Resumo Financeiro</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-label">Receitas do Mês</div>
+            <div class="stat-value positive">{{ formatCurrency(totalIncome) }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Gastos do Mês</div>
+            <div class="stat-value negative">{{ formatCurrency(totalSpent) }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Saldo Atual</div>
+            <div class="stat-value" [class]="balance >= 0 ? 'positive' : 'negative'">
+              {{ formatCurrency(balance) }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status do Cartão de Crédito -->
+      <div class="stats-card">
+        <h3>Status do Cartão de Crédito</h3>
+        <div class="credit-card-status">
+          <div class="status-item">
+            <div class="status-label">Limite Total</div>
+            <div class="status-value">{{ formatCurrency(creditCardLimit) }}</div>
+          </div>
+          <div class="status-item">
+            <div class="status-label">Utilizado</div>
+            <div class="status-value">{{ formatCurrency(creditCardUsed) }}</div>
+          </div>
+          <div class="status-item">
+            <div class="status-label">Disponível</div>
+            <div class="status-value">{{ formatCurrency(creditCardLimit - creditCardUsed) }}</div>
+          </div>
+          <div class="usage-bar">
+            <div class="usage-fill" 
+                 [style.width.%]="getCreditCardUsagePercentage()"
+                 [style.background-color]="getCreditCardUsageColor()">
+            </div>
+          </div>
+          <div class="usage-text">
+            {{ getCreditCardUsagePercentage().toFixed(1) }}% utilizado
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transações Recentes -->
+    <div class="recent-transactions">
+      <div class="section-header">
+        <h3>Transações Recentes</h3>
+        <a routerLink="/transacoes" class="view-all">Ver todas</a>
+      </div>
+      
+      <div class="transactions-list">
+        <div class="transaction-item" *ngFor="let transaction of recentTransactions">
+          <div class="transaction-icon" [class]="transaction.type">
+            <i [class]="transaction.type === 'credit' ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"></i>
+          </div>
+          <div class="transaction-details">
+            <div class="transaction-description">{{ transaction.description }}</div>
+            <div class="transaction-meta">
+              <span class="transaction-category">{{ transaction.category }}</span>
+              <span class="transaction-date">{{ formatDate(transaction.date) }}</span>
+            </div>
+          </div>
+          <div class="transaction-amount" [class]="transaction.type">
+            {{ transaction.type === 'credit' ? '+' : '' }}{{ formatCurrency(transaction.amount) }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ações Rápidas -->
+    <div class="quick-actions">
+      <div class="section-header">
+        <h3>Ações Rápidas</h3>
+      </div>
+      
+      <div class="actions-grid">
+        <a routerLink="/transacoes" class="action-card">
+          <div class="action-icon">
+            <i class="fas fa-plus"></i>
+          </div>
+          <div class="action-content">
+            <h4>Nova Transação</h4>
+            <p>Registrar entrada ou saída</p>
+          </div>
+        </a>
+        
+        <a routerLink="/cartoes" class="action-card">
+          <div class="action-icon">
+            <i class="fas fa-credit-card"></i>
+          </div>
+          <div class="action-content">
+            <h4>Gerenciar Cartões</h4>
+            <p>Adicionar ou editar cartões</p>
+          </div>
+        </a>
+        
+        <a routerLink="/faturas" class="action-card">
+          <div class="action-icon">
+            <i class="fas fa-file-invoice-dollar"></i>
+          </div>
+          <div class="action-content">
+            <h4>Ver Faturas</h4>
+            <p>Controle de faturas</p>
+          </div>
+        </a>
+        
+        <a routerLink="/simulacoes" class="action-card">
+          <div class="action-icon">
+            <i class="fas fa-calculator"></i>
+          </div>
+          <div class="action-content">
+            <h4>Simulações</h4>
+            <p>Calcular financiamentos</p>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

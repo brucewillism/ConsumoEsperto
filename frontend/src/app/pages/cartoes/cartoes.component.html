@@ -1,0 +1,296 @@
+<div class="cartoes-container">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1>Cartões de Crédito</h1>
+      <p class="subtitle">Gerencie seus cartões e conecte com bancos</p>
+    </div>
+    <div class="header-actions">
+      <button mat-raised-button color="accent" (click)="atualizarDados()" [disabled]="loading">
+        <mat-icon>refresh</mat-icon>
+        {{ loading ? 'Atualizando...' : 'Atualizar Dados' }}
+      </button>
+      <button mat-raised-button color="primary" (click)="showForm = !showForm">
+        <mat-icon>add</mat-icon>
+        {{ showForm ? 'Cancelar' : 'Novo Cartão' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="loading-container">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Sincronizando dados bancários...</p>
+  </div>
+
+  <!-- Resumo dos Limites -->
+  <div class="resumo-grid" *ngIf="!loading">
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="card-icon">
+          <mat-icon>credit_card</mat-icon>
+        </div>
+        <div class="card-content">
+          <h3>Limite Total</h3>
+          <p class="valor">{{ formatarMoeda(bankApiService.getTotalCreditLimit()) }}</p>
+          <small>{{ cartoes.length }} cartão{{ cartoes.length !== 1 ? 'es' : '' }}</small>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="card-icon">
+          <mat-icon>account_balance_wallet</mat-icon>
+        </div>
+        <div class="card-content">
+          <h3>Limite Disponível</h3>
+          <p class="valor positivo">{{ formatarMoeda(bankApiService.getTotalAvailableCredit()) }}</p>
+          <small>Disponível para uso</small>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="card-icon">
+          <mat-icon>trending_up</mat-icon>
+        </div>
+        <div class="card-content">
+          <h3>Limite Utilizado</h3>
+          <p class="valor negativo">{{ formatarMoeda(bankApiService.getTotalCreditLimit() - bankApiService.getTotalAvailableCredit()) }}</p>
+          <small>{{ ((bankApiService.getTotalCreditLimit() - bankApiService.getTotalAvailableCredit()) / bankApiService.getTotalCreditLimit() * 100) | number:'1.1-1' }}% do total</small>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="card-icon">
+          <mat-icon>account_balance</mat-icon>
+        </div>
+        <div class="card-content">
+          <h3>Saldo Contas</h3>
+          <p class="valor">{{ formatarMoeda(bankApiService.getTotalBalance()) }}</p>
+          <small>{{ contas.length }} conta{{ contas.length !== 1 ? 's' : '' }}</small>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Formulário para Novo Cartão -->
+  <mat-card *ngIf="showForm" class="form-card">
+    <mat-card-header>
+      <mat-card-title>Adicionar Novo Cartão</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="novoCartaoForm" (ngSubmit)="adicionarCartao()">
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Banco</mat-label>
+            <mat-select formControlName="banco" required>
+              <mat-option value="itau">Itaú</mat-option>
+              <mat-option value="nubank">Nubank</mat-option>
+              <mat-option value="inter">Banco Inter</mat-option>
+              <mat-option value="mercadopago">Mercado Pago</mat-option>
+            </mat-select>
+            <mat-error *ngIf="novoCartaoForm.get('banco')?.hasError('required')">
+              Banco é obrigatório
+            </mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Número do Cartão</mat-label>
+            <input matInput formControlName="numero" placeholder="1234 5678 9012 3456" required>
+            <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('required')">
+              Número é obrigatório
+            </mat-error>
+            <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('minlength')">
+              Número deve ter pelo menos 13 dígitos
+            </mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Nome do Titular</mat-label>
+            <input matInput formControlName="titular" placeholder="Nome completo" required>
+            <mat-error *ngIf="novoCartaoForm.get('titular')?.hasError('required')">
+              Nome do titular é obrigatório
+            </mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Limite de Crédito</mat-label>
+            <input matInput type="number" formControlName="limite" placeholder="0,00" step="0.01" required>
+            <mat-error *ngIf="novoCartaoForm.get('limite')?.hasError('required')">
+              Limite é obrigatório
+            </mat-error>
+            <mat-error *ngIf="novoCartaoForm.get('limite')?.hasError('min')">
+              Limite deve ser maior que zero
+            </mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Data de Vencimento</mat-label>
+            <input matInput [matDatepicker]="vencimentoPicker" formControlName="vencimento" required>
+            <mat-datepicker-toggle matSuffix [for]="vencimentoPicker"></mat-datepicker-toggle>
+            <mat-datepicker #vencimentoPicker></mat-datepicker>
+            <mat-error *ngIf="novoCartaoForm.get('vencimento')?.hasError('required')">
+              Data de vencimento é obrigatória
+            </mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Data de Fechamento</mat-label>
+            <input matInput [matDatepicker]="fechamentoPicker" formControlName="fechamento" required>
+            <mat-datepicker-toggle matSuffix [for]="fechamentoPicker"></mat-datepicker-toggle>
+            <mat-datepicker #fechamentoPicker></mat-datepicker>
+            <mat-error *ngIf="novoCartaoForm.get('fechamento')?.hasError('required')">
+              Data de fechamento é obrigatória
+            </mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="form-actions">
+          <button mat-button type="button" (click)="showForm = false">Cancelar</button>
+          <button mat-raised-button color="primary" type="submit" [disabled]="novoCartaoForm.invalid">
+            <mat-icon>save</mat-icon>
+            Adicionar Cartão
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Bancos Conectados -->
+  <mat-card class="bancos-card" *ngIf="!loading">
+    <mat-card-header>
+      <mat-card-title>Bancos Conectados</mat-card-title>
+      <mat-card-subtitle>Conecte suas contas bancárias para sincronização automática</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="bancos-grid">
+        <div class="banco-item" *ngFor="let banco of bankApiService.connectedBanks$ | async">
+          <div class="banco-info">
+            <div class="banco-logo" [style.background-color]="getBancoColor(banco.bankName)">
+              <span>{{ getBancoNome(banco.bankName).charAt(0) }}</span>
+            </div>
+            <div class="banco-detalhes">
+              <h4>{{ getBancoNome(banco.bankName) }}</h4>
+              <p>Conectado</p>
+            </div>
+          </div>
+          <button mat-icon-button color="primary" (click)="conectarBanco(banco)">
+            <mat-icon>sync</mat-icon>
+          </button>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Lista de Cartões -->
+  <mat-card class="cartoes-card" *ngIf="!loading">
+    <mat-card-header>
+      <mat-card-title>Seus Cartões</mat-card-title>
+      <mat-card-subtitle>{{ cartoes.length }} cartão{{ cartoes.length !== 1 ? 'es' : '' }} cadastrado{{ cartoes.length !== 1 ? 's' : '' }}</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div *ngIf="cartoes.length === 0" class="empty-state">
+        <mat-icon>credit_card_off</mat-icon>
+        <h3>Nenhum cartão cadastrado</h3>
+        <p>Adicione seu primeiro cartão de crédito para começar</p>
+        <button mat-raised-button color="primary" (click)="showForm = true">
+          <mat-icon>add</mat-icon>
+          Adicionar Cartão
+        </button>
+      </div>
+
+      <div *ngIf="cartoes.length > 0" class="cartoes-grid">
+        <mat-card *ngFor="let cartao of cartoes" class="cartao-item">
+          <mat-card-header>
+            <div class="cartao-header">
+              <div class="cartao-banco">
+                <div class="banco-logo" [style.background-color]="getBancoColor(cartao.bankName)">
+                  <span>{{ getBancoNome(cartao.bankName).charAt(0) }}</span>
+                </div>
+                <div class="banco-info">
+                  <h4>{{ getBancoNome(cartao.bankName) }}</h4>
+                  <p>{{ cartao.cardNumber }}</p>
+                </div>
+              </div>
+              <mat-chip [color]="getStatusColor(getStatusCartao(cartao))" selected>
+                {{ getStatusCartao(cartao) }}
+              </mat-chip>
+            </div>
+          </mat-card-header>
+          
+          <mat-card-content>
+            <div class="cartao-detalhes">
+              <div class="detalhe-item">
+                <span class="label">Titular:</span>
+                <span class="value">{{ cartao.cardholderName }}</span>
+              </div>
+              
+              <div class="detalhe-item">
+                <span class="label">Limite Total:</span>
+                <span class="value">{{ formatarMoeda(cartao.limit) }}</span>
+              </div>
+              
+              <div class="detalhe-item">
+                <span class="label">Limite Disponível:</span>
+                <span class="value positivo">{{ formatarMoeda(cartao.availableLimit) }}</span>
+              </div>
+              
+              <div class="detalhe-item">
+                <span class="label">Limite Utilizado:</span>
+                <span class="value negativo">{{ formatarMoeda(getLimiteUtilizado(cartao)) }}</span>
+              </div>
+              
+              <div class="detalhe-item">
+                <span class="label">Vencimento:</span>
+                <span class="value">{{ formatarData(cartao.dueDate) }}</span>
+              </div>
+              
+              <div class="detalhe-item">
+                <span class="label">Fechamento:</span>
+                <span class="value">{{ formatarData(cartao.closingDate) }}</span>
+              </div>
+            </div>
+
+            <!-- Barra de Progresso do Limite -->
+            <div class="limite-progresso">
+              <div class="progresso-header">
+                <span>Utilização do Limite</span>
+                <span>{{ formatarPercentual(getPercentualUso(cartao)) }}</span>
+              </div>
+              <div class="progresso-bar">
+                <div class="progresso-fill" 
+                     [style.width.%]="getPercentualUso(cartao)"
+                     [style.background-color]="getStatusColor(getStatusCartao(cartao))">
+                </div>
+              </div>
+            </div>
+          </mat-card-content>
+          
+          <mat-card-actions>
+            <button mat-button color="primary" (click)="visualizarFaturas(cartao)">
+              <mat-icon>receipt</mat-icon>
+              Faturas
+            </button>
+            <button mat-button color="accent" (click)="editarCartao(cartao)">
+              <mat-icon>edit</mat-icon>
+              Editar
+            </button>
+            <button mat-button color="warn" (click)="excluirCartao(cartao)">
+              <mat-icon>delete</mat-icon>
+              Excluir
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

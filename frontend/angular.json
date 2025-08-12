@@ -1,0 +1,242 @@
+{
+  // =============================================================================
+  // CONFIGURAÇÃO ANGULAR - CONSUMO ESPERTO FRONTEND
+  // =============================================================================
+  // Este arquivo define as configurações de build, desenvolvimento e
+  // teste da aplicação Angular ConsumoEsperto.
+  // =============================================================================
+  
+  // Schema JSON para validação da configuração
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  
+  // Versão da configuração Angular
+  "version": 1,
+  
+  // =============================================================================
+  // CONFIGURAÇÕES GLOBAIS DO CLI
+  // =============================================================================
+  
+  "cli": {
+    // Gerenciador de pacotes padrão (npm, yarn, pnpm)
+    "packageManager": "npm",
+    
+    // ID de analytics para estatísticas de uso (opcional)
+    "analytics": "f2146267-7cc8-4df3-9ce3-0d7fca88f3ad"
+  },
+  
+  // Diretório onde novos projetos serão criados
+  "newProjectRoot": "projects",
+  
+  // =============================================================================
+  // PROJETOS DA APLICAÇÃO
+  // =============================================================================
+  
+  "projects": {
+    // Projeto principal da aplicação
+    "frontend": {
+      // Tipo do projeto (application, library)
+      "projectType": "application",
+      
+      // =============================================================================
+      // ESQUEMAS - Configurações padrão para novos arquivos
+      // =============================================================================
+      
+      "schematics": {
+        // Configuração padrão para novos componentes
+        "@schematics/angular:component": {
+          "style": "scss" // Usa SCSS como linguagem de estilo padrão
+        }
+      },
+      
+      // Diretório raiz do projeto (vazio = diretório atual)
+      "root": "",
+      
+      // Diretório onde está o código fonte
+      "sourceRoot": "src",
+      
+      // Prefixo para seletores de componentes (ex: app-dashboard)
+      "prefix": "app",
+      
+      // =============================================================================
+      // ARQUITETURA - Configurações de build, serve e teste
+      // =============================================================================
+      
+      "architect": {
+        // =============================================================================
+        // CONFIGURAÇÃO DE BUILD
+        // =============================================================================
+        
+        "build": {
+          // Builder responsável pela compilação
+          "builder": "@angular-devkit/build-angular:application",
+          
+          // Opções de build
+          "options": {
+            // Diretório de saída dos arquivos compilados
+            "outputPath": "dist/frontend",
+            
+            // Arquivo HTML principal da aplicação
+            "index": "src/index.html",
+            
+            // Arquivo TypeScript principal (ponto de entrada)
+            "browser": "src/main.ts",
+            
+            // Polyfills necessários para compatibilidade
+            "polyfills": [
+              "zone.js" // Necessário para detecção de mudanças do Angular
+            ],
+            
+            // Configuração TypeScript para build
+            "tsConfig": "tsconfig.app.json",
+            
+            // Linguagem de estilo inline (SCSS)
+            "inlineStyleLanguage": "scss",
+            
+            // Arquivos estáticos (imagens, fontes, etc.)
+            "assets": [
+              {
+                "glob": "**/*",        // Todos os arquivos
+                "input": "public"      // Do diretório public
+              }
+            ],
+            
+            // Arquivos de estilo globais
+            "styles": [
+              "src/styles.scss"        // Estilos principais da aplicação
+            ],
+            
+            // Scripts JavaScript externos (vazio por padrão)
+            "scripts": []
+          },
+          
+          // =============================================================================
+          // CONFIGURAÇÕES ESPECÍFICAS POR AMBIENTE
+          // =============================================================================
+          
+          "configurations": {
+            // =============================================================================
+            // CONFIGURAÇÃO DE PRODUÇÃO
+            // =============================================================================
+            
+            "production": {
+              // Orçamentos de tamanho para otimização
+              "budgets": [
+                {
+                  "type": "initial",           // Bundle inicial
+                  "maximumWarning": "500kB",   // Aviso se > 500kB
+                  "maximumError": "1MB"        // Erro se > 1MB
+                },
+                {
+                  "type": "anyComponentStyle", // Estilos de componentes
+                  "maximumWarning": "15kB",    // Aviso se > 15kB
+                  "maximumError": "20kB"       // Erro se > 20kB
+                }
+              ],
+              
+              // Hash nos nomes dos arquivos para cache busting
+              "outputHashing": "all"
+            },
+            
+            // =============================================================================
+            // CONFIGURAÇÃO DE DESENVOLVIMENTO
+            // =============================================================================
+            
+            "development": {
+              "optimization": false,        // Sem otimizações para build mais rápido
+              "extractLicenses": false,     // Não extrai licenças
+              "sourceMap": true,            // Gera source maps para debug
+              
+              // Orçamentos mais permissivos para desenvolvimento
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "15kB",
+                  "maximumError": "20kB"
+                }
+              ]
+            }
+          },
+          
+          // Configuração padrão (produção)
+          "defaultConfiguration": "production"
+        },
+        
+        // =============================================================================
+        // CONFIGURAÇÃO DO SERVIDOR DE DESENVOLVIMENTO
+        // =============================================================================
+        
+        "serve": {
+          // Builder para servidor de desenvolvimento
+          "builder": "@angular-devkit/build-angular:dev-server",
+          
+          "configurations": {
+            // Serve com configuração de produção
+            "production": {
+              "buildTarget": "frontend:build:production"
+            },
+            
+            // Serve com configuração de desenvolvimento
+            "development": {
+              "buildTarget": "frontend:build:development"
+            }
+          },
+          
+          // Configuração padrão (desenvolvimento)
+          "defaultConfiguration": "development"
+        },
+        
+        // =============================================================================
+        // EXTRAÇÃO DE INTERNACIONALIZAÇÃO
+        // =============================================================================
+        
+        "extract-i18n": {
+          "builder": "@angular-devkit/build-angular:extract-i18n"
+        },
+        
+        // =============================================================================
+        // CONFIGURAÇÃO DE TESTES
+        // =============================================================================
+        
+        "test": {
+          // Builder para testes com Karma
+          "builder": "@angular-devkit/build-angular:karma",
+          
+          "options": {
+            // Polyfills para testes
+            "polyfills": [
+              "zone.js",           // Zone.js padrão
+              "zone.js/testing"    // Zone.js para testes
+            ],
+            
+            // Configuração TypeScript para testes
+            "tsConfig": "tsconfig.spec.json",
+            
+            // Linguagem de estilo para testes
+            "inlineStyleLanguage": "scss",
+            
+            // Assets para testes
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              }
+            ],
+            
+            // Estilos para testes
+            "styles": [
+              "src/styles.scss"
+            ],
+            
+            // Scripts para testes
+            "scripts": []
+          }
+        }
+      }
+    }
+  }
+}

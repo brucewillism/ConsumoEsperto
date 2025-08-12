@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ============================================================================= -->
+<!-- ARQUIVO POM.XML - CONSUMO ESPERTO BACKEND -->
+<!-- ============================================================================= -->
+<!-- Este arquivo define as dependências, configurações e build do projeto -->
+<!-- Backend Java Spring Boot para a aplicação ConsumoEsperto -->
+<!-- ============================================================================= -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    
+    <!-- Versão do modelo Maven -->
+    <modelVersion>4.0.0</modelVersion>
+    
+    <!-- Herda configurações do Spring Boot Starter Parent -->
+    <!-- Fornece versões compatíveis e configurações padrão -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.18</version>
+        <relativePath/>
+    </parent>
+    
+    <!-- Informações do projeto -->
+    <groupId>com.consumoesperto</groupId>
+    <artifactId>consumo-esperto-backend</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>consumo-esperto-backend</name>
+    <description>Backend da aplicação ConsumoEsperto - Sistema de gestão financeira pessoal</description>
+    
+    <!-- Propriedades do projeto -->
+    <properties>
+        <!-- Versão do Java (requer Java 17 ou superior) -->
+        <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+    </properties>
+    
+    <!-- Dependências do projeto -->
+    <dependencies>
+        <!-- ============================================================================= -->
+        <!-- SPRING BOOT STARTERS - Dependências principais do Spring Boot -->
+        <!-- ============================================================================= -->
+        
+        <!-- Spring Boot Web: para criar APIs REST -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        
+        <!-- Spring Boot Data JPA: para persistência de dados -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        
+        <!-- Spring Boot Security: para autenticação e autorização -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        
+        <!-- Spring Boot Validation: para validação de dados -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- ============================================================================= -->
+        <!-- BANCOS DE DADOS - Drivers para Oracle e H2 -->
+        <!-- ============================================================================= -->
+        
+        <!-- Driver Oracle JDBC para produção e desenvolvimento -->
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ojdbc8</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        
+        <!-- Banco H2 em memória para desenvolvimento e testes -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ============================================================================= -->
+        <!-- JWT (JSON WEB TOKENS) - Para autenticação stateless -->
+        <!-- ============================================================================= -->
+        
+        <!-- API principal do JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        
+        <!-- Implementação do JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        
+        <!-- Serialização/Deserialização JSON do JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ============================================================================= -->
+        <!-- SWAGGER - Documentação automática da API -->
+        <!-- ============================================================================= -->
+        
+        <!-- Gera documentação interativa da API REST -->
+        <dependency>
+            <groupId>io.springfox</groupId>
+            <artifactId>springfox-boot-starter</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
+        <!-- ============================================================================= -->
+        <!-- LOMBOK - Reduz código boilerplate -->
+        <!-- ============================================================================= -->
+        
+        <!-- Anotações para gerar getters, setters, construtores automaticamente -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ============================================================================= -->
+        <!-- OAUTH2 E INTEGRAÇÃO COM APIS BANCÁRIAS -->
+        <!-- ============================================================================= -->
+        
+        <!-- Cliente OAuth2 para autenticação com Google e bancos -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+        </dependency>
+        
+        <!-- WebFlux para chamadas HTTP reativas às APIs bancárias -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+        
+        <!-- ============================================================================= -->
+        <!-- GOOGLE OAUTH2 - Para login via Google -->
+        <!-- ============================================================================= -->
+        
+        <!-- Cliente da API do Google -->
+        <dependency>
+            <groupId>com.google.api-client</groupId>
+            <artifactId>google-api-client</artifactId>
+            <version>2.0.0</version>
+        </dependency>
+        
+        <!-- Cliente OAuth2 do Google -->
+        <dependency>
+            <groupId>com.google.oauth-client</groupId>
+            <artifactId>google-oauth-client</artifactId>
+            <version>1.34.1</version>
+        </dependency>
+
+        <!-- ============================================================================= -->
+        <!-- TESTES - Dependências para testes unitários e de integração -->
+        <!-- ============================================================================= -->
+        
+        <!-- Spring Boot Test para testes da aplicação -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
+        <!-- Spring Security Test para testes de segurança -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <!-- ============================================================================= -->
+    <!-- CONFIGURAÇÕES DE BUILD -->
+    <!-- ============================================================================= -->
+    
+    <build>
+        <plugins>
+            <!-- Plugin Spring Boot Maven -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Exclui Lombok do JAR final (não é necessário em runtime) -->
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                    
+                    <!-- Argumentos JVM para compatibilidade com Java 17 -->
+                    <!-- Permite acesso a módulos internos do Java -->
+                    <jvmArguments>
+                        --add-opens java.base/java.lang=ALL-UNNAMED
+                        --add-opens java.base/java.io=ALL-UNNAMED
+                        --add-opens java.base/java.util=ALL-UNNAMED
+                        --add-opens java.base/java.util.concurrent=ALL-UNNAMED
+                    </jvmArguments>
+                </configuration>
+            </plugin>
+            
+            <!-- Plugin do compilador Maven -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <!-- Compila para Java 17 -->
+                    <source>17</source>
+                    <target>17</target>
+                    
+                    <!-- Habilita recursos preview do Java 17 -->
+                    <compilerArgs>
+                        <arg>--enable-preview</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

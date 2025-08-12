@@ -1,0 +1,122 @@
+# =============================================================================
+# DOCKER COMPOSE - CONSUMO ESPERTO BACKEND
+# =============================================================================
+# Este arquivo define os serviços necessários para executar a aplicação
+# ConsumoEsperto em ambiente Docker, incluindo banco de dados Oracle
+# e ferramentas de administração.
+# =============================================================================
+
+# Versão do Docker Compose (3.8 suporta recursos avançados)
+version: '3.8'
+
+# =============================================================================
+# SERVIÇOS DEFINIDOS
+# =============================================================================
+
+services:
+  # =============================================================================
+  # SERVIÇO ORACLE - Banco de dados principal
+  # =============================================================================
+  oracle:
+    # Imagem oficial do Oracle Database Express Edition
+    # Express é a versão gratuita com limitações de recursos
+    image: container-registry.oracle.com/database/express:latest
+    
+    # Nome do container para facilitar identificação
+    container_name: consumo_esperto_oracle
+    
+    # Variáveis de ambiente para configuração do Oracle
+    environment:
+      # Senha do usuário SYS (administrador)
+      - ORACLE_PWD=oracle123
+      # Conjunto de caracteres UTF-8 para suporte a português
+      - ORACLE_CHARACTERSET=AL32UTF8
+    
+    # Mapeamento de portas do container para o host
+    ports:
+      - "1521:1521"  # Porta padrão do Oracle (SQL*Net)
+      - "5500:5500"  # Porta para Oracle Enterprise Manager
+    
+    # Volumes para persistência de dados e scripts
+    volumes:
+      # Volume para dados do banco (persistente)
+      - oracle_data:/opt/oracle/oradata
+      # Scripts SQL para inicialização automática
+      - ./sql:/opt/oracle/scripts/startup
+    
+    # Comando personalizado para inicialização
+    command: >
+      bash -c "
+        echo 'Waiting for database to be ready...'
+        # Aguarda o banco estar disponível antes de executar scripts
+        while ! sqlplus -s sys/oracle123@localhost:1521/XE as sysdba <<< 'exit' > /dev/null 2>&1; do
+          sleep 5
+        done
+        echo 'Database is ready!'
+        # Executa script de configuração inicial
+        sqlplus -s sys/oracle123@localhost:1521/XE as sysdba @/opt/oracle/scripts/startup/oracle-setup.sql
+        # Mantém o container rodando mostrando logs
+        tail -f /opt/oracle/diag/rdbms/*/*/trace/alert_*.log
+      "
+    
+    # Verificação de saúde do banco de dados
+    healthcheck:
+      # Comando para testar se o banco está respondendo
+      test: ["CMD", "sqlplus", "-s", "sys/oracle123@localhost:1521/XE", "as", "sysdba", "<<<", "exit"]
+      interval: 30s      # Verifica a cada 30 segundos
+      timeout: 10s       # Timeout de 10 segundos para cada verificação
+      retries: 5         # Tenta 5 vezes antes de considerar não saudável
+      start_period: 60s  # Aguarda 60 segundos antes de começar verificações
+
+  # =============================================================================
+  # SERVIÇO ORACLE APEX - Interface web para administração (OPCIONAL)
+  # =============================================================================
+  # Oracle Application Express (APEX) fornece interface web para
+  # administração do banco, desenvolvimento de aplicações e relatórios
+  oracle-apex:
+    # Mesma imagem do Oracle Database
+    image: container-registry.oracle.com/database/express:latest
+    
+    # Nome do container para APEX
+    container_name: consumo_esperto_apex
+    
+    # Configurações do Oracle
+    environment:
+      - ORACLE_PWD=oracle123
+      - ORACLE_CHARACTERSET=AL32UTF8
+    
+    # Porta para interface web do APEX
+    ports:
+      - "8081:8080"  # Mapeia porta 8081 do host para 8080 do container
+    
+    # Volume para dados do APEX
+    volumes:
+      - apex_data:/opt/oracle/oradata
+    
+    # Dependência: APEX só inicia após o Oracle estar rodando
+    depends_on:
+      - oracle
+    
+    # Perfil: só executa quando especificado explicitamente
+    # docker-compose --profile apex up
+    profiles:
+      - apex
+
+# =============================================================================
+# VOLUMES - Persistência de dados
+# =============================================================================
+
+volumes:
+  # Volume para dados do banco Oracle principal
+  oracle_data:
+  # Volume para dados do APEX (se usado)
+  apex_data:
+
+# =============================================================================
+# REDES - Configuração de rede
+# =============================================================================
+
+networks:
+  # Rede padrão com nome personalizado
+  default:
+    name: consumo_esperto_network

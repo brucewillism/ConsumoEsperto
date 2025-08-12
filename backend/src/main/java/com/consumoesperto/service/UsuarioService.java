@@ -1,0 +1,254 @@
+package com.consumoesperto.service;
+
+import com.consumoesperto.dto.UsuarioDTO;
+import com.consumoesperto.model.Usuario;
+import com.consumoesperto.repository.UsuarioRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * Serviço responsável por gerenciar operações relacionadas a usuários
+ * 
+ * Este serviço implementa a lógica de negócio para criação, busca,
+ * atualização e validação de usuários. Inclui validações de unicidade
+ * e criptografia de senhas para segurança.
+ * 
+ * Funcionalidades principais:
+ * - CRUD completo de usuários
+ * - Validação de unicidade de username e email
+ * - Criptografia de senhas
+ * - Conversão entre entidades e DTOs
+ * 
+ * @author ConsumoEsperto Team
+ * @version 1.0
+ */
+@Service
+@RequiredArgsConstructor // Lombok: gera construtor com campos final automaticamente
+public class UsuarioService {
+
+    // Repositório para operações de persistência de usuários no banco de dados
+    private final UsuarioRepository usuarioRepository;
+    
+    // Codificador de senhas para criptografia usando BCrypt ou similar
+    private final PasswordEncoder passwordEncoder;
+
+    /**
+     * Cria um novo usuário no sistema
+     * 
+     * Este método implementa o fluxo completo de criação de usuário:
+     * 1. Valida se o username já existe no sistema
+     * 2. Valida se o email já está cadastrado
+     * 3. Criptografa a senha usando o PasswordEncoder
+     * 4. Define a data de criação automática
+     * 5. Persiste o usuário no banco de dados
+     * 
+     * @param usuarioDTO DTO com os dados do usuário a ser criado
+     * @return UsuarioDTO com os dados do usuário criado (sem senha)
+     * @throws RuntimeException se username ou email já existirem no sistema
+     */
+    public UsuarioDTO criarUsuario(UsuarioDTO usuarioDTO) {
+        // Validação de unicidade: verifica se o username já existe
+        if (usuarioRepository.existsByUsername(usuarioDTO.getUsername())) {
+            throw new RuntimeException("Username já existe");
+        }
+
+        // Validação de unicidade: verifica se o email já está cadastrado
+        if (usuarioRepository.existsByEmail(usuarioDTO.getEmail())) {
+            throw new RuntimeException("Email já existe");
+        }
+
+        // Cria uma nova instância de usuário a partir dos dados do DTO
+        Usuario usuario = new Usuario();
+        usuario.setUsername(usuarioDTO.getUsername());
+        
+        // CRÍTICO: Criptografa a senha antes de salvar no banco
+        // Nunca armazene senhas em texto plano
+        usuario.setPassword(passwordEncoder.encode(usuarioDTO.getPassword()));
+        
+        usuario.setEmail(usuarioDTO.getEmail());
+        usuario.setNome(usuarioDTO.getNome());
+        
+        // Define automaticamente a data de criação do usuário
+        usuario.setDataCriacao(LocalDateTime.now());
+
+        // Persiste o usuário no banco de dados
+        Usuario usuarioSalvo = usuarioRepository.save(usuario);
+        
+        // Converte para DTO e retorna (sem informações sensíveis)
+        return converterParaDTO(usuarioSalvo);
+    }
+
+    /**
+     * Busca um usuário pelo seu ID único
+     * 
+     * Método para recuperar usuários específicos por identificador.
+     * Útil para operações de atualização, exclusão e consultas específicas.
+     * 
+     * @param id ID único do usuário a ser buscado
+     * @return UsuarioDTO com os dados do usuário encontrado
+     * @throws RuntimeException se o usuário não for encontrado no sistema
+     */
+    public UsuarioDTO buscarPorId(Long id) {
+        // Busca o usuário pelo ID ou lança exceção se não encontrar
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        return converterParaDTO(usuario);
+    }
+
+    /**
+     * Busca um usuário pelo nome de usuário (username)
+     * 
+     * Método usado principalmente para autenticação e validação
+     * de unicidade durante o processo de login.
+     * 
+     * @param username Nome de usuário único para busca
+     * @return UsuarioDTO com os dados do usuário encontrado
+     * @throws RuntimeException se o usuário não for encontrado no sistema
+     */
+    public UsuarioDTO buscarPorUsername(String username) {
+        // Busca o usuário pelo username ou lança exceção se não encontrar
+        Usuario usuario = usuarioRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        return converterParaDTO(usuario);
+    }
+
+    /**
+     * Busca um usuário pelo endereço de email
+     * 
+     * Método usado para recuperação de senha, validação de unicidade
+     * e operações administrativas.
+     * 
+     * @param email Endereço de email do usuário para busca
+     * @return UsuarioDTO com os dados do usuário encontrado
+     * @throws RuntimeException se o usuário não for encontrado no sistema
+     */
+    public UsuarioDTO buscarPorEmail(String email) {
+        // Busca o usuário pelo email ou lança exceção se não encontrar
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        return converterParaDTO(usuario);
+    }
+
+    /**
+     * Lista todos os usuários cadastrados no sistema
+     * 
+     * Método usado principalmente para operações administrativas
+     * e relatórios. Retorna uma lista paginada de todos os usuários.
+     * 
+     * @return Lista de UsuarioDTO com todos os usuários do sistema
+     */
+    public List<UsuarioDTO> listarTodos() {
+        // Busca todos os usuários e converte para DTOs usando Stream API
+        return usuarioRepository.findAll().stream()
+                .map(this::converterParaDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Atualiza os dados de um usuário existente
+     * 
+     * Este método permite atualizar informações do usuário como:
+     * - Nome completo
+     * - Endereço de email
+     * - Senha (opcional, só se fornecida)
+     * 
+     * Segurança: A senha só é atualizada se uma nova for fornecida
+     * 
+     * @param id ID do usuário a ser atualizado
+     * @param usuarioDTO DTO com os novos dados do usuário
+     * @return UsuarioDTO com os dados atualizados
+     * @throws RuntimeException se o usuário não for encontrado no sistema
+     */
+    public UsuarioDTO atualizarUsuario(Long id, UsuarioDTO usuarioDTO) {
+        // Verifica se o usuário existe antes de tentar atualizar
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        // Atualiza apenas os campos permitidos (nome e email)
+        usuario.setNome(usuarioDTO.getNome());
+        usuario.setEmail(usuarioDTO.getEmail());
+        
+        // Atualiza a senha apenas se uma nova foi fornecida
+        // Isso evita sobrescrever a senha com valores nulos
+        if (usuarioDTO.getPassword() != null && !usuarioDTO.getPassword().isEmpty()) {
+            // CRÍTICO: Sempre criptografa a nova senha
+            usuario.setPassword(passwordEncoder.encode(usuarioDTO.getPassword()));
+        }
+
+        // Persiste as alterações no banco de dados
+        Usuario usuarioAtualizado = usuarioRepository.save(usuario);
+        return converterParaDTO(usuarioAtualizado);
+    }
+
+    /**
+     * Exclui um usuário do sistema permanentemente
+     * 
+     * ATENÇÃO: Esta operação é irreversível e remove todos os dados
+     * do usuário, incluindo transações, faturas e cartões associados.
+     * 
+     * @param id ID do usuário a ser excluído
+     * @throws RuntimeException se o usuário não for encontrado no sistema
+     */
+    public void excluirUsuario(Long id) {
+        // Verifica se o usuário existe antes de tentar excluir
+        if (!usuarioRepository.existsById(id)) {
+            throw new RuntimeException("Usuário não encontrado");
+        }
+        // Remove o usuário do banco de dados
+        usuarioRepository.deleteById(id);
+    }
+
+    /**
+     * Busca o ID de um usuário pelo username
+     * 
+     * @param username Username do usuário
+     * @return ID do usuário
+     * @throws RuntimeException se o usuário não for encontrado
+     */
+    public Long getUsuarioIdByUsername(String username) {
+        Usuario usuario = usuarioRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        return usuario.getId();
+    }
+
+    /**
+     * Busca um usuário pelo seu ID único
+     * 
+     * @param id ID único do usuário a ser buscado
+     * @return Usuario com os dados do usuário encontrado
+     * @throws RuntimeException se o usuário não for encontrado no sistema
+     */
+    public Usuario findById(Long id) {
+        return usuarioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+    }
+
+    /**
+     * Converte uma entidade Usuario para UsuarioDTO
+     * 
+     * Este método é responsável por:
+     * - Mapear dados da entidade para o DTO
+     * - Remover informações sensíveis (como senha)
+     * - Garantir que dados privados não sejam expostos
+     * 
+     * @param usuario Entidade Usuario a ser convertida
+     * @return UsuarioDTO sem informações sensíveis
+     */
+    private UsuarioDTO converterParaDTO(Usuario usuario) {
+        UsuarioDTO dto = new UsuarioDTO();
+        dto.setId(usuario.getId());
+        dto.setUsername(usuario.getUsername());
+        dto.setEmail(usuario.getEmail());
+        dto.setNome(usuario.getNome());
+        dto.setDataCriacao(usuario.getDataCriacao());
+        
+        // SEGURANÇA: Nunca inclui a senha no DTO
+        // Mesmo criptografada, a senha não deve ser retornada
+        return dto;
+    }
+}

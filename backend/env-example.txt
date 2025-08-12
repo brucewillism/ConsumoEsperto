@@ -1,0 +1,29 @@
+# ========================================
+# CONFIGURAÇÃO DAS APIS BANCÁRIAS
+# ========================================
+
+# ITAÚ - Open Banking
+ITAU_CLIENT_ID=your_itau_client_id_here
+ITAU_CLIENT_SECRET=your_itau_client_secret_here
+
+# MERCADO PAGO
+MERCADOPAGO_CLIENT_ID=your_mercadopago_client_id_here
+MERCADOPAGO_CLIENT_SECRET=your_mercadopago_client_secret_here
+
+# INTER - Open Banking
+INTER_CLIENT_ID=your_inter_client_id_here
+INTER_CLIENT_SECRET=your_inter_client_secret_here
+
+# NUBANK (quando disponível)
+NUBANK_CLIENT_ID=your_nubank_client_id_here
+NUBANK_CLIENT_SECRET=your_nubank_client_secret_here
+
+# URL do ngrok (será configurada automaticamente)
+NGROK_URL=https://your-ngrok-url.ngrok.io
+
+# ========================================
+# CONFIGURAÇÕES ADICIONAIS
+# ========================================
+BANK_API_TIMEOUT=30000
+BANK_API_MAX_RETRIES=3
+BANK_API_RETRY_DELAY=1000
