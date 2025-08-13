@@ -213,12 +213,12 @@
           <mat-card-header>
             <div class="cartao-header">
               <div class="cartao-banco">
-                <div class="banco-logo" [style.background-color]="getBancoColor(cartao.bankName)">
-                  <span>{{ getBancoNome(cartao.bankName).charAt(0) }}</span>
+                <div class="banco-logo" [style.background-color]="getBancoColor(cartao.bank)">
+                  <span>{{ getBancoNome(cartao.bank).charAt(0) }}</span>
                 </div>
                 <div class="banco-info">
-                  <h4>{{ getBancoNome(cartao.bankName) }}</h4>
-                  <p>{{ cartao.cardNumber }}</p>
+                  <h4>{{ getBancoNome(cartao.bank) }}</h4>
+                  <p>{{ cartao.number }}</p>
                 </div>
               </div>
               <mat-chip [color]="getStatusColor(getStatusCartao(cartao))" selected>
@@ -231,7 +231,7 @@
             <div class="cartao-detalhes">
               <div class="detalhe-item">
                 <span class="label">Titular:</span>
-                <span class="value">{{ cartao.cardholderName }}</span>
+                <span class="value">{{ cartao.name }}</span>
               </div>
               
               <div class="detalhe-item">
@@ -241,7 +241,7 @@
               
               <div class="detalhe-item">
                 <span class="label">Limite Disponível:</span>
-                <span class="value positivo">{{ formatarMoeda(cartao.availableLimit) }}</span>
+                <span class="value positivo">{{ formatarMoeda(cartao.available) }}</span>
               </div>
               
               <div class="detalhe-item">
@@ -250,13 +250,13 @@
               </div>
               
               <div class="detalhe-item">
-                <span class="label">Vencimento:</span>
-                <span class="value">{{ formatarData(cartao.dueDate) }}</span>
+                <span class="label">Tipo:</span>
+                <span class="value">{{ cartao.type }}</span>
               </div>
               
               <div class="detalhe-item">
-                <span class="label">Fechamento:</span>
-                <span class="value">{{ formatarData(cartao.closingDate) }}</span>
+                <span class="label">Status:</span>
+                <span class="value">{{ cartao.status }}</span>
               </div>
             </div>
 

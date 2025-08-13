@@ -86,10 +86,13 @@ export class AuthService {
    * @returns Observable com a resposta de login (token JWT)
    */
   login(credentials: LoginRequest): Observable<LoginResponse> {
+    console.log('[AuthService] Iniciando login com credenciais:', credentials);
+    
     return this.http.post<LoginResponse>(`${this.API_URL}/login`, credentials)
       .pipe(
         // Executa ações adicionais após o login bem-sucedido
         tap(response => {
+          console.log('[AuthService] Login bem-sucedido, resposta recebida:', response);
           this.handleAuthSuccess(response.token); // Armazena o token
           this.loadUserInfo(response.token); // Carrega informações do usuário
         })
@@ -304,7 +307,9 @@ export class AuthService {
    * @param token Token JWT recebido do backend
    */
   private handleAuthSuccess(token: string): void {
+    console.log('[AuthService] Processando sucesso da autenticação, token:', token.substring(0, 20) + '...');
     localStorage.setItem('token', token); // Armazena o token no localStorage
+    console.log('[AuthService] Token armazenado no localStorage');
   }
 
   /**
@@ -372,7 +377,13 @@ export class AuthService {
    * @returns true se autenticado, false caso contrário
    */
   isAuthenticated(): boolean {
-    return !!localStorage.getItem('token');
+    const hasToken = !!localStorage.getItem('token');
+    console.log(`[AuthService] Verificando autenticação: ${hasToken ? 'SIM' : 'NÃO'}`);
+    if (hasToken) {
+      const token = localStorage.getItem('token');
+      console.log(`[AuthService] Token encontrado: ${token?.substring(0, 20)}...`);
+    }
+    return hasToken;
   }
 
   /**
@@ -381,6 +392,8 @@ export class AuthService {
    * @returns Token JWT ou null se não existir
    */
   getToken(): string | null {
-    return localStorage.getItem('token');
+    const token = localStorage.getItem('token');
+    console.log(`[AuthService] Obtendo token: ${token ? 'SIM' : 'NÃO'}`);
+    return token;
   }
 }

@@ -1,10 +1,12 @@
 import { ApplicationConfig } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { provideNativeDateAdapter } from '@angular/material/core';
 
 import { routes } from './app.routes';
+import { AuthInterceptor } from './interceptors/auth.interceptor';
 
 /**
  * Configuração principal da aplicação Angular ConsumoEsperto
@@ -27,9 +29,11 @@ export const appConfig: ApplicationConfig = {
     // Configura o roteamento da aplicação usando as rotas definidas
     provideRouter(routes),
     
-    // Configura o cliente HTTP com suporte a interceptors
-    // Útil para adicionar headers de autenticação automaticamente
-    provideHttpClient(withInterceptorsFromDi()),
+    // Configura o cliente HTTP com interceptors personalizados
+    // - AuthInterceptor: adiciona automaticamente token JWT nas requisições
+    provideHttpClient(
+      withInterceptors([AuthInterceptor])
+    ),
     
     // Habilita animações básicas do Angular
     // Permite transições suaves entre componentes
@@ -37,6 +41,9 @@ export const appConfig: ApplicationConfig = {
     
     // Habilita animações assíncronas para melhor performance
     // Útil para animações complexas e lazy loading
-    provideAnimationsAsync()
+    provideAnimationsAsync(),
+    
+    // Fornece adaptador de data nativo para Angular Material
+    provideNativeDateAdapter()
   ]
 };

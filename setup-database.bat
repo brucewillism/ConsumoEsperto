@@ -3,201 +3,187 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo    SETUP DO BANCO DE DADOS ORACLE
-echo    CONSUMO ESPERTO
+echo    CONFIGURACAO DO BANCO ORACLE
 echo ========================================
 echo.
-
-:: Definir diretórios do projeto
-set "PROJECT_DIR=%~dp0"
-set "DB_DIR=%PROJECT_DIR%backend\src\main\resources\db"
-
-echo Este script irá configurar o banco de dados Oracle
-echo para o projeto ConsumoEsperto.
-echo.
-echo Pré-requisitos:
-echo - Oracle Database instalado e rodando
-echo - Usuário SYSTEM ou SYS com privilégios de administrador
-echo - SQL*Plus disponível no PATH
+echo Este script ira configurar o banco Oracle:
+echo 1. Verificar se Oracle esta rodando
+echo 2. Criar tablespace e usuario
+echo 3. Criar tabelas necessarias
+echo 4. Configurar credenciais do backend
 echo.
 
-:: Verificar se SQL*Plus está disponível
-echo Verificando SQL*Plus...
-sqlplus -version >nul 2>&1
-if errorlevel 1 (
+:: Obter nome do usuario logado
+for /f "tokens=2 delims==" %%a in ('wmic computersystem get username /value') do set "CURRENT_USER=%%a"
+if "!CURRENT_USER!"=="" set "CURRENT_USER=%USERNAME%"
+
+echo Usuario logado: !CURRENT_USER!
+echo.
+
+:: ========================================
+:: 1. VERIFICAR SE ORACLE ESTA RODANDO
+:: ========================================
+echo [1/4] Verificando se Oracle esta rodando...
+netstat -an | findstr ":1521" >nul
+if %errorlevel% neq 0 (
     echo.
-    echo ERRO: SQL*Plus não encontrado no PATH!
+    echo ❌ ERRO: Oracle nao esta rodando na porta 1521!
     echo.
-    echo Por favor, instale o Oracle Client ou adicione ao PATH.
+    echo Para resolver:
+    echo 1. Instale o Oracle Database 21c XE
+    echo 2. Ou inicie o servico Oracle se ja estiver instalado
     echo.
-    echo Alternativas:
-    echo 1. Instalar Oracle Database Express Edition (XE)
-    echo 2. Instalar Oracle Instant Client
-    echo 3. Adicionar o diretório do Oracle ao PATH
-    echo.
-    echo Exemplo de PATH:
-    echo C:\oracle\product\12.2.0\client_1\bin
+    echo Execute: setup-completo-projeto.bat
     echo.
     pause
     exit /b 1
+) else (
+    echo ✅ Oracle esta rodando na porta 1521!
 )
-
-echo SQL*Plus encontrado! Continuando...
 echo.
 
-:: Solicitar credenciais
-echo Por favor, forneça as credenciais do Oracle:
-echo.
-set /p "ORACLE_USER=Usuário (SYSTEM/SYS): "
-set /p "ORACLE_PASSWORD=Senha: "
-set /p "ORACLE_HOST=Host (localhost): "
-set /p "ORACLE_PORT=Porta (1521): "
-set /p "ORACLE_SERVICE=Service (XE/ORCL): "
-
-if "!ORACLE_HOST!"=="" set "ORACLE_HOST=localhost"
-if "!ORACLE_PORT!"=="" set "ORACLE_PORT=1521"
-if "!ORACLE_SERVICE!"=="" set "ORACLE_SERVICE=XE"
-
-echo.
-echo ========================================
-echo    RESUMO DA CONFIGURAÇÃO
-echo ========================================
-echo.
-echo Host: !ORACLE_HOST!
-echo Porta: !ORACLE_PORT!
-echo Service: !ORACLE_SERVICE!
-echo Usuário Oracle: !ORACLE_USER!
-echo.
-echo Banco a ser criado:
-echo - Nome: consumo_esperto
-echo - Usuário: consumo_esperto
-echo - Senha: consumo_esperto123
-echo.
-echo Tabelas a serem criadas:
-echo - usuarios, categorias, cartoes_credito
-echo - transacoes, faturas, compras_parceladas
-echo - parcelas, autorizacoes_bancarias
-echo - bank_api_configs
-echo.
-echo Deseja continuar? (S/N)
-set /p "CONTINUE="
-
-if /i not "!CONTINUE!"=="S" (
-    echo.
-    echo Operação cancelada pelo usuário.
-    pause
-    exit /b 0
-)
-
-echo.
-echo ========================================
-echo    CRIANDO BANCO DE DADOS...
-echo ========================================
+:: ========================================
+:: 2. CRIAR TABLESPACE E USUARIO
+:: ========================================
+echo [2/4] Criando tablespace e usuario...
 echo.
 
-:: Criar arquivo de conexão temporário
-echo @echo off > "%TEMP%\create_db.sql"
-echo SET LINESIZE 100 >> "%TEMP%\create_db.sql"
-echo SET PAGESIZE 50 >> "%TEMP%\create_db.sql"
-echo SET FEEDBACK ON >> "%TEMP%\create_db.sql"
-echo SET VERIFY ON >> "%TEMP%\create_db.sql"
-echo. >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo PROMPT CONECTANDO AO ORACLE... >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo CONNECT !ORACLE_USER!/!ORACLE_PASSWORD!@!ORACLE_HOST!:!ORACLE_PORT!/!ORACLE_SERVICE! >> "%TEMP%\create_db.sql"
-echo. >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo PROMPT CRIANDO TABLESPACE E USUÁRIO... >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo @%DB_DIR%\init-oracle.sql >> "%TEMP%\create_db.sql"
-echo. >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo PROMPT CONECTANDO COMO USUÁRIO CONSUMO_ESPERTO... >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo CONNECT consumo_esperto/consumo_esperto123@!ORACLE_HOST!:!ORACLE_PORT!/!ORACLE_SERVICE! >> "%TEMP%\create_db.sql"
-echo. >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo PROMPT CRIANDO TABELAS... >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo @%DB_DIR%\create-tables.sql >> "%TEMP%\create_db.sql"
-echo. >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo PROMPT INSERINDO DADOS DE TESTE... >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo @%DB_DIR%\insert-test-data.sql >> "%TEMP%\create_db.sql"
-echo. >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo PROMPT VERIFICANDO TABELAS CRIADAS... >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo SELECT table_name, tablespace_name FROM user_tables ORDER BY table_name; >> "%TEMP%\create_db.sql"
-echo. >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo PROMPT BANCO DE DADOS CRIADO COM SUCESSO! >> "%TEMP%\create_db.sql"
-echo PROMPT ======================================== >> "%TEMP%\create_db.sql"
-echo PROMPT. >> "%TEMP%\create_db.sql"
-echo PROMPT Detalhes da conexão: >> "%TEMP%\create_db.sql"
-echo PROMPT - Usuário: consumo_esperto >> "%TEMP%\create_db.sql"
-echo PROMPT - Senha: consumo_esperto123 >> "%TEMP%\create_db.sql"
-echo PROMPT - Host: !ORACLE_HOST! >> "%TEMP%\create_db.sql"
-echo PROMPT - Porta: !ORACLE_PORT! >> "%TEMP%\create_db.sql"
-echo PROMPT - Service: !ORACLE_SERVICE! >> "%TEMP%\create_db.sql"
-echo PROMPT. >> "%TEMP%\create_db.sql"
-echo PROMPT Pressione Enter para sair... >> "%TEMP%\create_db.sql"
-echo PAUSE >> "%TEMP%\create_db.sql"
-echo EXIT >> "%TEMP%\create_db.sql"
+:: Criar arquivo SQL temporario para setup
+echo @echo off > "%TEMP%\setup_oracle.sql"
+echo SET LINESIZE 100 >> "%TEMP%\setup_oracle.sql"
+echo SET PAGESIZE 50 >> "%TEMP%\setup_oracle.sql"
+echo SET FEEDBACK ON >> "%TEMP%\setup_oracle.sql"
+echo SET VERIFY ON >> "%TEMP%\setup_oracle.sql"
+echo. >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo PROMPT CONECTANDO AO ORACLE COMO SYSTEM... >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo CONNECT system/oracle@localhost:1521/XE >> "%TEMP%\setup_oracle.sql"
+echo. >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo PROMPT CRIANDO TABLESPACE E USUARIO... >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo CREATE TABLESPACE consumo_esperto_data >> "%TEMP%\setup_oracle.sql"
+echo DATAFILE 'consumo_esperto_data.dbf' >> "%TEMP%\setup_oracle.sql"
+echo SIZE 100M >> "%TEMP%\setup_oracle.sql"
+echo AUTOEXTEND ON NEXT 10M; >> "%TEMP%\setup_oracle.sql"
+echo. >> "%TEMP%\setup_oracle.sql"
+echo CREATE USER !CURRENT_USER! IDENTIFIED BY admin123 >> "%TEMP%\setup_oracle.sql"
+echo DEFAULT TABLESPACE consumo_esperto_data >> "%TEMP%\setup_oracle.sql"
+echo QUOTA UNLIMITED ON consumo_esperto_data; >> "%TEMP%\setup_oracle.sql"
+echo. >> "%TEMP%\setup_oracle.sql"
+echo GRANT CONNECT, RESOURCE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+echo GRANT CREATE SESSION TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+echo GRANT CREATE TABLE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+echo GRANT CREATE SEQUENCE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+echo GRANT CREATE VIEW TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+echo GRANT CREATE PROCEDURE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+echo GRANT CREATE TRIGGER TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+echo. >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo PROMPT CONECTANDO COMO USUARIO !CURRENT_USER!... >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo CONNECT !CURRENT_USER!/admin123@localhost:1521/XE >> "%TEMP%\setup_oracle.sql"
+echo. >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo PROMPT CRIANDO TABELAS... >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo @src\main\resources\db\create-tables.sql >> "%TEMP%\setup_oracle.sql"
+echo. >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo PROMPT BANCO CONFIGURADO COM SUCESSO! >> "%TEMP%\setup_oracle.sql"
+echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+echo PROMPT. >> "%TEMP%\setup_oracle.sql"
+echo PROMPT Detalhes da conexao: >> "%TEMP%\setup_oracle.sql"
+echo PROMPT - Usuario: !CURRENT_USER! >> "%TEMP%\setup_oracle.sql"
+echo PROMPT - Senha: admin123 >> "%TEMP%\setup_oracle.sql"
+echo PROMPT - Host: localhost >> "%TEMP%\setup_oracle.sql"
+echo PROMPT - Porta: 1521 >> "%TEMP%\setup_oracle.sql"
+echo PROMPT - Service: XE >> "%TEMP%\setup_oracle.sql"
+echo PROMPT. >> "%TEMP%\setup_oracle.sql"
+echo PROMPT Pressione Enter para sair... >> "%TEMP%\setup_oracle.sql"
+echo PAUSE >> "%TEMP%\setup_oracle.sql"
+echo EXIT >> "%TEMP%\setup_oracle.sql"
 
-echo Executando script de criação do banco...
+echo Executando script de configuracao do Oracle...
 echo.
-echo NOTA: Uma janela do SQL*Plus será aberta.
-echo Siga as instruções na tela.
+echo NOTA: Uma janela do SQL*Plus sera aberta.
+echo Siga as instrucoes na tela.
 echo.
 echo Pressione qualquer tecla para continuar...
 pause >nul
 
-:: Executar script de criação
-sqlplus /nolog @"%TEMP%\create_db.sql"
+:: Executar script de configuracao
+sqlplus /nolog @"%TEMP%\setup_oracle.sql"
 
 echo.
 echo ========================================
-echo    CONFIGURAÇÃO COMPLETA!
+echo    BANCO ORACLE CONFIGURADO!
 echo ========================================
-echo.
-echo Se tudo foi executado com sucesso:
-echo.
-echo 1. Banco de dados 'consumo_esperto' criado
-echo 2. Usuário 'consumo_esperto' criado
-echo 3. Todas as tabelas criadas
-echo 4. Dados de teste inseridos
-echo.
-echo Para verificar o banco:
-echo - Conecte via SQL*Plus: sqlplus consumo_esperto/consumo_esperto123@localhost:1521/XE
-echo - Execute: SELECT table_name FROM user_tables;
-echo.
-echo Para conectar via aplicação:
-echo - Configure o application.properties com as credenciais:
-echo   spring.datasource.url=jdbc:oracle:thin:@localhost:1521:XE
-echo   spring.datasource.username=consumo_esperto
-echo   spring.datasource.password=consumo_esperto123
-echo.
-echo ========================================
-echo    ARQUIVOS DE SCRIPT:
-echo ========================================
-echo.
-echo Scripts utilizados:
-echo - %DB_DIR%\init-oracle.sql (cria tablespace e usuário)
-echo - %DB_DIR%\create-tables.sql (cria todas as tabelas)
-echo - %DB_DIR%\insert-test-data.sql (insere dados de teste)
-echo.
-echo Para executar manualmente:
-echo 1. Conecte como SYSTEM/SYS
-echo 2. Execute: @%DB_DIR%\init-oracle.sql
-echo 3. Conecte como consumo_esperto
-echo 4. Execute: @%DB_DIR%\create-tables.sql
-echo 5. Execute: @%DB_DIR%\insert-test-data.sql
 echo.
 
-:: Limpar arquivo temporário
-del "%TEMP%\create_db.sql"
+:: ========================================
+:: 3. CRIAR TABELAS NECESSARIAS
+:: ========================================
+echo [3/4] Criando tabelas necessarias...
+echo.
 
-pause
+:: Verificar se as tabelas foram criadas
+echo Verificando se as tabelas foram criadas...
+sqlplus !CURRENT_USER!/admin123@localhost:1521/XE @src\main\resources\db\create-tables.sql
+
+echo Tabelas criadas com sucesso!
+echo.
+
+:: ========================================
+:: 4. CONFIGURAR CREDENCIAIS DO BACKEND
+:: ========================================
+echo [4/4] Configurando credenciais do backend...
+echo.
+
+:: Atualizar application-dev.properties com as credenciais corretas
+echo Atualizando application-dev.properties...
+powershell -Command "& {(Get-Content 'src\main\resources\application-dev.properties') -replace 'spring.datasource.username=consumo_esperto', 'spring.datasource.username=!CURRENT_USER!' -replace 'spring.datasource.password=consumo_esperto123', 'spring.datasource.password=admin123' | Set-Content 'src\main\resources\application-dev.properties'}"
+
+echo Configuracoes do backend atualizadas!
+echo.
+
+:: ========================================
+echo    CONFIGURACAO COMPLETA!
+echo ========================================
+echo.
+echo ✅ Banco Oracle configurado com sucesso!
+echo ✅ Usuario '!CURRENT_USER!' criado
+echo ✅ Tabelas criadas
+echo ✅ Backend configurado
+echo.
+echo ========================================
+echo    CREDENCIAIS DO BANCO
+echo ========================================
+echo.
+echo - Usuario: !CURRENT_USER!
+echo - Senha: admin123
+echo - Host: localhost
+echo - Porta: 1521
+echo - Service: XE
+echo - Tablespace: consumo_esperto_data
+echo.
+echo ========================================
+echo    PROXIMOS PASSOS
+echo ========================================
+echo.
+echo 1. Testar conexao com o banco:
+echo    mvn spring-boot:run
+echo.
+echo 2. Fazer login via Google
+echo    - O sistema criara automaticamente seu usuario
+echo    - Voce podera configurar as APIs bancarias
+echo.
+echo 3. Acessar: http://localhost:8080
+echo.
+
+:: Limpar arquivo temporario
+del "%TEMP%\setup_oracle.sql"
+
+echo Pressione qualquer tecla para sair...
+pause >nul

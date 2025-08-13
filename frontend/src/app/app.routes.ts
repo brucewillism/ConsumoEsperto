@@ -69,6 +69,13 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   
+  // Configuração de APIs bancárias (protegida)
+  { 
+    path: 'bank-config', 
+    loadComponent: () => import('./pages/bank-config/bank-config.component').then(m => m.BankConfigComponent),
+    canActivate: [AuthGuard]
+  },
+  
   // Rota wildcard: captura todas as rotas inexistentes
   // Redireciona para o dashboard (útil para SPA)
   { path: '**', redirectTo: '/dashboard' }

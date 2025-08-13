@@ -88,8 +88,11 @@ export class LoginComponent implements OnInit {
         password: this.loginForm.value.password
       };
 
+      console.log('[LoginComponent] Enviando credenciais para login:', credentials);
+
       this.authService.login(credentials).subscribe({
         next: (response) => {
+          console.log('[LoginComponent] Login bem-sucedido, resposta:', response);
           this.isLoading = false;
           this.showAlert('Login realizado com sucesso!', 'success');
           
@@ -100,12 +103,13 @@ export class LoginComponent implements OnInit {
 
           // Redirecionar para o dashboard após um breve delay
           setTimeout(() => {
+            console.log('[LoginComponent] Redirecionando para dashboard...');
             this.router.navigate(['/dashboard']);
           }, 1000);
         },
         error: (error) => {
+          console.error('[LoginComponent] Erro no login:', error);
           this.isLoading = false;
-          console.error('Erro no login:', error);
           
           let errorMessage = 'Erro ao fazer login. Tente novamente.';
           

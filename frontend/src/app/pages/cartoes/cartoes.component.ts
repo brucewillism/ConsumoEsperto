@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
-import { BankApiService, CreditCard, Invoice, BankConnection } from '../../services/bank-api.service';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
@@ -12,6 +12,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatNativeDateModule } from '@angular/material/core';
+import { BankApiService, BankConnection, Invoice, CreditCard } from '../../services/bank-api.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-cartoes',
@@ -36,19 +38,20 @@ import { MatNativeDateModule } from '@angular/material/core';
 })
 export class CartoesComponent implements OnInit {
   
+  // Data properties
   creditCards: CreditCard[] = [];
-  invoices: Invoice[] = [];
   connectedBanks: BankConnection[] = [];
+  invoices: Invoice[] = [];
+  contas: any[] = [];
+  cartoes: CreditCard[] = [];
+  
+  // UI properties
   loading = false;
   error: string | null = null;
+  showForm = false;
   
   // Form properties
   novoCartaoForm!: FormGroup;
-  showForm = false;
-
-  // Data properties
-  cartoes: any[] = [];
-  contas: any[] = [];
   
   // Filtros
   selectedBank: string = 'all';
@@ -56,13 +59,23 @@ export class CartoesComponent implements OnInit {
   searchTerm: string = '';
 
   constructor(
+    private fb: FormBuilder,
     public bankApiService: BankApiService,
-    private fb: FormBuilder
+    private authService: AuthService,
+    private router: Router
   ) {
     this.initForm();
   }
 
   ngOnInit(): void {
+    // Verifica se o usuário está autenticado
+    if (!this.authService.isAuthenticated()) {
+      console.log('[CartoesComponent] Usuário não autenticado, redirecionando para login...');
+      this.router.navigate(['/login']);
+      return;
+    }
+
+    console.log('[CartoesComponent] Usuário autenticado, carregando dados...');
     this.loadData();
   }
 
@@ -84,45 +97,53 @@ export class CartoesComponent implements OnInit {
    * Carrega todos os dados necessários
    */
   loadData(): void {
+    console.log('[CartoesComponent] Iniciando carregamento de dados...');
     this.loading = true;
     this.error = null;
 
     // Carrega bancos conectados
+    console.log('[CartoesComponent] Carregando bancos conectados...');
     this.bankApiService.getConnectedBanks().subscribe({
       next: (banks) => {
+        console.log('[CartoesComponent] Bancos conectados carregados:', banks);
         this.connectedBanks = banks;
         console.log('Bancos conectados:', banks);
       },
       error: (err) => {
-        console.error('Erro ao carregar bancos:', err);
+        console.error('[CartoesComponent] Erro ao carregar bancos:', err);
         this.error = 'Erro ao carregar bancos conectados';
       }
     });
 
     // Carrega cartões de crédito
+    console.log('[CartoesComponent] Carregando cartões de crédito...');
     this.bankApiService.getCreditCards().subscribe({
       next: (cards) => {
+        console.log('[CartoesComponent] Cartões de crédito carregados:', cards);
         this.creditCards = cards;
         this.cartoes = cards; // Mapeia para a propriedade usada no template
         console.log('Cartões carregados:', cards);
       },
       error: (err) => {
-        console.error('Erro ao carregar cartões:', err);
+        console.error('[CartoesComponent] Erro ao carregar cartões:', err);
         this.error = 'Erro ao carregar cartões de crédito';
       }
     });
 
     // Carrega faturas
+    console.log('[CartoesComponent] Carregando faturas...');
     this.bankApiService.getInvoices().subscribe({
       next: (invoices) => {
+        console.log('[CartoesComponent] Faturas carregadas:', invoices);
         this.invoices = invoices;
         console.log('Faturas carregadas:', invoices);
       },
       error: (err) => {
-        console.error('Erro ao carregar faturas:', err);
+        console.error('[CartoesComponent] Erro ao carregar faturas:', err);
         this.error = 'Erro ao carregar faturas';
       },
       complete: () => {
+        console.log('[CartoesComponent] Carregamento de dados concluído');
         this.loading = false;
       }
     });
