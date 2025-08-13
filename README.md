@@ -1,234 +1,198 @@
-# 🚀 CONSUMO ESPERTO - Sistema de Gestão Financeira Inteligente
+# 🚀 Consumo Esperto - Setup Local
 
-## 🎯 Visão Geral
+## 📋 Visão Geral
 
-O **Consumo Esperto** é uma aplicação completa para gestão financeira pessoal que integra com APIs bancárias reais para sincronização automática de dados financeiros. O sistema oferece uma interface web moderna para configuração de credenciais bancárias e visualização de dados financeiros.
+Este projeto usa **ferramentas locais** para garantir compatibilidade e isolamento. Todas as ferramentas são baixadas e configuradas localmente, sem afetar o sistema global.
 
-## ✨ Funcionalidades Principais
+## 🛠️ Ferramentas Locais
 
-- 🏦 **Integração com APIs Bancárias Reais**
-  - Mercado Pago (cartões de crédito e transações)
-  - Nubank (cartões e transações)
-  - Itaú (Open Banking)
-  - Inter (Open Banking)
+### ✅ Java JDK 17.0.2
+- **Localização**: `tools/java/jdk-17.0.2/`
+- **Download**: Automático via `setup-completo-projeto.bat`
+- **Uso**: Configurado automaticamente no PATH durante execução
 
-- 🔄 **Sincronização Automática de Dados**
-  - Categorias de gastos
-  - Transações bancárias
-  - Faturas de cartão
-  - Compras parceladas
-  - Parcelas individuais
+### ✅ Maven 3.9.6
+- **Localização**: `tools/maven/apache-maven-3.9.6/`
+- **Download**: Automático via `setup-completo-projeto.bat`
+- **Uso**: Configurado automaticamente no PATH durante execução
 
-- 👤 **Sistema de Usuários**
-  - Login com Google OAuth2
-  - Configurações bancárias por usuário
-  - Dados isolados por usuário
+### ✅ Node.js 18.19.0
+- **Localização**: `tools/node/node-v18.19.0-win-x64/`
+- **Download**: Automático via `setup-completo-projeto.bat`
+- **Uso**: Configurado automaticamente no PATH durante execução
 
-- 💻 **Interface Web Moderna**
-  - Configuração de credenciais bancárias
-  - Visualização de dados financeiros
-  - Dashboard responsivo
+### ✅ Oracle Database 21c
+- **Instalação**: Sistema (não local)
+- **Configuração**: Automática via script
+- **Banco**: `consumo_esperto` com usuário da máquina
 
-## 🛠️ Tecnologias Utilizadas
+## 🚀 Como Usar
 
-### Backend
-- **Java 17** com Spring Boot 3.x
-- **Spring Security** com OAuth2 e JWT
-- **Spring Data JPA** com Hibernate
-- **Maven** para gerenciamento de dependências
-- **Oracle Database** (produção) / H2 (desenvolvimento)
-
-### Frontend
-- **HTML5, CSS3, JavaScript**
-- **Bootstrap 5** para interface responsiva
-- **Axios** para requisições HTTP
-- **Bootstrap Icons** para ícones
-
-### Infraestrutura
-- **ngrok** para túnel de desenvolvimento
-- **Maven** para build e dependências
-- **Node.js** para dependências frontend
-
-## 🚀 Setup Automatizado (RECOMENDADO)
-
-### ⚡ Setup Completo com Um Comando
-
-Execute apenas **UM** arquivo para configurar todo o ambiente:
-
+### 1. Setup Inicial (Primeira Vez)
 ```bash
+# Execute o script principal
 setup-completo-projeto.bat
 ```
 
-Este script faz **TUDO** automaticamente:
-- ✅ Detecta e configura JDK 17 existente
-- ✅ Baixa e instala Maven, Node.js, ngrok
-- ✅ Configura IntelliJ IDEA automaticamente
-- ✅ Cria arquivos .gitignore
-- ✅ Instala dependências backend e frontend
-- ✅ Configura banco Oracle (opcional)
-- ✅ Cria documentação automática
-- ✅ Configura Maven para JDK 17
+**O que acontece:**
+- ✅ Baixa Java JDK 17.0.2 localmente
+- ✅ Baixa Maven 3.9.6 localmente  
+- ✅ Baixa Node.js 18.19.0 localmente
+- ✅ Instala/configura Oracle Database 21c
+- ✅ Cria banco e usuário Oracle
+- ✅ Configura frontend Angular
+- ✅ Configura NGROK para APIs bancárias
 
-### 🎯 O que o Setup Completo Faz
-
-1. **Detecção Inteligente de JDK**
-   - Procura JDKs já instalados no sistema
-   - Usa JDK existente quando disponível
-   - Baixa JDK 17 apenas se necessário
-
-2. **Configuração Automática do IntelliJ**
-   - Cria todos os arquivos `.idea/` necessários
-   - Configura JDK 17 automaticamente
-   - Configura módulos e workspace
-
-3. **Configuração do Maven**
-   - Cria `.mvn/jvm.config` para JDK 17
-   - Configura compilador Java 17
-
-4. **Arquivos .gitignore**
-   - Cria .gitignore raiz, backend e frontend
-   - Exclui arquivos desnecessários do Git
-   - Mantém arquivos de configuração importantes
-
-5. **Instalação de Dependências**
-   - Backend: `mvn clean install`
-   - Frontend: `npm install`
-
-6. **Documentação Automática**
-   - Cria READMEs específicos automaticamente
-   - Documenta configurações realizadas
-
-## 🔧 Setup Manual (Alternativo)
-
-Se preferir configurar manualmente:
-
-### Pré-requisitos
-- Java 17 (JDK)
-- Maven 3.9+
-- Node.js 20+
-- Oracle Database (opcional)
-
-### Backend
+### 2. Testar Ferramentas (Opcional)
 ```bash
-cd backend
-mvn clean install
+# Verificar se todas as ferramentas estão funcionando
+testar-ferramentas.bat
 ```
 
-### Frontend
+### 3. Limpeza e Reinstalação (Se necessário)
 ```bash
-cd frontend
-npm install
+# Limpar ferramentas corrompidas e reinstalar
+limpar-e-reinstalar.bat
 ```
 
-## 🗄️ Banco de Dados
-
-### Oracle (Produção)
-O setup completo pode configurar automaticamente o banco Oracle, criando:
-- Usuário `consumo_esperto`
-- Todas as tabelas necessárias
-- Índices e constraints
-
-### H2 (Desenvolvimento)
-Para desenvolvimento local, o sistema usa H2 Database com dados em memória.
-
-## 🔑 Configuração de APIs Bancárias
-
-### Interface Web
-1. Execute o setup completo
-2. Inicie o backend: `start-servicos.bat`
-3. Acesse: `http://localhost:8080/bank-config.html`
-4. Configure credenciais para cada banco
-
-### APIs Suportadas
-- **Mercado Pago**: Cartões e transações
-- **Nubank**: Cartões e transações  
-- **Itaú**: Open Banking
-- **Inter**: Open Banking
-
-## 📱 Executando o Sistema
-
-### Iniciar Serviços
+### 4. Iniciar Serviços
 ```bash
+# Script interativo para escolher serviço
 start-servicos.bat
 ```
 
-### Verificar Status
+**Opções disponíveis:**
+1. **Backend Spring Boot** (Oracle)
+2. **Frontend Angular**
+3. **NGROK** para APIs bancárias
+4. **Todos os serviços** (em janelas separadas)
+
+### 3. Comandos Manuais
+
+#### Backend (Spring Boot + Oracle)
 ```bash
-status-servicos.bat
+cd backend
+..\tools\maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run -Dspring.profiles.active=dev
 ```
 
-### Parar Serviços
+#### Frontend (Angular)
 ```bash
-parar-servicos.bat
+cd frontend
+..\tools\node\node-v18.19.0-win-x64\npm.cmd install -g @angular/cli
+..\tools\node\node-v18.19.0-win-x64\npx.cmd ng serve
 ```
 
-## 🧹 Limpeza e Manutenção
-
-### Limpar Arquivos Antigos
-Se você tinha arquivos antigos antes da consolidação:
+#### NGROK (APIs Bancárias)
 ```bash
-limpar-arquivos-antigos.bat
+cd scripts
+start-ngrok.bat
 ```
 
-### Reconfigurar JDK
-Para reconfigurar o JDK:
+## 📁 Estrutura de Pastas
+
+```
+ConsumoEsperto/
+├── tools/                          # Ferramentas locais
+│   ├── java/jdk-17.0.2/           # Java JDK 17.0.2
+│   ├── maven/apache-maven-3.9.6/  # Maven 3.9.6
+│   └── node/node-v18.19.0-win-x64/ # Node.js 18.19.0
+├── backend/                        # Spring Boot + Oracle
+├── frontend/                       # Angular
+├── scripts/                        # Scripts de automação
+├── setup-completo-projeto.bat      # Setup principal
+├── testar-ferramentas.bat         # Testar ferramentas
+├── limpar-e-reinstalar.bat        # Limpeza e reinstalação
+├── start-servicos.bat             # Iniciar serviços
+└── README.md                      # Este arquivo
+```
+
+## 🔧 Configurações
+
+### Banco Oracle
+- **Host**: localhost
+- **Porta**: 1521
+- **Service**: XE
+- **Usuário**: Nome da máquina
+- **Senha**: admin123
+- **Tablespace**: consumo_esperto_data
+
+### URLs da Aplicação
+- **Backend**: http://localhost:8080
+- **Frontend**: http://localhost:4200
+- **Swagger**: http://localhost:8080/swagger-ui/
+- **H2 Console**: http://localhost:8080/h2-console (se usar H2)
+
+### NGROK (APIs Bancárias)
+- **API**: https://consumo-esperto-api.ngrok.io
+- **Web**: https://consumo-esperto-web.ngrok.io
+- **Config**: `scripts/ngrok-config.yml`
+
+## 🚨 Solução de Problemas
+
+### Problemas de Extração/Download
+Se as ferramentas falharem durante download ou extração:
+
 ```bash
+# 1. Limpar tudo e reinstalar
+limpar-e-reinstalar.bat
+
+# 2. Reexecutar setup
 setup-completo-projeto.bat
 ```
 
-## 📚 Documentação
+### Java não encontrado
+```bash
+# Verificar se está na pasta correta
+dir tools\java\jdk-17.0.2\bin\java.exe
 
-### Documentação Automática
-O setup completo cria automaticamente:
-- `SOLUCAO_JDK_README.md` - Solução do problema JDK
-- `CONFIGURACAO_BANCO_README.md` - Configuração do banco
-- `CONFIGURACAO_APIS_BANCARIAS_README.md` - APIs bancárias
+# Reexecutar setup se necessário
+setup-completo-projeto.bat
+```
 
-### Documentação Manual
-- `CONFIGURACAO_BANCO_README.md` - Setup do banco Oracle
-- `SINCRONIZACAO_AUTOMATICA_README.md` - Sistema de sincronização
-- `bank-api-config-per-user-README.md` - Configuração de APIs por usuário
+### Maven não encontrado
+```bash
+# Verificar se está na pasta correta
+dir tools\maven\apache-maven-3.9.6\bin\mvn.cmd
 
-## 🐛 Troubleshooting
+# Reexecutar setup se necessário
+setup-completo-projeto.bat
+```
 
-### Problema: "JDK isn't specified for module"
-**Solução**: Execute `setup-completo-projeto.bat` - ele detecta e configura automaticamente!
+### Node.js não encontrado
+```bash
+# Verificar se está na pasta correta
+dir tools\node\node-v18.19.0-win-x64\node.exe
 
-### Problema: Erro de compilação Maven
-**Solução**: Execute `setup-completo-projeto.bat` - ele configura Maven para JDK 17!
+# Reexecutar setup se necessário
+setup-completo-projeto.bat
+```
 
-### Problema: IntelliJ não reconhece projeto
-**Solução**: Execute `setup-completo-projeto.bat` - ele cria todas as configurações!
+### Oracle não conecta
+```bash
+# Verificar se está rodando
+netstat -an | findstr :1521
 
-## 🎉 Vantagens do Setup Automatizado
+# Iniciar serviço se necessário
+net start OracleServiceXE
+```
 
-- **Um comando para tudo**: `setup-completo-projeto.bat`
-- **Detecção inteligente**: Usa JDKs já instalados
-- **Configuração automática**: IntelliJ, Maven, .gitignore
-- **Documentação automática**: READMEs criados automaticamente
-- **Sem intervenção manual**: Tudo configurado automaticamente
-- **Reutilizável**: Execute sempre que precisar reconfigurar
+## 📝 Notas Importantes
 
-## 🔄 Atualizações
+- **Ferramentas locais**: Não afetam sistema global
+- **Versões específicas**: Garantem compatibilidade
+- **Isolamento**: Cada projeto tem suas ferramentas
+- **Portabilidade**: Funciona em qualquer máquina Windows
+- **Git**: Pasta `tools/` não é versionada (`.gitignore`)
 
-### Para Atualizar o Sistema
-1. Execute `git pull` para obter as últimas mudanças
-2. Execute `setup-completo-projeto.bat` para reconfigurar
-3. Todas as configurações serão atualizadas automaticamente
+## 🆘 Suporte
 
-## 📞 Suporte
+Se encontrar problemas:
 
-### Problemas Comuns
-- **JDK**: Execute `setup-completo-projeto.bat`
-- **Maven**: Execute `setup-completo-projeto.bat`
-- **IntelliJ**: Execute `setup-completo-projeto.bat`
-- **Banco**: Execute `setup-completo-projeto.bat`
-
-### Resumo
-**Execute sempre `setup-completo-projeto.bat`** - ele resolve 99% dos problemas!
+1. **Verifique logs** dos serviços
+2. **Reexecute setup** se necessário
+3. **Verifique permissões** de administrador
+4. **Verifique conexão** com internet para downloads
 
 ---
 
-**Desenvolvido com ❤️ pela equipe Consumo Esperto**
-
-> 💡 **Dica**: Execute `setup-completo-projeto.bat` sempre que tiver problemas - ele é a solução para tudo!
+**🎯 Sistema configurado para funcionar de forma isolada e portável!**

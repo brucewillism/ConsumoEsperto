@@ -3,157 +3,130 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo    INICIANDO SERVIÇOS - CONSUMO ESPERTO
+echo    INICIAR SERVICOS - CONSUMO ESPERTO
 echo ========================================
 echo.
 
-:: Verificar se as ferramentas estão instaladas
-set "TOOLS_DIR=%~dp0tools"
-set "JAVA_HOME_LOCAL=%TOOLS_DIR%\java-17"
-set "MAVEN_HOME_LOCAL=%TOOLS_DIR%\maven-3.9.6"
-set "NODE_HOME_LOCAL=%TOOLS_DIR%\node-20.11.0"
-
-if not exist "%JAVA_HOME_LOCAL%\bin\java.exe" (
-    echo Java 17 não encontrado! Execute setup-completo-projeto.bat primeiro.
+:: Configurar ferramentas locais
+if exist "tools\java\jdk-17.0.2\bin\java.exe" (
+    set "JAVA_HOME=%CD%\tools\java\jdk-17.0.2"
+    set "PATH=%CD%\tools\java\jdk-17.0.2\bin;%PATH%"
+    echo Java JDK 17.0.2 configurado
+) else (
+    echo ERRO: Java JDK 17.0.2 nao encontrado!
+    echo Execute setup-completo-projeto.bat primeiro
     pause
     exit /b 1
 )
 
-if not exist "%MAVEN_HOME_LOCAL%\bin\mvn.cmd" (
-    echo Maven não encontrado! Execute setup-completo-projeto.bat primeiro.
+if exist "tools\maven\apache-maven-3.9.6\bin\mvn.cmd" (
+    set "MAVEN_HOME=%CD%\tools\maven\apache-maven-3.9.6"
+    set "PATH=%CD%\tools\maven\apache-maven-3.9.6\bin;%PATH%"
+    echo Maven 3.9.6 configurado
+) else (
+    echo ERRO: Maven 3.9.6 nao encontrado!
+    echo Execute setup-completo-projeto.bat primeiro
     pause
     exit /b 1
 )
 
-if not exist "%NODE_HOME_LOCAL%\node.exe" (
-    echo Node.js não encontrado! Execute setup-completo-projeto.bat primeiro.
+if exist "tools\node\node-v18.19.0-win-x64\node.exe" (
+    set "NODE_HOME=%CD%\tools\node\node-v18.19.0-win-x64"
+    set "PATH=%CD%\tools\node\node-v18.19.0-win-x64;%PATH%"
+    echo Node.js 18.19.0 configurado
+) else (
+    echo ERRO: Node.js 18.19.0 nao encontrado!
+    echo Execute setup-completo-projeto.bat primeiro
     pause
     exit /b 1
 )
 
-echo Ferramentas encontradas! Iniciando serviços...
-echo.
-
-:: Definir diretórios do projeto
-set "PROJECT_DIR=%~dp0"
-set "BACKEND_DIR=%PROJECT_DIR%backend"
-set "FRONTEND_DIR=%PROJECT_DIR%frontend"
-
-:: Verificar se os serviços já estão rodando
-echo Verificando serviços em execução...
-
-:: Verificar backend (porta 8080)
-for /f "tokens=*" %%a in ('netstat -an 2^>nul ^| findstr :8080') do (
-    echo Backend já está rodando na porta 8080
-    goto :backend_running
-)
-echo Backend não está rodando
-
-:: Verificar frontend (porta 4200)
-for /f "tokens=*" %%a in ('netstat -an 2^>nul ^| findstr :4200') do (
-    echo Frontend já está rodando na porta 4200
-    goto :frontend_running
-)
-echo Frontend não está rodando
-
-:: Verificar ngrok (porta 4040)
-for /f "tokens=*" %%a in ('netstat -an 2^>nul ^| findstr :4040') do (
-    echo ngrok já está rodando na porta 4040
-    goto :ngrok_running
-)
-echo ngrok não está rodando
-
 echo.
 echo ========================================
-echo    INICIANDO SERVIÇOS...
+echo    FERRAMENTAS CONFIGURADAS
 echo ========================================
+echo Java: !JAVA_HOME!
+echo Maven: !MAVEN_HOME!
+echo Node.js: !NODE_HOME!
 echo.
 
-:: Iniciar backend se não estiver rodando
-:backend_running
-if not exist "%TEMP_DIR%\backend_running.flag" (
-    echo Iniciando backend...
-    start "Backend - Consumo Esperto" /min cmd /c "cd /d \"%BACKEND_DIR%\" && \"%MAVEN_HOME_LOCAL%\bin\mvn.cmd\" spring-boot:run"
-    
-    :: Aguardar backend iniciar
-    echo Aguardando backend iniciar...
-    timeout /t 15 /nobreak >nul
-    
-    :: Marcar como rodando
-    echo. > "%TEMP_DIR%\backend_running.flag"
+echo Escolha o servico para iniciar:
+echo 1. Backend Spring Boot (Oracle)
+echo 2. Frontend Angular
+echo 3. NGROK para APIs bancarias
+echo 4. Todos os servicos
+echo.
+
+set /p escolha="Digite sua escolha (1-4): "
+
+if "%escolha%"=="1" goto :backend
+if "%escolha%"=="2" goto :frontend
+if "%escolha%"=="3" goto :ngrok
+if "%escolha%"=="4" goto :todos
+goto :invalido
+
+:backend
+echo.
+echo Iniciando Backend Spring Boot...
+cd backend
+echo Executando: mvn spring-boot:run -Dspring.profiles.active=dev
+mvn spring-boot:run -Dspring.profiles.active=dev
+goto :fim
+
+:frontend
+echo.
+echo Iniciando Frontend Angular...
+cd frontend
+echo Instalando dependencias...
+npm install
+echo Executando: ng serve
+ng serve
+goto :fim
+
+:ngrok
+echo.
+echo Iniciando NGROK para APIs bancarias...
+cd scripts
+if exist "start-ngrok.bat" (
+    start-ngrok.bat
 ) else (
-    echo Backend já foi iniciado.
+    echo ERRO: Script NGROK nao encontrado!
+    echo Execute setup-completo-projeto.bat primeiro
 )
+goto :fim
 
-:: Iniciar ngrok se não estiver rodando
-:ngrok_running
-if not exist "%TEMP_DIR%\ngrok_running.flag" (
-    echo Iniciando ngrok...
-    start "ngrok" /min cmd /c "cd /d \"%TOOLS_DIR%\" && ngrok http 8080"
-    
-    :: Aguardar ngrok iniciar
-    echo Aguardando ngrok iniciar...
-    timeout /t 10 /nobreak >nul
-    
-    :: Marcar como rodando
-    echo. > "%TEMP_DIR%\ngrok_running.flag"
+:todos
+echo.
+echo Iniciando todos os servicos...
+echo.
+echo 1. Backend em nova janela...
+start "Backend Spring Boot" cmd /k "cd /d %CD%\backend && mvn spring-boot:run -Dspring.profiles.active=dev"
+echo.
+echo 2. Frontend em nova janela...
+start "Frontend Angular" cmd /k "cd /d %CD%\frontend && npm install && ng serve"
+echo.
+echo 3. NGROK em nova janela...
+if exist "scripts\start-ngrok.bat" (
+    start "NGROK" cmd /k "cd /d %CD%\scripts && start-ngrok.bat"
 ) else (
-    echo ngrok já foi iniciado.
+    echo ERRO: Script NGROK nao encontrado!
 )
-
-:: Iniciar frontend se não estiver rodando
-:frontend_running
-if not exist "%TEMP_DIR%\frontend_running.flag" (
-    echo Iniciando frontend...
-    start "Frontend - Consumo Esperto" /min cmd /c "cd /d \"%FRONTEND_DIR%\" && \"%NODE_HOME_LOCAL%\npm.cmd\" start"
-    
-    :: Aguardar frontend iniciar
-    echo Aguardando frontend iniciar...
-    timeout /t 20 /nobreak >nul
-    
-    :: Marcar como rodando
-    echo. > "%TEMP_DIR%\frontend_running.flag"
-) else (
-    echo Frontend já foi iniciado.
-)
-
-:: Aguardar um pouco mais para garantir que tudo está rodando
-echo Aguardando serviços estabilizarem...
-timeout /t 10 /nobreak >nul
-
-:: Tentar obter URL do ngrok
-echo Obtendo URL do ngrok...
-for /f "tokens=*" %%i in ('powershell -Command "try { $ngrokInfo = Invoke-RestMethod -Uri 'http://localhost:4040/api/tunnels' -ErrorAction SilentlyContinue; if ($ngrokInfo.tunnels -and $ngrokInfo.tunnels.Count -gt 0) { $ngrokInfo.tunnels[0].public_url } } catch { 'http://localhost:4200' }"') do set "NGROK_URL=%%i"
-
-if "!NGROK_URL!"=="" set "NGROK_URL=http://localhost:4200"
-
-:: Abrir navegador
-echo Abrindo navegador...
-start "" "!NGROK_URL!"
-
 echo.
-echo ========================================
-echo    SERVIÇOS INICIADOS!
-echo ========================================
+echo Todos os servicos iniciados em janelas separadas!
 echo.
-echo Backend: http://localhost:8080
-echo Frontend: http://localhost:4200
-echo ngrok: !NGROK_URL!
+echo URLs disponiveis:
+echo - Backend: http://localhost:8080
+echo - Frontend: http://localhost:4200
+echo - Swagger: http://localhost:8080/swagger-ui/
 echo.
-echo Swagger: http://localhost:8080/swagger-ui.html
-echo Health Check: http://localhost:8080/actuator/health
-echo.
-echo ========================================
-echo    COMANDOS ÚTEIS:
-echo ========================================
-echo.
-echo Para parar todos os serviços: parar-servicos.bat
-echo Para reiniciar: execute este script novamente
-echo.
-echo ========================================
-echo    APLICAÇÃO RODANDO!
-echo ========================================
-echo.
+goto :fim
 
-:: Manter janela aberta
+:invalido
+echo Escolha invalida! Digite 1, 2, 3 ou 4.
 pause
+goto :fim
+
+:fim
+echo.
+echo Pressione qualquer tecla para sair...
+pause >nul

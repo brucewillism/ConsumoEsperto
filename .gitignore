@@ -1,274 +1,55 @@
-# Compiled class files
-*.class
+# =============================================================================
+# GITIGNORE - CONSUMO ESPERTO
+# =============================================================================
 
-# Log files
+# Ferramentas locais (não versionar)
+tools/
+!tools/.gitkeep
+
+# Arquivos temporários
+*.tmp
+*.temp
 *.log
+*.sql
 
-# Maven
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
-buildNumber.properties
-.mvn/timing.properties
-.mvn/wrapper/maven-wrapper.jar
+# Downloads temporários
+%TEMP%/
+temp/
 
-# Gradle
-.gradle
-build/
-!gradle/wrapper/gradle-wrapper.jar
-
-# IntelliJ IDEA
-.idea/
-*.iws
-*.iml
-*.ipr
-out/
-
-# Eclipse
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-
-# NetBeans
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-# VS Code
-.vscode/
-
-# Mac
-.DS_Store
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# Node.js (Frontend)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.npm
-.eslintcache
-
-# Angular
-.angular/
-dist/
-tmp/
-out-tsc/
-.angular/cache/
-
-# Environment files
+# Arquivos de configuração local
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+application-local.properties
 
 # Logs
 logs/
 *.log
 
-# Temporary files
-*.tmp
-*.temp
-*.swp
-*.swo
-*~
+# Arquivos de build
+target/
+dist/
+node_modules/
 
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# IDE specific files
+# Arquivos de IDE
 .idea/
 .vscode/
 *.iml
 *.ipr
 *.iws
 
-# Build outputs
-target/
-build/
-out/
-dist/
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
 
-# Dependencies
-node_modules/
-vendor/
-
-# Coverage reports
-coverage/
-*.lcov
-
-# Test results
-test-results/
-coverage/
-
-# Spring Boot specific
-*.pid
-*.pid.lock
-
-# Oracle database files
-*.ora
-*.dmp
-*.exp
-*.imp
-
-# Backup files
+# Arquivos de backup
 *.bak
 *.backup
 *.old
 
-# Large binary files
-*.zip
-*.tar
-*.gz
-*.rar
-*.7z
-*.iso
-*.img
-*.bin
-*.exe
-*.dll
-*.so
-*.dylib
-*.jar
-*.war
-*.ear
-*.nar
+# Arquivos de configuração Oracle
+*.ora
+*.dbf
+*.ctl
 
-# Database dumps
-*.sql
-*.dump
-*.backup
-
-# Configuration files with secrets
-config/
-secrets/
-credentials/
-*.key
-*.pem
-*.p12
-*.pfx
-*.jks
-*.keystore
-*.truststore
-
-# Cache directories
-.cache/
-cache/
-tmp/
-temp/
-
-# User-specific files
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-
-# Build results
-[Dd]ebug/
-[Dd]ebugPublic/
-[Rr]elease/
-[Rr]eleases/
-x64/
-x86/
-build/
-bld/
-[Bb]in/
-[Oo]bj/
-[Oo]ut/
-msbuild.log
-msbuild.err
-msbuild.wrn
-
-# NuGet Packages
-*.nupkg
-*.snupkg
-**/[Pp]ackages/*
-!**/[Pp]ackages/build/
-*.nuget.props
-*.nuget.targets
-
-# Microsoft Azure Build Output
-csx/
-*.build.csdef
-
-# Microsoft Azure Emulator
-ecf/
-rcf/
-
-# Windows Store app package directories and files
-AppPackages/
-BundleArtifacts/
-Package.StoreAssociation.xml
-_pkginfo.txt
-*.appx
-*.appxbundle
-*.appxupload
-
-# Visual Studio cache files
-*.[Cc]ache
-!?*.[Cc]ache/
-
-# Others
-ClientBin/
-~$*
-*~
-*.dbmdl
-*.dbproj.schemaview
-*.jfm
-*.pfx
-*.publishsettings
-orleans.codegen.cs
-
-# Including or excluding files
-# Include specific files if needed
-!**/src/main/resources/application.properties
-!**/src/main/resources/application.yml
-!**/src/main/resources/application.yaml
-!**/src/main/resources/application-h2.properties
-!**/src/main/resources/bank-apis-config.properties
-!**/src/main/resources/mercadopago-config.properties
-
-# Exclude large files and directories
-tools/
-jdk*/
-jre*/
-*.jdk
-*.jre
-*.jar
-*.war
-*.ear
-*.nar
-*.zip
-*.tar
-*.gz
-*.rar
-*.7z
-*.iso
-*.img
-*.bin
-*.exe
-*.dll
-*.so
-*.dylib
+# Arquivos de configuração NGROK
+ngrok.yml
+ngrok-config.yml
