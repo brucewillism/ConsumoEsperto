@@ -2,19 +2,56 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
+:: ========================================
+::    SETUP COMPLETO - CONSUMO ESPERTO
+::    AMBIENTE LOCAL - MENU INTERATIVO
+:: ========================================
+
+:menu
+cls
 echo ========================================
-echo    SETUP COMPLETO - CONSUMO ESPERTO
+echo    CONSUMO ESPERTO - SETUP COMPLETO
+echo    AMBIENTE LOCAL - MENU INTERATIVO
 echo ========================================
 echo.
-echo Este script ira configurar todo o projeto:
-echo 1. Verificar/Instalar Java JDK 17
-echo 2. Verificar/Instalar Maven
-echo 3. Verificar/Instalar Node.js
-echo 4. Verificar/Instalar Oracle Database 21c
-echo 5. Criar banco e usuario Oracle
-echo 6. Configurar frontend Angular
-echo 7. Configurar NGROK para APIs bancarias
-echo 8. Iniciar servicos
+echo Escolha uma opcao:
+echo.
+echo 1. Instalar Java JDK 17
+echo 2. Instalar Maven 3.9.6
+echo 3. Instalar Node.js 20
+echo 4. Instalar Oracle 21c + Banco
+echo 5. Fazer TUDO (1+2+3+4)
+echo 6. Verificar Status
+echo 7. Executar Backend
+echo 8. Executar Frontend
+echo 9. Configurar Oracle (Docker)
+echo 0. Sair
+echo.
+set /p opcao="Digite sua opcao: "
+
+if "%opcao%"=="1" goto instalar_java
+if "%opcao%"=="2" goto instalar_maven
+if "%opcao%"=="3" goto instalar_node
+if "%opcao%"=="4" goto instalar_oracle
+if "%opcao%"=="5" goto fazer_tudo
+if "%opcao%"=="6" goto verificar_status
+if "%opcao%"=="7" goto executar_backend
+if "%opcao%"=="8" goto executar_frontend
+if "%opcao%"=="9" goto configurar_oracle_docker
+if "%opcao%"=="0" goto sair
+
+echo Opcao invalida!
+timeout /t 2 /nobreak >nul
+goto menu
+
+:: ========================================
+:: 1. INSTALAR JAVA JDK 17
+:: ========================================
+:instalar_java
+cls
+echo ========================================
+echo    INSTALANDO JAVA JDK 17
+echo ========================================
 echo.
 
 :: Obter nome do usuario logado
@@ -24,41 +61,35 @@ if "!CURRENT_USER!"=="" set "CURRENT_USER=%USERNAME%"
 echo Usuario logado: !CURRENT_USER!
 echo.
 
-:: ========================================
-:: 1. VERIFICAR/INSTALAR JAVA JDK 17 LOCAL
-:: ========================================
-echo [1/8] Verificando/Instalando Java JDK 17 local...
-echo.
-
-:: Criar diretorio local para ferramentas
+:: Criar estrutura de diretorios
 if not exist "tools" mkdir tools
 if not exist "tools\java" mkdir tools\java
-if not exist "tools\maven" mkdir tools\maven
-if not exist "tools\node" mkdir tools\node
+if not exist "tools\scripts" mkdir tools\scripts
 
-:: Verificar se Java ja esta instalado localmente
+echo [1/4] Verificando se Java 17 ja esta instalado...
 if exist "tools\java\jdk-17.0.2\bin\java.exe" (
-    echo Java JDK 17 encontrado localmente!
-    set "JAVA_HOME=%CD%\tools\java\jdk-17.0.2"
-    set "PATH=%CD%\tools\java\jdk-17.0.2\bin;%PATH%"
-    echo JAVA_HOME configurado: !JAVA_HOME!
+    echo ✅ Java JDK 17 ja esta instalado localmente!
+    set "JAVA_HOME_LOCAL=%CD%\tools\java\jdk-17.0.2"
+    echo Localizacao: !JAVA_HOME_LOCAL!
 ) else (
-    echo Java JDK 17 nao encontrado localmente. Baixando...
+    echo ❌ Java JDK 17 nao encontrado. Baixando...
     echo.
     
-    :: Verificar se o download ja foi feito
+    echo [2/4] Baixando OpenJDK 17.0.2...
     if not exist "%TEMP%\openjdk-17.0.2_windows-x64_bin.zip" (
-        echo Baixando OpenJDK 17.0.2...
+        echo Download em andamento... (pode demorar alguns minutos)
         powershell -Command "& {Invoke-WebRequest -Uri 'https://download.java.net/java/GA/jdk17.0.2/dfd4a8d0985749f896bed50d7138ee7f/8/GPL/openjdk-17.0.2_windows-x64_bin.zip' -OutFile '%TEMP%\openjdk-17.0.2_windows-x64_bin.zip'}"
     )
     
     if exist "%TEMP%\openjdk-17.0.2_windows-x64_bin.zip" (
-        echo Extraindo JDK para pasta local...
+        echo ✅ Download concluido!
+        echo.
+        echo [3/4] Extraindo JDK para pasta local...
         powershell -Command "& {Expand-Archive -Path '%TEMP%\openjdk-17.0.2_windows-x64_bin.zip' -DestinationPath 'tools\java' -Force}"
         
         :: Renomear pasta para padrao
         if exist "tools\java\jdk-17.0.2" (
-            echo Java JDK 17.0.2 instalado localmente!
+            echo ✅ Java JDK 17.0.2 instalado localmente!
         ) else (
             echo Renomeando pasta do JDK...
             for /d %%i in ("tools\java\jdk-17*") do (
@@ -66,353 +97,300 @@ if exist "tools\java\jdk-17.0.2\bin\java.exe" (
             )
         )
         
-        set "JAVA_HOME=%CD%\tools\java\jdk-17.0.2"
-        set "PATH=%CD%\tools\java\jdk-17.0.2\bin;%PATH%"
-        echo JAVA_HOME configurado: !JAVA_HOME!
+        set "JAVA_HOME_LOCAL=%CD%\tools\java\jdk-17.0.2"
+        echo Localizacao: !JAVA_HOME_LOCAL!
     ) else (
-        echo ERRO: Falha ao baixar Java JDK 17
+        echo ❌ ERRO: Falha ao baixar Java JDK 17
         echo Verifique sua conexao com a internet e tente novamente
         pause
-        exit /b 1
+        goto menu
     )
 )
 
-:: Verificar se Java esta funcionando
 echo.
-echo Verificando se Java esta funcionando...
-java -version >nul 2>&1
+echo [4/4] Verificando se Java 17 esta funcionando...
+"!JAVA_HOME_LOCAL!\bin\java.exe" -version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ERRO: Java nao esta funcionando corretamente!
-    echo Verifique a instalacao e tente novamente
+    echo ❌ ERRO: Java 17 local nao esta funcionando!
     pause
-    exit /b 1
+    goto menu
 ) else (
-    echo Java funcionando corretamente!
-    java -version
+    echo ✅ Java 17 local funcionando perfeitamente!
+    "!JAVA_HOME_LOCAL!\bin\java.exe" -version
 )
+
 echo.
+echo ========================================
+echo    JAVA JDK 17 INSTALADO COM SUCESSO!
+echo ========================================
+echo.
+echo Localizacao: !JAVA_HOME_LOCAL!
+echo.
+pause
+goto menu
 
 :: ========================================
-:: 2. VERIFICAR/INSTALAR MAVEN LOCAL
+:: 2. INSTALAR MAVEN 3.9.6
 :: ========================================
-echo [2/8] Verificando/Instalando Maven local...
+:instalar_maven
+cls
+echo ========================================
+echo    INSTALANDO MAVEN 3.9.6
+echo ========================================
 echo.
 
-:: Verificar se Maven ja esta instalado localmente
+:: Criar estrutura de diretorios
+if not exist "tools" mkdir tools
+if not exist "tools\maven" mkdir tools\maven
+
+echo [1/4] Verificando se Maven ja esta instalado...
 if exist "tools\maven\apache-maven-3.9.6\bin\mvn.cmd" (
-    echo Maven 3.9.6 encontrado localmente!
-    set "MAVEN_HOME=%CD%\tools\maven\apache-maven-3.9.6"
-    set "PATH=%CD%\tools\maven\apache-maven-3.9.6\bin;%PATH%"
-    echo MAVEN_HOME configurado: !MAVEN_HOME!
+    echo ✅ Maven 3.9.6 ja esta instalado localmente!
+    set "MAVEN_HOME_LOCAL=%CD%\tools\maven\apache-maven-3.9.6"
+    echo Localizacao: !MAVEN_HOME_LOCAL!
 ) else (
-    echo Maven nao encontrado localmente. Baixando...
+    echo ❌ Maven nao encontrado. Baixando...
     echo.
     
-    :: Verificar se o download ja foi feito
+    echo [2/4] Baixando Maven 3.9.6...
     if not exist "%TEMP%\apache-maven-3.9.6-bin.zip" (
-        echo Baixando Apache Maven 3.9.6...
+        echo Download em andamento... (pode demorar alguns minutos)
         powershell -Command "& {Invoke-WebRequest -Uri 'https://archive.apache.org/dist/maven/maven-3/3.9.6/binaries/apache-maven-3.9.6-bin.zip' -OutFile '%TEMP%\apache-maven-3.9.6-bin.zip'}"
     )
     
     if exist "%TEMP%\apache-maven-3.9.6-bin.zip" (
-        echo Extraindo Maven para pasta local...
-        
-        :: Limpar pasta maven se existir
-        if exist "tools\maven" rmdir /s /q "tools\maven"
-        
-        :: Extrair com PowerShell
-        powershell -Command "& {try { Expand-Archive -Path '%TEMP%\apache-maven-3.9.6-bin.zip' -DestinationPath 'tools\maven' -Force; Write-Host 'Maven extraido com sucesso!' } catch { Write-Host 'ERRO na extracao: ' + $_.Exception.Message; exit 1 }}"
-        
-        :: Verificar se a extração foi bem-sucedida
-        if exist "tools\maven\apache-maven-3.9.6\bin\mvn.cmd" (
-            set "MAVEN_HOME=%CD%\tools\maven\apache-maven-3.9.6"
-            set "PATH=%CD%\tools\maven\apache-maven-3.9.6\bin;%PATH%"
-            echo Maven 3.9.6 instalado localmente!
-            echo MAVEN_HOME configurado: !MAVEN_HOME!
-        ) else (
-            echo ERRO: Falha ao extrair Maven
-            echo Verificando estrutura da pasta...
-            dir "tools\maven" /s
-            echo.
-            echo Tentando extrair novamente...
-            powershell -Command "& {Expand-Archive -Path '%TEMP%\apache-maven-3.9.6-bin.zip' -DestinationPath 'tools\maven' -Force}"
-            
-            if exist "tools\maven\apache-maven-3.9.6\bin\mvn.cmd" (
-                set "MAVEN_HOME=%CD%\tools\maven\apache-maven-3.9.6"
-                set "PATH=%CD%\tools\maven\apache-maven-3.9.6\bin;%PATH%"
-                echo Maven 3.9.6 instalado localmente na segunda tentativa!
-                echo MAVEN_HOME configurado: !MAVEN_HOME!
-            ) else (
-                echo ERRO: Falha definitiva ao extrair Maven
-                echo Verifique se o arquivo ZIP esta corrompido
-                echo Tamanho do arquivo: 
-                dir "%TEMP%\apache-maven-3.9.6-bin.zip"
-                pause
-                exit /b 1
-            )
-        )
-    ) else (
-        echo ERRO: Falha ao baixar Maven
-        echo Verifique sua conexao com a internet e tente novamente
-        pause
-        exit /b 1
-    )
-)
-
-:: Verificar se Maven esta funcionando
-echo.
-echo Verificando se Maven esta funcionando...
-mvn -version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ERRO: Maven nao esta funcionando corretamente!
-    echo Verifique a instalacao e tente novamente
-    echo.
-    echo Pressione qualquer tecla para continuar...
-    pause >nul
-    exit /b 1
-) else (
-    echo Maven funcionando corretamente!
-    mvn -version
-)
-echo.
-echo Maven configurado com sucesso!
-echo.
-pause
-
-:: ========================================
-:: 3. VERIFICAR/INSTALAR NODE.JS LOCAL
-:: ========================================
-echo [3/8] Verificando/Instalando Node.js local...
-echo.
-
-:: Verificar se Node.js ja esta instalado localmente
-if exist "tools\node\node-v18.19.0-win-x64\node.exe" (
-    echo Node.js 18.19.0 encontrado localmente!
-    set "NODE_HOME=%CD%\tools\node\node-v18.19.0-win-x64"
-    set "PATH=%CD%\tools\node\node-v18.19.0-win-x64;%PATH%"
-    echo NODE_HOME configurado: !NODE_HOME!
-) else (
-    echo Node.js nao encontrado localmente. Baixando...
-    echo.
-    
-    :: Verificar se o download ja foi feito
-    if not exist "%TEMP%\node-v18.19.0-win-x64.zip" (
-        echo Baixando Node.js 18.19.0...
-        powershell -Command "& {Invoke-WebRequest -Uri 'https://nodejs.org/dist/v18.19.0/node-v18.19.0-win-x64.zip' -OutFile '%TEMP%\node-v18.19.0-win-x64.zip'}"
-    )
-    
-    if exist "%TEMP%\node-v18.19.0-win-x64.zip" (
-        echo Extraindo Node.js para pasta local...
-        
-        :: Limpar pasta node se existir
-        if exist "tools\node" rmdir /s /q "tools\node"
-        
-        :: Extrair com PowerShell
-        powershell -Command "& {try { Expand-Archive -Path '%TEMP%\node-v18.19.0-win-x64.zip' -DestinationPath 'tools\node' -Force; Write-Host 'Node.js extraido com sucesso!' } catch { Write-Host 'ERRO na extracao: ' + $_.Exception.Message; exit 1 }}"
-        
-        :: Verificar se a extração foi bem-sucedida
-        if exist "tools\node\node-v18.19.0-win-x64\node.exe" (
-            set "NODE_HOME=%CD%\tools\node\node-v18.19.0-win-x64"
-            set "PATH=%CD%\tools\node\node-v18.19.0-win-x64;%PATH%"
-            echo Node.js 18.19.0 instalado localmente!
-            echo NODE_HOME configurado: !NODE_HOME!
-        ) else (
-            echo ERRO: Falha ao extrair Node.js
-            echo Verificando estrutura da pasta...
-            dir "tools\node" /s
-            echo.
-            echo Tentando extrair novamente...
-            powershell -Command "& {Expand-Archive -Path '%TEMP%\node-v18.19.0-win-x64.zip' -DestinationPath 'tools\node' -Force}"
-            
-            if exist "tools\node\node-v18.19.0-win-x64\node.exe" (
-                set "NODE_HOME=%CD%\tools\node\node-v18.19.0-win-x64"
-                set "PATH=%CD%\tools\node\node-v18.19.0-win-x64;%PATH%"
-                echo Node.js 18.19.0 instalado localmente na segunda tentativa!
-                echo NODE_HOME configurado: !NODE_HOME!
-            ) else (
-                echo ERRO: Falha definitiva ao extrair Node.js
-                echo Verifique se o arquivo ZIP esta corrompido
-                echo Tamanho do arquivo: 
-                dir "%TEMP%\node-v18.19.0-win-x64.zip"
-                pause
-                exit /b 1
-            )
-        )
-    ) else (
-        echo ERRO: Falha ao baixar Node.js
-        echo Verifique sua conexao com a internet e tente novamente
-        pause
-        exit /b 1
-    )
-)
-
-:: Verificar se Node.js esta funcionando
-echo.
-echo Verificando se Node.js esta funcionando...
-node --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ERRO: Node.js nao esta funcionando corretamente!
-    echo Verifique a instalacao e tente novamente
-    echo.
-    echo Pressione qualquer tecla para continuar...
-    pause >nul
-    exit /b 1
-) else (
-    echo Node.js funcionando corretamente!
-    node --version
-    npm --version
-)
-echo.
-echo Node.js configurado com sucesso!
-echo.
-pause
-
-:: ========================================
-:: 4. VERIFICAR/INSTALAR ORACLE DATABASE 21C
-:: ========================================
-echo [4/8] Verificando Oracle Database 21c...
-echo.
-
-:: Verificar se Oracle ja esta instalado
-echo Verificando se Oracle Database 21c esta instalado...
-reg query "HKLM\SOFTWARE\ORACLE" /v "ORACLE_HOME" >nul 2>&1
-if %errorlevel% equ 0 (
-    echo Oracle Database 21c encontrado no registro!
-    for /f "tokens=3" %%i in ('reg query "HKLM\SOFTWARE\ORACLE" /v "ORACLE_HOME" ^| findstr "ORACLE_HOME"') do set "ORACLE_HOME=%%i"
-    echo ORACLE_HOME: !ORACLE_HOME!
-) else (
-    echo Oracle Database 21c nao encontrado. Instalando...
-    echo.
-    
-    :: Verificar se o instalador ja foi baixado
-    if not exist "%TEMP%\OracleXE213_Win64.zip" (
-        echo Baixando Oracle Database 21c Express Edition...
-        echo NOTA: Este arquivo tem aproximadamente 2.5GB e pode demorar...
-        powershell -Command "& {Invoke-WebRequest -Uri 'https://download.oracle.com/otn-pub/otn_software/db-free/OracleXE213_Win64.zip' -OutFile '%TEMP%\OracleXE213_Win64.zip'}"
-    )
-    
-    if exist "%TEMP%\OracleXE213_Win64.zip" (
-        echo Extraindo Oracle Database...
-        powershell -Command "& {Expand-Archive -Path '%TEMP%\OracleXE213_Win64.zip' -DestinationPath '%TEMP%\oracle' -Force}"
-        
-        echo Instalando Oracle Database 21c...
-        echo NOTA: A instalacao pode demorar varios minutos...
-        echo Siga as instrucoes na tela e use as configuracoes padrao:
-        echo - Senha do SYS: oracle123
-        echo - Porta: 1521
-        echo - Service: XE
+        echo ✅ Download concluido!
         echo.
-        echo Pressione qualquer tecla para continuar com a instalacao...
-        pause >nul
+        echo [3/4] Extraindo Maven para pasta local...
+        powershell -Command "& {Expand-Archive -Path '%TEMP%\apache-maven-3.9.6-bin.zip' -DestinationPath 'tools\maven' -Force}"
         
-        start /wait "%TEMP%\oracle\Disk1\setup.exe"
-        
-        echo Oracle Database instalado! Configurando...
-        
-        :: Configurar Oracle para iniciar automaticamente
-        sc config OracleServiceXE start= auto
-        net start OracleServiceXE
-        
-        echo Aguardando Oracle inicializar...
-        timeout /t 60 /nobreak >nul
-        
-        echo Oracle Database 21c instalado e configurado!
+        set "MAVEN_HOME_LOCAL=%CD%\tools\maven\apache-maven-3.9.6"
+        echo Localizacao: !MAVEN_HOME_LOCAL!
     ) else (
-        echo ERRO: Falha ao baixar Oracle Database 21c
+        echo ❌ ERRO: Falha ao baixar Maven
         echo Verifique sua conexao com a internet e tente novamente
         pause
-        exit /b 1
+        goto menu
     )
 )
 
-:: Verificar se Oracle esta rodando
-echo Verificando se Oracle esta rodando...
-netstat -an | findstr ":1521" >nul
+echo.
+echo [4/4] Verificando se Maven esta funcionando...
+"!MAVEN_HOME_LOCAL!\bin\mvn.cmd" -version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Oracle nao esta rodando. Iniciando servico...
-    net start OracleServiceXE
-    echo Aguardando Oracle inicializar...
-    timeout /t 30 /nobreak >nul
+    echo ❌ ERRO: Maven local nao esta funcionando!
+    pause
+    goto menu
 ) else (
-    echo Oracle esta rodando na porta 1521!
+    echo ✅ Maven local funcionando perfeitamente!
+    "!MAVEN_HOME_LOCAL!\bin\mvn.cmd" -version
 )
-echo.
-
-:: ========================================
-:: 5. CRIAR BANCO E USUARIO ORACLE
-:: ========================================
-echo [5/8] Criando banco e usuario Oracle...
-echo.
-
-:: Navegar para o backend
-cd backend
-
-:: Criar arquivo SQL temporario para setup
-echo @echo off > "%TEMP%\setup_oracle.sql"
-echo SET LINESIZE 100 >> "%TEMP%\setup_oracle.sql"
-echo SET PAGESIZE 50 >> "%TEMP%\setup_oracle.sql"
-echo SET FEEDBACK ON >> "%TEMP%\setup_oracle.sql"
-echo SET VERIFY ON >> "%TEMP%\setup_oracle.sql"
-echo. >> "%TEMP%\setup_oracle.sql"
-echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
-echo PROMPT CONECTANDO AO ORACLE COMO SYSTEM... >> "%TEMP%\setup_oracle.sql"
-echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
-echo CONNECT system/oracle123@localhost:1521/XE >> "%TEMP%\setup_oracle.sql"
-echo. >> "%TEMP%\setup_oracle.sql"
-echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
-echo PROMPT CRIANDO TABLESPACE E USUARIO... >> "%TEMP%\setup_oracle.sql"
-echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
-echo CREATE TABLESPACE consumo_esperto_data >> "%TEMP%\setup_oracle.sql"
-echo DATAFILE 'consumo_esperto_data.dbf' >> "%TEMP%\setup_oracle.sql"
-echo SIZE 100M >> "%TEMP%\setup_oracle.sql"
-echo AUTOEXTEND ON NEXT 10M; >> "%TEMP%\setup_oracle.sql"
-echo. >> "%TEMP%\setup_oracle.sql"
-echo CREATE USER !CURRENT_USER! IDENTIFIED BY admin123 >> "%TEMP%\setup_oracle.sql"
-echo DEFAULT TABLESPACE consumo_esperto_data >> "%TEMP%\setup_oracle.sql"
-echo QUOTA UNLIMITED ON consumo_esperto_data; >> "%TEMP%\setup_oracle.sql"
-echo. >> "%TEMP%\setup_oracle.sql"
-echo GRANT CONNECT, RESOURCE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
-echo GRANT CREATE SESSION TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
-echo GRANT CREATE TABLE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
-echo GRANT CREATE SEQUENCE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
-echo GRANT CREATE VIEW TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
-echo GRANT CREATE PROCEDURE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
-echo GRANT CREATE TRIGGER TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
-echo. >> "%TEMP%\setup_oracle.sql"
-echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
-echo PROMPT CONECTANDO COMO USUARIO !CURRENT_USER!... >> "%TEMP%\setup_oracle.sql"
-echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
-echo CONNECT !CURRENT_USER!/admin123@localhost:1521/XE >> "%TEMP%\setup_oracle.sql"
-echo. >> "%TEMP%\setup_oracle.sql"
-echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
-echo PROMPT BANCO CONFIGURADO COM SUCESSO! >> "%TEMP%\setup_oracle.sql"
-echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
-echo PROMPT. >> "%TEMP%\setup_oracle.sql"
-echo PROMPT Detalhes da conexao: >> "%TEMP%\setup_oracle.sql"
-echo PROMPT - Usuario: !CURRENT_USER! >> "%TEMP%\setup_oracle.sql"
-echo PROMPT - Senha: admin123 >> "%TEMP%\setup_oracle.sql"
-echo PROMPT - Host: localhost >> "%TEMP%\setup_oracle.sql"
-echo PROMPT - Porta: 1521 >> "%TEMP%\setup_oracle.sql"
-echo PROMPT - Service: XE >> "%TEMP%\setup_oracle.sql"
-echo PROMPT. >> "%TEMP%\setup_oracle.sql"
-echo PROMPT Pressione Enter para sair... >> "%TEMP%\setup_oracle.sql"
-echo PAUSE >> "%TEMP%\setup_oracle.sql"
-echo EXIT >> "%TEMP%\setup_oracle.sql"
-
-echo Executando script de configuracao do Oracle...
-echo.
-echo NOTA: Uma janela do SQL*Plus sera aberta.
-echo Siga as instrucoes na tela.
-echo.
-echo Pressione qualquer tecla para continuar...
-pause >nul
-
-:: Executar script de configuracao
-sqlplus /nolog @"%TEMP%\setup_oracle.sql"
 
 echo.
 echo ========================================
-echo    BANCO ORACLE CONFIGURADO!
+echo    MAVEN 3.9.6 INSTALADO COM SUCESSO!
+echo ========================================
+echo.
+echo Localizacao: !MAVEN_HOME_LOCAL!
+echo.
+pause
+goto menu
+
+:: ========================================
+:: 3. INSTALAR NODE.JS 20
+:: ========================================
+:instalar_node
+cls
+echo ========================================
+echo    INSTALANDO NODE.JS 20
+echo ========================================
+echo.
+
+:: Criar estrutura de diretorios
+if not exist "tools" mkdir tools
+if not exist "tools\node" mkdir tools\node
+
+echo [1/4] Verificando se Node.js ja esta instalado...
+if exist "tools\node\node-v20.11.0-win-x64\node.exe" (
+    echo ✅ Node.js 20 ja esta instalado localmente!
+    set "NODE_HOME_LOCAL=%CD%\tools\node\node-v20.11.0-win-x64"
+    echo Localizacao: !NODE_HOME_LOCAL!
+) else (
+    echo ❌ Node.js nao encontrado. Baixando...
+    echo.
+    
+    echo [2/4] Baixando Node.js 20.11.0...
+    if not exist "%TEMP%\node-v20.11.0-win-x64.zip" (
+        echo Download em andamento... (pode demorar alguns minutos)
+        powershell -Command "& {Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.11.0/node-v20.11.0-win-x64.zip' -OutFile '%TEMP%\node-v20.11.0-win-x64.zip'}"
+    )
+    
+    if exist "%TEMP%\node-v20.11.0-win-x64.zip" (
+        echo ✅ Download concluido!
+        echo.
+        echo [3/4] Extraindo Node.js para pasta local...
+        powershell -Command "& {Expand-Archive -Path '%TEMP%\node-v20.11.0-win-x64.zip' -DestinationPath 'tools\node' -Force}"
+        
+        set "NODE_HOME_LOCAL=%CD%\tools\node\node-v20.11.0-win-x64"
+        echo Localizacao: !NODE_HOME_LOCAL!
+    ) else (
+        echo ❌ ERRO: Falha ao baixar Node.js
+        echo Verifique sua conexao com a internet e tente novamente
+        pause
+        goto menu
+    )
+)
+
+echo.
+echo [4/4] Verificando se Node.js esta funcionando...
+"!NODE_HOME_LOCAL!\node.exe" -version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ❌ ERRO: Node.js local nao esta funcionando!
+    pause
+    goto menu
+) else (
+    echo ✅ Node.js local funcionando perfeitamente!
+    "!NODE_HOME_LOCAL!\node.exe" -version
+    "!NODE_HOME_LOCAL!\npm.cmd" -version
+)
+
+echo.
+echo ========================================
+echo    NODE.JS 20 INSTALADO COM SUCESSO!
+echo ========================================
+echo.
+echo Localizacao: !NODE_HOME_LOCAL!
+echo.
+pause
+goto menu
+
+:: ========================================
+:: 4. INSTALAR ORACLE 21C + BANCO
+:: ========================================
+:instalar_oracle
+cls
+echo ========================================
+echo    INSTALANDO ORACLE 21C + BANCO
+echo ========================================
+echo.
+
+echo [1/5] Verificando se Docker esta disponivel...
+docker version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ❌ Docker nao esta rodando ou nao esta instalado!
+    echo.
+    echo Para resolver:
+    echo 1. Instale Docker Desktop
+    echo 2. Inicie o Docker Desktop
+    echo 3. Execute esta opcao novamente
+    echo.
+    pause
+    goto menu
+) else (
+    echo ✅ Docker esta funcionando!
+)
+
+echo.
+echo [2/5] Verificando se Oracle ja esta rodando...
+docker ps | findstr "oracle" >nul
+if %errorlevel% equ 0 (
+    echo ✅ Oracle ja esta rodando no Docker!
+) else (
+    echo ❌ Oracle nao esta rodando. Iniciando...
+    echo.
+    echo [3/5] Iniciando Oracle no Docker...
+    cd backend
+    docker-compose up -d oracle
+    cd ..
+    
+    echo Aguardando Oracle inicializar... (pode demorar 2-3 minutos)
+    timeout /t 30 /nobreak >nul
+    
+    echo [4/5] Verificando se Oracle iniciou...
+    docker ps | findstr "oracle" >nul
+    if %errorlevel% equ 0 (
+        echo ✅ Oracle iniciado com sucesso!
+    ) else (
+        echo ❌ Falha ao iniciar Oracle no Docker
+        echo Verifique os logs: docker-compose logs oracle
+        pause
+        goto menu
+    )
+)
+
+echo.
+echo [5/5] Criando banco e usuario automaticamente...
+echo Aguardando banco estar disponivel...
+timeout /t 10 /nobreak >nul
+
+:: Verificar se o usuario ja existe
+echo exit | sqlplus -s !CURRENT_USER!/admin123@localhost:1521/XE >nul 2>&1
+if %errorlevel% equ 0 (
+    echo ✅ Usuario !CURRENT_USER! ja existe no banco!
+) else (
+    echo Criando usuario !CURRENT_USER! no banco...
+    
+    :: Criar arquivo SQL temporario
+    echo @echo off > "%TEMP%\setup_oracle.sql"
+    echo SET LINESIZE 100 >> "%TEMP%\setup_oracle.sql"
+    echo SET PAGESIZE 50 >> "%TEMP%\setup_oracle.sql"
+    echo SET FEEDBACK ON >> "%TEMP%\setup_oracle.sql"
+    echo SET VERIFY ON >> "%TEMP%\setup_oracle.sql"
+    echo. >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT CONECTANDO AO ORACLE COMO SYSTEM... >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+    echo CONNECT system/oracle123@localhost:1521/XE >> "%TEMP%\setup_oracle.sql"
+    echo. >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT CRIANDO TABLESPACE E USUARIO... >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+    echo CREATE TABLESPACE consumo_esperto_data >> "%TEMP%\setup_oracle.sql"
+    echo DATAFILE 'consumo_esperto_data.dbf' >> "%TEMP%\setup_oracle.sql"
+    echo SIZE 100M >> "%TEMP%\setup_oracle.sql"
+    echo AUTOEXTEND ON NEXT 10M; >> "%TEMP%\setup_oracle.sql"
+    echo. >> "%TEMP%\setup_oracle.sql"
+    echo CREATE USER !CURRENT_USER! IDENTIFIED BY admin123 >> "%TEMP%\setup_oracle.sql"
+    echo DEFAULT TABLESPACE consumo_esperto_data >> "%TEMP%\setup_oracle.sql"
+    echo QUOTA UNLIMITED ON consumo_esperto_data; >> "%TEMP%\setup_oracle.sql"
+    echo. >> "%TEMP%\setup_oracle.sql"
+    echo GRANT CONNECT, RESOURCE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+    echo GRANT CREATE SESSION TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+    echo GRANT CREATE TABLE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+    echo GRANT CREATE SEQUENCE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+    echo GRANT CREATE VIEW TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+    echo GRANT CREATE PROCEDURE TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+    echo GRANT CREATE TRIGGER TO !CURRENT_USER!; >> "%TEMP%\setup_oracle.sql"
+    echo. >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT USUARIO CRIADO COM SUCESSO! >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT ======================================== >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT. >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT Detalhes da conexao: >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT - Usuario: !CURRENT_USER! >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT - Senha: admin123 >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT - Host: localhost >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT - Porta: 1521 >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT - Service: XE >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT. >> "%TEMP%\setup_oracle.sql"
+    echo PROMPT Pressione Enter para sair... >> "%TEMP%\setup_oracle.sql"
+    echo PAUSE >> "%TEMP%\setup_oracle.sql"
+    echo EXIT >> "%TEMP%\setup_oracle.sql"
+    
+    echo NOTA: Uma janela do SQL*Plus sera aberta.
+    echo Execute o script para criar o usuario.
+    echo.
+    pause
+    
+    sqlplus /nolog @"%TEMP%\setup_oracle.sql"
+    
+    :: Limpar arquivo temporario
+    del "%TEMP%\setup_oracle.sql"
+)
+
+echo.
+echo ========================================
+echo    ORACLE 21C + BANCO CONFIGURADO!
 echo ========================================
 echo.
 echo Credenciais do banco:
@@ -421,207 +399,428 @@ echo - Senha: admin123
 echo - Host: localhost
 echo - Porta: 1521
 echo - Service: XE
+echo - Tablespace: consumo_esperto_data
 echo.
+pause
+goto menu
 
 :: ========================================
-:: 6. CONFIGURAR FRONTEND ANGULAR
+:: 5. FAZER TUDO (1+2+3+4)
 :: ========================================
-echo [6/8] Configurando frontend Angular...
+:fazer_tudo
+cls
+echo ========================================
+echo    FAZENDO TUDO AUTOMATICAMENTE
+echo ========================================
+echo.
+echo Este processo ira:
+echo 1. Instalar Java JDK 17
+echo 2. Instalar Maven 3.9.6
+echo 3. Instalar Node.js 20
+echo 4. Instalar Oracle 21c + Banco
+echo.
+echo Tempo estimado: 10-15 minutos
+echo.
+set /p confirm="Continuar? (S/N): "
+if /i not "%confirm%"=="S" goto menu
+
+echo.
+echo ========================================
+echo    INICIANDO INSTALACAO COMPLETA...
+echo ========================================
 echo.
 
-cd ..
-cd frontend
-
-echo Instalando dependencias do Angular...
-npm install
-
-echo Frontend configurado!
-echo.
-
-:: ========================================
-:: 7. CONFIGURAR NGROK PARA APIS BANCARIAS
-:: ========================================
-echo [7/8] Configurando NGROK para APIs bancarias...
-echo.
-
-cd ..
-cd scripts
-
-echo Verificando se NGROK esta instalado...
-ngrok version >nul 2>&1
+:: Instalar Java
+echo [1/4] Instalando Java JDK 17...
+call :instalar_java_silencioso
 if %errorlevel% neq 0 (
-    echo NGROK nao encontrado. Baixando...
-    echo.
-    echo Baixando NGROK...
-    powershell -Command "& {Invoke-WebRequest -Uri 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip' -OutFile '%TEMP%\ngrok.zip'}"
-    
-    echo Extraindo NGROK...
-    powershell -Command "& {Expand-Archive -Path '%TEMP%\ngrok.zip' -DestinationPath 'scripts' -Force}"
-    
-    echo NGROK instalado com sucesso!
+    echo ❌ Falha na instalacao do Java
+    pause
+    goto menu
+)
+echo ✅ Java instalado com sucesso!
+echo.
+
+:: Instalar Maven
+echo [2/4] Instalando Maven 3.9.6...
+call :instalar_maven_silencioso
+if %errorlevel% neq 0 (
+    echo ❌ Falha na instalacao do Maven
+    pause
+    goto menu
+)
+echo ✅ Maven instalado com sucesso!
+echo.
+
+:: Instalar Node.js
+echo [3/4] Instalando Node.js 20...
+call :instalar_node_silencioso
+if %errorlevel% neq 0 (
+    echo ❌ Falha na instalacao do Node.js
+    pause
+    goto menu
+)
+echo ✅ Node.js instalado com sucesso!
+echo.
+
+:: Instalar Oracle
+echo [4/4] Instalando Oracle 21c + Banco...
+call :instalar_oracle_silencioso
+if %errorlevel% neq 0 (
+    echo ❌ Falha na instalacao do Oracle
+    pause
+    goto menu
+)
+echo ✅ Oracle instalado com sucesso!
+echo.
+
+:: Criar scripts de ambiente
+echo [EXTRA] Criando scripts de ambiente...
+call :criar_scripts_ambiente
+
+echo.
+echo ========================================
+echo    INSTALACAO COMPLETA FINALIZADA!
+echo ========================================
+echo.
+echo Tudo foi instalado com sucesso:
+echo ✅ Java JDK 17
+echo ✅ Maven 3.9.6
+echo ✅ Node.js 20
+echo ✅ Oracle 21c + Banco
+echo ✅ Scripts de ambiente
+echo.
+echo Para usar:
+echo 1. Ativar ambiente: tools\scripts\ativar-ambiente.bat
+echo 2. Executar backend: tools\scripts\executar-backend.bat
+echo 3. Executar frontend: tools\scripts\executar-frontend.bat
+echo.
+pause
+goto menu
+
+:: ========================================
+:: 6. VERIFICAR STATUS
+:: ========================================
+:verificar_status
+cls
+echo ========================================
+echo    VERIFICANDO STATUS
+echo ========================================
+echo.
+
+echo Verificando Java 17 local...
+if exist "tools\java\jdk-17.0.2\bin\java.exe" (
+    echo ✅ Java 17: OK
+    echo    Localizacao: tools\java\jdk-17.0.2
 ) else (
-    echo NGROK encontrado!
-    ngrok version
+    echo ❌ Java 17: NAO ENCONTRADO
 )
 
 echo.
-echo Configurando NGROK para APIs bancarias...
-echo.
+echo Verificando Maven local...
+if exist "tools\maven\apache-maven-3.9.6\bin\mvn.cmd" (
+    echo ✅ Maven: OK
+    echo    Localizacao: tools\maven\apache-maven-3.9.6
+) else (
+    echo ❌ Maven: NAO ENCONTRADO
+)
 
-:: Criar arquivo de configuracao do NGROK
-echo # ============================================================================= > "ngrok-config.yml"
-echo # CONFIGURACAO NGROK - CONSUMO ESPERTO >> "ngrok-config.yml"
-echo # Este arquivo configura o NGROK para as APIs bancarias >> "ngrok-config.yml"
-echo # Execute: ngrok start --config ngrok-config.yml >> "ngrok-config.yml"
-echo. >> "ngrok-config.yml"
-echo version: "2" >> "ngrok-config.yml"
-echo authtoken: "SEU_TOKEN_AQUI" >> "ngrok-config.yml"
-echo. >> "ngrok-config.yml"
-echo tunnels: >> "ngrok-config.yml"
-echo   consumo-esperto-api: >> "ngrok-config.yml"
-echo     addr: 8080 >> "ngrok-config.yml"
-echo     proto: http >> "ngrok-config.yml"
-echo     subdomain: consumo-esperto-api >> "ngrok-config.yml"
-echo     inspect: false >> "ngrok-config.yml"
-echo. >> "ngrok-config.yml"
-echo   consumo-esperto-web: >> "ngrok-config.yml"
-echo     addr: 4200 >> "ngrok-config.yml"
-echo     proto: http >> "ngrok-config.yml"
-echo     subdomain: consumo-esperto-web >> "ngrok-config.yml"
-echo     inspect: false >> "ngrok-config.yml"
-
-echo Arquivo de configuracao NGROK criado: scripts/ngrok-config.yml
 echo.
-echo IMPORTANTE: Configure seu token de autenticacao NGROK:
-echo 1. Acesse: https://dashboard.ngrok.com/get-started/your-authtoken
-echo 2. Copie seu token
-echo 3. Edite o arquivo ngrok-config.yml e substitua "SEU_TOKEN_AQUI"
-echo.
+echo Verificando Node.js local...
+if exist "tools\node\node-v20.11.0-win-x64\node.exe" (
+    echo ✅ Node.js: OK
+    echo    Localizacao: tools\node\node-v20.11.0-win-x64
+) else (
+    echo ❌ Node.js: NAO ENCONTRADO
+)
 
-:: Criar script para iniciar NGROK
-echo @echo off > "start-ngrok.bat"
-echo echo Iniciando NGROK para APIs bancarias... >> "start-ngrok.bat"
-echo echo. >> "start-ngrok.bat"
-echo echo URLs disponiveis: >> "start-ngrok.bat"
-echo echo - API: https://consumo-esperto-api.ngrok.io >> "start-ngrok.bat"
-echo echo - Web: https://consumo-esperto-web.ngrok.io >> "start-ngrok.bat"
-echo echo. >> "start-ngrok.bat"
-echo echo Pressione Ctrl+C para parar o NGROK >> "start-ngrok.bat"
-echo echo. >> "start-ngrok.bat"
-echo ngrok start --config ngrok-config.yml >> "start-ngrok.bat"
-
-echo Script para iniciar NGROK criado: scripts/start-ngrok.bat
 echo.
+echo Verificando Oracle...
+netstat -an | findstr ":1521" >nul
+if %errorlevel% equ 0 (
+    echo ✅ Oracle: RODANDO (porta 1521)
+) else (
+    echo ❌ Oracle: NAO RODANDO
+)
+
+echo.
+echo Verificando scripts de ambiente...
+if exist "tools\scripts\ativar-ambiente.bat" (
+    echo ✅ Scripts: OK
+) else (
+    echo ❌ Scripts: NAO ENCONTRADOS
+)
+
+echo.
+pause
+goto menu
 
 :: ========================================
-:: 8. INICIAR SERVICOS
+:: 7. EXECUTAR BACKEND
 :: ========================================
-echo [8/8] Iniciando servicos...
+:executar_backend
+cls
+echo ========================================
+echo    EXECUTANDO BACKEND
+echo ========================================
 echo.
 
+if not exist "tools\scripts\ativar-ambiente.bat" (
+    echo ❌ Scripts de ambiente nao encontrados!
+    echo Execute a opcao 5 (Fazer TUDO) primeiro.
+    pause
+    goto menu
+)
+
+echo Ativando ambiente local...
+call "tools\scripts\ativar-ambiente.bat"
+echo.
+echo Executando backend...
+cd backend
+mvn spring-boot:run -Dspring.profiles.active=dev
+cd ..
+echo.
+pause
+goto menu
+
+:: ========================================
+:: 8. EXECUTAR FRONTEND
+:: ========================================
+:executar_frontend
+cls
+echo ========================================
+echo    EXECUTANDO FRONTEND
+echo ========================================
+echo.
+
+if not exist "tools\scripts\ativar-ambiente.bat" (
+    echo ❌ Scripts de ambiente nao encontrados!
+    echo Execute a opcao 5 (Fazer TUDO) primeiro.
+    pause
+    goto menu
+)
+
+echo Ativando ambiente local...
+call "tools\scripts\ativar-ambiente.bat"
+echo.
+echo Executando frontend...
+cd frontend
+ng serve
+cd ..
+echo.
+pause
+goto menu
+
+:: ========================================
+:: 9. CONFIGURAR ORACLE (DOCKER)
+:: ========================================
+:configurar_oracle_docker
+cls
+echo ========================================
+echo    CONFIGURANDO ORACLE (DOCKER)
+echo ========================================
+echo.
+
+echo Verificando se Docker esta disponivel...
+docker version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ❌ Docker nao esta rodando ou nao esta instalado!
+    echo.
+    echo Para resolver:
+    echo 1. Instale Docker Desktop
+    echo 2. Inicie o Docker Desktop
+    echo 3. Execute esta opcao novamente
+    echo.
+    pause
+    goto menu
+)
+
+echo ✅ Docker esta funcionando!
+echo.
+echo Iniciando Oracle no Docker...
+cd backend
+docker-compose up -d oracle
 cd ..
 
-echo ========================================
-echo    CONFIGURACAO COMPLETA!
-echo ========================================
-echo.
-echo Todos os componentes foram configurados:
-echo.
-echo 1. ✅ Java JDK 17.0.2 instalado localmente
-echo 2. ✅ Maven 3.9.6 instalado localmente
-echo 3. ✅ Node.js 18.19.0 instalado localmente
-echo 4. ✅ Oracle Database 21c instalado
-echo 5. ✅ Banco 'consumo_esperto' criado
-echo 6. ✅ Usuario '!CURRENT_USER!' criado (senha: admin123)
-echo 7. ✅ Frontend Angular configurado
-echo 8. ✅ NGROK configurado para APIs bancarias
-echo.
-echo ========================================
-echo    PROXIMOS PASSOS
-echo ========================================
-echo.
-echo 1. Iniciar o backend (usando Maven local):
-echo    cd backend
-echo    ..\tools\maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run -Dspring.profiles.active=dev
-echo.
-echo 2. Em outro terminal, iniciar o frontend (usando Node.js local):
-echo    cd frontend
-echo    ..\tools\node\node-v18.19.0-win-x64\npm.cmd install -g @angular/cli
-echo    ..\tools\node\node-v18.19.0-win-x64\npx.cmd ng serve
-echo.
-echo 3. Para APIs bancarias, iniciar NGROK:
-echo    cd scripts
-echo    start-ngrok.bat
-echo.
-echo 4. Acessar a aplicacao:
-echo    http://localhost:4200
-echo.
-echo 5. Fazer login via Google
-echo    - O sistema criara automaticamente seu usuario
-echo    - Voce podera configurar as APIs bancarias
-echo.
-echo ========================================
-echo    CREDENCIAIS IMPORTANTES
-echo ========================================
-echo.
-echo Banco Oracle:
-echo - Usuario: !CURRENT_USER!
-echo - Senha: admin123
-echo - Host: localhost
-echo - Porta: 1521
-echo - Service: XE
-echo.
-echo NGROK (APIs bancarias):
-echo - API: https://consumo-esperto-api.ngrok.io
-echo - Web: https://consumo-esperto-web.ngrok.io
-echo - Config: scripts/ngrok-config.yml
-echo.
-echo Aplicacao:
-echo - URL: http://localhost:4200
-echo - Login: Via Google OAuth2
-echo.
-echo ========================================
-echo    ARQUIVOS DE CONFIGURACAO
-echo ========================================
-echo.
-echo Backend:
-echo - src\main\resources\application.properties
-echo - src\main\resources\application-dev.properties
-echo.
-echo Frontend:
-echo - src\environments\environment.ts
-echo.
-echo NGROK:
-echo - scripts/ngrok-config.yml
-echo - scripts/start-ngrok.bat
-echo.
-echo Scripts:
-echo - setup-completo-projeto.bat (este arquivo)
-echo - testar-ferramentas.bat (verificar ferramentas)
-echo - start-servicos.bat (iniciar servicos)
-echo - parar-servicos.bat
-echo.
-echo Ferramentas locais:
-echo - tools\java\jdk-17.0.2 (Java JDK 17.0.2)
-echo - tools\maven\apache-maven-3.9.6 (Maven 3.9.6)
-echo - tools\node\node-v18.19.0-win-x64 (Node.js 18.19.0)
-echo.
+echo Aguardando Oracle inicializar... (pode demorar 2-3 minutos)
+timeout /t 30 /nobreak >nul
 
-:: Limpar arquivo temporario
-del "%TEMP%\setup_oracle.sql"
+echo Verificando se Oracle iniciou...
+docker ps | findstr "oracle" >nul
+if %errorlevel% equ 0 (
+    echo ✅ Oracle iniciado com sucesso!
+    echo.
+    echo Para criar usuario no banco:
+    echo Execute a opcao 4 (Instalar Oracle 21c + Banco)
+    echo.
+) else (
+    echo ❌ Falha ao iniciar Oracle no Docker
+    echo Verifique os logs: docker-compose logs oracle
+)
 
+pause
+goto menu
+
+:: ========================================
+:: FUNCOES AUXILIARES
+:: ========================================
+
+:instalar_java_silencioso
+if exist "tools\java\jdk-17.0.2\bin\java.exe" (
+    set "JAVA_HOME_LOCAL=%CD%\tools\java\jdk-17.0.2"
+    exit /b 0
+)
+
+if not exist "%TEMP%\openjdk-17.0.2_windows-x64_bin.zip" (
+    powershell -Command "& {Invoke-WebRequest -Uri 'https://download.java.net/java/GA/jdk17.0.2/dfd4a8d0985749f896bed50d7138ee7f/8/GPL/openjdk-17.0.2_windows-x64_bin.zip' -OutFile '%TEMP%\openjdk-17.0.2_windows-x64_bin.zip'}"
+)
+
+if exist "%TEMP%\openjdk-17.0.2_windows-x64_bin.zip" (
+    powershell -Command "& {Expand-Archive -Path '%TEMP%\openjdk-17.0.2_windows-x64_bin.zip' -DestinationPath 'tools\java' -Force}"
+    
+    if exist "tools\java\jdk-17.0.2" (
+        set "JAVA_HOME_LOCAL=%CD%\tools\java\jdk-17.0.2"
+        exit /b 0
+    ) else (
+        for /d %%i in ("tools\java\jdk-17*") do (
+            ren "%%i" "jdk-17.0.2"
+        )
+        set "JAVA_HOME_LOCAL=%CD%\tools\java\jdk-17.0.2"
+        exit /b 0
+    )
+) else (
+    exit /b 1
+)
+
+:instalar_maven_silencioso
+if exist "tools\maven\apache-maven-3.9.6\bin\mvn.cmd" (
+    set "MAVEN_HOME_LOCAL=%CD%\tools\maven\apache-maven-3.9.6"
+    exit /b 0
+)
+
+if not exist "%TEMP%\apache-maven-3.9.6-bin.zip" (
+    powershell -Command "& {Invoke-WebRequest -Uri 'https://archive.apache.org/dist/maven/maven-3/3.9.6/binaries/apache-maven-3.9.6-bin.zip' -OutFile '%TEMP%\apache-maven-3.9.6-bin.zip'}"
+)
+
+if exist "%TEMP%\apache-maven-3.9.6-bin.zip" (
+    powershell -Command "& {Expand-Archive -Path '%TEMP%\apache-maven-3.9.6-bin.zip' -DestinationPath 'tools\maven' -Force}"
+    set "MAVEN_HOME_LOCAL=%CD%\tools\maven\apache-maven-3.9.6"
+    exit /b 0
+) else (
+    exit /b 1
+)
+
+:instalar_node_silencioso
+if exist "tools\node\node-v20.11.0-win-x64\node.exe" (
+    set "NODE_HOME_LOCAL=%CD%\tools\node\node-v20.11.0-win-x64"
+    exit /b 0
+)
+
+if not exist "%TEMP%\node-v20.11.0-win-x64.zip" (
+    powershell -Command "& {Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.11.0/node-v20.11.0-win-x64.zip' -OutFile '%TEMP%\node-v20.11.0-win-x64.zip'}"
+)
+
+if exist "%TEMP%\node-v20.11.0-win-x64.zip" (
+    powershell -Command "& {Expand-Archive -Path '%TEMP%\node-v20.11.0-win-x64.zip' -DestinationPath 'tools\node' -Force}"
+    set "NODE_HOME_LOCAL=%CD%\tools\node\node-v20.11.0-win-x64"
+    exit /b 0
+) else (
+    exit /b 1
+)
+
+:instalar_oracle_silencioso
+docker version >nul 2>&1
+if %errorlevel% neq 0 exit /b 1
+
+docker ps | findstr "oracle" >nul
+if %errorlevel% equ 0 exit /b 0
+
+cd backend
+docker-compose up -d oracle
+cd ..
+
+timeout /t 30 /nobreak >nul
+
+docker ps | findstr "oracle" >nul
+if %errorlevel% equ 0 exit /b 0
+exit /b 1
+
+:criar_scripts_ambiente
+if not exist "tools\scripts" mkdir tools\scripts
+
+:: Script para ativar o ambiente
+echo @echo off > "tools\scripts\ativar-ambiente.bat"
+echo chcp 65001 ^>nul >> "tools\scripts\ativar-ambiente.bat"
+echo setlocal enabledelayedexpansion >> "tools\scripts\ativar-ambiente.bat"
+echo. >> "tools\scripts\ativar-ambiente.bat"
+echo echo ======================================== >> "tools\scripts\ativar-ambiente.bat"
+echo echo    ATIVANDO AMBIENTE LOCAL >> "tools\scripts\ativar-ambiente.bat"
+echo echo    CONSUMO ESPERTO - JAVA 17 >> "tools\scripts\ativar-ambiente.bat"
+echo echo ======================================== >> "tools\scripts\ativar-ambiente.bat"
+echo echo. >> "tools\scripts\ativar-ambiente.bat"
+echo echo Configurando variaveis de ambiente... >> "tools\scripts\ativar-ambiente.bat"
+echo echo. >> "tools\scripts\ativar-ambiente.bat"
+echo set "JAVA_HOME=%%~dp0..\java\jdk-17.0.2" >> "tools\scripts\ativar-ambiente.bat"
+echo set "MAVEN_HOME=%%~dp0..\maven\apache-maven-3.9.6" >> "tools\scripts\ativar-ambiente.bat"
+echo set "NODE_HOME=%%~dp0..\node\node-v20.11.0-win-x64" >> "tools\scripts\ativar-ambiente.bat"
+echo. >> "tools\scripts\ativar-ambiente.bat"
+echo set "PATH=%%JAVA_HOME%%\bin;%%MAVEN_HOME%%\bin;%%NODE_HOME%%;%%PATH%%" >> "tools\scripts\ativar-ambiente.bat"
+echo. >> "tools\scripts\ativar-ambiente.bat"
+echo echo ✅ Ambiente ativado! >> "tools\scripts\ativar-ambiente.bat"
+echo echo. >> "tools\scripts\ativar-ambiente.bat"
+echo echo Java: %%JAVA_HOME%% >> "tools\scripts\ativar-ambiente.bat"
+echo echo Maven: %%MAVEN_HOME%% >> "tools\scripts\ativar-ambiente.bat"
+echo echo Node: %%NODE_HOME%% >> "tools\scripts\ativar-ambiente.bat"
+echo echo. >> "tools\scripts\ativar-ambiente.bat"
+echo echo Para usar: >> "tools\scripts\ativar-ambiente.bat"
+echo echo   java -version >> "tools\scripts\ativar-ambiente.bat"
+echo echo   mvn -version >> "tools\scripts\ativar-ambiente.bat"
+echo echo   node -version >> "tools\scripts\ativar-ambiente.bat"
+echo echo. >> "tools\scripts\ativar-ambiente.bat"
+echo echo Para sair: exit >> "tools\scripts\ativar-ambiente.bat"
+echo echo. >> "tools\scripts\ativar-ambiente.bat"
+echo cmd /k >> "tools\scripts\ativar-ambiente.bat"
+
+:: Script para executar o backend
+echo @echo off > "tools\scripts\executar-backend.bat"
+echo chcp 65001 ^>nul >> "tools\scripts\executar-backend.bat"
+echo setlocal enabledelayedexpansion >> "tools\scripts\executar-backend.bat"
+echo. >> "tools\scripts\executar-backend.bat"
+echo echo ======================================== >> "tools\scripts\executar-backend.bat"
+echo echo    EXECUTANDO BACKEND >> "tools\scripts\executar-backend.bat"
+echo echo    CONSUMO ESPERTO - JAVA 17 >> "tools\scripts\executar-backend.bat"
+echo echo ======================================== >> "tools\scripts\executar-backend.bat"
+echo echo. >> "tools\scripts\executar-backend.bat"
+echo echo Ativando ambiente local... >> "tools\scripts\executar-backend.bat"
+echo call "%%~dp0ativar-ambiente.bat" >> "tools\scripts\executar-backend.bat"
+echo echo. >> "tools\scripts\executar-backend.bat"
+echo echo Executando backend... >> "tools\scripts\executar-backend.bat"
+echo cd "%%~dp0..\..\backend" >> "tools\scripts\executar-backend.bat"
+echo mvn spring-boot:run -Dspring.profiles.active=dev >> "tools\scripts\executar-backend.bat"
+
+:: Script para executar o frontend
+echo @echo off > "tools\scripts\executar-frontend.bat"
+echo chcp 65001 ^>nul >> "tools\scripts\executar-frontend.bat"
+echo setlocal enabledelayedexpansion >> "tools\scripts\executar-frontend.bat"
+echo. >> "tools\scripts\executar-frontend.bat"
+echo echo ======================================== >> "tools\scripts\executar-frontend.bat"
+echo echo    EXECUTANDO FRONTEND >> "tools\scripts\executar-frontend.bat"
+echo echo    CONSUMO ESPERTO - NODE.JS 20 >> "tools\scripts\executar-frontend.bat"
+echo echo ======================================== >> "tools\scripts\executar-frontend.bat"
+echo echo. >> "tools\scripts\executar-frontend.bat"
+echo echo Ativando ambiente local... >> "tools\scripts\executar-frontend.bat"
+echo call "%%~dp0ativar-ambiente.bat" >> "tools\scripts\executar-frontend.bat"
+echo echo. >> "tools\scripts\executar-frontend.bat"
+echo echo Executando frontend... >> "tools\scripts\executar-frontend.bat"
+echo cd "%%~dp0..\..\frontend" >> "tools\scripts\executar-frontend.bat"
+echo ng serve >> "tools\scripts\executar-frontend.bat"
+
+exit /b 0
+
+:: ========================================
+:: SAIR
+:: ========================================
+:sair
 echo.
-echo ========================================
-echo    SETUP CONCLUIDO!
-echo ========================================
-echo.
-echo Todas as ferramentas foram instaladas localmente:
-echo.
-echo ✅ Java JDK 17.0.2: !JAVA_HOME!
-echo ✅ Maven 3.9.6: !MAVEN_HOME!
-echo ✅ Node.js 18.19.0: !NODE_HOME!
-echo.
-echo Pasta tools criada com sucesso!
-echo.
-echo Pressione qualquer tecla para sair...
-pause >nul
+echo Saindo...
+exit /b 0
