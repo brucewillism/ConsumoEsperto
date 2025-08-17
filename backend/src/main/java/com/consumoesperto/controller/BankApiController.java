@@ -2,8 +2,8 @@ package com.consumoesperto.controller;
 
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.BankApiService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -31,7 +31,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/bank") // Base path para endpoints de integração bancária
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
-@Api(tags = "Integração com APIs Bancárias") // Documentação Swagger
+@Tag(name = "APIs Bancárias", description = "Endpoints para integração com APIs bancárias")
 @CrossOrigin(origins = "*") // Permite CORS de qualquer origem
 public class BankApiController {
 
@@ -51,7 +51,7 @@ public class BankApiController {
      * @return URL de autorização do banco
      */
     @GetMapping("/auth/{bankType}")
-    @ApiOperation("Obter URL de autorização para banco")
+    @Operation(summary = "Obter URL de autorização", description = "Obtém URL de autorização para autenticação com banco")
     public ResponseEntity<String> getAuthorizationUrl(
             @PathVariable BankApiService.BankType bankType,
             @RequestParam String redirectUri,
@@ -75,7 +75,7 @@ public class BankApiController {
      * @return Resposta contendo token de acesso e refresh token
      */
     @PostMapping("/token/{bankType}")
-    @ApiOperation("Trocar código de autorização por token de acesso")
+    @Operation(summary = "Trocar código por token", description = "Troca código de autorização por token de acesso")
     public ResponseEntity<Map<String, Object>> exchangeCodeForToken(
             @PathVariable BankApiService.BankType bankType,
             @RequestParam String code,
@@ -98,7 +98,7 @@ public class BankApiController {
      * @return Dados do saldo da conta bancária
      */
     @GetMapping("/balance/{bankType}")
-    @ApiOperation("Obter saldo da conta")
+    @Operation(summary = "Obter saldo da conta", description = "Obtém saldo atual da conta bancária")
     public ResponseEntity<Map<String, Object>> getAccountBalance(
             @PathVariable BankApiService.BankType bankType,
             @RequestParam String accessToken,
@@ -123,7 +123,7 @@ public class BankApiController {
      * @return Lista de transações bancárias
      */
     @GetMapping("/transactions/{bankType}")
-    @ApiOperation("Obter transações da conta")
+    @Operation(summary = "Obter transações", description = "Obtém transações da conta bancária")
     public ResponseEntity<Map<String, Object>> getTransactions(
             @PathVariable BankApiService.BankType bankType,
             @RequestParam String accessToken,
@@ -147,7 +147,7 @@ public class BankApiController {
      * @return Lista de cartões de crédito do banco
      */
     @GetMapping("/credit-cards/{bankType}")
-    @ApiOperation("Obter cartões de crédito")
+    @Operation(summary = "Obter cartões de crédito", description = "Obtém cartões de crédito do banco")
     public ResponseEntity<Map<String, Object>> getCreditCards(
             @PathVariable BankApiService.BankType bankType,
             @RequestParam String accessToken,
@@ -171,7 +171,7 @@ public class BankApiController {
      * @return Lista de faturas do cartão de crédito
      */
     @GetMapping("/credit-cards/{bankType}/{cardId}/invoices")
-    @ApiOperation("Obter faturas do cartão de crédito")
+    @Operation(summary = "Obter faturas do cartão de crédito", description = "Retorna faturas de um cartão de crédito específico")
     public ResponseEntity<Map<String, Object>> getCreditCardInvoices(
             @PathVariable BankApiService.BankType bankType,
             @PathVariable String cardId,
@@ -195,7 +195,7 @@ public class BankApiController {
      * @return Status da renovação (true se bem-sucedida)
      */
     @PostMapping("/refresh-token/{bankType}")
-    @ApiOperation("Renovar token de acesso")
+    @Operation(summary = "Renovar token de acesso", description = "Renova token de acesso usando refresh token")
     public ResponseEntity<Boolean> refreshToken(
             @PathVariable BankApiService.BankType bankType,
             @RequestParam String refreshToken) {
@@ -218,7 +218,7 @@ public class BankApiController {
      * @return Dados reais do saldo da conta bancária
      */
     @GetMapping("/real/balance/{bankType}")
-    @ApiOperation("Obter saldo real da conta bancária")
+    @Operation(summary = "Obter saldo real da conta bancária", description = "Retorna saldo real da conta bancária usando autorização salva")
     public ResponseEntity<Map<String, Object>> getRealAccountBalance(
             @PathVariable BankApiService.BankType bankType,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -249,7 +249,7 @@ public class BankApiController {
      * @return Lista real de cartões de crédito
      */
     @GetMapping("/real/credit-cards/{bankType}")
-    @ApiOperation("Obter cartões de crédito reais")
+    @Operation(summary = "Obter cartões de crédito reais", description = "Retorna cartões de crédito reais usando autorização salva")
     public ResponseEntity<Map<String, Object>> getRealCreditCards(
             @PathVariable BankApiService.BankType bankType,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -281,7 +281,7 @@ public class BankApiController {
      * @return Lista real de faturas do cartão
      */
     @GetMapping("/real/credit-cards/{bankType}/{cardId}/invoices")
-    @ApiOperation("Obter faturas reais do cartão de crédito")
+    @Operation(summary = "Obter faturas reais do cartão de crédito", description = "Retorna faturas reais de um cartão de crédito específico")
     public ResponseEntity<Map<String, Object>> getRealCreditCardInvoices(
             @PathVariable BankApiService.BankType bankType,
             @PathVariable String cardId,
@@ -314,7 +314,7 @@ public class BankApiController {
      * @return Lista real de transações da conta
      */
     @GetMapping("/real/transactions/{bankType}")
-    @ApiOperation("Obter transações reais da conta")
+    @Operation(summary = "Obter transações reais da conta", description = "Retorna transações reais de uma conta bancária")
     public ResponseEntity<Map<String, Object>> getRealTransactions(
             @PathVariable BankApiService.BankType bankType,
             @RequestParam String accountId,
@@ -345,7 +345,7 @@ public class BankApiController {
      * @return Dados consolidados de todos os bancos
      */
     @GetMapping("/real/consolidated")
-    @ApiOperation("Obter dados consolidados de todos os bancos")
+    @Operation(summary = "Obter dados consolidados de todos os bancos", description = "Retorna dados consolidados de todos os bancos do usuário")
     public ResponseEntity<Map<String, Object>> getConsolidatedBankData(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         

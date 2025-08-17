@@ -2,8 +2,8 @@ package com.consumoesperto.controller;
 
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.RelatorioFinanceiroService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -32,7 +32,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/relatorios") // Base path para endpoints de relatórios
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
-@Api(tags = "Relatórios Financeiros") // Documentação Swagger
+@Tag(name = "Relatórios", description = "Endpoints para geração de relatórios financeiros")
 @CrossOrigin(origins = "*") // Permite CORS de qualquer origem
 public class RelatorioController {
 
@@ -52,7 +52,7 @@ public class RelatorioController {
      * @return Mapa contendo dados do relatório mensal
      */
     @GetMapping("/mensal")
-    @ApiOperation("Gerar relatório mensal")
+    @Operation(summary = "Relatório mensal", description = "Gera relatório financeiro mensal do usuário")
     public ResponseEntity<Map<String, Object>> relatorioMensal(
             @RequestParam int ano,
             @RequestParam int mes,
@@ -75,7 +75,7 @@ public class RelatorioController {
      * @return Mapa contendo dados do relatório anual
      */
     @GetMapping("/anual")
-    @ApiOperation("Gerar relatório anual")
+    @Operation(summary = "Relatório anual", description = "Gera relatório financeiro anual do usuário")
     public ResponseEntity<Map<String, Object>> relatorioAnual(
             @RequestParam int ano,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -96,7 +96,7 @@ public class RelatorioController {
      * @return Mapa contendo alertas e notificações financeiras
      */
     @GetMapping("/alertas")
-    @ApiOperation("Gerar alertas financeiros")
+    @Operation(summary = "Gerar alertas financeiros", description = "Gera alertas e notificações financeiras importantes")
     public ResponseEntity<Map<String, Object>> alertas(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -118,7 +118,7 @@ public class RelatorioController {
      * @return Mapa contendo análise financeira por categoria
      */
     @GetMapping("/categoria")
-    @ApiOperation("Gerar relatório por categoria")
+    @Operation(summary = "Gerar relatório por categoria", description = "Gera relatório financeiro agrupado por categoria")
     public ResponseEntity<Map<String, Object>> relatorioPorCategoria(
             @RequestParam int ano,
             @RequestParam int mes,

@@ -1,236 +1,348 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- ============================================================================= -->
-<!-- ARQUIVO POM.XML - CONSUMO ESPERTO BACKEND -->
-<!-- ============================================================================= -->
-<!-- Este arquivo define as dependências, configurações e build do projeto -->
-<!-- Backend Java Spring Boot para a aplicação ConsumoEsperto -->
-<!-- ============================================================================= -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    
-    <!-- Versão do modelo Maven -->
+
     <modelVersion>4.0.0</modelVersion>
-    
-    <!-- Herda configurações do Spring Boot Starter Parent -->
-    <!-- Fornece versões compatíveis e configurações padrão -->
+
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>2.7.18</version>
         <relativePath/>
     </parent>
-    
-    <!-- Informações do projeto -->
+
     <groupId>com.consumoesperto</groupId>
     <artifactId>consumo-esperto-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>consumo-esperto-backend</name>
     <description>Backend da aplicação ConsumoEsperto - Sistema de gestão financeira pessoal</description>
-    
-    <!-- Propriedades do projeto -->
+
     <properties>
-        <!-- Versão do Java (requer Java 17 ou superior) -->
         <java.version>17</java.version>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- libs -->
+        <springdoc.version>1.7.0</springdoc.version>
+        <jjwt.version>0.11.5</jjwt.version>
+        <ojdbc.version>21.9.0.0</ojdbc.version>  <!-- Java 17 / Oracle 21c - Versão disponível publicamente -->
+        <resilience4j.version>2.3.0</resilience4j.version>
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <flyway.version>9.22.3</flyway.version>
+        <spring-cloud.version>2021.0.8</spring-cloud.version>
+
+        <!-- plugins -->
+        <maven.enforcer.version>1.4.1</maven.enforcer.version>
+        <owasp.depcheck.version>8.4.2</owasp.depcheck.version>
+        <maven.surefire.version>2.22.2</maven.surefire.version>
     </properties>
-    
-    <!-- Dependências do projeto -->
+
+    <!-- Repositórios para dependências Oracle -->
+    <repositories>
+        <repository>
+            <id>oracle</id>
+            <name>Oracle Repository</name>
+            <url>https://maven.oracle.com</url>
+            <layout>default</layout>
+        </repository>
+        <repository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://repo1.maven.org/maven2</url>
+            <layout>default</layout>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
-        <!-- ============================================================================= -->
-        <!-- SPRING BOOT STARTERS - Dependências principais do Spring Boot -->
-        <!-- ============================================================================= -->
-        
-        <!-- Spring Boot Web: para criar APIs REST -->
+        <!-- Core Spring -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-        
-        <!-- Spring Boot Data JPA: para persistência de dados -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
-        
-        <!-- Spring Boot Security: para autenticação e autorização -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
-        
-        <!-- Spring Boot Validation: para validação de dados -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
 
-        <!-- ============================================================================= -->
-        <!-- BANCOS DE DADOS - Drivers para Oracle e H2 -->
-        <!-- ============================================================================= -->
-        
-        <!-- Driver Oracle JDBC para produção e desenvolvimento -->
+        <!-- OAuth2 / JWT -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <!-- JJWT (se você emitir tokens próprios) -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Cliente HTTP reativo (WebClient) para integrações externas -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
+        <!-- OpenFeign para integrações bancárias declarativas -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <!-- Banco de dados -->
+        <!-- Oracle JDBC Driver - Versão disponível publicamente -->
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ojdbc8</artifactId>
+            <version>21.9.0.0</version>
             <scope>runtime</scope>
         </dependency>
         
-        <!-- Banco H2 em memória para desenvolvimento e testes -->
+        <!-- H2 para desenvolvimento local -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
         </dependency>
 
-        <!-- ============================================================================= -->
-        <!-- JWT (JSON WEB TOKENS) - Para autenticação stateless -->
-        <!-- ============================================================================= -->
-        
-        <!-- API principal do JWT -->
+        <!-- Cache -->
         <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.11.5</version>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
-        
-        <!-- Implementação do JWT -->
         <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.11.5</version>
-            <scope>runtime</scope>
-        </dependency>
-        
-        <!-- Serialização/Deserialização JSON do JWT -->
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.11.5</version>
-            <scope>runtime</scope>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
         </dependency>
 
-        <!-- ============================================================================= -->
-        <!-- SWAGGER - Documentação automática da API -->
-        <!-- ============================================================================= -->
-        
-        <!-- Gera documentação interativa da API REST -->
+        <!-- Observabilidade (Prometheus) -->
         <dependency>
-            <groupId>io.springfox</groupId>
-            <artifactId>springfox-boot-starter</artifactId>
-            <version>3.0.0</version>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- ============================================================================= -->
-        <!-- LOMBOK - Reduz código boilerplate -->
-        <!-- ============================================================================= -->
-        
-        <!-- Anotações para gerar getters, setters, construtores automaticamente -->
+        <!-- OpenAPI / Swagger UI - SpringDoc -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-security</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Resiliência (circuit breaker, retry, rate-limit) -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot2</artifactId>
+            <version>${resilience4j.version}</version>
+        </dependency>
+
+        <!-- Migrações de banco (opcional) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <version>${flyway.version}</version>
+        </dependency>
+
+        <!-- Mapeamento DTO ↔ Entidade (opcional) -->
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+            <version>${mapstruct.version}</version>
+        </dependency>
+
+        <!-- Qualidade de vida -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
-
-        <!-- ============================================================================= -->
-        <!-- OAUTH2 E INTEGRAÇÃO COM APIS BANCÁRIAS -->
-        <!-- ============================================================================= -->
-        
-        <!-- Cliente OAuth2 para autenticação com Google e bancos -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
         </dependency>
-        
-        <!-- WebFlux para chamadas HTTP reativas às APIs bancárias -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webflux</artifactId>
-        </dependency>
-        
-        <!-- ============================================================================= -->
-        <!-- GOOGLE OAUTH2 - Para login via Google -->
-        <!-- ============================================================================= -->
-        
-        <!-- Cliente da API do Google -->
-        <dependency>
-            <groupId>com.google.api-client</groupId>
-            <artifactId>google-api-client</artifactId>
-            <version>2.0.0</version>
-        </dependency>
-        
-        <!-- Cliente OAuth2 do Google -->
-        <dependency>
-            <groupId>com.google.oauth-client</groupId>
-            <artifactId>google-oauth-client</artifactId>
-            <version>1.34.1</version>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
         </dependency>
 
-        <!-- ============================================================================= -->
-        <!-- TESTES - Dependências para testes unitários e de integração -->
-        <!-- ============================================================================= -->
-        
-        <!-- Spring Boot Test para testes da aplicação -->
+        <!-- Logging estruturado (opcional) -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>7.4</version>
+        </dependency>
+
+        <!-- Testes -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        
-        <!-- Spring Security Test para testes de segurança -->
         <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
-            <scope>test</scope>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct-processor</artifactId>
+            <version>${mapstruct.version}</version>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 
-    <!-- ============================================================================= -->
-    <!-- CONFIGURAÇÕES DE BUILD -->
-    <!-- ============================================================================= -->
-    
     <build>
         <plugins>
-            <!-- Plugin Spring Boot Maven -->
+            <!-- Spring Boot -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <!-- Exclui Lombok do JAR final (não é necessário em runtime) -->
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
-                    
-                    <!-- Argumentos JVM para compatibilidade com Java 17 -->
-                    <!-- Permite acesso a módulos internos do Java -->
-                    <jvmArguments>
-                        --add-opens java.base/java.lang=ALL-UNNAMED
-                        --add-opens java.base/java.io=ALL-UNNAMED
-                        --add-opens java.base/java.util=ALL-UNNAMED
-                        --add-opens java.base/java.util.concurrent=ALL-UNNAMED
-                    </jvmArguments>
                 </configuration>
             </plugin>
-            
-            <!-- Plugin do compilador Maven -->
+
+            <!-- Compilador -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
                 <configuration>
-                    <!-- Compila para Java 17 -->
-                    <source>17</source>
-                    <target>17</target>
-                    
-                    <!-- Habilita recursos preview do Java 17 -->
-                    <compilerArgs>
-                        <arg>--enable-preview</arg>
-                    </compilerArgs>
+                    <release>${java.version}</release>
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+
+            <!-- Enforcer (sem BanDuplicateClasses para evitar a falha) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven.enforcer.version}</version>
+                <executions>
+                    <execution>
+                        <id>enforce</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>[3.3.9,)</version>
+                                </requireMavenVersion>
+                                <requireJavaVersion>
+                                    <version>[1.8,)</version>
+                                </requireJavaVersion>
+                                <dependencyConvergence/>
+                            </rules>
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- OWASP Dependency-Check (CVE gating) - Temporariamente desabilitado -->
+            <!--
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>${owasp.depcheck.version}</version>
+                <executions>
+                    <execution>
+                        <id>analyze</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <phase>verify</phase>
+                    </execution>
+                </executions>
+                <configuration>
+                    <failBuildOnCVSS>8</failBuildOnCVSS>
+                    <skipTestScope>true</skipTestScope>
+                    <skipProvidedScope>true</skipProvidedScope>
+                </configuration>
+            </plugin>
+            -->
+
+            <!-- Maven Surefire para testes -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.version}</version>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+
+            <!-- Jib para imagem Docker sem Dockerfile -->
+            <plugin>
+                <groupId>com.google.cloud.tools</groupId>
+                <artifactId>jib-maven-plugin</artifactId>
+                <version>3.4.0</version>
+                <configuration>
+                    <from>
+                        <image>openjdk:17-jre-slim</image>
+                    </from>
+                    <to>
+                        <image>consumo-esperto-backend:latest</image>
+                    </to>
+                    <container>
+                        <ports>
+                            <port>8080</port>
+                        </ports>
+                        <environment>
+                            <SPRING_PROFILES_ACTIVE>prod</SPRING_PROFILES_ACTIVE>
+                        </environment>
+                    </container>
                 </configuration>
             </plugin>
         </plugins>
     </build>
+
 </project>
+

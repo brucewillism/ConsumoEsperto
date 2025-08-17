@@ -3,8 +3,8 @@ package com.consumoesperto.controller;
 import com.consumoesperto.service.BankApiService;
 import com.consumoesperto.service.AutorizacaoBancariaService;
 import com.consumoesperto.model.AutorizacaoBancaria;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -33,7 +33,7 @@ import java.util.Map;
 @RequestMapping("/api/bank/oauth")
 @RequiredArgsConstructor
 @Slf4j
-@Api(tags = "Callbacks OAuth2 Bancários")
+@Tag(name = "Callbacks OAuth2 Bancários", description = "Endpoints para callbacks OAuth2 dos bancos")
 @CrossOrigin(origins = "*")
 public class BankOAuthCallbackController {
 
@@ -51,7 +51,7 @@ public class BankOAuthCallbackController {
      * @return Redirecionamento para o frontend com resultado
      */
     @GetMapping("/itau/callback")
-    @ApiOperation("Callback OAuth2 do Itaú")
+    @Operation(summary = "Callback OAuth2 do Itaú", description = "Processa callback OAuth2 do Itaú")
     public ResponseEntity<String> itauCallback(
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String state,
@@ -90,7 +90,7 @@ public class BankOAuthCallbackController {
      * @return Redirecionamento para o frontend com resultado
      */
     @GetMapping("/nubank/callback")
-    @ApiOperation("Callback OAuth2 do Nubank")
+    @Operation(summary = "Callback OAuth2 do Nubank", description = "Processa callback OAuth2 do Nubank")
     public ResponseEntity<String> nubankCallback(
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String state,
@@ -129,7 +129,7 @@ public class BankOAuthCallbackController {
      * @return Redirecionamento para o frontend com resultado
      */
     @GetMapping("/inter/callback")
-    @ApiOperation("Callback OAuth2 do Inter")
+    @Operation(summary = "Callback OAuth2 do Inter", description = "Processa callback OAuth2 do Inter")
     public ResponseEntity<String> interCallback(
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String state,
@@ -168,7 +168,7 @@ public class BankOAuthCallbackController {
      * @return Redirecionamento para o frontend com resultado
      */
     @GetMapping("/mercadopago/callback")
-    @ApiOperation("Callback OAuth2 do Mercado Pago")
+    @Operation(summary = "Callback OAuth2 do Mercado Pago", description = "Processa callback OAuth2 do Mercado Pago")
     public ResponseEntity<String> mercadoPagoCallback(
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String state,

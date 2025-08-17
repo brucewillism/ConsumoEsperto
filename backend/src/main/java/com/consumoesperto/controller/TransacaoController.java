@@ -4,8 +4,8 @@ import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.TransacaoService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -35,7 +35,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/transacoes") // Base path para endpoints de transações
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
-@Api(tags = "Transações") // Documentação Swagger
+@Tag(name = "Transações", description = "Endpoints para gestão de transações financeiras")
 @CrossOrigin(origins = "*") // Permite CORS de qualquer origem
 public class TransacaoController {
 
@@ -53,7 +53,7 @@ public class TransacaoController {
      * @return Transação criada com ID e dados completos
      */
     @PostMapping
-    @ApiOperation("Criar nova transação")
+    @Operation(summary = "Criar nova transação", description = "Cria uma nova transação financeira para o usuário autenticado")
     public ResponseEntity<TransacaoDTO> criarTransacao(
             @Valid @RequestBody TransacaoDTO transacaoDTO,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -74,7 +74,7 @@ public class TransacaoController {
      * @return Dados da transação encontrada
      */
     @GetMapping("/{id}")
-    @ApiOperation("Buscar transação por ID")
+    @Operation(summary = "Buscar transação por ID", description = "Busca uma transação específica por ID")
     public ResponseEntity<TransacaoDTO> buscarPorId(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -94,7 +94,7 @@ public class TransacaoController {
      * @return Lista de todas as transações do usuário
      */
     @GetMapping
-    @ApiOperation("Listar todas as transações do usuário")
+    @Operation(summary = "Listar todas as transações", description = "Lista todas as transações do usuário autenticado")
     public ResponseEntity<List<TransacaoDTO>> buscarPorUsuario(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -115,7 +115,7 @@ public class TransacaoController {
      * @return Transação atualizada
      */
     @PutMapping("/{id}")
-    @ApiOperation("Atualizar transação")
+    @Operation(summary = "Atualizar transação", description = "Atualiza uma transação existente")
     public ResponseEntity<TransacaoDTO> atualizarTransacao(
             @PathVariable Long id,
             @Valid @RequestBody TransacaoDTO transacaoDTO,
@@ -137,7 +137,7 @@ public class TransacaoController {
      * @return Resposta vazia indicando sucesso
      */
     @DeleteMapping("/{id}")
-    @ApiOperation("Deletar transação")
+    @Operation(summary = "Deletar transação", description = "Remove uma transação do sistema")
     public ResponseEntity<Void> deletarTransacao(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -159,7 +159,7 @@ public class TransacaoController {
      * @return Lista de transações no período especificado
      */
     @GetMapping("/periodo")
-    @ApiOperation("Buscar transações por período")
+    @Operation(summary = "Buscar transações por período", description = "Busca transações dentro de um período específico")
     public ResponseEntity<List<TransacaoDTO>> buscarPorPeriodo(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataInicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataFim,
@@ -181,7 +181,7 @@ public class TransacaoController {
      * @return Lista de transações da categoria especificada
      */
     @GetMapping("/categoria/{categoriaId}")
-    @ApiOperation("Buscar transações por categoria")
+    @Operation(summary = "Buscar transações por categoria", description = "Filtra transações por categoria específica")
     public ResponseEntity<List<TransacaoDTO>> buscarPorCategoria(
             @PathVariable Long categoriaId,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -202,7 +202,7 @@ public class TransacaoController {
      * @return Lista de transações do tipo especificado
      */
     @GetMapping("/tipo/{tipo}")
-    @ApiOperation("Buscar transações por tipo (RECEITA/DESPESA)")
+    @Operation(summary = "Buscar transações por tipo (RECEITA/DESPESA)", description = "Filtra transações por tipo específico")
     public ResponseEntity<List<TransacaoDTO>> buscarPorTipo(
             @PathVariable Transacao.TipoTransacao tipo,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -222,7 +222,7 @@ public class TransacaoController {
      * @return Objeto com resumo financeiro completo
      */
     @GetMapping("/resumo")
-    @ApiOperation("Obter resumo das transações do usuário")
+    @Operation(summary = "Obter resumo das transações do usuário", description = "Retorna resumo financeiro completo das transações")
     public ResponseEntity<Object> obterResumo(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         

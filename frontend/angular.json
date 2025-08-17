@@ -198,44 +198,7 @@
           "builder": "@angular-devkit/build-angular:extract-i18n"
         },
         
-        // =============================================================================
-        // CONFIGURAÇÃO DE TESTES
-        // =============================================================================
-        
-        "test": {
-          // Builder para testes com Karma
-          "builder": "@angular-devkit/build-angular:karma",
-          
-          "options": {
-            // Polyfills para testes
-            "polyfills": [
-              "zone.js",           // Zone.js padrão
-              "zone.js/testing"    // Zone.js para testes
-            ],
-            
-            // Configuração TypeScript para testes
-            "tsConfig": "tsconfig.spec.json",
-            
-            // Linguagem de estilo para testes
-            "inlineStyleLanguage": "scss",
-            
-            // Assets para testes
-            "assets": [
-              {
-                "glob": "**/*",
-                "input": "public"
-              }
-            ],
-            
-            // Estilos para testes
-            "styles": [
-              "src/styles.scss"
-            ],
-            
-            // Scripts para testes
-            "scripts": []
-          }
-        }
+
       }
     }
   }

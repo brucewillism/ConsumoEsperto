@@ -2,8 +2,8 @@ package com.consumoesperto.controller;
 
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.BankSynchronizationService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -42,7 +42,7 @@ import com.consumoesperto.service.BankApiService;
 @RequestMapping("/api/bank-sync") // Base path para endpoints de sincronização bancária
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Slf4j // Lombok: fornece logger automático para a classe
-@Api(tags = "Sincronização Bancária") // Documentação Swagger
+@Tag(name = "Sincronização Bancária", description = "Endpoints para sincronização de dados bancários")
 @CrossOrigin(origins = "*") // Permite CORS de qualquer origem
 public class BankSynchronizationController {
 
@@ -66,7 +66,7 @@ public class BankSynchronizationController {
      * @return Resumo da sincronização de todos os bancos
      */
     @PostMapping("/synchronize")
-    @ApiOperation("Sincronizar todos os dados bancários do usuário")
+    @Operation(summary = "Sincronizar dados bancários", description = "Sincroniza todos os dados bancários do usuário")
     public ResponseEntity<Map<String, Object>> synchronizeAllBankData(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -103,7 +103,7 @@ public class BankSynchronizationController {
      * @return Resultado da sincronização do banco específico
      */
     @PostMapping("/synchronize/{bankType}")
-    @ApiOperation("Sincronizar dados de um banco específico")
+    @Operation(summary = "Sincronizar banco específico", description = "Sincroniza dados de um banco específico")
     public ResponseEntity<Map<String, Object>> synchronizeSpecificBank(
             @PathVariable String bankType,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -163,7 +163,7 @@ public class BankSynchronizationController {
      * @return Status da última sincronização
      */
     @GetMapping("/status")
-    @ApiOperation("Obter status da última sincronização bancária")
+    @Operation(summary = "Obter status da última sincronização bancária", description = "Retorna status da última sincronização bancária")
     public ResponseEntity<Map<String, Object>> getSyncStatus(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -210,7 +210,7 @@ public class BankSynchronizationController {
      * @return Resultado da atualização forçada
      */
     @PostMapping("/force-update/{dataType}")
-    @ApiOperation("Forçar atualização de dados específicos")
+    @Operation(summary = "Forçar atualização de dados específicos", description = "Força atualização de dados específicos ignorando cache")
     public ResponseEntity<Map<String, Object>> forceUpdateData(
             @PathVariable String dataType,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -263,7 +263,7 @@ public class BankSynchronizationController {
      * @return Histórico de sincronizações
      */
     @GetMapping("/history")
-    @ApiOperation("Obter histórico de sincronizações bancárias")
+    @Operation(summary = "Obter histórico de sincronizações bancárias", description = "Retorna histórico de sincronizações bancárias")
     public ResponseEntity<Map<String, Object>> getSyncHistory(
             @RequestParam(defaultValue = "10") int limit,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -318,7 +318,7 @@ public class BankSynchronizationController {
      * @return Configurações aplicadas
      */
     @PostMapping("/auto-sync-config")
-    @ApiOperation("Configurar sincronização automática")
+    @Operation(summary = "Configurar sincronização automática", description = "Configura parâmetros da sincronização automática")
     public ResponseEntity<Map<String, Object>> configureAutoSync(
             @RequestBody Map<String, Object> config,
             @AuthenticationPrincipal UserPrincipal currentUser) {

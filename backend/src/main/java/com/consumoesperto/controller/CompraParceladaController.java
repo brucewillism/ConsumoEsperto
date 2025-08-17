@@ -4,8 +4,8 @@ import com.consumoesperto.dto.CompraParceladaDTO;
 import com.consumoesperto.model.CompraParcelada;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.CompraParceladaService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -38,7 +38,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/compras-parceladas") // Base path para endpoints de compras parceladas
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
-@Api(tags = "Compras Parceladas") // Documentação Swagger
+@Tag(name = "Compras Parceladas", description = "Endpoints para gestão de compras parceladas")
 @CrossOrigin(origins = "*") // Permite CORS de qualquer origem
 public class CompraParceladaController {
 
@@ -57,7 +57,7 @@ public class CompraParceladaController {
      * @return Compra parcelada criada com ID e dados completos
      */
     @PostMapping
-    @ApiOperation("Criar nova compra parcelada")
+    @Operation(summary = "Criar compra parcelada", description = "Cria uma nova compra parcelada para o usuário")
     public ResponseEntity<CompraParceladaDTO> criarCompraParcelada(
             @Valid @RequestBody CompraParceladaDTO compraParceladaDTO,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -78,7 +78,7 @@ public class CompraParceladaController {
      * @return Dados da compra parcelada encontrada
      */
     @GetMapping("/{id}")
-    @ApiOperation("Buscar compra parcelada por ID")
+    @Operation(summary = "Buscar compra por ID", description = "Busca uma compra parcelada específica por ID")
     public ResponseEntity<CompraParceladaDTO> buscarPorId(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -98,7 +98,7 @@ public class CompraParceladaController {
      * @return Lista de todas as compras parceladas do usuário
      */
     @GetMapping
-    @ApiOperation("Listar todas as compras parceladas do usuário")
+    @Operation(summary = "Listar todas as compras parceladas do usuário", description = "Retorna lista completa de todas as compras parceladas do usuário")
     public ResponseEntity<List<CompraParceladaDTO>> buscarPorUsuario(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -118,7 +118,7 @@ public class CompraParceladaController {
      * @return Lista de compras parceladas do cartão especificado
      */
     @GetMapping("/cartao/{cartaoId}")
-    @ApiOperation("Listar compras parceladas por cartão de crédito")
+    @Operation(summary = "Listar compras parceladas por cartão de crédito", description = "Retorna compras parceladas de um cartão de crédito específico")
     public ResponseEntity<List<CompraParceladaDTO>> buscarPorCartaoCredito(
             @PathVariable Long cartaoId,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -140,7 +140,7 @@ public class CompraParceladaController {
      * @return Compra parcelada atualizada com dados modificados
      */
     @PutMapping("/{id}")
-    @ApiOperation("Atualizar compra parcelada")
+    @Operation(summary = "Atualizar compra parcelada", description = "Atualiza dados de uma compra parcelada existente")
     public ResponseEntity<CompraParceladaDTO> atualizarCompraParcelada(
             @PathVariable Long id,
             @Valid @RequestBody CompraParceladaDTO compraParceladaDTO,
@@ -162,7 +162,7 @@ public class CompraParceladaController {
      * @return Resposta sem conteúdo (204 No Content)
      */
     @DeleteMapping("/{id}")
-    @ApiOperation("Deletar compra parcelada")
+    @Operation(summary = "Deletar compra parcelada", description = "Remove permanentemente uma compra parcelada")
     public ResponseEntity<Void> deletarCompraParcelada(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -183,7 +183,7 @@ public class CompraParceladaController {
      * @return Lista de compras parceladas com o status especificado
      */
     @GetMapping("/status/{status}")
-    @ApiOperation("Buscar compras parceladas por status")
+    @Operation(summary = "Buscar compras parceladas por status", description = "Retorna compras parceladas filtradas por status específico")
     public ResponseEntity<List<CompraParceladaDTO>> buscarPorStatus(
             @PathVariable CompraParcelada.StatusCompra status,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -205,7 +205,7 @@ public class CompraParceladaController {
      * @return Lista de compras parceladas no período especificado
      */
     @GetMapping("/periodo")
-    @ApiOperation("Buscar compras parceladas por período")
+    @Operation(summary = "Buscar compras parceladas por período", description = "Retorna compras parceladas em um período específico")
     public ResponseEntity<List<CompraParceladaDTO>> buscarPorPeriodo(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataInicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataFim,
@@ -227,7 +227,7 @@ public class CompraParceladaController {
      * @return Valor total das compras parceladas com o status especificado
      */
     @GetMapping("/total/{status}")
-    @ApiOperation("Obter total de compras parceladas por status")
+    @Operation(summary = "Obter total de compras parceladas por status", description = "Retorna valor total das compras parceladas por status")
     public ResponseEntity<BigDecimal> getTotalPorStatus(
             @PathVariable CompraParcelada.StatusCompra status,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -247,7 +247,7 @@ public class CompraParceladaController {
      * @return Lista de compras parceladas com parcelas ativas
      */
     @GetMapping("/parcelas-ativas")
-    @ApiOperation("Buscar parcelas ativas")
+    @Operation(summary = "Buscar parcelas ativas", description = "Retorna compras parceladas com parcelas ativas (não finalizadas)")
     public ResponseEntity<List<CompraParceladaDTO>> buscarParcelasAtivas(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -266,7 +266,7 @@ public class CompraParceladaController {
      * @return Lista de compras parceladas com parcelas vencendo em breve
      */
     @GetMapping("/parcelas-vencendo")
-    @ApiOperation("Buscar parcelas vencendo nos próximos 30 dias")
+    @Operation(summary = "Buscar parcelas vencendo nos próximos 30 dias", description = "Retorna parcelas que vencem nos próximos 30 dias")
     public ResponseEntity<List<CompraParceladaDTO>> buscarParcelasVencendo(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         

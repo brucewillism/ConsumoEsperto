@@ -135,4 +135,13 @@ public class JwtTokenProvider {
             return false;
         }
     }
+
+    /**
+     * Retorna o tempo de expiração do token em milissegundos
+     * 
+     * @return Tempo de expiração em milissegundos
+     */
+    public int getExpirationTime() {
+        return jwtExpirationInMs;
+    }
 }

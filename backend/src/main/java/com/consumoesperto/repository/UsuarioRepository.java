@@ -51,4 +51,20 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
      * @return true se o email já existe, false caso contrário
      */
     boolean existsByEmail(String email);
+
+    /**
+     * Busca um usuário pelo Google ID (OAuth2)
+     * 
+     * @param googleId ID único do usuário no Google
+     * @return Optional contendo o usuário encontrado ou vazio se não encontrado
+     */
+    Optional<Usuario> findByGoogleId(String googleId);
+
+    /**
+     * Verifica se existe um usuário com o Google ID informado
+     * 
+     * @param googleId ID único do usuário no Google
+     * @return true se o Google ID já existe, false caso contrário
+     */
+    boolean existsByGoogleId(String googleId);
 }

@@ -6,8 +6,8 @@ import com.consumoesperto.dto.GoogleLoginDTO;
 import com.consumoesperto.security.JwtTokenProvider;
 import com.consumoesperto.service.UsuarioService;
 import com.consumoesperto.service.GoogleOAuth2Service;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -33,7 +33,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth") // Base path para todos os endpoints de autenticação
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
-@Api(tags = "Autenticação") // Documentação Swagger
+@Tag(name = "Autenticação", description = "Endpoints para autenticação e registro de usuários")
 @CrossOrigin(origins = "*") // Permite CORS de qualquer origem
 public class AuthController {
 
@@ -59,7 +59,7 @@ public class AuthController {
      * @return ResponseEntity com token JWT e tipo de autenticação
      */
     @PostMapping("/login")
-    @ApiOperation("Realizar login")
+    @Operation(summary = "Realizar login", description = "Autentica as credenciais do usuário e retorna JWT")
     public ResponseEntity<?> login(@Valid @RequestBody LoginDTO loginDTO) {
         // Cria um token de autenticação com as credenciais fornecidas
         Authentication authentication = authenticationManager.authenticate(
@@ -93,7 +93,7 @@ public class AuthController {
      * @return ResponseEntity com os dados do usuário criado
      */
     @PostMapping("/registro")
-    @ApiOperation("Registrar novo usuário")
+    @Operation(summary = "Registrar usuário", description = "Cria uma nova conta de usuário no sistema")
     public ResponseEntity<?> registro(@Valid @RequestBody UsuarioDTO usuarioDTO) {
         // Cria o usuário através do serviço
         UsuarioDTO novoUsuario = usuarioService.criarUsuario(usuarioDTO);
@@ -110,20 +110,17 @@ public class AuthController {
      * @return ResponseEntity com token JWT e dados do usuário
      */
     @PostMapping("/google")
-    @ApiOperation("Login com Google")
+    @Operation(summary = "Login com Google", description = "Autentica usuário via Google OAuth2")
     public ResponseEntity<?> googleLogin(@Valid @RequestBody GoogleLoginDTO googleLoginDTO) {
         try {
-            // Autentica o usuário via Google
-            UsuarioDTO usuarioDTO = googleOAuth2Service.authenticateGoogleUser(googleLoginDTO.getIdToken());
+            // Para OAuth2 com Spring Security, a autenticação é feita automaticamente
+            // Este endpoint pode ser usado para obter informações do usuário após autenticação
+            // ou para criar/atualizar usuários no sistema local
             
-            // Gera o token JWT para o usuário autenticado
-            String jwt = tokenProvider.generateToken(usuarioDTO.getUsername());
-            
-            // Prepara a resposta com o token e dados do usuário
+            // Por enquanto, retorna uma mensagem informativa
             Map<String, Object> response = new HashMap<>();
-            response.put("token", jwt);
-            response.put("type", "Bearer");
-            response.put("usuario", usuarioDTO);
+            response.put("message", "Autenticação OAuth2 configurada. Use o endpoint de login padrão após autenticação OAuth2.");
+            response.put("status", "success");
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {

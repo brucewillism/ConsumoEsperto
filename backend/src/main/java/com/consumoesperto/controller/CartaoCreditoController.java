@@ -3,8 +3,8 @@ package com.consumoesperto.controller;
 import com.consumoesperto.dto.CartaoCreditoDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.CartaoCreditoService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -33,7 +33,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/cartoes-credito") // Base path para endpoints de cartões de crédito
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
-@Api(tags = "Cartões de Crédito") // Documentação Swagger
+@Tag(name = "Cartões de Crédito", description = "Endpoints para gestão de cartões de crédito")
 @CrossOrigin(origins = "*") // Permite CORS de qualquer origem
 public class CartaoCreditoController {
 
@@ -51,7 +51,7 @@ public class CartaoCreditoController {
      * @return Cartão de crédito criado com ID e dados completos
      */
     @PostMapping
-    @ApiOperation("Criar novo cartão de crédito")
+    @Operation(summary = "Criar novo cartão de crédito", description = "Cria um novo cartão de crédito para o usuário")
     public ResponseEntity<CartaoCreditoDTO> criarCartaoCredito(
             @Valid @RequestBody CartaoCreditoDTO cartaoCreditoDTO,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -75,7 +75,7 @@ public class CartaoCreditoController {
      * @return Dados do cartão de crédito encontrado
      */
     @GetMapping("/{id}")
-    @ApiOperation("Buscar cartão de crédito por ID")
+    @Operation(summary = "Buscar cartão por ID", description = "Busca um cartão de crédito específico por ID")
     public ResponseEntity<CartaoCreditoDTO> buscarPorId(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -95,7 +95,7 @@ public class CartaoCreditoController {
      * @return Lista de todos os cartões de crédito do usuário
      */
     @GetMapping
-    @ApiOperation("Listar todos os cartões de crédito do usuário")
+    @Operation(summary = "Listar todos os cartões de crédito do usuário", description = "Retorna lista completa de todos os cartões de crédito do usuário")
     public ResponseEntity<List<CartaoCreditoDTO>> buscarPorUsuario(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -116,7 +116,7 @@ public class CartaoCreditoController {
      * @return Cartão de crédito atualizado
      */
     @PutMapping("/{id}")
-    @ApiOperation("Atualizar cartão de crédito")
+    @Operation(summary = "Atualizar cartão de crédito", description = "Atualiza dados de um cartão de crédito existente")
     public ResponseEntity<CartaoCreditoDTO> atualizarCartaoCredito(
             @PathVariable Long id,
             @Valid @RequestBody CartaoCreditoDTO cartaoCreditoDTO,
@@ -138,7 +138,7 @@ public class CartaoCreditoController {
      * @return Resposta vazia indicando sucesso
      */
     @DeleteMapping("/{id}")
-    @ApiOperation("Deletar cartão de crédito")
+    @Operation(summary = "Deletar cartão de crédito", description = "Remove permanentemente um cartão de crédito")
     public ResponseEntity<Void> deletarCartaoCredito(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -158,7 +158,7 @@ public class CartaoCreditoController {
      * @return Valor total do limite de crédito disponível
      */
     @GetMapping("/limite-total")
-    @ApiOperation("Obter limite total de crédito do usuário")
+    @Operation(summary = "Obter limite total de crédito do usuário", description = "Retorna o limite total de crédito de todos os cartões ativos")
     public ResponseEntity<BigDecimal> getLimiteTotal(@AuthenticationPrincipal UserPrincipal currentUser) {
         // Calcula o limite total de todos os cartões do usuário
         BigDecimal limiteTotal = cartaoCreditoService.getTotalLimiteCredito(currentUser.getId());
@@ -175,7 +175,7 @@ public class CartaoCreditoController {
      * @return Valor do limite de crédito ainda disponível para uso
      */
     @GetMapping("/limite-disponivel")
-    @ApiOperation("Obter limite disponível de crédito do usuário")
+    @Operation(summary = "Obter limite disponível de crédito do usuário", description = "Retorna o limite disponível de crédito (total - utilizado)")
     public ResponseEntity<BigDecimal> getLimiteDisponivel(@AuthenticationPrincipal UserPrincipal currentUser) {
         // Calcula o limite disponível (total - utilizado)
         BigDecimal limiteDisponivel = cartaoCreditoService.getTotalLimiteDisponivel(currentUser.getId());

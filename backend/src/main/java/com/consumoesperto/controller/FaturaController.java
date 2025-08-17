@@ -4,8 +4,8 @@ import com.consumoesperto.dto.FaturaDTO;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.FaturaService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -37,7 +37,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/faturas") // Base path para endpoints de faturas
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
-@Api(tags = "Faturas") // Documentação Swagger
+@Tag(name = "Faturas", description = "Endpoints para gestão de faturas de cartão de crédito")
 @CrossOrigin(origins = "*") // Permite CORS de qualquer origem
 public class FaturaController {
 
@@ -55,7 +55,7 @@ public class FaturaController {
      * @return Fatura criada com ID e dados completos
      */
     @PostMapping
-    @ApiOperation("Criar nova fatura")
+    @Operation(summary = "Criar nova fatura", description = "Cria uma nova fatura de cartão de crédito")
     public ResponseEntity<FaturaDTO> criarFatura(
             @Valid @RequestBody FaturaDTO faturaDTO,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -76,7 +76,7 @@ public class FaturaController {
      * @return Dados da fatura encontrada
      */
     @GetMapping("/{id}")
-    @ApiOperation("Buscar fatura por ID")
+    @Operation(summary = "Buscar fatura por ID", description = "Busca uma fatura específica por ID")
     public ResponseEntity<FaturaDTO> buscarPorId(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -96,7 +96,7 @@ public class FaturaController {
      * @return Lista de todas as faturas do usuário
      */
     @GetMapping
-    @ApiOperation("Listar todas as faturas do usuário")
+    @Operation(summary = "Listar todas as faturas do usuário", description = "Retorna lista completa de todas as faturas do usuário")
     public ResponseEntity<List<FaturaDTO>> buscarPorUsuario(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -116,7 +116,7 @@ public class FaturaController {
      * @return Lista de faturas do cartão especificado
      */
     @GetMapping("/cartao/{cartaoId}")
-    @ApiOperation("Listar faturas por cartão de crédito")
+    @Operation(summary = "Listar faturas por cartão de crédito", description = "Retorna faturas de um cartão de crédito específico")
     public ResponseEntity<List<FaturaDTO>> buscarPorCartaoCredito(
             @PathVariable Long cartaoId,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -138,7 +138,7 @@ public class FaturaController {
      * @return Fatura atualizada
      */
     @PutMapping("/{id}")
-    @ApiOperation("Atualizar fatura")
+    @Operation(summary = "Atualizar fatura", description = "Atualiza dados de uma fatura existente")
     public ResponseEntity<FaturaDTO> atualizarFatura(
             @PathVariable Long id,
             @Valid @RequestBody FaturaDTO faturaDTO,
@@ -160,7 +160,7 @@ public class FaturaController {
      * @return Resposta vazia indicando sucesso
      */
     @DeleteMapping("/{id}")
-    @ApiOperation("Deletar fatura")
+    @Operation(summary = "Deletar fatura", description = "Remove permanentemente uma fatura")
     public ResponseEntity<Void> deletarFatura(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -180,7 +180,7 @@ public class FaturaController {
      * @return Lista de faturas com o status especificado
      */
     @GetMapping("/status/{status}")
-    @ApiOperation("Buscar faturas por status")
+    @Operation(summary = "Buscar faturas por status", description = "Retorna faturas filtradas por status específico")
     public ResponseEntity<List<FaturaDTO>> buscarPorStatus(
             @PathVariable Fatura.StatusFatura status,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -202,7 +202,7 @@ public class FaturaController {
      * @return Lista de faturas no período especificado
      */
     @GetMapping("/periodo")
-    @ApiOperation("Buscar faturas por período")
+    @Operation(summary = "Buscar faturas por período", description = "Retorna faturas em um período específico")
     public ResponseEntity<List<FaturaDTO>> buscarPorPeriodo(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataInicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataFim,
@@ -224,7 +224,7 @@ public class FaturaController {
      * @return Valor total das faturas com o status especificado
      */
     @GetMapping("/total/{status}")
-    @ApiOperation("Obter total de faturas por status")
+    @Operation(summary = "Obter total de faturas por status", description = "Retorna valor total das faturas por status")
     public ResponseEntity<BigDecimal> getTotalPorStatus(
             @PathVariable Fatura.StatusFatura status,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -244,7 +244,7 @@ public class FaturaController {
      * @return Lista de faturas vencidas
      */
     @GetMapping("/vencidas")
-    @ApiOperation("Buscar faturas vencidas")
+    @Operation(summary = "Buscar faturas vencidas", description = "Retorna faturas que já passaram da data de vencimento")
     public ResponseEntity<List<FaturaDTO>> buscarFaturasVencidas(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         

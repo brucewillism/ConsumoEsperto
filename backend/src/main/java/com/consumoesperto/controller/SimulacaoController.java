@@ -2,8 +2,8 @@ package com.consumoesperto.controller;
 
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.SimulacaoCompraService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -36,7 +36,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/simulacoes") // Base path para endpoints de simulações
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
-@Api(tags = "Simulações de Futuras Compras") // Documentação Swagger
+@Tag(name = "Simulações", description = "Endpoints para simulações financeiras")
 @CrossOrigin(origins = "*") // Permite CORS de qualquer origem
 public class SimulacaoController {
 
@@ -56,7 +56,7 @@ public class SimulacaoController {
      * @return Mapa contendo detalhes da simulação parcelada
      */
     @GetMapping("/compra-parcelada")
-    @ApiOperation("Simular compra parcelada")
+    @Operation(summary = "Simular compra parcelada", description = "Simula uma compra parcelada considerando o perfil financeiro")
     public ResponseEntity<Map<String, Object>> simularCompraParcelada(
             @RequestParam @NotNull @DecimalMin("0.01") BigDecimal valorCompra,
             @RequestParam @NotNull @Min(1) int numeroParcelas,
@@ -79,7 +79,7 @@ public class SimulacaoController {
      * @return Mapa contendo detalhes da simulação à vista
      */
     @GetMapping("/compra-vista")
-    @ApiOperation("Simular compra à vista")
+    @Operation(summary = "Simular compra à vista", description = "Simula uma compra à vista com análise de desconto")
     public ResponseEntity<Map<String, Object>> simularCompraAVista(
             @RequestParam @NotNull @DecimalMin("0.01") BigDecimal valorCompra,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -102,7 +102,7 @@ public class SimulacaoController {
      * @return Mapa contendo plano de economia e recomendações
      */
     @GetMapping("/economia-necessaria")
-    @ApiOperation("Calcular economia necessária para meta")
+    @Operation(summary = "Calcular economia necessária para meta", description = "Calcula economia mensal necessária para atingir meta financeira")
     public ResponseEntity<Map<String, Object>> calcularEconomiaNecessaria(
             @RequestParam @NotNull @DecimalMin("0.01") BigDecimal valorCompra,
             @RequestParam @NotNull @Min(1) int mesesDesejados,

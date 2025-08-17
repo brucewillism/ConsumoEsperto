@@ -41,16 +41,14 @@ public class Usuario {
      * Nome de usuário único para login
      * Deve ser preenchido e ter no máximo 50 caracteres
      */
-    @NotBlank(message = "Nome de usuário é obrigatório")
     @Size(max = 50, message = "Nome de usuário deve ter no máximo 50 caracteres")
     @Column(unique = true) // Garante que o username seja único
     private String username;
 
     /**
-     * Senha criptografada do usuário
-     * Deve ser preenchida e ter no máximo 120 caracteres
+     * Senha criptografada do usuário (opcional para OAuth2)
+     * Deve ter no máximo 120 caracteres
      */
-    @NotBlank(message = "Senha é obrigatória")
     @Size(max = 120, message = "Senha deve ter no máximo 120 caracteres")
     private String password;
 
@@ -87,6 +85,38 @@ public class Usuario {
     private LocalDateTime ultimoAcesso;
 
     /**
+     * ID único do usuário no Google (OAuth2)
+     * Usado para identificar usuários que fazem login via Google
+     */
+    @Column(name = "google_id", unique = true)
+    private String googleId;
+
+    /**
+     * URL da foto de perfil do usuário no Google
+     */
+    @Column(name = "foto_url", length = 500)
+    private String fotoUrl;
+
+    /**
+     * Locale/idioma preferido do usuário
+     */
+    @Column(name = "locale", length = 10)
+    private String locale;
+
+    /**
+     * Indica se a conta do usuário foi verificada pelo Google
+     */
+    @Column(name = "email_verificado")
+    private Boolean emailVerificado = false;
+
+    /**
+     * Provedor de autenticação (GOOGLE, LOCAL, etc.)
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "provedor_auth")
+    private ProvedorAuth provedorAuth = ProvedorAuth.LOCAL;
+
+    /**
      * Lista de transações financeiras do usuário
      * Relacionamento um-para-muitos: um usuário pode ter várias transações
      * Carregamento lazy para melhor performance
@@ -117,5 +147,23 @@ public class Usuario {
     @PrePersist
     protected void onCreate() {
         dataCriacao = LocalDateTime.now();
+    }
+
+    /**
+     * Método executado automaticamente antes de atualizar a entidade
+     * Atualiza o último acesso quando o usuário faz login
+     */
+    @PreUpdate
+    protected void onUpdate() {
+        ultimoAcesso = LocalDateTime.now();
+    }
+
+    /**
+     * Enum para tipos de provedor de autenticação
+     */
+    public enum ProvedorAuth {
+        LOCAL,      // Login local com senha
+        GOOGLE,     // Login via Google OAuth2
+        MERCADOPAGO // Login via Mercado Pago (futuro)
     }
 }

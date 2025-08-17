@@ -10,8 +10,8 @@ import com.consumoesperto.service.AutorizacaoBancariaService;
 import com.consumoesperto.service.BankSynchronizationService;
 import com.consumoesperto.service.CartaoCreditoService;
 import com.consumoesperto.service.FaturaService;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/bank")
 @RequiredArgsConstructor
 @Slf4j
-@Api(tags = "Operações Bancárias")
+@Tag(name = "Operações Bancárias", description = "Endpoints para operações bancárias gerais")
 @CrossOrigin(origins = "*")
 public class BankController {
 
@@ -56,7 +56,7 @@ public class BankController {
      * Obtém bancos conectados do usuário
      */
     @GetMapping("/connected")
-    @ApiOperation("Obter bancos conectados do usuário")
+    @Operation(summary = "Obter bancos conectados do usuário", description = "Retorna lista de bancos conectados ao usuário autenticado")
     public ResponseEntity<List<Map<String, Object>>> getConnectedBanks(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -90,7 +90,7 @@ public class BankController {
      * Conecta um novo banco
      */
     @PostMapping("/connect")
-    @ApiOperation("Conectar um novo banco")
+    @Operation(summary = "Conectar um novo banco", description = "Inicia processo de conexão com um novo banco")
     public ResponseEntity<Map<String, Object>> connectBank(
             @RequestBody Map<String, String> request,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -146,7 +146,7 @@ public class BankController {
      * Desconecta um banco
      */
     @DeleteMapping("/disconnect/{bankId}")
-    @ApiOperation("Desconectar um banco")
+    @Operation(summary = "Desconectar um banco", description = "Remove conexão com um banco específico")
     public ResponseEntity<Map<String, Object>> disconnectBank(
             @PathVariable Long bankId,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -194,7 +194,7 @@ public class BankController {
      * Sincroniza dados de um banco específico
      */
     @PostMapping("/sync/{bankId}")
-    @ApiOperation("Sincronizar dados de um banco específico")
+    @Operation(summary = "Sincronizar dados de um banco específico", description = "Força sincronização de dados de um banco específico")
     public ResponseEntity<Map<String, Object>> syncBankData(
             @PathVariable Long bankId,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -253,7 +253,7 @@ public class BankController {
      * Sincroniza dados de todos os bancos conectados
      */
     @PostMapping("/sync/all")
-    @ApiOperation("Sincronizar dados de todos os bancos conectados")
+    @Operation(summary = "Sincronizar dados de todos os bancos conectados", description = "Força sincronização de dados de todos os bancos conectados")
     public ResponseEntity<Map<String, Object>> syncAllBanks(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -340,7 +340,7 @@ public class BankController {
      * Obtém cartões de crédito de todos os bancos conectados
      */
     @GetMapping("/credit-cards")
-    @ApiOperation("Obter cartões de crédito de todos os bancos")
+    @Operation(summary = "Obter cartões de crédito de todos os bancos", description = "Retorna todos os cartões de crédito de todos os bancos conectados")
     public ResponseEntity<List<CartaoCreditoDTO>> getCreditCards(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -400,7 +400,7 @@ public class BankController {
      * Obtém faturas de todos os cartões
      */
     @GetMapping("/invoices")
-    @ApiOperation("Obter faturas de todos os cartões")
+    @Operation(summary = "Obter faturas de todos os cartões", description = "Retorna todas as faturas de todos os cartões de crédito")
     public ResponseEntity<List<FaturaDTO>> getInvoices(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -458,7 +458,7 @@ public class BankController {
      * Obtém saldo consolidado de todos os bancos
      */
     @GetMapping("/balance/consolidated")
-    @ApiOperation("Obter saldo consolidado de todos os bancos")
+    @Operation(summary = "Obter saldo consolidado de todos os bancos", description = "Retorna saldo consolidado de todos os bancos conectados")
     public ResponseEntity<Map<String, Object>> getConsolidatedBalance(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -529,7 +529,7 @@ public class BankController {
      * Obtém estatísticas de sincronização
      */
     @GetMapping("/sync/stats")
-    @ApiOperation("Obter estatísticas de sincronização")
+    @Operation(summary = "Obter estatísticas de sincronização", description = "Retorna estatísticas de sincronização bancária")
     public ResponseEntity<Map<String, Object>> getSyncStats(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
@@ -564,7 +564,7 @@ public class BankController {
      * Obtém URL de autorização para conectar banco
      */
     @GetMapping("/auth/url/{bankType}")
-    @ApiOperation("Obter URL de autorização para conectar banco")
+    @Operation(summary = "Obter URL de autorização para conectar banco", description = "Gera URL de autorização OAuth2 para conectar um banco")
     public ResponseEntity<Map<String, Object>> getBankAuthUrl(
             @PathVariable String bankType,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -594,7 +594,7 @@ public class BankController {
      * Processa callback OAuth2
      */
     @PostMapping("/oauth/callback")
-    @ApiOperation("Processar callback OAuth2")
+    @Operation(summary = "Processar callback OAuth2", description = "Processa callback OAuth2 para finalizar conexão bancária")
     public ResponseEntity<Map<String, Object>> processOAuthCallback(
             @RequestBody Map<String, String> request,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -648,7 +648,7 @@ public class BankController {
      * Verifica status de conexão com banco
      */
     @GetMapping("/connection/status/{bankId}")
-    @ApiOperation("Verificar status de conexão com banco")
+    @Operation(summary = "Verificar status de conexão com banco", description = "Verifica o status atual da conexão com um banco específico")
     public ResponseEntity<Map<String, Object>> checkBankConnectionStatus(
             @PathVariable Long bankId,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -700,7 +700,7 @@ public class BankController {
      * Obtém histórico de sincronizações
      */
     @GetMapping("/sync/history")
-    @ApiOperation("Obter histórico de sincronizações")
+    @Operation(summary = "Obter histórico de sincronizações", description = "Retorna histórico de sincronizações bancárias")
     public ResponseEntity<List<Map<String, Object>>> getSyncHistory(
             @RequestParam(defaultValue = "10") int limit,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -738,7 +738,7 @@ public class BankController {
      * Força renovação de token
      */
     @PostMapping("/token/refresh/{bankId}")
-    @ApiOperation("Forçar renovação de token")
+    @Operation(summary = "Forçar renovação de token", description = "Força renovação de token de acesso bancário")
     public ResponseEntity<Map<String, Object>> forceTokenRefresh(
             @PathVariable Long bankId,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -790,7 +790,7 @@ public class BankController {
      * Obtém detalhes de um banco específico
      */
     @GetMapping("/details/{bankId}")
-    @ApiOperation("Obter detalhes de um banco específico")
+    @Operation(summary = "Obter detalhes de um banco específico", description = "Retorna detalhes completos de um banco específico")
     public ResponseEntity<Map<String, Object>> getBankDetails(
             @PathVariable Long bankId,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -846,7 +846,7 @@ public class BankController {
      * Obtém transações de um banco específico
      */
     @GetMapping("/transactions/{bankId}")
-    @ApiOperation("Obter transações de um banco específico")
+    @Operation(summary = "Obter transações de um banco específico", description = "Retorna transações de um banco específico")
     public ResponseEntity<List<Map<String, Object>>> getBankTransactions(
             @PathVariable Long bankId,
             @RequestParam(defaultValue = "50") int limit,
@@ -906,7 +906,7 @@ public class BankController {
      * Obtém gastos por categoria
      */
     @GetMapping("/spending/category")
-    @ApiOperation("Obter gastos por categoria")
+    @Operation(summary = "Obter gastos por categoria", description = "Retorna gastos agrupados por categoria")
     public ResponseEntity<List<Map<String, Object>>> getSpendingByCategory(
             @RequestParam(defaultValue = "30") int days,
             @AuthenticationPrincipal UserPrincipal currentUser) {
@@ -974,7 +974,7 @@ public class BankController {
      * Obtém análise de gastos
      */
     @GetMapping("/spending/analysis")
-    @ApiOperation("Obter análise de gastos")
+    @Operation(summary = "Obter análise de gastos", description = "Retorna análise detalhada de gastos e receitas")
     public ResponseEntity<Map<String, Object>> getSpendingAnalysis(
             @RequestParam(defaultValue = "30") int days,
             @AuthenticationPrincipal UserPrincipal currentUser) {
