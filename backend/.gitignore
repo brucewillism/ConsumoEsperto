@@ -140,11 +140,11 @@ coverage/
 *.pid
 *.pid.lock
 
-# Oracle database files
-*.ora
-*.dmp
-*.exp
-*.imp
+# PostgreSQL database files
+*.conf
+*.pid
+*.lock
+*.dump
 
 # Backup files
 *.bak

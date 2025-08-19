@@ -56,7 +56,7 @@ public class AutorizacaoBancariaService {
 
             // Verifica se já existe uma autorização para este usuário e banco
             Optional<AutorizacaoBancaria> autorizacaoExistente = autorizacaoBancariaRepository
-                    .findByUsuarioIdAndTipoBanco(userId, mapBankType(bankType));
+                    .findByUsuarioIdAndBanco(userId, mapBankType(bankType));
 
             if (autorizacaoExistente.isPresent()) {
                 // Atualiza autorização existente
@@ -84,12 +84,11 @@ public class AutorizacaoBancariaService {
         AutorizacaoBancaria autorizacao = new AutorizacaoBancaria();
         
         autorizacao.setUsuario(usuario);
-        autorizacao.setTipoBanco(mapBankType(bankType));
+        autorizacao.setBanco(mapBankType(bankType));
         autorizacao.setAccessToken(extractAccessToken(tokenResponse));
         autorizacao.setRefreshToken(extractRefreshToken(tokenResponse));
         autorizacao.setDataExpiracao(extractExpirationDate(tokenResponse));
-        autorizacao.setEscopo(extractScope(tokenResponse));
-        autorizacao.setStatus(AutorizacaoBancaria.StatusAutorizacao.ATIVA);
+        autorizacao.setAtivo(true);
         autorizacao.setDataCriacao(LocalDateTime.now());
         autorizacao.setDataAtualizacao(LocalDateTime.now());
         
@@ -111,15 +110,13 @@ public class AutorizacaoBancariaService {
         autorizacaoExistente.setAccessToken(extractAccessToken(tokenResponse));
         autorizacaoExistente.setRefreshToken(extractRefreshToken(tokenResponse));
         autorizacaoExistente.setDataExpiracao(extractExpirationDate(tokenResponse));
-        autorizacaoExistente.setEscopo(extractScope(tokenResponse));
-        autorizacaoExistente.setStatus(AutorizacaoBancaria.StatusAutorizacao.ATIVA);
+        autorizacaoExistente.setAtivo(true);
         autorizacaoExistente.setDataAtualizacao(LocalDateTime.now());
-        autorizacaoExistente.incrementarContadorRenovacoes();
         
         AutorizacaoBancaria autorizacaoAtualizada = autorizacaoBancariaRepository.save(autorizacaoExistente);
         log.info("Autorização bancária atualizada: {} para usuário {} e banco {}", 
                 autorizacaoAtualizada.getId(), autorizacaoExistente.getUsuario().getId(), 
-                autorizacaoExistente.getTipoBanco());
+                autorizacaoExistente.getBanco());
         
         return autorizacaoAtualizada;
     }
@@ -131,7 +128,7 @@ public class AutorizacaoBancariaService {
      * @return Lista de autorizações ativas
      */
     public List<AutorizacaoBancaria> buscarAutorizacoesAtivas(Long userId) {
-        return autorizacaoBancariaRepository.findByUsuarioIdAndStatus(userId, AutorizacaoBancaria.StatusAutorizacao.ATIVA);
+        return autorizacaoBancariaRepository.findByUsuarioIdAndAtivoTrue(userId);
     }
 
     /**
@@ -152,7 +149,7 @@ public class AutorizacaoBancariaService {
      * @return Optional com a autorização se encontrada
      */
     public Optional<AutorizacaoBancaria> buscarAutorizacao(Long userId, BankApiService.BankType bankType) {
-        return autorizacaoBancariaRepository.findByUsuarioIdAndTipoBanco(userId, mapBankType(bankType));
+        return autorizacaoBancariaRepository.findByUsuarioIdAndBanco(userId, mapBankType(bankType));
     }
 
     /**
@@ -163,8 +160,8 @@ public class AutorizacaoBancariaService {
      * @return true se possui autorização ativa
      */
     public boolean possuiAutorizacaoAtiva(Long userId, BankApiService.BankType bankType) {
-        return autorizacaoBancariaRepository.existsByUsuarioIdAndTipoBancoAndStatus(
-                userId, mapBankType(bankType), AutorizacaoBancaria.StatusAutorizacao.ATIVA);
+        return autorizacaoBancariaRepository.existsByUsuarioIdAndBancoAndAtivoTrue(
+                userId, mapBankType(bankType));
     }
 
     /**
@@ -180,12 +177,12 @@ public class AutorizacaoBancariaService {
         autorizacao.setRefreshToken(extractRefreshToken(newTokenResponse));
         autorizacao.setDataExpiracao(extractExpirationDate(newTokenResponse));
         autorizacao.setDataAtualizacao(LocalDateTime.now());
-        autorizacao.incrementarContadorRenovacoes();
+        // Nota: contador de renovações foi removido da entidade
         
         AutorizacaoBancaria autorizacaoRenovada = autorizacaoBancariaRepository.save(autorizacao);
         log.info("Token renovado para autorização: {} do usuário {} e banco {}", 
                 autorizacaoRenovada.getId(), autorizacao.getUsuario().getId(), 
-                autorizacao.getTipoBanco());
+                autorizacao.getBanco());
         
         return autorizacaoRenovada;
     }
@@ -208,12 +205,12 @@ public class AutorizacaoBancariaService {
                 throw new RuntimeException("Autorização não pertence ao usuário");
             }
             
-            autorizacao.setStatus(AutorizacaoBancaria.StatusAutorizacao.REVOGADA);
+            autorizacao.setAtivo(false);
             autorizacao.setDataAtualizacao(LocalDateTime.now());
             
             autorizacaoBancariaRepository.save(autorizacao);
             log.info("Autorização bancária revogada: {} do usuário {} e banco {}", 
-                    autorizacaoId, userId, autorizacao.getTipoBanco());
+                    autorizacaoId, userId, autorizacao.getBanco());
         }
     }
 
@@ -248,27 +245,28 @@ public class AutorizacaoBancariaService {
         
         if (autorizacaoOpt.isPresent()) {
             AutorizacaoBancaria autorizacao = autorizacaoOpt.get();
-            autorizacao.marcarComoUtilizada();
+            // Nota: método marcarComoUtilizada foi removido da entidade
+            autorizacao.setDataAtualizacao(LocalDateTime.now());
             autorizacaoBancariaRepository.save(autorizacao);
         }
     }
 
     /**
-     * Mapeia o tipo de banco do serviço para o enum do modelo
+     * Mapeia o tipo de banco do serviço para o nome do banco
      * 
      * @param bankType Tipo do banco do serviço
-     * @return Tipo do banco do modelo
+     * @return Nome do banco como String
      */
-    private AutorizacaoBancaria.TipoBanco mapBankType(BankApiService.BankType bankType) {
+    private String mapBankType(BankApiService.BankType bankType) {
         switch (bankType) {
             case NUBANK:
-                return AutorizacaoBancaria.TipoBanco.NUBANK;
+                return "NUBANK";
             case ITAU:
-                return AutorizacaoBancaria.TipoBanco.ITAU;
+                return "ITAU";
             case INTER:
-                return AutorizacaoBancaria.TipoBanco.INTER;
+                return "INTER";
             case MERCADO_PAGO:
-                return AutorizacaoBancaria.TipoBanco.MERCADO_PAGO;
+                return "MERCADO_PAGO";
             default:
                 throw new IllegalArgumentException("Tipo de banco não suportado: " + bankType);
         }
@@ -348,8 +346,8 @@ public class AutorizacaoBancariaService {
             AutorizacaoBancaria autorizacao = autorizacaoBancariaRepository.findById(autorizacaoId)
                     .orElseThrow(() -> new RuntimeException("Autorização não encontrada: " + autorizacaoId));
 
-            // Marca como revogada
-            autorizacao.setStatus(AutorizacaoBancaria.StatusAutorizacao.REVOGADA);
+            // Marca como inativa
+            autorizacao.setAtivo(false);
             autorizacao.setDataAtualizacao(LocalDateTime.now());
             
             autorizacaoBancariaRepository.save(autorizacao);

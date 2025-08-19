@@ -43,7 +43,6 @@ public class AutorizacaoBancaria {
     /**
      * Usuário que concedeu a autorização
      * Relacionamento muitos-para-um: um usuário pode ter várias autorizações
-     * Carregamento eager para garantir que o usuário esteja sempre disponível
      */
     @NotNull(message = "Usuário é obrigatório")
     @ManyToOne(fetch = FetchType.EAGER)
@@ -51,90 +50,56 @@ public class AutorizacaoBancaria {
     private Usuario usuario;
 
     /**
-     * Tipo do banco para o qual a autorização foi concedida
-     * Usa enum para garantir valores válidos e consistentes
+     * Nome do banco para o qual a autorização foi concedida
      */
-    @NotNull(message = "Tipo do banco é obrigatório")
-    @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_banco", nullable = false)
-    private TipoBanco tipoBanco;
+    @NotBlank(message = "Banco é obrigatório")
+    @Column(name = "banco", nullable = false, length = 100)
+    private String banco;
+
+    /**
+     * Tipo de conta bancária
+     */
+    @NotBlank(message = "Tipo de conta é obrigatório")
+    @Column(name = "tipo_conta", nullable = false, length = 50)
+    private String tipoConta;
+
+    /**
+     * Número da conta bancária
+     */
+    @Column(name = "numero_conta", length = 50)
+    private String numeroConta;
+
+    /**
+     * Agência bancária
+     */
+    @Column(name = "agencia", length = 20)
+    private String agencia;
 
     /**
      * Token de acesso OAuth2 para consultas à API do banco
      * Deve ser criptografado antes de ser armazenado por questões de segurança
      * Não pode ser nulo e deve ter tamanho adequado para tokens OAuth2
      */
-    @NotBlank(message = "Token de acesso é obrigatório")
-    @Column(name = "access_token", nullable = false, length = 1000)
+    @Column(name = "token_acesso", columnDefinition = "TEXT")
     private String accessToken;
 
     /**
      * Refresh token OAuth2 para renovação automática do access token
-     * Permite renovar o acesso sem necessidade de nova autorização do usuário
-     * Deve ser criptografado antes de ser armazenado
      */
-    @NotBlank(message = "Refresh token é obrigatório")
-    @Column(name = "refresh_token", nullable = false, length = 1000)
+    @Column(name = "refresh_token", columnDefinition = "TEXT")
     private String refreshToken;
 
     /**
      * Data e hora de expiração do token de acesso
-     * Usada para determinar quando o token precisa ser renovado
-     * Não pode ser nula para controle de validade
      */
-    @NotNull(message = "Data de expiração é obrigatória")
-    @Column(name = "data_expiracao", nullable = false)
+    @Column(name = "data_expiracao")
     private LocalDateTime dataExpiracao;
 
     /**
-     * Escopo de permissões concedidas pelo usuário
-     * Define quais dados o sistema pode acessar (ex: read, write, accounts)
-     * Deve ser preenchido e ter tamanho adequado
-     */
-    @NotBlank(message = "Escopo de permissões é obrigatório")
-    @Column(name = "escopo", nullable = false, length = 200)
-    private String escopo;
-
-    /**
-     * Status atual da autorização
-     * Controla se a autorização está ativa, expirada ou revogada
-     * Inicializa como ATIVA
-     */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    private StatusAutorizacao status = StatusAutorizacao.ATIVA;
-
-    /**
      * Indica se a autorização está ativa para uso
-     * Usado para controlar quais autorizações podem ser utilizadas
-     * Inicializa como true
      */
     @Column(name = "ativo", nullable = false)
     private Boolean ativo = true;
-
-    /**
-     * Data e hora da última utilização da autorização
-     * Usada para auditoria e para identificar autorizações não utilizadas
-     * Pode ser nula se a autorização nunca foi utilizada
-     */
-    @Column(name = "ultima_utilizacao")
-    private LocalDateTime ultimaUtilizacao;
-
-    /**
-     * Data e hora da última sincronização de dados bancários
-     * Usada para rastrear quando os dados foram atualizados pela última vez
-     * Pode ser nula se nunca houve sincronização
-     */
-    @Column(name = "ultima_sincronizacao")
-    private LocalDateTime dataUltimaSincronizacao;
-
-    /**
-     * Contador de renovações automáticas realizadas
-     * Usado para controle e auditoria de renovações
-     * Inicializa com zero
-     */
-    @Column(name = "contador_renovacoes")
-    private Integer contadorRenovacoes = 0;
 
     /**
      * Data e hora de criação da autorização
@@ -175,8 +140,9 @@ public class AutorizacaoBancaria {
      * @return true se o token não expirou, false caso contrário
      */
     public boolean isTokenValido() {
-        return LocalDateTime.now().isBefore(dataExpiracao) && 
-               status == StatusAutorizacao.ATIVA;
+        return dataExpiracao != null && 
+               LocalDateTime.now().isBefore(dataExpiracao) && 
+               ativo;
     }
 
     /**
@@ -185,8 +151,8 @@ public class AutorizacaoBancaria {
      * @return true se o token expirou, false caso contrário
      */
     public boolean isTokenExpirado() {
-        return LocalDateTime.now().isAfter(dataExpiracao) || 
-               status != StatusAutorizacao.ATIVA;
+        return dataExpiracao != null && 
+               LocalDateTime.now().isAfter(dataExpiracao);
     }
 
     /**
@@ -198,74 +164,10 @@ public class AutorizacaoBancaria {
      * @return true se o token precisa ser renovado, false caso contrário
      */
     public boolean precisaRenovacao() {
+        if (dataExpiracao == null) return false;
         LocalDateTime umaHoraAntes = dataExpiracao.minusHours(1);
-        return LocalDateTime.now().isAfter(umaHoraAntes) && 
-               status == StatusAutorizacao.ATIVA;
+        return LocalDateTime.now().isAfter(umaHoraAntes) && ativo;
     }
 
-    /**
-     * Marca a autorização como utilizada
-     * 
-     * Atualiza a data da última utilização para auditoria
-     */
-    public void marcarComoUtilizada() {
-        this.ultimaUtilizacao = LocalDateTime.now();
-    }
 
-    /**
-     * Incrementa o contador de renovações
-     * 
-     * Usado quando o token é renovado automaticamente
-     */
-    public void incrementarContadorRenovacoes() {
-        this.contadorRenovacoes++;
-    }
-
-    /**
-     * Enum que define os tipos de banco suportados pela aplicação
-     * 
-     * Cada banco possui suas próprias configurações de API e endpoints
-     * específicos para autenticação e consulta de dados.
-     */
-    public enum TipoBanco {
-        NUBANK("Nubank", "Banco digital com foco em cartão de crédito"),
-        ITAU("Itaú", "Banco tradicional com Open Banking"),
-        INTER("Inter", "Banco digital com Open Banking"),
-        MERCADO_PAGO("Mercado Pago", "Fintech com serviços financeiros");
-
-        private final String nome;
-        private final String descricao;
-
-        TipoBanco(String nome, String descricao) {
-            this.nome = nome;
-            this.descricao = descricao;
-        }
-
-        public String getNome() { return nome; }
-        public String getDescricao() { return descricao; }
-    }
-
-    /**
-     * Enum que define os status possíveis de uma autorização bancária
-     * 
-     * Controla o ciclo de vida da autorização desde a criação até a revogação
-     */
-    public enum StatusAutorizacao {
-        ATIVA("Ativa", "Autorização válida e ativa"),
-        EXPIRADA("Expirada", "Token expirou e precisa ser renovado"),
-        REVOGADA("Revogada", "Usuário revogou a autorização"),
-        SUSPENSA("Suspensa", "Autorização temporariamente suspensa"),
-        PENDENTE("Pendente", "Aguardando confirmação do usuário");
-
-        private final String nome;
-        private final String descricao;
-
-        StatusAutorizacao(String nome, String descricao) {
-            this.nome = nome;
-            this.descricao = descricao;
-        }
-
-        public String getNome() { return nome; }
-        public String getDescricao() { return descricao; }
-    }
 }

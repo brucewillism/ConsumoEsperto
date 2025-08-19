@@ -73,7 +73,7 @@ public class BankApiConfigController {
     @GetMapping("/{id}")
     public ResponseEntity<BankApiConfig> getConfigById(@PathVariable Long id) {
         log.info("Buscando configuração por ID: {}", id);
-        return configService.findByBankCode(id.toString()) // Note: This should probably be findById(id)
+        return configService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -87,9 +87,9 @@ public class BankApiConfigController {
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         log.info("Buscando configuração para banco: {} - Usuário: {}", bankCode, userPrincipal.getId());
         try {
-            return configService.findByUsuarioIdAndBankCode(userPrincipal.getId(), bankCode)
-                    .map(ResponseEntity::ok)
-                    .orElse(ResponseEntity.notFound().build());
+                    return configService.findByUsuarioIdAndBanco(userPrincipal.getId(), bankCode)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
         } catch (Exception e) {
             log.error("Erro ao buscar configuração: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
@@ -102,7 +102,7 @@ public class BankApiConfigController {
     @GetMapping("/bank/{bankCode}")
     public ResponseEntity<BankApiConfig> getConfigByBankCode(@PathVariable String bankCode) {
         log.info("Buscando configuração para banco: {}", bankCode);
-        return configService.findByBankCode(bankCode)
+        return configService.findByBanco(bankCode)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -114,7 +114,7 @@ public class BankApiConfigController {
     public ResponseEntity<BankApiConfig> createMyConfig(
             @RequestBody BankApiConfig config,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        log.info("Criando nova configuração para banco: {} - Usuário: {}", config.getBankName(), userPrincipal.getId());
+        log.info("Criando nova configuração para banco: {} - Usuário: {}", config.getBanco(), userPrincipal.getId());
         try {
             // Busca o usuário e associa à configuração
             Usuario usuario = usuarioService.findById(userPrincipal.getId());
@@ -133,7 +133,7 @@ public class BankApiConfigController {
      */
     @PostMapping
     public ResponseEntity<BankApiConfig> createConfig(@RequestBody BankApiConfig config) {
-        log.info("Criando nova configuração para banco: {}", config.getBankName());
+        log.info("Criando nova configuração para banco: {}", config.getBanco());
         try {
             BankApiConfig saved = configService.saveConfig(config);
             return ResponseEntity.ok(saved);
@@ -154,8 +154,8 @@ public class BankApiConfigController {
         log.info("Atualizando configuração ID: {} - Usuário: {}", id, userPrincipal.getId());
         try {
             // Verifica se a configuração pertence ao usuário
-            Optional<BankApiConfig> existingConfig = configService.findByUsuarioIdAndBankCode(
-                userPrincipal.getId(), config.getBankCode());
+            Optional<BankApiConfig> existingConfig = configService.findByUsuarioIdAndBanco(
+                userPrincipal.getId(), config.getBanco());
             if (!existingConfig.isPresent()) {
                 return ResponseEntity.notFound().build();
             }

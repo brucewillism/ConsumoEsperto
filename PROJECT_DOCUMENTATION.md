@@ -7,7 +7,7 @@
 3. [Migração SpringFox para SpringDoc](#migração-springfox-para-springdoc)
 4. [OAuth2 com Google](#oauth2-com-google)
 5. [Inicialização Automática do Banco](#inicialização-automática-do-banco)
-6. [Instalação Oracle 23c](#instalação-oracle-23c)
+6. [Setup do PostgreSQL (Local)](#setup-do-postgresql-local)
 7. [Configurações e Execução](#configurações-e-execução)
 
 ---
@@ -21,14 +21,14 @@
 - 🏦 **Integração com APIs bancárias** (Mercado Pago, etc.)
 - 📱 **Interface web responsiva** (Angular 19)
 - 🔐 **Autenticação OAuth2** com Google
-- 🗄️ **Banco de dados Oracle** com inicialização automática
+- 🗄️ **Banco de dados PostgreSQL** com inicialização e scripts de setup
 - 📈 **Relatórios e análises** financeiras
 - 🔄 **Sincronização automática** com bancos
 
 ### **Arquitetura**
 - **Backend**: Spring Boot 2.7.18 + Java 17
 - **Frontend**: Angular 19 + Material Design
-- **Banco**: Oracle 23c Express Edition
+- **Banco**: PostgreSQL 15+
 - **Cache**: Caffeine + Spring Cache
 - **Resiliência**: Resilience4j (Circuit Breaker, Retry)
 - **Documentação**: SpringDoc OpenAPI 3.0 + Swagger UI
@@ -71,12 +71,12 @@
 - ✅ Endpoints: `/actuator/health`, `/actuator/metrics`, `/actuator/prometheus`
 - ✅ Métricas configuradas para Prometheus/Grafana
 
-#### **6. Banco de Dados Oracle**
-- ✅ `ojdbc8` versão 21.5.0.0 (Java 17)
-- ✅ Flyway para migrações de banco (versão 9.22.3)
+#### **6. Banco de Dados PostgreSQL**
+- ✅ Driver `org.postgresql:postgresql`
+- ✅ Flyway para migrações de banco (9.x)
 - ✅ Script de migração inicial criado
 - ✅ Estrutura completa do banco implementada
-- ✅ Configurações de pool HikariCP otimizadas
+- ✅ HikariCP otimizado e `SELECT 1` como query de teste
 
 #### **7. Configuração e Ergonomia**
 - ✅ `spring-boot-configuration-processor` para autocomplete no IDE
@@ -111,9 +111,7 @@
 
 #### **12. Plugins/Build**
 - ✅ Maven Surefire configurado
-- ✅ **Jib para Docker**: `jib-maven-plugin` para imagens sem Dockerfile
-- ✅ Configuração de imagem OpenJDK 17
-- ✅ Portas e variáveis de ambiente configuradas
+- ✅ Build padrão sem Docker
 
 ### **📁 Estrutura de Arquivos Implementada**
 
@@ -159,11 +157,13 @@ resilience4j.circuitbreaker.instances.default.sliding-window-size=10
 resilience4j.circuitbreaker.instances.default.failure-rate-threshold=50
 ```
 
-#### **Banco de Dados Oracle**
+#### **Banco de Dados PostgreSQL**
 ```properties
-spring.datasource.hikari.maximum-pool-size=20
-spring.datasource.hikari.minimum-idle=5
-spring.datasource.hikari.connection-timeout=30000
+spring.datasource.url=jdbc:postgresql://localhost:5432/consumo_esperto
+spring.datasource.username=consumo_esperto
+spring.datasource.password=consumo_esperto123
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+spring.datasource.hikari.connection-test-query=SELECT 1
 ```
 
 ### **🚀 Como Usar**
@@ -184,10 +184,7 @@ http://localhost:8080/swagger-ui.html
 http://localhost:8080/actuator/prometheus
 ```
 
-#### **4. Construir Imagem Docker**
-```bash
-mvn clean compile jib:build
-```
+<!-- Seção Docker removida: projeto sem Docker -->
 
 #### **5. Executar Migrações**
 As migrações do Flyway executam automaticamente na inicialização.
@@ -201,11 +198,11 @@ As migrações do Flyway executam automaticamente na inicialização.
 | **Feign** | `spring-cloud-starter-openfeign` | 2021.0.8 | ✅ |
 | **Cache** | `spring-boot-starter-cache` + `caffeine` | 2.7.18 | ✅ |
 | **Resiliência** | `resilience4j-spring-boot2` | 2.3.0 | ✅ |
-| **Banco** | `flyway-core` + `ojdbc8` | 9.22.3 + 21.5.0.0 | ✅ |
+| **Banco** | `flyway-core` + `postgresql` | 9.22.3 + 42.7.1 | ✅ |
 | **Mapeamento** | `mapstruct` + `mapstruct-processor` | 1.5.5.Final | ✅ |
 | **Métricas** | `micrometer-registry-prometheus` | 1.10.14 | ✅ |
 | **Logging** | `logstash-logback-encoder` | 7.4 | ✅ |
-| **Docker** | `jib-maven-plugin` | 3.4.0 | ✅ |
+
 
 ---
 
@@ -421,7 +418,7 @@ O sistema **ConsumoEsperto** agora suporta autenticação OAuth2 com Google, per
 
 #### **1. Fluxo de Autenticação**
 ```
-Frontend → Google OAuth2 → Backend → Banco Oracle
+Frontend → Google OAuth2 → Backend → Banco PostgreSQL
     ↓           ↓           ↓         ↓
    Login    Autorização   Processa   Persiste
    Google   do Usuário    Dados      Usuário
@@ -689,9 +686,18 @@ SELECT COUNT(*) FROM transacoes;
 
 ---
 
-## 🗄️ **Instalação Oracle 23c**
+## 🗄️ **Setup do PostgreSQL (Local)**
 
 ### **📋 Visão Geral**
+Configure o PostgreSQL localmente e use o menu interativo único do projeto.
+
+Passos rápidos:
+1. Instale PostgreSQL 15+ e adicione o psql ao PATH
+2. Execute `setup-completo-projeto.bat`
+3. Use as opções:
+   - [1] Configurar PostgreSQL
+   - [2] Testar Conexão PostgreSQL
+   - [7] Executar Backend (Spring Boot)
 
 Este diretório contém scripts para instalação e configuração automática do Oracle Database 23c para o projeto ConsumoEsperto.
 

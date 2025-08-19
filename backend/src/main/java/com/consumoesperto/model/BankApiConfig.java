@@ -24,14 +24,14 @@ public class BankApiConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "bank_name", nullable = false)
-    private String bankName;
+    // @Column(name = "bank_name", nullable = false)
+    // private String bankName;
 
-    @Column(name = "bank_code", nullable = false)
-    private String bankCode; // ITAU, MERCADOPAGO, NUBANK, INTER
+    @Column(name = "banco", nullable = false)
+    private String banco; // ITAU, MERCADOPAGO, NUBANK, INTER
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "usuario_id", nullable = false)
+    @JoinColumn(name = "usuario_id")
     private Usuario usuario;
 
     @Column(name = "client_id", nullable = false)
@@ -40,8 +40,8 @@ public class BankApiConfig {
     @Column(name = "client_secret", nullable = false)
     private String clientSecret;
 
-    @Column(name = "user_id")
-    private String userId;
+    // @Column(name = "user_id")
+    // private String userId;
 
     @Column(name = "api_url", nullable = false)
     private String apiUrl;
@@ -58,11 +58,11 @@ public class BankApiConfig {
     @Column(name = "scope")
     private String scope;
 
-    @Column(name = "is_sandbox")
-    private Boolean isSandbox = true;
+    @Column(name = "sandbox")
+    private Boolean sandbox = false;
 
-    @Column(name = "is_active")
-    private Boolean isActive = true;
+    @Column(name = "ativo")
+    private Boolean ativo = true;
 
     @Column(name = "timeout_ms")
     private Integer timeoutMs = 30000;
@@ -73,30 +73,29 @@ public class BankApiConfig {
     @Column(name = "retry_delay_ms")
     private Integer retryDelayMs = 1000;
 
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    @Column(name = "data_criacao")
+    private LocalDateTime dataCriacao;
 
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    @Column(name = "data_atualizacao")
+    private LocalDateTime dataAtualizacao;
 
-    @Column(name = "last_test_at")
-    private LocalDateTime lastTestAt;
+    // @Column(name = "last_test_at")
+    // private LocalDateTime lastTestAt;
 
-    @Column(name = "last_test_status")
-    private String lastTestStatus; // SUCCESS, FAILED, NOT_TESTED
+    // @Column(name = "last_test_status")
+    // private String lastTestStatus; // SUCCESS, FAILED, NOT_TESTED
 
-    @Column(name = "last_test_message")
-    private String lastTestMessage;
+    // @Column(name = "last_test_message")
+    // private String lastTestMessage;
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-        lastTestStatus = "NOT_TESTED";
+        dataCriacao = LocalDateTime.now();
+        dataAtualizacao = LocalDateTime.now();
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        dataAtualizacao = LocalDateTime.now();
     }
 }

@@ -29,17 +29,17 @@ public class BankApiConfigService {
      */
     @Transactional
     public BankApiConfig saveConfig(BankApiConfig config) {
-        log.info("Salvando configuração para banco: {} - Usuário: {}", config.getBankName(), config.getUsuario().getId());
+        log.info("Salvando configuração para banco: {} - ID: {}", config.getBanco(), config.getId());
 
         // Se é uma atualização, preserva alguns campos
         if (config.getId() != null) {
             Optional<BankApiConfig> existing = configRepository.findById(config.getId());
             if (existing.isPresent()) {
                 BankApiConfig existingConfig = existing.get();
-                config.setCreatedAt(existingConfig.getCreatedAt());
-                config.setLastTestAt(existingConfig.getLastTestAt());
-                config.setLastTestStatus(existingConfig.getLastTestStatus());
-                config.setLastTestMessage(existingConfig.getLastTestMessage());
+                config.setDataCriacao(existingConfig.getDataCriacao());
+                // config.setLastTestAt(existingConfig.getLastTestAt());
+                // config.setLastTestStatus(existingConfig.getLastTestStatus());
+                // config.setLastTestMessage(existingConfig.getLastTestMessage());
             }
         }
 
@@ -49,24 +49,31 @@ public class BankApiConfigService {
     }
 
     /**
+     * Busca configuração por ID
+     */
+    public Optional<BankApiConfig> findById(Long id) {
+        return configRepository.findById(id);
+    }
+
+    /**
      * Busca configuração por código do banco para um usuário específico
      */
-    public Optional<BankApiConfig> findByUsuarioIdAndBankCode(Long usuarioId, String bankCode) {
-        return configRepository.findByUsuarioIdAndBankCode(usuarioId, bankCode);
+    public Optional<BankApiConfig> findByUsuarioIdAndBanco(Long usuarioId, String banco) {
+        return configRepository.findByUsuarioIdAndBanco(usuarioId, banco);
     }
 
     /**
      * Busca configuração por código do banco (método legado para compatibilidade)
      */
-    public Optional<BankApiConfig> findByBankCode(String bankCode) {
-        return configRepository.findByBankCode(bankCode);
+    public Optional<BankApiConfig> findByBanco(String banco) {
+        return configRepository.findByBanco(banco);
     }
 
     /**
      * Busca configuração por nome do banco (método legado para compatibilidade)
      */
     public Optional<BankApiConfig> findByBankName(String bankName) {
-        return configRepository.findByBankName(bankName);
+        return configRepository.findByBanco(bankName);
     }
 
     /**
@@ -87,14 +94,14 @@ public class BankApiConfigService {
      * Lista configurações ativas de um usuário
      */
     public List<BankApiConfig> findActiveConfigsByUsuario(Long usuarioId) {
-        return configRepository.findByUsuarioIdAndIsActiveTrue(usuarioId);
+        return configRepository.findByUsuarioIdAndAtivoTrue(usuarioId);
     }
 
     /**
      * Lista configurações ativas (método legado para compatibilidade)
      */
     public List<BankApiConfig> findActiveConfigs() {
-        return configRepository.findByIsActiveTrue();
+        return configRepository.findByAtivoTrue();
     }
 
     /**
@@ -105,9 +112,9 @@ public class BankApiConfigService {
         Optional<BankApiConfig> configOpt = configRepository.findById(configId);
         if (configOpt.isPresent()) {
             BankApiConfig config = configOpt.get();
-            config.setLastTestAt(LocalDateTime.now());
-            config.setLastTestStatus(status);
-            config.setLastTestMessage(message);
+            // config.setLastTestAt(LocalDateTime.now());
+            // config.setLastTestStatus(status);
+            // config.setLastTestMessage(message);
             configRepository.save(config);
             log.info("Status de teste atualizado para configuração {}: {}", configId, status);
         }
@@ -121,9 +128,9 @@ public class BankApiConfigService {
         Optional<BankApiConfig> configOpt = configRepository.findById(configId);
         if (configOpt.isPresent()) {
             BankApiConfig config = configOpt.get();
-            config.setIsActive(!config.getIsActive());
+            config.setAtivo(!config.getAtivo());
             configRepository.save(config);
-            log.info("Status ativo alterado para configuração {}: {}", configId, config.getIsActive());
+            log.info("Status ativo alterado para configuração {}: {}", configId, config.getAtivo());
         }
     }
 
@@ -154,34 +161,26 @@ public class BankApiConfigService {
         Usuario usuario = usuarioOpt.get();
 
         // Mercado Pago
-        if (!configRepository.existsByUsuarioIdAndBankCode(usuarioId, "MERCADOPAGO")) {
+        if (!configRepository.existsByUsuarioIdAndBanco(usuarioId, "MERCADOPAGO")) {
             BankApiConfig mercadopago = BankApiConfig.builder()
-                    .bankName("Mercado Pago")
-                    .bankCode("MERCADOPAGO")
-                    .usuario(usuario)
+                    .banco("MERCADOPAGO")
                     .clientId("4223603750190943")
                     .clientSecret("APP_USR-4223603750190943-XXXXXX")
-                    .userId("209112973")
                     .apiUrl("https://api.mercadopago.com/v1")
                     .authUrl("https://api.mercadopago.com/authorization")
                     .tokenUrl("https://api.mercadopago.com/oauth/token")
                     .redirectUri("https://29e1b0b32eb8.ngrok-free.app/api/auth/mercadopago/callback")
                     .scope("read,write")
-                    .isSandbox(true)
-                    .isActive(true)
-                    .timeoutMs(30000)
-                    .maxRetries(3)
-                    .retryDelayMs(1000)
+                    .sandbox(true)
+                    .ativo(true)
                     .build();
             configRepository.save(mercadopago);
         }
 
         // Itaú
-        if (!configRepository.existsByUsuarioIdAndBankCode(usuarioId, "ITAU")) {
+        if (!configRepository.existsByUsuarioIdAndBanco(usuarioId, "ITAU")) {
             BankApiConfig itau = BankApiConfig.builder()
-                    .bankName("Itaú")
-                    .bankCode("ITAU")
-                    .usuario(usuario)
+                    .banco("ITAU")
                     .clientId("your_itau_client_id")
                     .clientSecret("your_itau_client_secret")
                     .apiUrl("https://openbanking.itau.com.br/api")
@@ -189,21 +188,16 @@ public class BankApiConfigService {
                     .tokenUrl("https://openbanking.itau.com.br/oauth/token")
                     .redirectUri("https://29e1b0b32eb8.ngrok-free.app/api/auth/itau/callback")
                     .scope("openid,profile,email,accounts,transactions")
-                    .isSandbox(true)
-                    .isActive(true)
-                    .timeoutMs(30000)
-                    .maxRetries(3)
-                    .retryDelayMs(1000)
+                    .sandbox(true)
+                    .ativo(true)
                     .build();
             configRepository.save(itau);
         }
 
         // Inter
-        if (!configRepository.existsByUsuarioIdAndBankCode(usuarioId, "INTER")) {
+        if (!configRepository.existsByUsuarioIdAndBanco(usuarioId, "INTER")) {
             BankApiConfig inter = BankApiConfig.builder()
-                    .bankName("Inter")
-                    .bankCode("INTER")
-                    .usuario(usuario)
+                    .banco("INTER")
                     .clientId("your_inter_client_id")
                     .clientSecret("your_inter_client_secret")
                     .apiUrl("https://cdp.openbanking.bancointer.com.br/api")
@@ -211,21 +205,16 @@ public class BankApiConfigService {
                     .tokenUrl("https://cdp.openbanking.bancointer.com.br/oauth/token")
                     .redirectUri("https://29e1b0b32eb8.ngrok-free.app/api/auth/inter/callback")
                     .scope("openid,profile,email,accounts,transactions")
-                    .isSandbox(true)
-                    .isActive(true)
-                    .timeoutMs(30000)
-                    .maxRetries(3)
-                    .retryDelayMs(1000)
+                    .sandbox(true)
+                    .ativo(true)
                     .build();
             configRepository.save(inter);
         }
 
         // Nubank
-        if (!configRepository.existsByUsuarioIdAndBankCode(usuarioId, "NUBANK")) {
+        if (!configRepository.existsByUsuarioIdAndBanco(usuarioId, "NUBANK")) {
             BankApiConfig nubank = BankApiConfig.builder()
-                    .bankName("Nubank")
-                    .bankCode("NUBANK")
-                    .usuario(usuario)
+                    .banco("NUBANK")
                     .clientId("your_nubank_client_id")
                     .clientSecret("your_nubank_client_secret")
                     .apiUrl("https://api.nubank.com.br/api")
@@ -233,11 +222,8 @@ public class BankApiConfigService {
                     .tokenUrl("https://api.nubank.com.br/oauth/token")
                     .redirectUri("https://29e1b0b32eb8.ngrok-free.app/api/auth/nubank/callback")
                     .scope("openid,profile,email,accounts,transactions")
-                    .isSandbox(true)
-                    .isActive(true)
-                    .timeoutMs(30000)
-                    .maxRetries(3)
-                    .retryDelayMs(1000)
+                    .sandbox(true)
+                    .ativo(true)
                     .build();
             configRepository.save(nubank);
         }

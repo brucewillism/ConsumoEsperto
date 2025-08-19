@@ -68,10 +68,10 @@ public class BankController {
                 .map(auth -> {
                     Map<String, Object> banco = new HashMap<>();
                     banco.put("id", auth.getId());
-                    banco.put("bankName", auth.getTipoBanco().toString());
+                    banco.put("bankName", auth.getBanco().toString());
                     banco.put("status", "connected");
-                    banco.put("lastSync", auth.getDataUltimaSincronizacao() != null ? 
-                        auth.getDataUltimaSincronizacao().toString() : "Nunca");
+                    banco.put("lastSync", auth.getDataAtualizacao() != null ? 
+                        auth.getDataAtualizacao().toString() : "Nunca");
                     banco.put("cardsCount", 0); // TODO: Implementar contagem real de cartões
                     return banco;
                 })
@@ -108,7 +108,7 @@ public class BankController {
                 .buscarAutorizacoesPorUsuario(currentUser.getId());
             
             boolean jaConectado = autorizacoesExistentes.stream()
-                .anyMatch(auth -> auth.getTipoBanco().toString().equalsIgnoreCase(bankType));
+                .anyMatch(auth -> auth.getBanco().toString().equalsIgnoreCase(bankType));
             
             if (jaConectado) {
                 return ResponseEntity.badRequest().body(Map.of(
@@ -171,13 +171,13 @@ public class BankController {
             autorizacaoBancariaService.removerAutorizacao(bankId);
             
             // Remove cartões e faturas associados a este banco
-            cartaoCreditoService.removerPorBanco(currentUser.getId(), auth.getTipoBanco().toString());
-            faturaService.removerPorBanco(currentUser.getId(), auth.getTipoBanco().toString());
+            cartaoCreditoService.removerPorBanco(currentUser.getId(), auth.getBanco().toString());
+            faturaService.removerPorBanco(currentUser.getId(), auth.getBanco().toString());
             
             return ResponseEntity.ok(Map.of(
                 "status", "SUCESSO",
                 "mensagem", "Banco desconectado com sucesso",
-                "banco", auth.getTipoBanco().toString(),
+                "banco", auth.getBanco().toString(),
                 "usuarioId", currentUser.getId()
             ));
             
@@ -230,7 +230,7 @@ public class BankController {
                 return ResponseEntity.ok(Map.of(
                     "status", "SUCESSO",
                     "mensagem", "Dados sincronizados com sucesso",
-                    "banco", auth.getTipoBanco().toString(),
+                    "banco", auth.getBanco().toString(),
                     "resultado", resultado
                 ));
             } else {
@@ -278,7 +278,7 @@ public class BankController {
                 try {
                     if (auth.isTokenExpirado()) {
                         resultadosIndividuais.add(Map.of(
-                            "banco", auth.getTipoBanco().toString(),
+                            "banco", auth.getBanco().toString(),
                             "status", "TOKEN_EXPIRADO",
                             "mensagem", "Token expirado, renove a autorização"
                         ));
@@ -292,14 +292,14 @@ public class BankController {
                     
                     if (resultado != null && resultado.containsKey("sucesso")) {
                         resultadosIndividuais.add(Map.of(
-                            "banco", auth.getTipoBanco().toString(),
+                            "banco", auth.getBanco().toString(),
                             "status", "SUCESSO",
                             "resultado", resultado
                         ));
                         sucessos++;
                     } else {
                         resultadosIndividuais.add(Map.of(
-                            "banco", auth.getTipoBanco().toString(),
+                            "banco", auth.getBanco().toString(),
                             "status", "FALHA",
                             "resultado", resultado
                         ));
@@ -308,9 +308,9 @@ public class BankController {
                     
                 } catch (Exception e) {
                     log.error("Erro ao sincronizar banco {}: {}", 
-                            auth.getTipoBanco(), e.getMessage());
+                            auth.getBanco(), e.getMessage());
                     resultadosIndividuais.add(Map.of(
-                        "banco", auth.getTipoBanco().toString(),
+                        "banco", auth.getBanco().toString(),
                         "status", "ERRO",
                         "mensagem", e.getMessage()
                     ));
@@ -366,7 +366,7 @@ public class BankController {
                             cartaoDTO.setNumeroCartao((String) cartaoMap.get("numero"));
                             cartaoDTO.setLimiteCredito((BigDecimal) cartaoMap.get("limite"));
                             cartaoDTO.setLimiteDisponivel((BigDecimal) cartaoMap.get("saldoDisponivel"));
-                            cartaoDTO.setBanco(auth.getTipoBanco().toString());
+                            cartaoDTO.setBanco(auth.getBanco().toString());
                             cartaoDTO.setUsuarioId(currentUser.getId());
                             cartaoDTO.setAtivo(true);
                             cartoesReais.add(cartaoDTO);
@@ -374,7 +374,7 @@ public class BankController {
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar cartões do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }
@@ -432,7 +432,7 @@ public class BankController {
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar faturas do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }
@@ -482,7 +482,7 @@ public class BankController {
                             .getBankBalanceData(auth);
                         
                         if (dadosBanco != null) {
-                            String nomeBanco = auth.getTipoBanco().toString();
+                            String nomeBanco = auth.getBanco().toString();
                             double saldoBanco = (Double) dadosBanco.getOrDefault("saldo", 0.0);
                             double limiteBanco = (Double) dadosBanco.getOrDefault("limite", 0.0);
                             double limiteDisponivelBanco = (Double) dadosBanco.getOrDefault("limiteDisponivel", 0.0);
@@ -500,7 +500,7 @@ public class BankController {
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar dados do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }
@@ -543,8 +543,8 @@ public class BankController {
                     .filter(auth -> !auth.isTokenExpirado())
                     .count(),
                 "ultimaSincronizacao", autorizacoes.stream()
-                    .mapToLong(auth -> auth.getDataUltimaSincronizacao() != null ? 
-                        auth.getDataUltimaSincronizacao().toEpochSecond(java.time.ZoneOffset.UTC) : 0)
+                                    .mapToLong(auth -> auth.getDataAtualizacao() != null ?
+                    auth.getDataAtualizacao().toEpochSecond(java.time.ZoneOffset.UTC) : 0)
                     .max()
                     .orElse(0),
                 "statusGeral", autorizacoes.stream()
@@ -675,13 +675,13 @@ public class BankController {
             
             if (status != null) {
                 status.put("bancoId", bankId);
-                status.put("banco", auth.getTipoBanco().toString());
+                status.put("banco", auth.getBanco().toString());
                 status.put("usuarioId", currentUser.getId());
                 return ResponseEntity.ok(status);
             } else {
                 return ResponseEntity.ok(Map.of(
                     "bancoId", bankId,
-                    "banco", auth.getTipoBanco().toString(),
+                    "banco", auth.getBanco().toString(),
                     "status", "INDEFINIDO",
                     "mensagem", "Não foi possível verificar o status"
                 ));
@@ -767,7 +767,7 @@ public class BankController {
                 return ResponseEntity.ok(Map.of(
                     "status", "SUCESSO",
                     "mensagem", "Token renovado com sucesso",
-                    "banco", auth.getTipoBanco().toString(),
+                    "banco", auth.getBanco().toString(),
                     "resultado", resultado
                 ));
             } else {
@@ -817,17 +817,17 @@ public class BankController {
             
             if (detalhesBanco != null) {
                 detalhesBanco.put("bancoId", bankId);
-                detalhesBanco.put("banco", auth.getTipoBanco().toString());
+                detalhesBanco.put("banco", auth.getBanco().toString());
                 detalhesBanco.put("usuarioId", currentUser.getId());
                 detalhesBanco.put("dataConexao", auth.getDataCriacao());
-                detalhesBanco.put("ultimaSincronizacao", auth.getDataUltimaSincronizacao());
+                detalhesBanco.put("ultimaSincronizacao", auth.getDataAtualizacao());
                 detalhesBanco.put("tokenExpirado", auth.isTokenExpirado());
                 
                 return ResponseEntity.ok(detalhesBanco);
             } else {
                 return ResponseEntity.ok(Map.of(
                     "bancoId", bankId,
-                    "banco", auth.getTipoBanco().toString(),
+                    "banco", auth.getBanco().toString(),
                     "status", "DADOS_INDISPONIVEIS",
                     "mensagem", "Não foi possível obter detalhes do banco"
                 ));
@@ -941,7 +941,7 @@ public class BankController {
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar gastos do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }
@@ -1019,7 +1019,7 @@ public class BankController {
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar análise do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }

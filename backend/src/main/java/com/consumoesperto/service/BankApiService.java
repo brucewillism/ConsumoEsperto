@@ -132,8 +132,8 @@ public class BankApiService {
      */
     public enum BankType {
         NUBANK,        // Nubank - banco digital
-        MERCADO_PAGO,  // Mercado Pago - fintech
         ITAU,          // Itaú - banco tradicional
+        MERCADO_PAGO,  // Mercado Pago - fintech
         INTER          // Inter - banco digital
     }
 
@@ -622,7 +622,7 @@ public class BankApiService {
             List<AutorizacaoBancaria> autorizacoes = autorizacaoBancariaService.buscarAutorizacoesAtivas(userId);
             
             for (AutorizacaoBancaria autorizacao : autorizacoes) {
-                BankType bankType = mapTipoBanco(autorizacao.getTipoBanco());
+                BankType bankType = mapTipoBanco(autorizacao.getBanco());
                 
                 try {
                     // Busca dados do banco
@@ -664,7 +664,7 @@ public class BankApiService {
     private boolean renovarTokenExpirado(AutorizacaoBancaria autorizacao) {
         try {
             // Tenta renovar o token
-            if (refreshTokenIfNeeded(mapTipoBanco(autorizacao.getTipoBanco()), autorizacao.getRefreshToken())) {
+            if (refreshTokenIfNeeded(mapTipoBanco(autorizacao.getBanco()), autorizacao.getRefreshToken())) {
                 // Se renovação for bem-sucedida, atualiza a autorização
                 // Nota: Em uma implementação real, você precisaria obter o novo token da resposta
                 log.info("Token renovado com sucesso para autorização {}", autorizacao.getId());
@@ -680,23 +680,23 @@ public class BankApiService {
     }
 
     /**
-     * Mapeia o tipo de banco do modelo para o enum do serviço
+     * Mapeia o nome do banco do modelo para o enum do serviço
      * 
-     * @param tipoBanco Tipo do banco do modelo
+     * @param nomeBanco Nome do banco do modelo
      * @return Tipo do banco do serviço
      */
-    private BankType mapTipoBanco(AutorizacaoBancaria.TipoBanco tipoBanco) {
-        switch (tipoBanco) {
-            case NUBANK:
+    private BankType mapTipoBanco(String nomeBanco) {
+        switch (nomeBanco.toUpperCase()) {
+            case "NUBANK":
                 return BankType.NUBANK;
-            case ITAU:
+            case "ITAU":
                 return BankType.ITAU;
-            case INTER:
+            case "INTER":
                 return BankType.INTER;
-            case MERCADO_PAGO:
+            case "MERCADO_PAGO":
                 return BankType.MERCADO_PAGO;
             default:
-                throw new IllegalArgumentException("Tipo de banco não suportado: " + tipoBanco);
+                throw new IllegalArgumentException("Banco não suportado: " + nomeBanco);
         }
     }
 }
