@@ -29,6 +29,7 @@ public class BankApiConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+<<<<<<< HEAD
     @NotBlank(message = "Nome da configuração é obrigatório")
     @Column(name = "nome")
     private String nome;
@@ -39,6 +40,28 @@ public class BankApiConfig {
 
     @NotBlank(message = "URL da API é obrigatória")
     @Column(name = "api_url", length = 500)
+=======
+    // @Column(name = "bank_name", nullable = false)
+    // private String bankName;
+
+    @Column(name = "banco", nullable = false)
+    private String banco; // ITAU, MERCADOPAGO, NUBANK, INTER
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
+
+    @Column(name = "client_id", nullable = false)
+    private String clientId;
+
+    @Column(name = "client_secret", nullable = false)
+    private String clientSecret;
+
+    // @Column(name = "user_id")
+    // private String userId;
+
+    @Column(name = "api_url", nullable = false)
+>>>>>>> origin/main
     private String apiUrl;
 
     @Column(name = "client_id", length = 200)
@@ -53,11 +76,19 @@ public class BankApiConfig {
     @Column(name = "scope")
     private String scope;
 
+<<<<<<< HEAD
     @Column(name = "ativo")
     private Boolean ativo = true;
 
     @Column(name = "data_criacao")
     private LocalDateTime dataCriacao;
+=======
+    @Column(name = "sandbox")
+    private Boolean sandbox = false;
+
+    @Column(name = "ativo")
+    private Boolean ativo = true;
+>>>>>>> origin/main
 
     @Column(name = "data_atualizacao")
     private LocalDateTime dataAtualizacao;
@@ -71,6 +102,7 @@ public class BankApiConfig {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
+<<<<<<< HEAD
     public String getNome() { return nome; }
     public void setNome(String nome) { this.nome = nome; }
 
@@ -161,6 +193,22 @@ public class BankApiConfig {
     
     public Integer getRetryDelayMs() { return 1000; } // Campo removido, retorna valor padrão para compatibilidade
     public void setRetryDelayMs(Integer retryDelayMs) { /* Campo removido */ }
+=======
+    @Column(name = "data_criacao")
+    private LocalDateTime dataCriacao;
+
+    @Column(name = "data_atualizacao")
+    private LocalDateTime dataAtualizacao;
+
+    // @Column(name = "last_test_at")
+    // private LocalDateTime lastTestAt;
+
+    // @Column(name = "last_test_status")
+    // private String lastTestStatus; // SUCCESS, FAILED, NOT_TESTED
+
+    // @Column(name = "last_test_message")
+    // private String lastTestMessage;
+>>>>>>> origin/main
 
     @PrePersist
     protected void onCreate() {

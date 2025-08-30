@@ -49,10 +49,17 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
      * o acesso a um determinado banco.
      * 
      * @param usuarioId ID do usuário
+<<<<<<< HEAD
      * @param tipoBanco Tipo/código do banco
      * @return Optional contendo a autorização se encontrada
      */
     Optional<AutorizacaoBancaria> findByUsuarioIdAndTipoBanco(Long usuarioId, String tipoBanco);
+=======
+     * @param banco Nome do banco
+     * @return Optional contendo a autorização se encontrada
+     */
+    Optional<AutorizacaoBancaria> findByUsuarioIdAndBanco(Long usuarioId, String banco);
+>>>>>>> origin/main
 
     /**
      * Busca autorizações ativas de um usuário
@@ -90,6 +97,7 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
     List<AutorizacaoBancaria> findAutorizacoesExpiradas();
 
     /**
+<<<<<<< HEAD
      * Busca autorizações por tipo de banco
      * 
      * Retorna todas as autorizações para um tipo de banco específico,
@@ -99,6 +107,17 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
      * @return Lista de autorizações do tipo de banco especificado
      */
     List<AutorizacaoBancaria> findByTipoBanco(String tipoBanco);
+=======
+     * Busca autorizações por banco
+     * 
+     * Retorna todas as autorizações para um banco específico,
+     * útil para operações em lote ou auditoria por banco.
+     * 
+     * @param banco Nome do banco
+     * @return Lista de autorizações do banco especificado
+     */
+    List<AutorizacaoBancaria> findByBanco(String banco);
+>>>>>>> origin/main
 
     /**
      * Verifica se usuário possui autorização para um banco específico
@@ -107,10 +126,17 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
      * já autorizou o acesso a um determinado banco.
      * 
      * @param usuarioId ID do usuário
+<<<<<<< HEAD
      * @param tipoBanco Tipo/código do banco
      * @return true se possui autorização ativa, false caso contrário
      */
     boolean existsByUsuarioIdAndTipoBancoAndAtivoTrue(Long usuarioId, String tipoBanco);
+=======
+     * @param banco Nome do banco
+     * @return true se possui autorização ativa, false caso contrário
+     */
+    boolean existsByUsuarioIdAndBancoAndAtivoTrue(Long usuarioId, String banco);
+>>>>>>> origin/main
 
     /**
      * Busca autorizações criadas em um período específico
@@ -138,6 +164,7 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
     @Query("SELECT a FROM AutorizacaoBancaria a WHERE " +
            "a.ativo = true AND a.dataExpiracao <= CURRENT_TIMESTAMP")
     List<AutorizacaoBancaria> findAutorizacoesQuePrecisamAtencao();
+<<<<<<< HEAD
     
     // Métodos de compatibilidade para código existente
     default Optional<AutorizacaoBancaria> findByUsuarioIdAndBanco(Long usuarioId, String banco) {
@@ -147,4 +174,6 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
     default boolean existsByUsuarioIdAndBancoAndAtivoTrue(Long usuarioId, String banco) {
         return existsByUsuarioIdAndTipoBancoAndAtivoTrue(usuarioId, banco);
     }
+=======
+>>>>>>> origin/main
 }

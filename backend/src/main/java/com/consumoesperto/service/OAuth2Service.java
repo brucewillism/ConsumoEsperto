@@ -160,9 +160,12 @@ public class OAuth2Service {
         usuario.setProvedorAuth(Usuario.ProvedorAuth.GOOGLE);
         usuario.setDataCriacao(LocalDateTime.now());
         usuario.setUltimoAcesso(LocalDateTime.now());
+<<<<<<< HEAD
         
         // Para usuários OAuth2, definir uma senha padrão (será ignorada no login)
         usuario.setPassword("OAUTH2_USER_" + System.currentTimeMillis());
+=======
+>>>>>>> origin/main
 
         return usuario;
     }
@@ -178,6 +181,7 @@ public class OAuth2Service {
         usuario.setLocale(googleUserInfo.getLocale());
         usuario.setEmailVerificado(googleUserInfo.getVerified_email());
         usuario.setUltimoAcesso(LocalDateTime.now());
+<<<<<<< HEAD
         
         // Garantir que o provedor de autenticação seja GOOGLE
         usuario.setProvedorAuth(Usuario.ProvedorAuth.GOOGLE);
@@ -186,6 +190,8 @@ public class OAuth2Service {
         if (usuario.getPassword() == null || usuario.getPassword().trim().isEmpty()) {
             usuario.setPassword("OAUTH2_USER_" + System.currentTimeMillis());
         }
+=======
+>>>>>>> origin/main
     }
 
     /**
