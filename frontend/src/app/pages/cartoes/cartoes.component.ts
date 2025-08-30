@@ -68,6 +68,9 @@ export class CartoesComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    console.log('[CartoesComponent] ngOnInit iniciado');
+    console.log('[CartoesComponent] Verificando autenticação...');
+    
     // Verifica se o usuário está autenticado
     if (!this.authService.isAuthenticated()) {
       console.log('[CartoesComponent] Usuário não autenticado, redirecionando para login...');
@@ -76,6 +79,7 @@ export class CartoesComponent implements OnInit {
     }
 
     console.log('[CartoesComponent] Usuário autenticado, carregando dados...');
+    console.log('[CartoesComponent] Token disponível:', this.authService.getToken());
     this.loadData();
   }
 
@@ -98,6 +102,7 @@ export class CartoesComponent implements OnInit {
    */
   loadData(): void {
     console.log('[CartoesComponent] Iniciando carregamento de dados...');
+    console.log('[CartoesComponent] Token atual:', this.authService.getToken());
     this.loading = true;
     this.error = null;
 
@@ -111,6 +116,8 @@ export class CartoesComponent implements OnInit {
       },
       error: (err) => {
         console.error('[CartoesComponent] Erro ao carregar bancos:', err);
+        console.error('[CartoesComponent] Status do erro:', err.status);
+        console.error('[CartoesComponent] Mensagem do erro:', err.message);
         this.error = 'Erro ao carregar bancos conectados';
       }
     });
@@ -126,6 +133,8 @@ export class CartoesComponent implements OnInit {
       },
       error: (err) => {
         console.error('[CartoesComponent] Erro ao carregar cartões:', err);
+        console.error('[CartoesComponent] Status do erro:', err.status);
+        console.error('[CartoesComponent] Mensagem do erro:', err.message);
         this.error = 'Erro ao carregar cartões de crédito';
       }
     });
@@ -140,6 +149,8 @@ export class CartoesComponent implements OnInit {
       },
       error: (err) => {
         console.error('[CartoesComponent] Erro ao carregar faturas:', err);
+        console.error('[CartoesComponent] Status do erro:', err.status);
+        console.error('[CartoesComponent] Mensagem do erro:', err.message);
         this.error = 'Erro ao carregar faturas';
       },
       complete: () => {

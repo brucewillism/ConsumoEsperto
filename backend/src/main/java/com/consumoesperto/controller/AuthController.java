@@ -2,7 +2,6 @@ package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.LoginDTO;
 import com.consumoesperto.dto.UsuarioDTO;
-import com.consumoesperto.dto.GoogleLoginDTO;
 import com.consumoesperto.security.JwtTokenProvider;
 import com.consumoesperto.service.UsuarioService;
 import com.consumoesperto.service.GoogleOAuth2Service;
@@ -100,31 +99,6 @@ public class AuthController {
         return ResponseEntity.ok(novoUsuario);
     }
 
-    /**
-     * Endpoint para autenticação via Google OAuth2
-     * 
-     * Permite que usuários se autentiquem usando suas contas Google.
-     * Se o usuário não existir, uma nova conta é criada automaticamente.
-     * 
-     * @param googleLoginDTO DTO contendo o token do Google
-     * @return ResponseEntity com token JWT e dados do usuário
-     */
-    @PostMapping("/google")
-    @Operation(summary = "Login com Google", description = "Autentica usuário via Google OAuth2")
-    public ResponseEntity<?> googleLogin(@Valid @RequestBody GoogleLoginDTO googleLoginDTO) {
-        try {
-            // Para OAuth2 com Spring Security, a autenticação é feita automaticamente
-            // Este endpoint pode ser usado para obter informações do usuário após autenticação
-            // ou para criar/atualizar usuários no sistema local
-            
-            // Por enquanto, retorna uma mensagem informativa
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Autenticação OAuth2 configurada. Use o endpoint de login padrão após autenticação OAuth2.");
-            response.put("status", "success");
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Erro na autenticação via Google: " + e.getMessage());
-        }
-    }
+    // Nota: O endpoint /google foi movido para OAuth2Controller para evitar conflitos
+    // e centralizar toda a lógica OAuth2 em um único controller
 }

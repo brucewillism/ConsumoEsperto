@@ -25,7 +25,9 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
   
   // Debug: log da requisição e token
   console.log(`[AuthInterceptor] Interceptando requisição para: ${request.url}`);
+  console.log(`[AuthInterceptor] Método HTTP: ${request.method}`);
   console.log(`[AuthInterceptor] Token disponível: ${token ? 'SIM' : 'NÃO'}`);
+  console.log(`[AuthInterceptor] Headers da requisição:`, request.headers);
   
   // Se há um token válido, adiciona ao header Authorization
   if (token) {
@@ -35,6 +37,7 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
       }
     });
     console.log(`[AuthInterceptor] Token adicionado ao header: Bearer ${token.substring(0, 20)}...`);
+    console.log(`[AuthInterceptor] Headers após modificação:`, request.headers);
   } else {
     console.warn(`[AuthInterceptor] Nenhum token encontrado para requisição: ${request.url}`);
   }
@@ -43,6 +46,8 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
   return next(request).pipe(
     catchError((error: HttpErrorResponse) => {
       console.error(`[AuthInterceptor] Erro na requisição ${request.url}:`, error);
+      console.error(`[AuthInterceptor] Status do erro: ${error.status}`);
+      console.error(`[AuthInterceptor] Mensagem do erro: ${error.message}`);
       
       // Se receber 401 (Unauthorized), o token pode ter expirado
       if (error.status === 401) {

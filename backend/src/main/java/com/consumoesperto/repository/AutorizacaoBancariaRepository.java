@@ -44,26 +44,26 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
     /**
      * Busca autorização de um usuário para um banco específico
      * 
-     * Retorna a autorização ativa de um usuário para um tipo de banco
+     * Retorna a autorização ativa de um usuário para um banco
      * específico, útil para verificar se o usuário já autorizou
      * o acesso a um determinado banco.
      * 
      * @param usuarioId ID do usuário
-     * @param tipoBanco Tipo do banco (NUBANK, ITAU, INTER, MERCADO_PAGO)
+     * @param tipoBanco Tipo/código do banco
      * @return Optional contendo a autorização se encontrada
      */
-    Optional<AutorizacaoBancaria> findByUsuarioIdAndTipoBanco(Long usuarioId, AutorizacaoBancaria.TipoBanco tipoBanco);
+    Optional<AutorizacaoBancaria> findByUsuarioIdAndTipoBanco(Long usuarioId, String tipoBanco);
 
     /**
      * Busca autorizações ativas de um usuário
      * 
-     * Retorna apenas as autorizações com status ATIVA, excluindo
-     * autorizações expiradas, revogadas ou suspensas.
+     * Retorna apenas as autorizações ativas, excluindo
+     * autorizações inativas.
      * 
      * @param usuarioId ID do usuário
      * @return Lista de autorizações ativas
      */
-    List<AutorizacaoBancaria> findByUsuarioIdAndStatus(Long usuarioId, AutorizacaoBancaria.StatusAutorizacao status);
+    List<AutorizacaoBancaria> findByUsuarioIdAndAtivoTrue(Long usuarioId);
 
     /**
      * Busca autorizações que precisam ser renovadas
@@ -75,7 +75,7 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
      * @param dataLimite Data limite para renovação (1 hora antes da expiração)
      * @return Lista de autorizações que precisam ser renovadas
      */
-    @Query("SELECT a FROM AutorizacaoBancaria a WHERE a.dataExpiracao <= :dataLimite AND a.status = 'ATIVA'")
+    @Query("SELECT a FROM AutorizacaoBancaria a WHERE a.dataExpiracao <= :dataLimite AND a.ativo = true")
     List<AutorizacaoBancaria> findAutorizacoesParaRenovacao(@Param("dataLimite") LocalDateTime dataLimite);
 
     /**
@@ -86,21 +86,8 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
      * 
      * @return Lista de autorizações expiradas
      */
-    @Query("SELECT a FROM AutorizacaoBancaria a WHERE a.dataExpiracao < CURRENT_TIMESTAMP AND a.status = 'ATIVA'")
+    @Query("SELECT a FROM AutorizacaoBancaria a WHERE a.dataExpiracao < CURRENT_TIMESTAMP AND a.ativo = true")
     List<AutorizacaoBancaria> findAutorizacoesExpiradas();
-
-    /**
-     * Busca autorizações não utilizadas há muito tempo
-     * 
-     * Retorna autorizações que não foram utilizadas por um período
-     * específico, útil para identificar autorizações obsoletas
-     * que podem ser removidas ou notificadas ao usuário.
-     * 
-     * @param dataLimite Data limite para considerar como não utilizada
-     * @return Lista de autorizações não utilizadas
-     */
-    @Query("SELECT a FROM AutorizacaoBancaria a WHERE a.ultimaUtilizacao < :dataLimite OR a.ultimaUtilizacao IS NULL")
-    List<AutorizacaoBancaria> findAutorizacoesNaoUtilizadas(@Param("dataLimite") LocalDateTime dataLimite);
 
     /**
      * Busca autorizações por tipo de banco
@@ -108,32 +95,10 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
      * Retorna todas as autorizações para um tipo de banco específico,
      * útil para operações em lote ou auditoria por banco.
      * 
-     * @param tipoBanco Tipo do banco
+     * @param tipoBanco Tipo/código do banco
      * @return Lista de autorizações do tipo de banco especificado
      */
-    List<AutorizacaoBancaria> findByTipoBanco(AutorizacaoBancaria.TipoBanco tipoBanco);
-
-    /**
-     * Busca autorizações por status
-     * 
-     * Retorna todas as autorizações com um status específico,
-     * útil para auditoria e relatórios de sistema.
-     * 
-     * @param status Status das autorizações
-     * @return Lista de autorizações com o status especificado
-     */
-    List<AutorizacaoBancaria> findByStatus(AutorizacaoBancaria.StatusAutorizacao status);
-
-    /**
-     * Conta autorizações ativas por usuário
-     * 
-     * Retorna o número de autorizações ativas que um usuário possui,
-     * útil para validações de limite de bancos conectados.
-     * 
-     * @param usuarioId ID do usuário
-     * @return Número de autorizações ativas
-     */
-    long countByUsuarioIdAndStatus(Long usuarioId, AutorizacaoBancaria.StatusAutorizacao status);
+    List<AutorizacaoBancaria> findByTipoBanco(String tipoBanco);
 
     /**
      * Verifica se usuário possui autorização para um banco específico
@@ -142,23 +107,10 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
      * já autorizou o acesso a um determinado banco.
      * 
      * @param usuarioId ID do usuário
-     * @param tipoBanco Tipo do banco
+     * @param tipoBanco Tipo/código do banco
      * @return true se possui autorização ativa, false caso contrário
      */
-    boolean existsByUsuarioIdAndTipoBancoAndStatus(Long usuarioId, AutorizacaoBancaria.TipoBanco tipoBanco, AutorizacaoBancaria.StatusAutorizacao status);
-
-    /**
-     * Busca autorizações com contador de renovações alto
-     * 
-     * Retorna autorizações que foram renovadas muitas vezes,
-     * útil para identificar possíveis problemas ou autorizações
-     * que precisam de atenção especial.
-     * 
-     * @param limiteRenovacoes Limite mínimo de renovações
-     * @return Lista de autorizações com muitas renovações
-     */
-    @Query("SELECT a FROM AutorizacaoBancaria a WHERE a.contadorRenovacoes >= :limiteRenovacoes")
-    List<AutorizacaoBancaria> findAutorizacoesComMuitasRenovacoes(@Param("limiteRenovacoes") Integer limiteRenovacoes);
+    boolean existsByUsuarioIdAndTipoBancoAndAtivoTrue(Long usuarioId, String tipoBanco);
 
     /**
      * Busca autorizações criadas em um período específico
@@ -176,37 +128,23 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
             @Param("dataFim") LocalDateTime dataFim);
 
     /**
-     * Busca autorizações por escopo de permissões
-     * 
-     * Retorna autorizações que possuem um escopo específico,
-     * útil para filtrar por nível de acesso concedido.
-     * 
-     * @param escopo Escopo de permissões (ex: "read", "read write")
-     * @return Lista de autorizações com o escopo especificado
-     */
-    List<AutorizacaoBancaria> findByEscopoContaining(String escopo);
-
-    /**
      * Busca autorizações que precisam de atenção
      * 
      * Retorna autorizações que podem ter problemas ou precisam
-     * de intervenção manual, como tokens expirados ou muitas renovações.
+     * de intervenção manual, como tokens expirados.
      * 
      * @return Lista de autorizações que precisam de atenção
      */
     @Query("SELECT a FROM AutorizacaoBancaria a WHERE " +
-           "a.status = 'ATIVA' AND (" +
-           "a.dataExpiracao <= CURRENT_TIMESTAMP OR " +
-           "a.contadorRenovacoes >= 10 OR " +
-           "(a.ultimaUtilizacao IS NULL AND a.dataCriacao < :dataLimite))")
-    List<AutorizacaoBancaria> findAutorizacoesQuePrecisamAtencao(
-            @Param("dataLimite") LocalDateTime dataLimite);
-
-    /**
-     * Busca autorizações ativas de um usuário
-     * 
-     * @param usuarioId ID do usuário
-     * @return Lista de autorizações ativas
-     */
-    List<AutorizacaoBancaria> findByUsuarioIdAndAtivoTrue(Long usuarioId);
+           "a.ativo = true AND a.dataExpiracao <= CURRENT_TIMESTAMP")
+    List<AutorizacaoBancaria> findAutorizacoesQuePrecisamAtencao();
+    
+    // Métodos de compatibilidade para código existente
+    default Optional<AutorizacaoBancaria> findByUsuarioIdAndBanco(Long usuarioId, String banco) {
+        return findByUsuarioIdAndTipoBanco(usuarioId, banco);
+    }
+    
+    default boolean existsByUsuarioIdAndBancoAndAtivoTrue(Long usuarioId, String banco) {
+        return existsByUsuarioIdAndTipoBancoAndAtivoTrue(usuarioId, banco);
+    }
 }

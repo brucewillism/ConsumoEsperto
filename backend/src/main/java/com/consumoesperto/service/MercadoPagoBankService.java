@@ -2,10 +2,11 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.*;
 import com.consumoesperto.model.AutorizacaoBancaria;
+import com.consumoesperto.model.BankApiConfig;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
+import com.consumoesperto.repository.BankApiConfigRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -24,45 +25,68 @@ import java.util.*;
 @Slf4j
 public class MercadoPagoBankService {
 
-    @Value("${bank.api.mercadopago.client-id:4223603750190943}")
-    private String clientId;
-
-    @Value("${bank.api.mercadopago.client-secret:APP_USR-4223603750190943-XXXXXX}")
-    private String clientSecret;
-    
-    @Value("${bank.api.mercadopago.user-id:209112973}")
-    private String userId;
-
-    @Value("${bank.api.mercadopago.api-url:https://api.mercadopago.com/sandbox}")
-    private String baseUrl;
-
     private final RestTemplate restTemplate;
+    private final BankApiConfigRepository bankApiConfigRepository;
 
-    public MercadoPagoBankService(RestTemplate restTemplate) {
+    public MercadoPagoBankService(RestTemplate restTemplate, BankApiConfigRepository bankApiConfigRepository) {
         this.restTemplate = restTemplate;
+        this.bankApiConfigRepository = bankApiConfigRepository;
     }
 
-    public String generateAuthUrl(String redirectUri, String state) {
-        log.info("Gerando URL de autorização para Mercado Pago");
+    /**
+     * Busca configuração do Mercado Pago para um usuário
+     */
+    private Optional<BankApiConfig> getMercadoPagoConfig(Long userId) {
+        try {
+            log.debug("🔍 Buscando configuração do Mercado Pago para usuário: {}", userId);
+            Optional<BankApiConfig> config = bankApiConfigRepository.findByUsuarioIdAndBanco(userId, "MERCADOPAGO");
+            if (config.isPresent() && config.get().getAtivo()) {
+                return config;
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("❌ Erro ao buscar configuração do Mercado Pago para usuário {}: {}", userId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public String generateAuthUrl(String redirectUri, String state, Long userId) {
+        log.info("Gerando URL de autorização para Mercado Pago - Usuário: {}", userId);
         
-        return UriComponentsBuilder.fromHttpUrl("https://api.mercadopago.com/authorization")
-                .queryParam("client_id", clientId)
+        Optional<BankApiConfig> config = getMercadoPagoConfig(userId);
+        if (config.isEmpty()) {
+            log.error("❌ Usuário {} não possui configuração do Mercado Pago", userId);
+            throw new RuntimeException("Configuração do Mercado Pago não encontrada");
+        }
+        
+        BankApiConfig mpConfig = config.get();
+        
+        return UriComponentsBuilder.fromHttpUrl(mpConfig.getAuthUrl())
+                .queryParam("client_id", mpConfig.getClientId())
                 .queryParam("redirect_uri", redirectUri)
                 .queryParam("response_type", "code")
-                .queryParam("scope", "read,write")
+                .queryParam("scope", mpConfig.getScope())
                 .queryParam("state", state)
                 .build()
                 .toUriString();
     }
 
-    public Map<String, Object> processOAuthCallback(String code, String state, String redirectUri) {
-        log.info("Processando callback OAuth para Mercado Pago");
+    public Map<String, Object> processOAuthCallback(String code, String state, String redirectUri, Long userId) {
+        log.info("Processando callback OAuth para Mercado Pago - Usuário: {}", userId);
+        
+        Optional<BankApiConfig> config = getMercadoPagoConfig(userId);
+        if (config.isEmpty()) {
+            log.error("❌ Usuário {} não possui configuração do Mercado Pago", userId);
+            throw new RuntimeException("Configuração do Mercado Pago não encontrada");
+        }
+        
+        BankApiConfig mpConfig = config.get();
         
         try {
             // Preparar headers para troca do código por token
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-            headers.setBasicAuth(clientId, clientSecret);
+            headers.setBasicAuth(mpConfig.getClientId(), mpConfig.getClientSecret());
 
             // Preparar body da requisição
             String body = String.format("grant_type=authorization_code&code=%s&redirect_uri=%s", 
@@ -72,22 +96,22 @@ public class MercadoPagoBankService {
 
             // Fazer chamada para trocar código por token
             ResponseEntity<Map> response = restTemplate.postForEntity(
-                    "https://api.mercadopago.com/oauth/token", 
+                    mpConfig.getTokenUrl(), 
                     request, 
                     Map.class
             );
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> tokenData = response.getBody();
-                log.info("Token obtido com sucesso para Mercado Pago");
+                log.info("Token obtido com sucesso para Mercado Pago - Usuário: {}", userId);
                 return tokenData;
             } else {
-                log.error("Erro ao obter token do Mercado Pago: {}", response.getStatusCode());
+                log.error("Erro ao obter token do Mercado Pago - Usuário: {} - Status: {}", userId, response.getStatusCode());
                 throw new RuntimeException("Falha na autenticação com Mercado Pago");
             }
 
         } catch (Exception e) {
-            log.error("Erro ao processar callback OAuth do Mercado Pago: {}", e.getMessage());
+            log.error("Erro ao processar callback OAuth do Mercado Pago - Usuário: {} - Erro: {}", userId, e.getMessage());
             throw new RuntimeException("Erro na autenticação com Mercado Pago", e);
         }
     }
@@ -96,6 +120,13 @@ public class MercadoPagoBankService {
         log.info("Testando conexão com Mercado Pago para usuário {}", auth.getUsuario().getId());
         
         try {
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(auth.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", auth.getUsuario().getId());
+                return false;
+            }
+            
             // Preparar headers com token de acesso
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(auth.getAccessToken());
@@ -105,7 +136,7 @@ public class MercadoPagoBankService {
 
             // Fazer chamada de teste para API do Mercado Pago
             ResponseEntity<Map> response = restTemplate.exchange(
-                    "https://api.mercadopago.com/v1/users/" + userId + "/accounts",
+                    "https://api.mercadopago.com/v1/users/" + config.get().getUserId() + "/accounts",
                     HttpMethod.GET,
                     request,
                     Map.class
@@ -168,9 +199,16 @@ public class MercadoPagoBankService {
         try {
             log.info("Buscando cartões reais do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
             
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+                return getSimulatedCreditCards();
+            }
+
             // Chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
-                    .fromHttpUrl("https://api.mercadopago.com/v1/users/" + userId + "/cards")
+                    .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/cards")
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .build()
                     .toUriString();
@@ -200,9 +238,16 @@ public class MercadoPagoBankService {
         try {
             log.info("Buscando saldo real do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
             
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+                return getSimulatedBalanceData();
+            }
+
             // Chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
-                    .fromHttpUrl("https://api.mercadopago.com/v1/users/" + userId + "/accounts/balance")
+                    .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/accounts/balance")
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .build()
                     .toUriString();
@@ -230,9 +275,16 @@ public class MercadoPagoBankService {
 
     public List<Map<String, Object>> getInvoices(AutorizacaoBancaria autorizacao) {
         try {
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+                return getSimulatedInvoices();
+            }
+
             // TODO: Implementar chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
-                    .fromHttpUrl(baseUrl + "/invoices")
+                    .fromHttpUrl(config.get().getApiUrl() + "/invoices")
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .build()
                     .toUriString();
@@ -257,9 +309,16 @@ public class MercadoPagoBankService {
         try {
             log.info("Buscando transações reais do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
             
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+                return getSimulatedTransactions();
+            }
+
             // Chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
-                    .fromHttpUrl("https://api.mercadopago.com/v1/users/" + userId + "/transactions")
+                    .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/transactions")
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .queryParam("limit", "100")
                     .queryParam("offset", "0")
@@ -289,9 +348,16 @@ public class MercadoPagoBankService {
 
     public Map<String, Object> getSpendingByCategory(AutorizacaoBancaria autorizacao) {
         try {
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+                return getSimulatedSpendingByCategory();
+            }
+
             // TODO: Implementar chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
-                    .fromHttpUrl(baseUrl + "/spending/category")
+                    .fromHttpUrl(config.get().getApiUrl() + "/spending/category")
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .build()
                     .toUriString();
@@ -314,9 +380,16 @@ public class MercadoPagoBankService {
 
     public Map<String, Object> getSpendingAnalysis(AutorizacaoBancaria autorizacao) {
         try {
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+                return getSimulatedSpendingAnalysis();
+            }
+
             // TODO: Implementar chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
-                    .fromHttpUrl(baseUrl + "/spending/analysis")
+                    .fromHttpUrl(config.get().getApiUrl() + "/spending/analysis")
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .build()
                     .toUriString();
@@ -343,16 +416,25 @@ public class MercadoPagoBankService {
                 return false;
             }
 
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago para renovar token", autorizacao.getUsuario().getId());
+                return false;
+            }
+
+            BankApiConfig mpConfig = config.get();
+
             // TODO: Implementar renovação real do token
-            String url = baseUrl + "/oauth/token";
+            String url = mpConfig.getTokenUrl();
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
             MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
             body.add("grant_type", "refresh_token");
             body.add("refresh_token", autorizacao.getRefreshToken());
-            body.add("client_id", clientId);
-            body.add("client_secret", clientSecret);
+            body.add("client_id", mpConfig.getClientId());
+            body.add("client_secret", mpConfig.getClientSecret());
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
             ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
@@ -375,7 +457,7 @@ public class MercadoPagoBankService {
                 
                 autorizacao.setDataAtualizacao(LocalDateTime.now());
                 
-                log.info("Token renovado com sucesso para Mercado Pago");
+                log.info("Token renovado com sucesso para Mercado Pago - Usuário: {}", autorizacao.getUsuario().getId());
                 return true;
             }
 

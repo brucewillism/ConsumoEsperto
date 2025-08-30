@@ -25,8 +25,8 @@
         <!-- libs -->
         <springdoc.version>1.7.0</springdoc.version>
         <jjwt.version>0.11.5</jjwt.version>
-        <ojdbc.version>21.9.0.0</ojdbc.version>  <!-- Java 17 / Oracle 21c - Versão disponível publicamente -->
-        <resilience4j.version>2.3.0</resilience4j.version>
+        <postgresql.version>42.7.1</postgresql.version>
+        <resilience4j.version>1.7.0</resilience4j.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <flyway.version>9.22.3</flyway.version>
         <spring-cloud.version>2021.0.8</spring-cloud.version>
@@ -36,22 +36,6 @@
         <owasp.depcheck.version>8.4.2</owasp.depcheck.version>
         <maven.surefire.version>2.22.2</maven.surefire.version>
     </properties>
-
-    <!-- Repositórios para dependências Oracle -->
-    <repositories>
-        <repository>
-            <id>oracle</id>
-            <name>Oracle Repository</name>
-            <url>https://maven.oracle.com</url>
-            <layout>default</layout>
-        </repository>
-        <repository>
-            <id>central</id>
-            <name>Maven Central</name>
-            <url>https://repo1.maven.org/maven2</url>
-            <layout>default</layout>
-        </repository>
-    </repositories>
 
     <dependencyManagement>
         <dependencies>
@@ -130,11 +114,11 @@
         </dependency>
 
         <!-- Banco de dados -->
-        <!-- Oracle JDBC Driver - Versão disponível publicamente -->
+        <!-- PostgreSQL JDBC Driver -->
         <dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc8</artifactId>
-            <version>21.9.0.0</version>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
             <scope>runtime</scope>
         </dependency>
         
@@ -180,7 +164,15 @@
             <version>${resilience4j.version}</version>
         </dependency>
 
+        <!-- Rate Limiting com Bucket4j -->
+        <dependency>
+            <groupId>com.github.vladimir-bukhtoyarov</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>7.6.0</version>
+        </dependency>
+
         <!-- Migrações de banco (opcional) -->
+        <!-- Flyway - Migrações de banco de dados -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -204,6 +196,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
             <optional>true</optional>
+        </dependency>
+
+        <!-- Apache HttpClient para configuração SSL personalizada -->
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>4.5.14</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -254,7 +253,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <release>${java.version}</release>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
                     <parameters>true</parameters>
                 </configuration>
             </plugin>
@@ -319,28 +319,7 @@
                 </configuration>
             </plugin>
 
-            <!-- Jib para imagem Docker sem Dockerfile -->
-            <plugin>
-                <groupId>com.google.cloud.tools</groupId>
-                <artifactId>jib-maven-plugin</artifactId>
-                <version>3.4.0</version>
-                <configuration>
-                    <from>
-                        <image>openjdk:17-jre-slim</image>
-                    </from>
-                    <to>
-                        <image>consumo-esperto-backend:latest</image>
-                    </to>
-                    <container>
-                        <ports>
-                            <port>8080</port>
-                        </ports>
-                        <environment>
-                            <SPRING_PROFILES_ACTIVE>prod</SPRING_PROFILES_ACTIVE>
-                        </environment>
-                    </container>
-                </configuration>
-            </plugin>
+            <!-- Plugin Docker removido por solicitação do usuário -->
         </plugins>
     </build>
 

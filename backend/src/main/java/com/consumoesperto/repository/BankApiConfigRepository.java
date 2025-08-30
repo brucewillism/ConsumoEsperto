@@ -12,14 +12,26 @@ import java.util.Optional;
  */
 @Repository
 public interface BankApiConfigRepository extends JpaRepository<BankApiConfig, Long> {
-    Optional<BankApiConfig> findByBankCode(String bankCode);
-    Optional<BankApiConfig> findByBankName(String bankName);
-    List<BankApiConfig> findByIsActiveTrue();
-    boolean existsByBankCode(String bankCode);
+    Optional<BankApiConfig> findByTipoBanco(String tipoBanco);
+    List<BankApiConfig> findByAtivoTrue();
+    boolean existsByTipoBanco(String tipoBanco);
     
     // Novos métodos para configurações por usuário
-    Optional<BankApiConfig> findByUsuarioIdAndBankCode(Long usuarioId, String bankCode);
+    Optional<BankApiConfig> findByUsuarioIdAndTipoBanco(Long usuarioId, String tipoBanco);
     List<BankApiConfig> findByUsuarioId(Long usuarioId);
-    List<BankApiConfig> findByUsuarioIdAndIsActiveTrue(Long usuarioId);
-    boolean existsByUsuarioIdAndBankCode(Long usuarioId, String bankCode);
+    List<BankApiConfig> findByUsuarioIdAndAtivoTrue(Long usuarioId);
+    boolean existsByUsuarioIdAndTipoBanco(Long usuarioId, String tipoBanco);
+    
+    // Métodos de compatibilidade para código existente
+    default Optional<BankApiConfig> findByUsuarioIdAndBanco(Long usuarioId, String banco) {
+        return findByUsuarioIdAndTipoBanco(usuarioId, banco);
+    }
+    
+    default Optional<BankApiConfig> findByBanco(String banco) {
+        return findByTipoBanco(banco);
+    }
+    
+    default boolean existsByUsuarioIdAndBanco(Long usuarioId, String banco) {
+        return existsByUsuarioIdAndTipoBanco(usuarioId, banco);
+    }
 }

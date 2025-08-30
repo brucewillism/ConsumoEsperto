@@ -11,9 +11,10 @@
     <p>Carregando configurações...</p>
   </div>
 
-  <!-- Lista de Bancos -->
+  <!-- Lista de Bancos Disponíveis -->
   <div *ngIf="!loading && !showForm" class="banks-grid">
-    <mat-card *ngFor="let bank of bankConfigs" class="bank-card">
+    <!-- Bancos já configurados -->
+    <mat-card *ngFor="let bank of bankConfigs" class="bank-card configured">
       <mat-card-header>
         <div class="bank-header">
           <div class="bank-icon" [style.background-color]="getBankColor(bank.bankCode)">
@@ -23,51 +24,99 @@
             <h3>{{ bank.bankName }}</h3>
             <p>{{ getBankDescription(bank.bankCode) }}</p>
           </div>
-          <mat-chip [color]="getStatusColor(getBankStatus(bank))" selected>
-            {{ getBankStatus(bank) }}
-          </mat-chip>
+          <div class="bank-status">
+            <span class="status-badge configured">{{ getBankStatus(bank) }}</span>
+          </div>
         </div>
       </mat-card-header>
       
       <mat-card-content>
         <div class="bank-details">
-          <div class="detail-item">
-            <span class="label">Client ID:</span>
-            <span class="value">{{ bank.clientId }}</span>
+          <div class="detail-row">
+            <span class="detail-label">Client ID:</span>
+            <span class="detail-value">{{ bank.clientId }}</span>
           </div>
           
-          <div class="detail-item">
-            <span class="label">User ID:</span>
-            <span class="value">{{ bank.userId || 'N/A' }}</span>
+          <div class="detail-row">
+            <span class="detail-label">User ID:</span>
+            <span class="detail-value">{{ bank.userId || 'N/A' }}</span>
           </div>
           
-          <div class="detail-item">
-            <span class="label">API URL:</span>
-            <span class="value">{{ bank.apiUrl }}</span>
+          <div class="detail-row">
+            <span class="detail-label">API URL:</span>
+            <span class="detail-value">{{ bank.apiUrl }}</span>
           </div>
           
-          <div class="detail-item">
-            <span class="label">Modo:</span>
-            <span class="value">{{ bank.isSandbox ? 'Sandbox' : 'Produção' }}</span>
+          <div class="detail-row">
+            <span class="detail-label">Modo:</span>
+            <span class="detail-value">{{ bank.isSandbox ? 'Sandbox' : 'Produção' }}</span>
           </div>
         </div>
       </mat-card-content>
       
       <mat-card-actions>
-        <button mat-button color="primary" (click)="editConfig(bank)">
-          <mat-icon>edit</mat-icon>
-          Editar
-        </button>
-        
-        <button mat-button color="accent" (click)="testConnection(bank)">
-          <mat-icon>wifi</mat-icon>
-          Testar
-        </button>
-        
-        <button mat-button [color]="bank.isActive ? 'warn' : 'primary'" (click)="toggleActive(bank)">
-          <mat-icon>{{ bank.isActive ? 'pause' : 'play_arrow' }}</mat-icon>
-          {{ bank.isActive ? 'Desativar' : 'Ativar' }}
-        </button>
+        <div class="bank-actions">
+          <button class="action-btn primary" (click)="editConfig(bank)">
+            <mat-icon>edit</mat-icon>
+            Editar
+          </button>
+          
+          <button class="action-btn secondary" (click)="testConnection(bank)">
+            <mat-icon>wifi</mat-icon>
+            Testar
+          </button>
+          
+          <button class="action-btn secondary" (click)="fetchRealData(bank)">
+            <mat-icon>download</mat-icon>
+            Buscar Dados
+          </button>
+          
+          <button class="action-btn secondary" (click)="toggleActive(bank)">
+            <mat-icon>{{ bank.isActive ? 'pause' : 'play_arrow' }}</mat-icon>
+            {{ bank.isActive ? 'Desativar' : 'Ativar' }}
+          </button>
+        </div>
+      </mat-card-actions>
+    </mat-card>
+
+    <!-- Bancos disponíveis para configuração -->
+    <mat-card *ngFor="let bank of getAvailableBanksForConfig()" class="bank-card available">
+      <mat-card-header>
+        <div class="bank-header">
+          <div class="bank-icon" [style.background-color]="getBankColor(bank.code)">
+            <mat-icon>{{ getBankIcon(bank.code) }}</mat-icon>
+          </div>
+          <div class="bank-info">
+            <h3>{{ bank.name }}</h3>
+            <p>{{ bank.description }}</p>
+          </div>
+          <div class="bank-status">
+            <span class="status-badge available">Não Configurado</span>
+          </div>
+        </div>
+      </mat-card-header>
+      
+      <mat-card-content>
+        <div class="bank-details">
+          <div class="detail-row">
+            <span class="detail-label">Status:</span>
+            <span class="detail-value">Aguardando configuração</span>
+          </div>
+          
+          <div class="detail-row">
+            <span class="detail-label">Tipo:</span>
+            <span class="detail-value">API {{ bank.code }}</span>
+          </div>
+        </div>
+      </mat-card-content>
+      
+      <mat-card-actions>
+        <div class="bank-actions">
+          <button class="action-btn primary" (click)="createConfig(bank.code)">
+            <mat-icon>add</mat-icon>
+            + Configurar
+          </button>
+        </div>
       </mat-card-actions>
     </mat-card>
   </div>
@@ -76,20 +125,44 @@
   <div *ngIf="showForm" class="form-container">
     <mat-card>
       <mat-card-header>
-        <h2>{{ editing ? 'Editar' : 'Nova' }} Configuração - {{ selectedBank?.bankName }}</h2>
+        <h2>{{ editing ? 'Editar' : 'Nova' }} Configuração - {{ bankForm.get('bankName')?.value || 'Banco' }}</h2>
       </mat-card-header>
       
       <mat-card-content>
         <form [formGroup]="bankForm" class="bank-form">
+          <!-- Campos fixos (não editáveis) -->
           <div class="form-row">
             <mat-form-field appearance="outline">
               <mat-label>Nome do Banco</mat-label>
               <input matInput formControlName="bankName" readonly>
+              <mat-hint>Nome fixo do banco/fintech</mat-hint>
             </mat-form-field>
             
             <mat-form-field appearance="outline">
               <mat-label>Código do Banco</mat-label>
               <input matInput formControlName="bankCode" readonly>
+              <mat-hint>Código fixo do banco/fintech</mat-hint>
+            </mat-form-field>
+          </div>
+          
+          <!-- Campos editáveis para Mercado Pago -->
+          <div class="form-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Access Token *</mat-label>
+              <input matInput formControlName="accessToken" placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+              <mat-error *ngIf="bankForm.get('accessToken')?.hasError('required')">
+                Access Token é obrigatório
+              </mat-error>
+              <mat-hint>Token de acesso obtido no painel de desenvolvedores</mat-hint>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline">
+              <mat-label>Public Key *</mat-label>
+              <input matInput formControlName="publicKey" placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+              <mat-error *ngIf="bankForm.get('publicKey')?.hasError('required')">
+                Public Key é obrigatória
+              </mat-error>
+              <mat-hint>Chave pública da aplicação</mat-hint>
             </mat-form-field>
           </div>
           
@@ -100,6 +173,7 @@
               <mat-error *ngIf="bankForm.get('clientId')?.hasError('required')">
                 Client ID é obrigatório
               </mat-error>
+              <mat-hint>Identificador único da sua integração</mat-hint>
             </mat-form-field>
             
             <mat-form-field appearance="outline">
@@ -108,111 +182,90 @@
               <mat-error *ngIf="bankForm.get('clientSecret')?.hasError('required')">
                 Client Secret é obrigatório
               </mat-error>
+              <mat-hint>Chave privada da sua integração</mat-hint>
             </mat-form-field>
           </div>
           
+          <!-- Campos opcionais -->
           <div class="form-row">
             <mat-form-field appearance="outline">
-              <mat-label>User ID</mat-label>
-              <input matInput formControlName="userId" placeholder="Seu User ID (opcional)">
+              <mat-label>User ID (opcional)</mat-label>
+              <input matInput formControlName="userId" placeholder="Seu User ID no Mercado Pago">
+              <mat-hint>ID do usuário no Mercado Pago (opcional)</mat-hint>
             </mat-form-field>
             
             <mat-form-field appearance="outline">
-              <mat-label>API URL *</mat-label>
-              <input matInput formControlName="apiUrl" placeholder="URL da API do banco">
-              <mat-error *ngIf="bankForm.get('apiUrl')?.hasError('required')">
-                API URL é obrigatória
-              </mat-error>
-            </mat-form-field>
-          </div>
-          
-          <div class="form-row">
-            <mat-form-field appearance="outline">
-              <mat-label>Auth URL</mat-label>
-              <input matInput formControlName="authUrl" placeholder="URL de autorização OAuth2">
-            </mat-form-field>
-            
-            <mat-form-field appearance="outline">
-              <mat-label>Token URL</mat-label>
-              <input matInput formControlName="tokenUrl" placeholder="URL para troca de token">
-            </mat-form-field>
-          </div>
-          
-          <div class="form-row">
-            <mat-form-field appearance="outline">
-              <mat-label>Redirect URI</mat-label>
-              <input matInput formControlName="redirectUri" placeholder="URI de redirecionamento OAuth2">
-            </mat-form-field>
-            
-            <mat-form-field appearance="outline">
-              <mat-label>Scope</mat-label>
-              <input matInput formControlName="scope" placeholder="Escopo de permissões">
-            </mat-form-field>
-          </div>
-          
-          <div class="form-row">
-            <mat-form-field appearance="outline">
-              <mat-label>Timeout (ms) *</mat-label>
-              <input matInput formControlName="timeoutMs" type="number" min="1000">
-              <mat-error *ngIf="bankForm.get('timeoutMs')?.hasError('min')">
-                Timeout deve ser pelo menos 1000ms
-              </mat-error>
-            </mat-form-field>
-            
-            <mat-form-field appearance="outline">
-              <mat-label>Máximo de Tentativas *</mat-label>
-              <input matInput formControlName="maxRetries" type="number" min="0">
-              <mat-error *ngIf="bankForm.get('maxRetries')?.hasError('min')">
-                Máximo de tentativas deve ser pelo menos 0
-              </mat-error>
-            </mat-form-field>
-            
-            <mat-form-field appearance="outline">
-              <mat-label>Delay entre Tentativas (ms) *</mat-label>
-              <input matInput formControlName="retryDelayMs" type="number" min="100">
-              <mat-error *ngIf="bankForm.get('retryDelayMs')?.hasError('min')">
-                Delay deve ser pelo menos 100ms
-              </mat-error>
-            </mat-form-field>
-          </div>
-          
-          <div class="form-row">
-            <mat-form-field appearance="outline">
-              <mat-label>Modo</mat-label>
+              <mat-label>Ambiente</mat-label>
               <mat-select formControlName="isSandbox">
                 <mat-option [value]="true">Sandbox (Teste)</mat-option>
                 <mat-option [value]="false">Produção</mat-option>
               </mat-select>
+              <mat-hint>Selecione o ambiente de trabalho</mat-hint>
+            </mat-form-field>
+          </div>
+          
+          <!-- Campos fixos de configuração -->
+          <div class="form-row">
+            <mat-form-field appearance="outline">
+              <mat-label>API URL</mat-label>
+              <input matInput formControlName="apiUrl" readonly>
+              <mat-hint>URL fixa da API do Mercado Pago</mat-hint>
             </mat-form-field>
             
+            <mat-form-field appearance="outline">
+              <mat-label>Timeout (ms)</mat-label>
+              <input matInput formControlName="timeoutMs" type="number" min="1000" readonly>
+              <mat-hint>Timeout fixo para requisições</mat-hint>
+            </mat-form-field>
+          </div>
+          
+          <div class="form-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Máximo de Tentativas</mat-label>
+              <input matInput formControlName="maxRetries" type="number" min="0" readonly>
+              <mat-hint>Número fixo de tentativas</mat-hint>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline">
+              <mat-label>Delay entre Tentativas (ms)</mat-label>
+              <input matInput formControlName="retryDelayMs" type="number" min="100" readonly>
+              <mat-hint>Delay fixo entre tentativas</mat-hint>
+            </mat-form-field>
+          </div>
+          
+          <!-- Status da configuração -->
+          <div class="form-row">
             <mat-form-field appearance="outline">
               <mat-label>Status</mat-label>
               <mat-select formControlName="isActive">
                 <mat-option [value]="true">Ativo</mat-option>
                 <mat-option [value]="false">Inativo</mat-option>
               </mat-select>
+              <mat-hint>Ative ou desative esta configuração</mat-hint>
             </mat-form-field>
           </div>
         </form>
       </mat-card-content>
       
       <mat-card-actions>
-        <button mat-button (click)="closeForm()">
-          <mat-icon>cancel</mat-icon>
-          Cancelar
-        </button>
-        
-        <button mat-raised-button color="primary" (click)="saveConfig()" [disabled]="!bankForm.valid">
-          <mat-icon>save</mat-icon>
-          {{ editing ? 'Atualizar' : 'Salvar' }}
-        </button>
+        <div class="bank-actions">
+          <button class="action-btn secondary" (click)="closeForm()">
+            <mat-icon>cancel</mat-icon>
+            Cancelar
+          </button>
+          
+          <button class="action-btn primary" (click)="saveConfig()" [disabled]="!bankForm.valid">
+            <mat-icon>save</mat-icon>
+            {{ editing ? 'Atualizar' : 'Salvar' }}
+          </button>
+        </div>
       </mat-card-actions>
     </mat-card>
   </div>
 
   <!-- Botão Voltar -->
   <div *ngIf="!showForm" class="actions">
-    <button mat-raised-button color="primary" (click)="router.navigate(['/dashboard'])">
+    <button class="action-btn primary" (click)="router.navigate(['/dashboard'])">
       <mat-icon>arrow_back</mat-icon>
       Voltar ao Dashboard
     </button>

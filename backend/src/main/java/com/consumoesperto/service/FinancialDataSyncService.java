@@ -136,7 +136,7 @@ public class FinancialDataSyncService {
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao obter transações do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao obter transações do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -181,7 +181,7 @@ public class FinancialDataSyncService {
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao sincronizar transações do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao sincronizar transações do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -223,7 +223,7 @@ public class FinancialDataSyncService {
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao sincronizar faturas do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao sincronizar faturas do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -269,7 +269,7 @@ public class FinancialDataSyncService {
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao sincronizar compras parceladas do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao sincronizar compras parceladas do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -311,7 +311,7 @@ public class FinancialDataSyncService {
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao sincronizar cartões do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao sincronizar cartões do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -333,17 +333,17 @@ public class FinancialDataSyncService {
      * Obtém transações de um banco específico
      */
     private List<Map<String, Object>> getTransactionsFromBank(AutorizacaoBancaria auth) {
-        switch (auth.getTipoBanco()) {
-            case ITAU:
+        switch (auth.getBanco()) {
+            case "ITAU":
                 return itauBankService.getTransactions(auth);
-            case MERCADO_PAGO:
+            case "MERCADO_PAGO":
                 return mercadoPagoBankService.getTransactions(auth);
-            case INTER:
+            case "INTER":
                 return interBankService.getTransactions(auth);
-            case NUBANK:
+            case "NUBANK":
                 return nubankBankService.getTransactions(auth);
             default:
-                log.warn("Tipo de banco não suportado: {}", auth.getTipoBanco());
+                log.warn("Tipo de banco não suportado: {}", auth.getBanco());
                 return new ArrayList<>();
         }
     }
@@ -352,17 +352,17 @@ public class FinancialDataSyncService {
      * Obtém faturas de um banco específico
      */
     private List<Map<String, Object>> getInvoicesFromBank(AutorizacaoBancaria auth) {
-        switch (auth.getTipoBanco()) {
-            case ITAU:
+        switch (auth.getBanco()) {
+            case "ITAU":
                 return itauBankService.getInvoices(auth);
-            case MERCADO_PAGO:
+            case "MERCADO_PAGO":
                 return mercadoPagoBankService.getInvoices(auth);
-            case INTER:
+            case "INTER":
                 return interBankService.getInvoices(auth);
-            case NUBANK:
+            case "NUBANK":
                 return nubankBankService.getInvoices(auth);
             default:
-                log.warn("Tipo de banco não suportado: {}", auth.getTipoBanco());
+                log.warn("Tipo de banco não suportado: {}", auth.getBanco());
                 return new ArrayList<>();
         }
     }
@@ -373,7 +373,7 @@ public class FinancialDataSyncService {
     private List<Map<String, Object>> getInstallmentPurchasesFromBank(AutorizacaoBancaria auth) {
         // Por enquanto, retorna lista vazia pois os métodos não estão implementados
         // TODO: Implementar métodos getInstallmentPurchases nos serviços bancários
-        log.info("Método getInstallmentPurchases não implementado para banco: {}", auth.getTipoBanco());
+        log.info("Método getInstallmentPurchases não implementado para banco: {}", auth.getBanco());
         return new ArrayList<>();
     }
 
@@ -381,17 +381,17 @@ public class FinancialDataSyncService {
      * Obtém cartões de crédito de um banco específico
      */
     private List<Map<String, Object>> getCreditCardsFromBank(AutorizacaoBancaria auth) {
-        switch (auth.getTipoBanco()) {
-            case ITAU:
+        switch (auth.getBanco()) {
+            case "ITAU":
                 return itauBankService.getCreditCards(auth);
-            case MERCADO_PAGO:
+            case "MERCADO_PAGO":
                 return mercadoPagoBankService.getCreditCards(auth);
-            case INTER:
+            case "INTER":
                 return interBankService.getCreditCards(auth);
-            case NUBANK:
+            case "NUBANK":
                 return nubankBankService.getCreditCards(auth);
             default:
-                log.warn("Tipo de banco não suportado: {}", auth.getTipoBanco());
+                log.warn("Tipo de banco não suportado: {}", auth.getBanco());
                 return new ArrayList<>();
         }
     }
@@ -532,7 +532,7 @@ public class FinancialDataSyncService {
             fatura.setAno((Integer) faturaBanco.get("year"));
             fatura.setValorTotal(new BigDecimal(faturaBanco.get("totalAmount").toString()));
             fatura.setValorPago(new BigDecimal(faturaBanco.get("paidAmount").toString()));
-            fatura.setStatus((String) faturaBanco.get("status"));
+            fatura.setStatus(Fatura.StatusFatura.fromString((String) faturaBanco.get("status")));
             fatura.setDataVencimento(LocalDateTime.parse((String) faturaBanco.get("dueDate")));
             fatura.setDataCriacao(LocalDateTime.now());
             
@@ -595,7 +595,7 @@ public class FinancialDataSyncService {
     private CartaoCredito findOrCreateCreditCard(Usuario usuario, Map<String, Object> dados, AutorizacaoBancaria auth) {
         String nomeCartao = (String) dados.get("cardName");
         if (nomeCartao == null) {
-            nomeCartao = auth.getTipoBanco().toString();
+            nomeCartao = auth.getBanco().toString();
         }
         
         CartaoCredito cartaoExistente = cartaoCreditoRepository.findByUsuarioIdAndNome(usuario.getId(), nomeCartao);
@@ -626,7 +626,7 @@ public class FinancialDataSyncService {
                 parcela.setCompraParcelada(compra);
                 parcela.setNumeroParcela(i);
                 parcela.setValor(valorParcela);
-                parcela.setDataVencimento(dataPrimeiraParcela.plusMonths(i - 1).toLocalDate());
+                parcela.setDataVencimento(dataPrimeiraParcela.plusMonths(i - 1));
                 parcela.setStatus(Parcela.StatusParcela.PENDENTE);
                 parcela.setDataCriacao(LocalDateTime.now());
                 

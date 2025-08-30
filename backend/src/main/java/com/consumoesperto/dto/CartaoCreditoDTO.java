@@ -1,9 +1,8 @@
 package com.consumoesperto.dto;
 
-import com.consumoesperto.model.CartaoCredito;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
@@ -11,6 +10,15 @@ import javax.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * DTO genérico para cartões de crédito
+ * 
+ * Este DTO é usado pelos serviços e controllers existentes
+ * para manter compatibilidade com o código atual.
+ * 
+ * @author ConsumoEsperto Team
+ * @version 1.0
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -36,15 +44,22 @@ public class CartaoCreditoDTO {
     @NotNull(message = "Limite disponível é obrigatório")
     private BigDecimal limiteDisponivel;
 
-    private LocalDateTime dataVencimento;
-
-    @NotNull(message = "Tipo do cartão é obrigatório")
-    private CartaoCredito.TipoCartao tipoCartao;
+    private Integer diaVencimento;
 
     private Boolean ativo = true;
+
+    private String cor;
+
+    private String icone;
+
+    // Campos de compatibilidade para código existente
+    private LocalDateTime dataVencimento;
+    
+    private com.consumoesperto.model.CartaoCredito.TipoCartao tipoCartao;
+    
+    private LocalDateTime dataAtualizacao;
 
     private Long usuarioId;
 
     private LocalDateTime dataCriacao;
-    private LocalDateTime dataAtualizacao;
 }

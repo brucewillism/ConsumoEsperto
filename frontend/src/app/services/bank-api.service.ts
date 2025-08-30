@@ -250,4 +250,67 @@ export class BankApiService {
     // TODO: Implementar cálculo real baseado nos dados das contas
     return 0;
   }
+
+  /**
+   * Salva configuração de API bancária
+   */
+  saveBankConfig(config: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/bank-api/configs`, config);
+  }
+
+  /**
+   * Atualiza configuração de API bancária existente
+   */
+  updateBankConfig(configId: number, config: any): Observable<any> {
+    return this.http.put(`${this.apiUrl}/bank-api/configs/${configId}`, config);
+  }
+
+  /**
+   * Obtém configurações bancárias do usuário
+   */
+  getBankConfigs(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/bank-api/configs`);
+  }
+
+  /**
+   * Testa a conectividade com o backend
+   */
+  testBackendConnection(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/bank-api/test`);
+  }
+
+  /**
+   * Testa a conexão de uma configuração bancária
+   */
+  testBankConnection(configId: number): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/bank-config/my-configs/${configId}/test`, {});
+  }
+
+  /**
+   * Obtém cartões de crédito reais de um banco
+   */
+  getRealCreditCards(bankType: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/bank-api/real/credit-cards/${bankType}`);
+  }
+
+  /**
+   * Obtém dados consolidados de todos os bancos
+   */
+  getConsolidatedBankData(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/bank-api/real/consolidated`);
+  }
+
+  /**
+   * Configura credenciais do Mercado Pago
+   */
+  configureMercadoPago(config: {
+    accessToken: string;
+    publicKey: string;
+    clientId: string;
+    clientSecret: string;
+    userId?: string;
+  }): Observable<any> {
+    // Usar o endpoint padrão de configurações bancárias
+    return this.http.post(`${this.apiUrl}/bank-api/configs`, config);
+  }
 }

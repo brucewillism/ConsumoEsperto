@@ -1,6 +1,5 @@
 package com.consumoesperto.model;
 
-import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
@@ -11,6 +10,7 @@ import javax.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 /**
  * Entidade que representa um usuário do sistema ConsumoEsperto
@@ -24,7 +24,6 @@ import java.util.Set;
  */
 @Entity
 @Table(name = "usuarios") // Nome da tabela no banco de dados
-@Data // Lombok: gera getters, setters, toString, equals e hashCode
 @NoArgsConstructor // Lombok: gera construtor sem argumentos
 @AllArgsConstructor // Lombok: gera construtor com todos os argumentos
 public class Usuario {
@@ -38,28 +37,30 @@ public class Usuario {
     private Long id;
 
     /**
-     * Nome de usuário único para login
-     * Deve ser preenchido e ter no máximo 50 caracteres
+     * Nome de usuário único para login no sistema
+     * Deve ser único e ter no máximo 50 caracteres
      */
-    @Size(max = 50, message = "Nome de usuário deve ter no máximo 50 caracteres")
-    @Column(unique = true) // Garante que o username seja único
+    @NotBlank(message = "Username é obrigatório")
+    @Size(max = 50, message = "Username deve ter no máximo 50 caracteres")
+    @Column(unique = true)
     private String username;
 
     /**
-     * Senha criptografada do usuário (opcional para OAuth2)
-     * Deve ter no máximo 120 caracteres
+     * Senha criptografada do usuário
+     * Armazenada de forma segura usando BCrypt
+     * Obrigatória apenas para usuários com autenticação LOCAL
      */
-    @Size(max = 120, message = "Senha deve ter no máximo 120 caracteres")
+    @Size(min = 6, max = 120, message = "Senha deve ter entre 6 e 120 caracteres")
     private String password;
 
     /**
-     * Email único do usuário
-     * Deve ser um email válido e ter no máximo 50 caracteres
+     * Endereço de email único do usuário
+     * Deve ser único e seguir formato válido de email
      */
     @NotBlank(message = "Email é obrigatório")
     @Size(max = 50, message = "Email deve ter no máximo 50 caracteres")
-    @Email(message = "Formato de email inválido")
-    @Column(unique = true) // Garante que o email seja único
+    @Email(message = "Email deve ser válido")
+    @Column(unique = true)
     private String email;
 
     /**
@@ -122,6 +123,7 @@ public class Usuario {
      * Carregamento lazy para melhor performance
      */
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference("usuario-transacoes")
     private Set<Transacao> transacoes = new HashSet<>();
 
     /**
@@ -130,6 +132,7 @@ public class Usuario {
      * Carregamento lazy para melhor performance
      */
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference("usuario-categorias")
     private Set<Categoria> categorias = new HashSet<>();
 
     /**
@@ -138,7 +141,78 @@ public class Usuario {
      * Carregamento lazy para melhor performance
      */
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference("usuario-cartoes")
     private Set<CartaoCredito> cartoesCredito = new HashSet<>();
+
+    /**
+     * Lista de configurações de APIs bancárias do usuário
+     * Relacionamento um-para-muitos: um usuário pode ter várias configurações bancárias
+     * Carregamento lazy para melhor performance
+     */
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference("usuario-bank-configs")
+    private Set<BankApiConfig> bankApiConfigs = new HashSet<>();
+
+    /**
+     * Lista de compras parceladas do usuário
+     * Relacionamento um-para-muitos: um usuário pode ter várias compras parceladas
+     * Carregamento lazy para melhor performance
+     */
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference("usuario-compras")
+    private Set<CompraParcelada> comprasParceladas = new HashSet<>();
+
+    // Getters e Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public LocalDateTime getUltimoAcesso() { return ultimoAcesso; }
+    public void setUltimoAcesso(LocalDateTime ultimoAcesso) { this.ultimoAcesso = ultimoAcesso; }
+
+    public String getGoogleId() { return googleId; }
+    public void setGoogleId(String googleId) { this.googleId = googleId; }
+
+    public String getFotoUrl() { return fotoUrl; }
+    public void setFotoUrl(String fotoUrl) { this.fotoUrl = fotoUrl; }
+
+    public String getLocale() { return locale; }
+    public void setLocale(String locale) { this.locale = locale; }
+
+    public Boolean getEmailVerificado() { return emailVerificado; }
+    public void setEmailVerificado(Boolean emailVerificado) { this.emailVerificado = emailVerificado; }
+
+    public ProvedorAuth getProvedorAuth() { return provedorAuth; }
+    public void setProvedorAuth(ProvedorAuth provedorAuth) { this.provedorAuth = provedorAuth; }
+
+    public Set<Transacao> getTransacoes() { return transacoes; }
+    public void setTransacoes(Set<Transacao> transacoes) { this.transacoes = transacoes; }
+
+    public Set<Categoria> getCategorias() { return categorias; }
+    public void setCategorias(Set<Categoria> categorias) { this.categorias = categorias; }
+
+    public Set<CartaoCredito> getCartoesCredito() { return cartoesCredito; }
+    public void setCartoesCredito(Set<CartaoCredito> cartoesCredito) { this.cartoesCredito = cartoesCredito; }
+
+    public Set<BankApiConfig> getBankApiConfigs() { return bankApiConfigs; }
+    public void setBankApiConfigs(Set<BankApiConfig> bankApiConfigs) { this.bankApiConfigs = bankApiConfigs; }
+
+    public Set<CompraParcelada> getComprasParceladas() { return comprasParceladas; }
+    public void setComprasParceladas(Set<CompraParcelada> comprasParceladas) { this.comprasParceladas = comprasParceladas; }
 
     /**
      * Método executado automaticamente antes de persistir a entidade
@@ -150,20 +224,10 @@ public class Usuario {
     }
 
     /**
-     * Método executado automaticamente antes de atualizar a entidade
-     * Atualiza o último acesso quando o usuário faz login
-     */
-    @PreUpdate
-    protected void onUpdate() {
-        ultimoAcesso = LocalDateTime.now();
-    }
-
-    /**
-     * Enum para tipos de provedor de autenticação
+     * Enum que define os provedores de autenticação suportados
      */
     public enum ProvedorAuth {
-        LOCAL,      // Login local com senha
-        GOOGLE,     // Login via Google OAuth2
-        MERCADOPAGO // Login via Mercado Pago (futuro)
+        LOCAL,   // Autenticação local com username/password
+        GOOGLE   // Autenticação via Google OAuth2
     }
 }

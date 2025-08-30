@@ -1,6 +1,5 @@
 package com.consumoesperto.model;
 
-import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
@@ -11,6 +10,7 @@ import javax.validation.constraints.Size;
 import javax.validation.constraints.DecimalMin;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 
 /**
  * Entidade que representa uma transação financeira
@@ -24,7 +24,6 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "transacoes") // Nome da tabela no banco de dados
-@Data // Lombok: gera getters, setters, toString, equals e hashCode
 @NoArgsConstructor // Lombok: gera construtor sem argumentos
 @AllArgsConstructor // Lombok: gera construtor com todos os argumentos
 public class Transacao {
@@ -68,6 +67,7 @@ public class Transacao {
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "categoria_id")
+    @JsonBackReference("categoria-transacoes")
     private Categoria categoria;
 
     /**
@@ -77,6 +77,7 @@ public class Transacao {
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id")
+    @JsonBackReference("usuario-transacoes")
     private Usuario usuario;
 
     /**
@@ -92,6 +93,31 @@ public class Transacao {
      */
     @Column(name = "data_criacao")
     private LocalDateTime dataCriacao;
+
+    // Getters e Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public BigDecimal getValor() { return valor; }
+    public void setValor(BigDecimal valor) { this.valor = valor; }
+
+    public TipoTransacao getTipoTransacao() { return tipoTransacao; }
+    public void setTipoTransacao(TipoTransacao tipoTransacao) { this.tipoTransacao = tipoTransacao; }
+
+    public Categoria getCategoria() { return categoria; }
+    public void setCategoria(Categoria categoria) { this.categoria = categoria; }
+
+    public Usuario getUsuario() { return usuario; }
+    public void setUsuario(Usuario usuario) { this.usuario = usuario; }
+
+    public LocalDateTime getDataTransacao() { return dataTransacao; }
+    public void setDataTransacao(LocalDateTime dataTransacao) { this.dataTransacao = dataTransacao; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
 
     /**
      * Método executado automaticamente antes de persistir a entidade
