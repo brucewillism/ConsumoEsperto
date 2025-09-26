@@ -20,7 +20,6 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
 @Service
-@ConditionalOnProperty(name = "bank.api.nubank.client-id", havingValue = "nubank_dev_client_id", matchIfMissing = true)
 @Slf4j
 public class NubankBankService {
 

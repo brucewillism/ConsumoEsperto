@@ -33,12 +33,19 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
   if (token) {
     request = request.clone({
       setHeaders: {
-        Authorization: `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
+        'ngrok-skip-browser-warning': 'true'
       }
     });
     console.log(`[AuthInterceptor] Token adicionado ao header: Bearer ${token.substring(0, 20)}...`);
     console.log(`[AuthInterceptor] Headers após modificação:`, request.headers);
   } else {
+    // Adiciona header do ngrok mesmo sem token
+    request = request.clone({
+      setHeaders: {
+        'ngrok-skip-browser-warning': 'true'
+      }
+    });
     console.warn(`[AuthInterceptor] Nenhum token encontrado para requisição: ${request.url}`);
   }
 

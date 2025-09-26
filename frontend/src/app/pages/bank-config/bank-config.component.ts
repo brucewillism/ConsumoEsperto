@@ -468,6 +468,9 @@ export class BankConfigComponent implements OnInit {
       // Mapear campos do formulário para o formato esperado pelo backend
       const config = {
         id: this.editing && this.selectedBank ? this.selectedBank.id : undefined,
+        nome: formData.bankName, // Campo obrigatório para o backend
+        tipoBanco: formData.bankCode, // Campo obrigatório para o backend
+        banco: formData.bankCode, // Campo de compatibilidade
         bankName: formData.bankName,
         bankCode: formData.bankCode,
         accessToken: formData.accessToken,
@@ -481,6 +484,7 @@ export class BankConfigComponent implements OnInit {
         redirectUri: formData.redirectUri,
         scope: formData.scope,
         isSandbox: formData.isSandbox,
+        ativo: formData.isActive, // Campo obrigatório para o backend
         isActive: formData.isActive,
         timeoutMs: formData.timeoutMs,
         maxRetries: formData.maxRetries,
@@ -569,30 +573,60 @@ export class BankConfigComponent implements OnInit {
   fetchRealData(bank: BankConfig): void {
     console.log('[BankConfigComponent] 📊 Buscando dados reais de:', bank.bankName);
     
-    this.showSuccessMessage(`🔄 Buscando dados reais de ${bank.bankName}...`);
+    this.showSuccessMessage(`🔄 Sincronizando dados de ${bank.bankName}...`);
     
-    // Buscar dados reais baseado no tipo de banco
-    this.bankApiService.getRealCreditCards(bank.bankCode).subscribe({
-      next: (response) => {
-        console.log('[BankConfigComponent] ✅ Dados reais obtidos:', response);
-        
-        if (response && response.cartoes) {
-          const cartoesCount = Array.isArray(response.cartoes) ? response.cartoes.length : 0;
-          this.showSuccessMessage(`✅ ${cartoesCount} cartão(ões) encontrado(s) em ${bank.bankName}!`);
+    // Para Mercado Pago, usar o endpoint de sincronização
+    if (bank.bankCode === 'MERCADO_PAGO' || bank.bankCode === 'MERCADOPAGO') {
+      this.bankApiService.syncMercadoPagoData().subscribe({
+        next: (response) => {
+          console.log('[BankConfigComponent] ✅ Dados sincronizados:', response);
           
-          // Aqui você pode implementar a lógica para mostrar os dados
-          // Por exemplo, abrir um modal ou navegar para uma página de detalhes
-          console.log('[BankConfigComponent] 📊 Dados dos cartões:', response.cartoes);
-        } else {
-          this.showSuccessMessage(`ℹ️ Nenhum cartão encontrado em ${bank.bankName}`);
+          if (response && response.success) {
+            const cartoes = response.cartoes_sincronizados || 0;
+            const faturas = response.faturas_sincronizadas || 0;
+            const transacoes = response.transacoes_sincronizadas || 0;
+            
+            this.showSuccessMessage(
+              `✅ Sincronização concluída! ${cartoes} cartões, ${faturas} faturas, ${transacoes} transações`
+            );
+            
+            console.log('[BankConfigComponent] 📊 Dados sincronizados:', {
+              cartoes: cartoes,
+              faturas: faturas,
+              transacoes: transacoes
+            });
+          } else {
+            this.showErrorMessage(`❌ Falha na sincronização: ${response?.erro || 'Erro desconhecido'}`);
+          }
+        },
+        error: (error) => {
+          console.error('[BankConfigComponent] ❌ Erro ao sincronizar dados:', error);
+          let errorMessage = this.extractErrorMessage(error);
+          this.showErrorMessage(`❌ Erro ao sincronizar dados: ${errorMessage}`);
         }
-      },
-      error: (error) => {
-        console.error('[BankConfigComponent] ❌ Erro ao buscar dados reais:', error);
-        let errorMessage = this.extractErrorMessage(error);
-        this.showErrorMessage(`❌ Erro ao buscar dados reais: ${errorMessage}`);
-      }
-    });
+      });
+    } else {
+      // Para outros bancos, usar o método original
+      this.bankApiService.getRealCreditCards(bank.bankCode).subscribe({
+        next: (response) => {
+          console.log('[BankConfigComponent] ✅ Dados reais obtidos:', response);
+          
+          if (response && response.cartoes) {
+            const cartoesCount = Array.isArray(response.cartoes) ? response.cartoes.length : 0;
+            this.showSuccessMessage(`✅ ${cartoesCount} cartão(ões) encontrado(s) em ${bank.bankName}!`);
+            
+            console.log('[BankConfigComponent] 📊 Dados dos cartões:', response.cartoes);
+          } else {
+            this.showSuccessMessage(`ℹ️ Nenhum cartão encontrado em ${bank.bankName}`);
+          }
+        },
+        error: (error) => {
+          console.error('[BankConfigComponent] ❌ Erro ao buscar dados reais:', error);
+          let errorMessage = this.extractErrorMessage(error);
+          this.showErrorMessage(`❌ Erro ao buscar dados reais: ${errorMessage}`);
+        }
+      });
+    }
   }
 
   /**
@@ -607,8 +641,21 @@ export class BankConfigComponent implements OnInit {
     
     // SALVAR NO BACKEND usando endpoint padrão
     if (bank.id) {
+      // Mapear para o formato esperado pelo backend
+      const config = {
+        id: bank.id,
+        nome: bank.bankName,
+        tipoBanco: bank.bankCode,
+        banco: bank.bankCode,
+        clientId: bank.clientId,
+        clientSecret: bank.clientSecret,
+        apiUrl: bank.apiUrl,
+        ativo: newStatus,
+        isActive: newStatus
+      };
+      
       // Atualizar configuração existente
-      this.bankApiService.updateBankConfig(bank.id, bank).subscribe({
+      this.bankApiService.updateBankConfig(bank.id, config).subscribe({
         next: (response) => {
           console.log('[BankConfigComponent] ✅ Status atualizado com sucesso:', response);
           this.showSuccessMessage(`✅ ${bank.bankName} ${bank.isActive ? 'ativado' : 'desativado'} com sucesso!`);

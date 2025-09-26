@@ -61,16 +61,6 @@
             Editar
           </button>
           
-          <button class="action-btn secondary" (click)="testConnection(bank)">
-            <mat-icon>wifi</mat-icon>
-            Testar
-          </button>
-          
-          <button class="action-btn secondary" (click)="fetchRealData(bank)">
-            <mat-icon>download</mat-icon>
-            Buscar Dados
-          </button>
-          
           <button class="action-btn secondary" (click)="toggleActive(bank)">
             <mat-icon>{{ bank.isActive ? 'pause' : 'play_arrow' }}</mat-icon>
             {{ bank.isActive ? 'Desativar' : 'Ativar' }}

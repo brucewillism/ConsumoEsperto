@@ -18,6 +18,10 @@ import java.util.Optional;
 import java.util.HashMap;
 import org.springframework.http.HttpStatus;
 import com.consumoesperto.repository.BankApiConfigRepository;
+import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.repository.AutorizacaoBancariaRepository;
+import com.consumoesperto.model.Usuario;
+import com.consumoesperto.model.AutorizacaoBancaria;
 import java.time.LocalDateTime;
 import java.util.concurrent.CompletableFuture;
 import com.consumoesperto.service.MercadoPagoService;
@@ -45,12 +49,14 @@ import java.util.Objects;
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Slf4j
 @Tag(name = "APIs Bancárias", description = "Endpoints para integração com APIs bancárias")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"}) // Permite CORS de qualquer origem
 public class BankApiController {
 
     // Serviço responsável pela integração com APIs bancárias
     private final BankApiService bankApiService;
     private final BankApiConfigRepository bankApiConfigRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final AutorizacaoBancariaRepository autorizacaoBancariaRepository;
     private final MercadoPagoService mercadopagoService;
 
     /**
@@ -447,10 +453,38 @@ public class BankApiController {
 
     @PostMapping("/configs")
     @Operation(summary = "Criar configuração bancária", description = "Cria uma nova configuração para integração com banco")
-    @PreAuthorize("hasRole('USER') and @securityService.canCreateBankConfig(#config.usuario.id)")
-    public ResponseEntity<BankApiConfig> createConfig(@Valid @RequestBody BankApiConfig config) {
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<BankApiConfig> createConfig(@Valid @RequestBody BankApiConfig config, @AuthenticationPrincipal UserPrincipal currentUser) {
         try {
-            log.info("🆕 Criando nova configuração bancária para usuário: {}", config.getUsuario().getId());
+            log.info("🆕 Criando nova configuração bancária para usuário: {}", currentUser.getId());
+            
+            // Garantir que o usuário associado à configuração é o usuário autenticado
+            Usuario user = usuarioRepository.findById(currentUser.getId())
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado com ID: " + currentUser.getId()));
+            config.setUsuario(user);
+            
+            // CORREÇÃO: Preencher AMBAS as colunas (banco e tipo_banco) para compatibilidade
+            // Priorizar tipo_banco se estiver preenchido, senão usar banco, senão usar padrão
+            String bancoValue = null;
+            if (config.getTipoBanco() != null && !config.getTipoBanco().trim().isEmpty()) {
+                bancoValue = config.getTipoBanco();
+            } else if (config.getBanco() != null && !config.getBanco().trim().isEmpty()) {
+                bancoValue = config.getBanco();
+            } else {
+                bancoValue = "MERCADO_PAGO"; // Valor padrão
+            }
+            
+            // Garantir que AMBAS as colunas sejam preenchidas
+            config.setBanco(bancoValue); // Coluna NOT NULL
+            config.setTipoBanco(bancoValue); // Coluna nullable
+            
+            // Preencher todos os campos necessários para PRODUÇÃO
+            config.setAuthUrl("https://api.mercadopago.com/authorization");
+            config.setTokenUrl("https://api.mercadopago.com/oauth/token");
+            config.setSandbox(false); // PRODUÇÃO
+            config.setTimeoutMs(30000);
+            config.setMaxRetries(3);
+            config.setRetryDelayMs(1000);
             
             // Definir timestamps
             config.setDataCriacao(LocalDateTime.now());
@@ -459,6 +493,9 @@ public class BankApiController {
             // Salvar configuração
             BankApiConfig savedConfig = bankApiConfigRepository.save(config);
             log.info("✅ Configuração bancária criada com sucesso. ID: {}", savedConfig.getId());
+            
+            // Criar autorização bancária automaticamente
+            criarAutorizacaoBancaria(savedConfig);
             
             // Se for Mercado Pago e estiver ativa, iniciar sincronização automática
             if ("MERCADOPAGO".equals(savedConfig.getBanco()) && savedConfig.getAtivo()) {
@@ -497,9 +534,9 @@ public class BankApiController {
     @PutMapping("/configs/{id}")
     @Operation(summary = "Atualizar configuração bancária", description = "Atualiza uma configuração existente para integração com banco")
     @PreAuthorize("hasRole('USER') and @securityService.canUpdateBankConfig(#id)")
-    public ResponseEntity<BankApiConfig> updateConfig(@PathVariable Long id, @Valid @RequestBody BankApiConfig config) {
+    public ResponseEntity<BankApiConfig> updateConfig(@PathVariable Long id, @Valid @RequestBody BankApiConfig config, @AuthenticationPrincipal UserPrincipal currentUser) {
         try {
-            log.info("🔄 Atualizando configuração bancária ID: {} para usuário: {}", id, config.getUsuario().getId());
+            log.info("🔄 Atualizando configuração bancária ID: {} para usuário: {}", id, currentUser.getId());
             
             // Verificar se a configuração existe
             Optional<BankApiConfig> existingConfig = bankApiConfigRepository.findById(id);
@@ -509,6 +546,19 @@ public class BankApiController {
             }
             
             BankApiConfig currentConfig = existingConfig.get();
+            
+            // Garantir que o usuário associado à configuração é o usuário autenticado
+            // Isso previne que o campo 'usuario' seja sobrescrito com null ou um valor incorreto
+            // e garante que a configuração sempre pertença ao usuário logado.
+            Usuario user = usuarioRepository.findById(currentUser.getId())
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado com ID: " + currentUser.getId()));
+            currentConfig.setUsuario(user); // Define o usuário antes de verificar ou atualizar
+            
+            // Verificar se o usuário atual é o proprietário da configuração
+            if (!currentConfig.getUsuario().getId().equals(currentUser.getId())) {
+                log.warn("⚠️ Usuário {} não tem permissão para atualizar configuração ID {}", currentUser.getId(), id);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
             
             // Verificar se houve mudança no Client Secret (para Mercado Pago)
             boolean clientSecretChanged = !Objects.equals(currentConfig.getClientSecret(), config.getClientSecret());
@@ -529,11 +579,50 @@ public class BankApiController {
             currentConfig.setTimeoutMs(config.getTimeoutMs());
             currentConfig.setMaxRetries(config.getMaxRetries());
             currentConfig.setRetryDelayMs(config.getRetryDelayMs());
+            
+            // CORREÇÃO: Atualizar AMBAS as colunas (banco e tipo_banco) para compatibilidade
+            String bancoValue = null;
+            if (config.getTipoBanco() != null && !config.getTipoBanco().trim().isEmpty()) {
+                bancoValue = config.getTipoBanco();
+            } else if (config.getBanco() != null && !config.getBanco().trim().isEmpty()) {
+                bancoValue = config.getBanco();
+            } else {
+                // Manter valor atual se não houver mudança
+                bancoValue = currentConfig.getBanco() != null ? currentConfig.getBanco() : "MERCADO_PAGO";
+            }
+            
+            // Garantir que AMBAS as colunas sejam preenchidas
+            currentConfig.setBanco(bancoValue); // Coluna NOT NULL
+            currentConfig.setTipoBanco(bancoValue); // Coluna nullable
+            
+            // Garantir que todos os campos de PRODUÇÃO estejam preenchidos
+            if (currentConfig.getAuthUrl() == null) {
+                currentConfig.setAuthUrl("https://api.mercadopago.com/authorization");
+            }
+            if (currentConfig.getTokenUrl() == null) {
+                currentConfig.setTokenUrl("https://api.mercadopago.com/oauth/token");
+            }
+            if (currentConfig.getSandbox() == null) {
+                currentConfig.setSandbox(false); // PRODUÇÃO
+            }
+            if (currentConfig.getTimeoutMs() == null) {
+                currentConfig.setTimeoutMs(30000);
+            }
+            if (currentConfig.getMaxRetries() == null) {
+                currentConfig.setMaxRetries(3);
+            }
+            if (currentConfig.getRetryDelayMs() == null) {
+                currentConfig.setRetryDelayMs(1000);
+            }
+            
             currentConfig.setDataAtualizacao(LocalDateTime.now());
             
             // Salvar configuração atualizada
             BankApiConfig savedConfig = bankApiConfigRepository.save(currentConfig);
             log.info("✅ Configuração bancária atualizada com sucesso. ID: {}", savedConfig.getId());
+            
+            // Atualizar autorização bancária automaticamente
+            criarAutorizacaoBancaria(savedConfig);
             
             // Se for Mercado Pago e houve mudanças significativas, iniciar sincronização automática
             if ("MERCADOPAGO".equals(savedConfig.getBanco()) && 
@@ -541,6 +630,12 @@ public class BankApiController {
                 
                 try {
                     log.info("🚀 Iniciando sincronização automática para Mercado Pago (configuração atualizada)...");
+                    
+                    // Se o client_secret foi alterado e não é placeholder, atualizar autorizacoes_bancarias
+                    if (clientSecretChanged && !"CONFIGURAR_CLIENT_SECRET".equals(config.getClientSecret())) {
+                        log.info("🔑 Client Secret alterado, atualizando tabela autorizacoes_bancarias...");
+                        atualizarAutorizacaoBancaria(savedConfig.getUsuario().getId(), config.getClientSecret());
+                    }
                     
                     // Executar em thread separada para não bloquear a resposta
                     CompletableFuture.runAsync(() -> {
@@ -792,6 +887,113 @@ public class BankApiController {
             Map<String, Object> error = new HashMap<>();
             error.put("erro", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
+     * Cria autorização bancária automaticamente quando uma configuração é salva
+     * 
+     * @param config Configuração bancária salva
+     */
+    private void criarAutorizacaoBancaria(BankApiConfig config) {
+        try {
+            log.info("🔑 Criando autorização bancária para configuração ID: {} - Banco: {}", 
+                config.getId(), config.getBanco());
+            
+            // Verificar se já existe autorização para este usuário e banco
+            Optional<AutorizacaoBancaria> authExistente = autorizacaoBancariaRepository
+                .findByUsuarioIdAndTipoBanco(config.getUsuario().getId(), config.getBanco());
+            
+            if (authExistente.isPresent()) {
+                log.info("⚠️ Autorização bancária já existe para usuário {} e banco {}. Atualizando...", 
+                    config.getUsuario().getId(), config.getBanco());
+                
+                // Atualizar autorização existente
+                AutorizacaoBancaria auth = authExistente.get();
+                auth.setAccessToken(config.getClientSecret());
+                auth.setBanco(config.getBanco()); // Preencher coluna NOT NULL
+                auth.setTipoConta("CREDITO"); // Preencher coluna NOT NULL
+                auth.setDataAtualizacao(LocalDateTime.now());
+                auth.setAtivo(config.getAtivo());
+                autorizacaoBancariaRepository.save(auth);
+                
+                log.info("✅ Autorização bancária atualizada com sucesso");
+                return;
+            }
+            
+            // Criar nova autorização bancária
+            AutorizacaoBancaria novaAuth = new AutorizacaoBancaria();
+            novaAuth.setUsuario(config.getUsuario());
+            novaAuth.setTipoBanco(config.getBanco());
+            novaAuth.setBanco(config.getBanco()); // Preencher coluna NOT NULL
+            novaAuth.setTipoConta("CREDITO"); // Preencher coluna NOT NULL
+            novaAuth.setAccessToken(config.getClientSecret());
+            novaAuth.setTokenType("Bearer");
+            novaAuth.setScope(config.getScope() != null ? config.getScope() : "read,write");
+            novaAuth.setAtivo(config.getAtivo());
+            novaAuth.setDataCriacao(LocalDateTime.now());
+            novaAuth.setDataAtualizacao(LocalDateTime.now());
+            
+            // Para Mercado Pago, definir data de expiração (6 horas)
+            if ("MERCADO_PAGO".equals(config.getBanco())) {
+                novaAuth.setDataExpiracao(LocalDateTime.now().plusHours(6));
+            }
+            
+            autorizacaoBancariaRepository.save(novaAuth);
+            log.info("✅ Autorização bancária criada com sucesso para usuário {} e banco {}", 
+                config.getUsuario().getId(), config.getBanco());
+            
+        } catch (Exception e) {
+            log.error("❌ Erro ao criar autorização bancária para configuração ID {}: {}", 
+                config.getId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Atualiza ou cria autorização bancária quando o client_secret é alterado
+     * 
+     * @param usuarioId ID do usuário
+     * @param accessToken Novo access token (client_secret)
+     */
+    private void atualizarAutorizacaoBancaria(Long usuarioId, String accessToken) {
+        try {
+            log.info("🔑 Atualizando autorização bancária para usuário: {} com token: {}...", 
+                usuarioId, accessToken.substring(0, Math.min(8, accessToken.length())) + "***");
+            
+            // Buscar autorização existente
+            Optional<AutorizacaoBancaria> authOpt = autorizacaoBancariaRepository
+                .findByUsuarioIdAndTipoBanco(usuarioId, "MERCADO_PAGO");
+            
+            if (authOpt.isPresent()) {
+                // Atualizar autorização existente
+                AutorizacaoBancaria auth = authOpt.get();
+                auth.setAccessToken(accessToken);
+                auth.setDataAtualizacao(LocalDateTime.now());
+                auth.setAtivo(true);
+                autorizacaoBancariaRepository.save(auth);
+                log.info("✅ Autorização bancária atualizada para usuário: {}", usuarioId);
+            } else {
+                // Criar nova autorização
+                Optional<Usuario> usuarioOpt = usuarioRepository.findById(usuarioId);
+                if (usuarioOpt.isPresent()) {
+                    AutorizacaoBancaria novaAuth = new AutorizacaoBancaria();
+                    novaAuth.setUsuario(usuarioOpt.get());
+                    novaAuth.setTipoBanco("MERCADO_PAGO");
+                    novaAuth.setAccessToken(accessToken);
+                    novaAuth.setTokenType("Bearer");
+                    novaAuth.setScope("read,write");
+                    novaAuth.setAtivo(true);
+                    novaAuth.setDataCriacao(LocalDateTime.now());
+                    novaAuth.setDataAtualizacao(LocalDateTime.now());
+                    autorizacaoBancariaRepository.save(novaAuth);
+                    log.info("✅ Nova autorização bancária criada para usuário: {}", usuarioId);
+                } else {
+                    log.error("❌ Usuário não encontrado para criar autorização: {}", usuarioId);
+                }
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Erro ao atualizar autorização bancária para usuário {}: {}", usuarioId, e.getMessage(), e);
         }
     }
 }

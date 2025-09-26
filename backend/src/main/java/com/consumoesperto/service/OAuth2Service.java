@@ -36,6 +36,7 @@ public class OAuth2Service {
     private final UsuarioRepository usuarioRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final RestTemplate restTemplate;
+    private final AutoTokenSyncService autoTokenSyncService;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
@@ -70,7 +71,16 @@ public class OAuth2Service {
             String jwtToken = jwtTokenProvider.generateToken(usuario.getUsername());
             log.info("🎫 Token JWT gerado com sucesso");
 
-            // 4. Construir resposta
+            // 4. Verificar e sincronizar tokens bancários automaticamente
+            try {
+                log.info("🔄 Verificando tokens bancários automaticamente...");
+                autoTokenSyncService.verificarESincronizarTokens(usuario.getId());
+            } catch (Exception e) {
+                log.warn("⚠️ Erro ao verificar tokens bancários: {}", e.getMessage());
+                // Não falhar o login por causa disso
+            }
+
+            // 5. Construir resposta
             return buildAuthResponse(jwtToken, usuario);
 
         } catch (Exception e) {
@@ -160,12 +170,9 @@ public class OAuth2Service {
         usuario.setProvedorAuth(Usuario.ProvedorAuth.GOOGLE);
         usuario.setDataCriacao(LocalDateTime.now());
         usuario.setUltimoAcesso(LocalDateTime.now());
-<<<<<<< HEAD
         
         // Para usuários OAuth2, definir uma senha padrão (será ignorada no login)
         usuario.setPassword("OAUTH2_USER_" + System.currentTimeMillis());
-=======
->>>>>>> origin/main
 
         return usuario;
     }
@@ -181,7 +188,6 @@ public class OAuth2Service {
         usuario.setLocale(googleUserInfo.getLocale());
         usuario.setEmailVerificado(googleUserInfo.getVerified_email());
         usuario.setUltimoAcesso(LocalDateTime.now());
-<<<<<<< HEAD
         
         // Garantir que o provedor de autenticação seja GOOGLE
         usuario.setProvedorAuth(Usuario.ProvedorAuth.GOOGLE);
@@ -190,8 +196,6 @@ public class OAuth2Service {
         if (usuario.getPassword() == null || usuario.getPassword().trim().isEmpty()) {
             usuario.setPassword("OAUTH2_USER_" + System.currentTimeMillis());
         }
-=======
->>>>>>> origin/main
     }
 
     /**

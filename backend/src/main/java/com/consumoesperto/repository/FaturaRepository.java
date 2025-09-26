@@ -34,4 +34,6 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
 
     @Query("SELECT f FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.dataVencimento <= :dataLimite AND f.status = 'VENCIDA'")
     List<Fatura> findVencidasByUsuarioId(@Param("usuarioId") Long usuarioId, @Param("dataLimite") LocalDateTime dataLimite);
+    
+    int deleteByCartaoCreditoUsuarioId(Long usuarioId);
 }

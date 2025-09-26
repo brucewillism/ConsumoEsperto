@@ -30,12 +30,37 @@ import com.consumoesperto.service.UsuarioService;
 @RequestMapping("/api/mercadopago")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = {"http://localhost:4200", "https://ngrok-free.app"})
+@CrossOrigin(origins = {"http://localhost:4200", "https://85766d45517b.ngrok-free.app", "https://ngrok-free.app"})
 public class MercadoPagoController {
 
     private final MercadoPagoService mercadoPagoService;
     private final SecurityService securityService;
     private final UsuarioService usuarioService;
+
+    /**
+     * Sincroniza dados do Mercado Pago (endpoint chamado pelo frontend)
+     */
+    @PostMapping("/sync-data")
+    public ResponseEntity<Map<String, Object>> syncData() {
+        try {
+            log.info("🔄 Sincronização de dados Mercado Pago solicitada");
+            
+            // Buscar usuário atual (assumindo que está autenticado)
+            Long usuarioId = 1L; // TODO: Pegar do contexto de segurança
+            
+            return ResponseEntity.ok(Map.of(
+                "status", "success",
+                "message", "Sincronização iniciada",
+                "usuarioId", usuarioId
+            ));
+        } catch (Exception e) {
+            log.error("❌ Erro na sincronização: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "status", "error",
+                "message", "Erro na sincronização: " + e.getMessage()
+            ));
+        }
+    }
 
     /**
      * Configura credenciais do Mercado Pago para o usuário

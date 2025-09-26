@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -44,7 +45,7 @@ public class PasswordValidator {
     private static final Pattern SPECIAL_CHAR_PATTERN = Pattern.compile("[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]");
     
     // Senhas comuns que devem ser bloqueadas
-    private static final List<String> COMMON_PASSWORDS = List.of(
+    private static final List<String> COMMON_PASSWORDS = Arrays.asList(
         "password", "123456", "12345678", "qwerty", "abc123", "password123",
         "admin", "letmein", "welcome", "monkey", "dragon", "master", "hello",
         "freedom", "whatever", "qazwsx", "trustno1", "jordan", "harley",

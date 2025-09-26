@@ -114,11 +114,40 @@
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 50%;
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
     font-size: 1.25rem;
     color: white;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    flex-shrink: 0;
+    position: relative;
+    
+    i {
+      font-size: 1.25rem !important;
+      line-height: 1 !important;
+      display: block !important;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      vertical-align: middle;
+      font-family: "Font Awesome 6 Free" !important;
+      font-weight: 900 !important;
+    }
+    
+    // Fallback para ícones que não carregam
+    &::before {
+      content: "?";
+      font-size: 1.25rem;
+      color: white;
+      display: none;
+    }
+    
+    // Se o ícone não carregar, mostra o fallback
+    &:empty::before {
+      display: block;
+    }
     
     &.expense-icon {
       background: var(--danger-color);
@@ -237,9 +266,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 0.75rem;
-    font-size: 1.25rem;
-    color: white;
+    min-width: 3rem;
+    min-height: 3rem;
+    flex-shrink: 0;
+    
+    i {
+      font-size: 1.5rem;
+      line-height: 1;
+      display: block;
+    }
   }
   
   .stats-value {
@@ -298,8 +333,16 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
-        font-size: 1rem;
+        min-width: 2.5rem;
+        min-height: 2.5rem;
+        flex-shrink: 0;
+        
+        i {
+          font-size: 1.25rem;
+          line-height: 1;
+          display: block;
+          color: white;
+        }
       }
       
       .transaction-details {
@@ -376,9 +419,16 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 0.75rem;
-      font-size: 1.25rem;
-      color: white;
+      min-width: 2.5rem;
+      min-height: 2.5rem;
+      flex-shrink: 0;
+      
+      i {
+        font-size: 1.25rem;
+        line-height: 1;
+        display: block;
+        color: white;
+      }
     }
     
     .action-label {

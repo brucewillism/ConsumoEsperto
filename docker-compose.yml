@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: http host.docker.internal:8080
+    ports:
+      - "4040:4040"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    restart: unless-stopped
+
+  app:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      - NGROK_URL=http://ngrok:4040
+      - NGROK_AUTO_DETECT=true
+      - JWT_SECRET=${JWT_SECRET}
+      - NUBANK_CLIENT_ID=${NUBANK_CLIENT_ID}
+      - NUBANK_CLIENT_SECRET=${NUBANK_CLIENT_SECRET}
+      - ITAU_CLIENT_ID=${ITAU_CLIENT_ID}
+      - ITAU_CLIENT_SECRET=${ITAU_CLIENT_SECRET}
+      - MERCADOPAGO_CLIENT_ID=${MERCADOPAGO_CLIENT_ID}
+      - MERCADOPAGO_CLIENT_SECRET=${MERCADOPAGO_CLIENT_SECRET}
+      - MERCADOPAGO_USER_ID=${MERCADOPAGO_USER_ID}
+      - INTER_CLIENT_ID=${INTER_CLIENT_ID}
+      - INTER_CLIENT_SECRET=${INTER_CLIENT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+    depends_on:
+      - ngrok
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "4200:4200"
+    environment:
+      - API_URL=http://localhost:8080
+    depends_on:
+      - app
+    restart: unless-stopped

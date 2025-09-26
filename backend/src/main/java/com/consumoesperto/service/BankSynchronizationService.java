@@ -210,6 +210,7 @@ public class BankSynchronizationService {
             case "ITAU":
                 return itauBankService.getBankDetails(autorizacao);
             case "MERCADO_PAGO":
+            case "MERCADOPAGO":
                 return mercadoPagoBankService.getBankDetails(autorizacao);
             case "INTER":
                 return interBankService.getBankDetails(autorizacao);
@@ -427,13 +428,13 @@ public class BankSynchronizationService {
         try {
             switch (bankType.toUpperCase()) {
                 case "ITAU":
-                    return itauBankService.generateAuthUrl("http://localhost:4200/callback", usuarioId.toString());
+                    return itauBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString());
                 case "NUBANK":
-                    return nubankBankService.generateAuthUrl("http://localhost:4200/callback", usuarioId.toString());
+                    return nubankBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString());
                 case "INTER":
-                    return interBankService.generateAuthUrl("http://localhost:4200/callback", usuarioId.toString());
+                    return interBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString());
                 case "MERCADO_PAGO":
-                    return mercadoPagoBankService.generateAuthUrl("http://localhost:4200/callback", usuarioId.toString(), usuarioId);
+                    return mercadoPagoBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString(), usuarioId);
                 default:
                     log.warn("Tipo de banco não suportado: {}", bankType);
                     return null;
@@ -451,13 +452,13 @@ public class BankSynchronizationService {
         try {
             switch (bankType.toUpperCase()) {
                 case "ITAU":
-                    return itauBankService.processOAuthCallback(code, usuarioId.toString(), "http://localhost:4200/callback");
+                    return itauBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback");
                 case "NUBANK":
-                    return nubankBankService.processOAuthCallback(code, usuarioId.toString(), "http://localhost:4200/callback");
+                    return nubankBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback");
                 case "INTER":
-                    return interBankService.processOAuthCallback(code, usuarioId.toString(), "http://localhost:4200/callback");
+                    return interBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback");
                 case "MERCADO_PAGO":
-                    return mercadoPagoBankService.processOAuthCallback(code, usuarioId.toString(), "http://localhost:4200/callback", usuarioId);
+                    return mercadoPagoBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback", usuarioId);
                 default:
                     log.warn("Tipo de banco não suportado: {}", bankType);
                     return Map.of("sucesso", false, "erro", "Tipo de banco não suportado");
@@ -529,7 +530,7 @@ public class BankSynchronizationService {
      */
     public Map<String, Object> getBankBalanceData(AutorizacaoBancaria autorizacao) {
         try {
-            switch (autorizacao.getBanco()) {
+            switch (autorizacao.getBanco().toUpperCase()) {
                 case "ITAU":
                     return itauBankService.getBalanceData(autorizacao);
                 case "NUBANK":
@@ -537,15 +538,24 @@ public class BankSynchronizationService {
                 case "INTER":
                     return interBankService.getBalanceData(autorizacao);
                 case "MERCADO_PAGO":
+                case "MERCADOPAGO":
                     return mercadoPagoBankService.getBalanceData(autorizacao);
                 default:
                     log.warn("Tipo de banco não suportado: {}", autorizacao.getBanco());
-                    return Map.of("saldo", 0.0, "limite", 0.0, "limiteDisponivel", 0.0);
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("saldo", 0.0);
+                    result.put("limite", 0.0);
+                    result.put("limiteDisponivel", 0.0);
+                    return result;
             }
         } catch (Exception e) {
             log.error("Erro ao buscar dados de saldo do banco {}: {}", 
                     autorizacao.getBanco(), e.getMessage());
-            return Map.of("saldo", 0.0, "limite", 0.0, "limiteDisponivel", 0.0);
+            Map<String, Object> result = new HashMap<>();
+            result.put("saldo", 0.0);
+            result.put("limite", 0.0);
+            result.put("limiteDisponivel", 0.0);
+            return result;
         }
     }
 

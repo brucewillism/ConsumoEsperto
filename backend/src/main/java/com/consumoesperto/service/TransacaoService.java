@@ -3,12 +3,14 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Categoria;
+import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.CategoriaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -49,9 +51,8 @@ public class TransacaoService {
      * Este método implementa o fluxo completo de criação de transação:
      * 1. Valida e associa a categoria (se fornecida)
      * 2. Define o tipo de transação (receita ou despesa)
-     * 3. Persiste a transação no banco de dados
-     * 
-     * TODO: Implementar validação de usuário quando o sistema de autenticação estiver completo
+     * 3. Associa a transação ao usuário
+     * 4. Persiste a transação no banco de dados
      * 
      * @param transacaoDTO DTO com os dados da transação a ser criada
      * @param usuarioId ID do usuário que está criando a transação
@@ -75,9 +76,11 @@ public class TransacaoService {
             transacao.setCategoria(categoria);
         }
         
-        // TODO: Implementar validação de usuário
-        // Buscar usuário e associar à transação
-        // transacao.setUsuario(usuarioRepository.findById(usuarioId).orElseThrow());
+        // Cria um usuário temporário com o ID fornecido para associação
+        // Em uma implementação completa, você buscaria o usuário do repositório
+        Usuario usuario = new Usuario();
+        usuario.setId(usuarioId);
+        transacao.setUsuario(usuario);
         
         // Persiste a transação no banco de dados
         Transacao transacaoSalva = transacaoRepository.save(transacao);
@@ -88,25 +91,23 @@ public class TransacaoService {
      * Busca uma transação específica pelo seu ID
      * 
      * Método para recuperar transações específicas por identificador.
-     * Inclui validação de acesso (preparado para implementação).
-     * 
-     * TODO: Implementar verificação de propriedade da transação
+     * Inclui validação de acesso para garantir que apenas o proprietário
+     * da transação possa acessá-la.
      * 
      * @param id ID único da transação a ser buscada
      * @param usuarioId ID do usuário solicitante (para validação de acesso)
      * @return TransacaoDTO com os dados da transação encontrada
-     * @throws RuntimeException se a transação não for encontrada
+     * @throws RuntimeException se a transação não for encontrada ou não pertencer ao usuário
      */
     public TransacaoDTO buscarPorId(Long id, Long usuarioId) {
         // Busca a transação pelo ID ou lança exceção se não encontrar
         Transacao transacao = transacaoRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
         
-        // TODO: Implementar verificação de propriedade da transação
-        // Verificar se a transação pertence ao usuário solicitante
-        // if (!transacao.getUsuario().getId().equals(usuarioId)) {
-        //     throw new RuntimeException("Acesso negado");
-        // }
+        // Verifica se a transação pertence ao usuário solicitante
+        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
+            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+        }
         
         return converterParaDTO(transacao);
     }
@@ -117,17 +118,12 @@ public class TransacaoService {
      * Método usado para exibir o histórico de transações do usuário
      * no dashboard e outras telas do sistema.
      * 
-     * TODO: Implementar filtro por usuário quando o sistema estiver completo
-     * 
      * @param usuarioId ID do usuário cujas transações devem ser listadas
      * @return Lista de TransacaoDTO com todas as transações do usuário
      */
     public List<TransacaoDTO> buscarPorUsuarioId(Long usuarioId) {
-        // TODO: Implementar busca específica por usuário
-        // List<Transacao> transacoes = transacaoRepository.findByUsuarioId(usuarioId);
-        
-        // Por enquanto, retorna todas as transações (implementação temporária)
-        List<Transacao> transacoes = transacaoRepository.findAll();
+        // Busca todas as transações do usuário ordenadas por data (mais recentes primeiro)
+        List<Transacao> transacoes = transacaoRepository.findByUsuarioIdOrderByDataTransacaoDesc(usuarioId);
         return transacoes.stream()
             .map(this::converterParaDTO)
             .collect(Collectors.toList());
@@ -143,24 +139,21 @@ public class TransacaoService {
      * - Data da transação
      * - Categoria associada
      * 
-     * TODO: Implementar verificação de propriedade da transação
-     * 
      * @param id ID da transação a ser atualizada
      * @param transacaoDTO DTO com os novos dados da transação
      * @param usuarioId ID do usuário solicitante (para validação de acesso)
      * @return TransacaoDTO com os dados atualizados
-     * @throws RuntimeException se a transação não for encontrada
+     * @throws RuntimeException se a transação não for encontrada ou não pertencer ao usuário
      */
     public TransacaoDTO atualizarTransacao(Long id, TransacaoDTO transacaoDTO, Long usuarioId) {
         // Verifica se a transação existe antes de tentar atualizar
         Transacao transacao = transacaoRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
         
-        // TODO: Implementar verificação de propriedade da transação
-        // Verificar se a transação pertence ao usuário solicitante
-        // if (!transacao.getUsuario().getId().equals(usuarioId)) {
-        //     throw new RuntimeException("Acesso negado");
-        // }
+        // Verifica se a transação pertence ao usuário solicitante
+        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
+            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+        }
         
         // Atualiza os campos da transação com os novos valores
         transacao.setDescricao(transacaoDTO.getDescricao());
@@ -186,22 +179,19 @@ public class TransacaoService {
      * ATENÇÃO: Esta operação é irreversível e remove todos os dados
      * da transação, incluindo histórico financeiro.
      * 
-     * TODO: Implementar verificação de propriedade da transação
-     * 
      * @param id ID da transação a ser excluída
      * @param usuarioId ID do usuário solicitante (para validação de acesso)
-     * @throws RuntimeException se a transação não for encontrada
+     * @throws RuntimeException se a transação não for encontrada ou não pertencer ao usuário
      */
     public void deletarTransacao(Long id, Long usuarioId) {
         // Verifica se a transação existe antes de tentar excluir
         Transacao transacao = transacaoRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
         
-        // TODO: Implementar verificação de propriedade da transação
-        // Verificar se a transação pertence ao usuário solicitante
-        // if (!transacao.getUsuario().getId().equals(usuarioId)) {
-        //     throw new RuntimeException("Acesso negado");
-        // }
+        // Verifica se a transação pertence ao usuário solicitante
+        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
+            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+        }
         
         // Remove a transação do banco de dados
         transacaoRepository.delete(transacao);
@@ -213,21 +203,14 @@ public class TransacaoService {
      * Método usado para relatórios mensais, trimestrais e anuais.
      * Útil para análise de gastos e receitas por período.
      * 
-     * TODO: Implementar busca específica por usuário quando o sistema estiver completo
-     * 
      * @param usuarioId ID do usuário cujas transações devem ser filtradas
      * @param dataInicio Data de início do período (inclusive)
      * @param dataFim Data de fim do período (exclusive)
      * @return Lista de TransacaoDTO com transações no período especificado
      */
     public List<TransacaoDTO> buscarPorPeriodo(Long usuarioId, LocalDateTime dataInicio, LocalDateTime dataFim) {
-        // TODO: Implementar busca específica por usuário
-        // List<Transacao> transacoes = transacaoRepository.findByUsuarioIdAndDataTransacaoBetween(usuarioId, dataInicio, dataFim);
-        
-        // Por enquanto, filtra todas as transações no período (implementação temporária)
-        List<Transacao> transacoes = transacaoRepository.findAll().stream()
-            .filter(t -> t.getDataTransacao().isAfter(dataInicio) && t.getDataTransacao().isBefore(dataFim))
-            .collect(Collectors.toList());
+        // Busca transações do usuário no período especificado
+        List<Transacao> transacoes = transacaoRepository.findByUsuarioIdAndDataTransacaoBetweenOrderByDataTransacaoDesc(usuarioId, dataInicio, dataFim);
         
         return transacoes.stream()
             .map(this::converterParaDTO)
@@ -240,20 +223,13 @@ public class TransacaoService {
      * Método usado para análise de gastos por categoria (alimentação, transporte, etc.)
      * e para relatórios de despesas organizados por tipo.
      * 
-     * TODO: Implementar busca específica por usuário quando o sistema estiver completo
-     * 
      * @param usuarioId ID do usuário cujas transações devem ser filtradas
      * @param categoriaId ID da categoria para filtrar as transações
      * @return Lista de TransacaoDTO com transações da categoria especificada
      */
     public List<TransacaoDTO> buscarPorCategoria(Long usuarioId, Long categoriaId) {
-        // TODO: Implementar busca específica por usuário
-        // List<Transacao> transacoes = transacaoRepository.findByUsuarioIdAndCategoriaId(usuarioId, categoriaId);
-        
-        // Por enquanto, filtra todas as transações da categoria (implementação temporária)
-        List<Transacao> transacoes = transacaoRepository.findAll().stream()
-            .filter(t -> t.getCategoria() != null && t.getCategoria().getId().equals(categoriaId))
-            .collect(Collectors.toList());
+        // Busca transações do usuário por categoria específica
+        List<Transacao> transacoes = transacaoRepository.findByUsuarioIdAndCategoriaIdOrderByDataTransacaoDesc(usuarioId, categoriaId);
         
         return transacoes.stream()
             .map(this::converterParaDTO)
@@ -266,20 +242,13 @@ public class TransacaoService {
      * Método usado para separar receitas de despesas em relatórios
      * e para cálculos de saldo e fluxo de caixa.
      * 
-     * TODO: Implementar busca específica por usuário quando o sistema estiver completo
-     * 
      * @param usuarioId ID do usuário cujas transações devem ser filtradas
      * @param tipo Tipo de transação (RECEITA ou DESPESA)
      * @return Lista de TransacaoDTO com transações do tipo especificado
      */
     public List<TransacaoDTO> buscarPorTipo(Long usuarioId, Transacao.TipoTransacao tipo) {
-        // TODO: Implementar busca específica por usuário
-        // List<Transacao> transacoes = transacaoRepository.findByUsuarioIdAndTipoTransacao(usuarioId, tipo);
-        
-        // Por enquanto, filtra todas as transações do tipo (implementação temporária)
-        List<Transacao> transacoes = transacaoRepository.findAll().stream()
-            .filter(t -> t.getTipoTransacao() == tipo)
-            .collect(Collectors.toList());
+        // Busca transações do usuário por tipo específico
+        List<Transacao> transacoes = transacaoRepository.findByUsuarioIdAndTipoTransacaoOrderByDataTransacaoDesc(usuarioId, tipo);
         
         return transacoes.stream()
             .map(this::converterParaDTO)
@@ -296,31 +265,29 @@ public class TransacaoService {
      * 
      * Útil para dashboard e relatórios financeiros.
      * 
-     * TODO: Implementar filtro por usuário quando o sistema estiver completo
-     * 
      * @param usuarioId ID do usuário para o qual gerar o resumo
      * @return Map com estatísticas financeiras (totalTransacoes, totalReceitas, totalDespesas)
      */
     public Object obterResumo(Long usuarioId) {
-        // TODO: Implementar filtro por usuário
-        // Por enquanto, calcula resumo de todas as transações (implementação temporária)
-        List<Transacao> todasTransacoes = transacaoRepository.findAll();
+        // Busca todas as transações do usuário
+        List<Transacao> transacoesUsuario = transacaoRepository.findByUsuarioIdOrderByDataTransacaoDesc(usuarioId);
         
         // Cria um mapa com as estatísticas financeiras
         Map<String, Object> resumo = new HashMap<>();
-        resumo.put("totalTransacoes", todasTransacoes.size());
+        resumo.put("totalTransacoes", transacoesUsuario.size());
         
-        // Calcula o total de receitas (transações positivas)
-        resumo.put("totalReceitas", todasTransacoes.stream()
-            .filter(t -> t.getTipoTransacao() == Transacao.TipoTransacao.RECEITA)
-            .mapToDouble(t -> t.getValor().doubleValue())
-            .sum());
+        // Calcula o total de receitas usando consulta otimizada
+        BigDecimal totalReceitas = transacaoRepository.sumValorByUsuarioIdAndTipoTransacao(usuarioId, Transacao.TipoTransacao.RECEITA);
+        resumo.put("totalReceitas", totalReceitas != null ? totalReceitas.doubleValue() : 0.0);
         
-        // Calcula o total de despesas (transações negativas)
-        resumo.put("totalDespesas", todasTransacoes.stream()
-            .filter(t -> t.getTipoTransacao() == Transacao.TipoTransacao.DESPESA)
-            .mapToDouble(t -> t.getValor().doubleValue())
-            .sum());
+        // Calcula o total de despesas usando consulta otimizada
+        BigDecimal totalDespesas = transacaoRepository.sumValorByUsuarioIdAndTipoTransacao(usuarioId, Transacao.TipoTransacao.DESPESA);
+        resumo.put("totalDespesas", totalDespesas != null ? totalDespesas.doubleValue() : 0.0);
+        
+        // Calcula o saldo (receitas - despesas)
+        double saldo = (totalReceitas != null ? totalReceitas.doubleValue() : 0.0) - 
+                      (totalDespesas != null ? totalDespesas.doubleValue() : 0.0);
+        resumo.put("saldo", saldo);
         
         return resumo;
     }
@@ -343,7 +310,11 @@ public class TransacaoService {
         dto.setValor(transacao.getValor());
         
         // Converte o tipo de transação da entidade para o DTO
-        dto.setTipoTransacao(TransacaoDTO.TipoTransacao.valueOf(transacao.getTipoTransacao().name()));
+        if (transacao.getTipoTransacao() != null) {
+            dto.setTipoTransacao(TransacaoDTO.TipoTransacao.valueOf(transacao.getTipoTransacao().name()));
+        } else {
+            dto.setTipoTransacao(TransacaoDTO.TipoTransacao.DESPESA); // Valor padrão
+        }
         dto.setDataTransacao(transacao.getDataTransacao());
         dto.setDataCriacao(transacao.getDataCriacao());
         

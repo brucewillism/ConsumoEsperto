@@ -40,4 +40,8 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     List<Object[]> findByUsuarioIdAndPeriodoGroupByCategoria(@Param("usuarioId") Long usuarioId,
                                                             @Param("dataInicio") LocalDateTime dataInicio,
                                                             @Param("dataFim") LocalDateTime dataFim);
+    
+    List<Transacao> findByUsuarioIdAndDescricaoAndDataTransacaoAndValor(Long usuarioId, String descricao, LocalDateTime dataTransacao, BigDecimal valor);
+    
+    int deleteByUsuarioId(Long usuarioId);
 }

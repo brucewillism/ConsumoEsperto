@@ -1,10 +1,7 @@
 package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.AuthResponse;
-<<<<<<< HEAD
 import com.consumoesperto.dto.GoogleTokenRequest;
-=======
->>>>>>> origin/main
 import com.consumoesperto.service.OAuth2Service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,15 +19,11 @@ import javax.servlet.http.HttpServletRequest;
  * @author ConsumoEsperto Team
  * @version 1.0
  */
-<<<<<<< HEAD
 @RestController
-=======
-// @RestController
->>>>>>> origin/main
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
 public class OAuth2Controller {
 
     private final OAuth2Service oAuth2Service;
@@ -38,7 +31,6 @@ public class OAuth2Controller {
     /**
      * Endpoint para login OAuth2 com Google
      * 
-<<<<<<< HEAD
      * Aceita dados de login Google via body da requisição
      * 
      * @param tokenRequest DTO contendo o token de acesso e informações do usuário
@@ -56,24 +48,6 @@ public class OAuth2Controller {
             }
 
             AuthResponse response = oAuth2Service.processGoogleOAuth2(tokenRequest.getAccessToken());
-=======
-     * @param request Requisição HTTP contendo o token de acesso
-     * @return Resposta de autenticação com JWT e dados do usuário
-     */
-    @PostMapping("/google")
-    public ResponseEntity<AuthResponse> googleLogin(HttpServletRequest request) {
-        try {
-            // Extrair token do header Authorization
-            String authHeader = request.getHeader("Authorization");
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return ResponseEntity.badRequest().build();
-            }
-
-            String accessToken = authHeader.substring(7); // Remove "Bearer "
-            log.info("🔐 Recebida requisição de login Google OAuth2");
-
-            AuthResponse response = oAuth2Service.processGoogleOAuth2(accessToken);
->>>>>>> origin/main
             log.info("✅ Login Google OAuth2 processado com sucesso para: {}", response.getUser().getEmail());
 
             return ResponseEntity.ok(response);
@@ -122,15 +96,11 @@ public class OAuth2Controller {
         
         // TODO: Implementar troca de código por token de acesso
         // Por enquanto, retorna instruções para o frontend
-        String instructions = """
-            Callback OAuth2 recebido com sucesso!
-            
-            Para completar a autenticação, o frontend deve:
-            1. Trocar o código de autorização por um token de acesso
-            2. Enviar o token para /api/auth/google ou /api/auth/google/token
-            
-            Código recebido: %s
-            """.formatted(code);
+        String instructions = "Callback OAuth2 recebido com sucesso!\n\n" +
+            "Para completar a autenticação, o frontend deve:\n" +
+            "1. Trocar o código de autorização por um token de acesso\n" +
+            "2. Enviar o token para /api/auth/google ou /api/auth/google/token\n\n" +
+            "Código recebido: " + code;
         
         return ResponseEntity.ok(instructions);
     }

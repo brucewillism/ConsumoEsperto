@@ -29,7 +29,6 @@ public class BankApiConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-<<<<<<< HEAD
     @NotBlank(message = "Nome da configuração é obrigatório")
     @Column(name = "nome")
     private String nome;
@@ -38,30 +37,12 @@ public class BankApiConfig {
     @Column(name = "tipo_banco")
     private String tipoBanco;
 
+    @NotBlank(message = "Banco é obrigatório")
+    @Column(name = "banco", nullable = false)
+    private String banco;
+
     @NotBlank(message = "URL da API é obrigatória")
     @Column(name = "api_url", length = 500)
-=======
-    // @Column(name = "bank_name", nullable = false)
-    // private String bankName;
-
-    @Column(name = "banco", nullable = false)
-    private String banco; // ITAU, MERCADOPAGO, NUBANK, INTER
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "usuario_id")
-    private Usuario usuario;
-
-    @Column(name = "client_id", nullable = false)
-    private String clientId;
-
-    @Column(name = "client_secret", nullable = false)
-    private String clientSecret;
-
-    // @Column(name = "user_id")
-    // private String userId;
-
-    @Column(name = "api_url", nullable = false)
->>>>>>> origin/main
     private String apiUrl;
 
     @Column(name = "client_id", length = 200)
@@ -76,19 +57,32 @@ public class BankApiConfig {
     @Column(name = "scope")
     private String scope;
 
-<<<<<<< HEAD
+    @Column(name = "auth_url", length = 500)
+    private String authUrl;
+
+    @Column(name = "token_url", length = 500)
+    private String tokenUrl;
+
+    @Column(name = "sandbox")
+    private Boolean sandbox = false;
+
+    @Column(name = "timeout_ms")
+    private Integer timeoutMs = 30000;
+
+    @Column(name = "max_retries")
+    private Integer maxRetries = 3;
+
+    @Column(name = "retry_delay_ms")
+    private Integer retryDelayMs = 1000;
+
+    @Column(name = "user_id", length = 100)
+    private String userId;
+
     @Column(name = "ativo")
     private Boolean ativo = true;
 
     @Column(name = "data_criacao")
     private LocalDateTime dataCriacao;
-=======
-    @Column(name = "sandbox")
-    private Boolean sandbox = false;
-
-    @Column(name = "ativo")
-    private Boolean ativo = true;
->>>>>>> origin/main
 
     @Column(name = "data_atualizacao")
     private LocalDateTime dataAtualizacao;
@@ -102,12 +96,14 @@ public class BankApiConfig {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-<<<<<<< HEAD
     public String getNome() { return nome; }
     public void setNome(String nome) { this.nome = nome; }
 
     public String getTipoBanco() { return tipoBanco; }
     public void setTipoBanco(String tipoBanco) { this.tipoBanco = tipoBanco; }
+
+    public String getBanco() { return banco; }
+    public void setBanco(String banco) { this.banco = banco; }
 
     public String getApiUrl() { return apiUrl; }
     public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
@@ -124,6 +120,27 @@ public class BankApiConfig {
     public String getScope() { return scope; }
     public void setScope(String scope) { this.scope = scope; }
 
+    public String getAuthUrl() { return authUrl; }
+    public void setAuthUrl(String authUrl) { this.authUrl = authUrl; }
+
+    public String getTokenUrl() { return tokenUrl; }
+    public void setTokenUrl(String tokenUrl) { this.tokenUrl = tokenUrl; }
+
+    public Boolean getSandbox() { return sandbox; }
+    public void setSandbox(Boolean sandbox) { this.sandbox = sandbox; }
+
+    public Integer getTimeoutMs() { return timeoutMs; }
+    public void setTimeoutMs(Integer timeoutMs) { this.timeoutMs = timeoutMs; }
+
+    public Integer getMaxRetries() { return maxRetries; }
+    public void setMaxRetries(Integer maxRetries) { this.maxRetries = maxRetries; }
+
+    public Integer getRetryDelayMs() { return retryDelayMs; }
+    public void setRetryDelayMs(Integer retryDelayMs) { this.retryDelayMs = retryDelayMs; }
+
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+
     public Boolean getAtivo() { return ativo; }
     public void setAtivo(Boolean ativo) { this.ativo = ativo; }
 
@@ -137,17 +154,7 @@ public class BankApiConfig {
     public void setUsuario(Usuario usuario) { this.usuario = usuario; }
 
     // Métodos de compatibilidade para código existente
-    public String getBanco() { return tipoBanco; }
-    public void setBanco(String banco) { this.tipoBanco = banco; }
-    
-    public String getAuthUrl() { return apiUrl; }
-    public void setAuthUrl(String authUrl) { this.apiUrl = authUrl; }
-    
-    public String getTokenUrl() { return apiUrl; }
-    public void setTokenUrl(String tokenUrl) { this.apiUrl = tokenUrl; }
-    
-    public String getUserId() { return null; } // Campo removido, retorna null para compatibilidade
-    public void setUserId(String userId) { /* Campo removido */ }
+    // (Removidos pois agora são campos reais)
     
     // Builder pattern para compatibilidade
     public static BankApiConfigBuilder builder() {
@@ -160,55 +167,29 @@ public class BankApiConfig {
         public BankApiConfigBuilder id(Long id) { config.setId(id); return this; }
         public BankApiConfigBuilder nome(String nome) { config.setNome(nome); return this; }
         public BankApiConfigBuilder tipoBanco(String tipoBanco) { config.setTipoBanco(tipoBanco); return this; }
-        public BankApiConfigBuilder banco(String banco) { config.setTipoBanco(banco); return this; } // Método de compatibilidade
+        public BankApiConfigBuilder banco(String banco) { config.setBanco(banco); return this; }
         public BankApiConfigBuilder apiUrl(String apiUrl) { config.setApiUrl(apiUrl); return this; }
-        public BankApiConfigBuilder authUrl(String authUrl) { config.setApiUrl(authUrl); return this; } // Método de compatibilidade
+        public BankApiConfigBuilder authUrl(String authUrl) { config.setAuthUrl(authUrl); return this; }
         public BankApiConfigBuilder clientId(String clientId) { config.setClientId(clientId); return this; }
         public BankApiConfigBuilder clientSecret(String clientSecret) { config.setClientSecret(clientSecret); return this; }
         public BankApiConfigBuilder redirectUri(String redirectUri) { config.setRedirectUri(redirectUri); return this; }
-        public BankApiConfigBuilder tokenUrl(String tokenUrl) { config.setApiUrl(tokenUrl); return this; } // Método de compatibilidade
+        public BankApiConfigBuilder tokenUrl(String tokenUrl) { config.setTokenUrl(tokenUrl); return this; }
         public BankApiConfigBuilder scope(String scope) { config.setScope(scope); return this; }
         public BankApiConfigBuilder ativo(Boolean ativo) { config.setAtivo(ativo); return this; }
-        public BankApiConfigBuilder sandbox(Boolean sandbox) { /* Campo removido, ignora */ return this; } // Método de compatibilidade
+        public BankApiConfigBuilder sandbox(Boolean sandbox) { config.setSandbox(sandbox); return this; }
         public BankApiConfigBuilder dataCriacao(LocalDateTime dataCriacao) { config.setDataCriacao(dataCriacao); return this; }
         public BankApiConfigBuilder dataAtualizacao(LocalDateTime dataAtualizacao) { config.setDataAtualizacao(dataAtualizacao); return this; }
         public BankApiConfigBuilder usuario(Usuario usuario) { config.setUsuario(usuario); return this; }
-        public BankApiConfigBuilder userId(String userId) { /* Campo removido, ignora */ return this; } // Método de compatibilidade
-        public BankApiConfigBuilder timeoutMs(Integer timeoutMs) { /* Campo removido, ignora */ return this; } // Método de compatibilidade
-        public BankApiConfigBuilder maxRetries(Integer maxRetries) { /* Campo removido, ignora */ return this; } // Método de compatibilidade
-        public BankApiConfigBuilder retryDelayMs(Integer retryDelayMs) { /* Campo removido, ignora */ return this; } // Método de compatibilidade
+        public BankApiConfigBuilder userId(String userId) { config.setUserId(userId); return this; }
+        public BankApiConfigBuilder timeoutMs(Integer timeoutMs) { config.setTimeoutMs(timeoutMs); return this; }
+        public BankApiConfigBuilder maxRetries(Integer maxRetries) { config.setMaxRetries(maxRetries); return this; }
+        public BankApiConfigBuilder retryDelayMs(Integer retryDelayMs) { config.setRetryDelayMs(retryDelayMs); return this; }
         
         public BankApiConfig build() { return config; }
     }
     
     // Métodos de compatibilidade para campos removidos
-    public Boolean getSandbox() { return false; } // Campo removido, retorna false para compatibilidade
-    public void setSandbox(Boolean sandbox) { /* Campo removido */ }
-    
-    public Integer getTimeoutMs() { return 30000; } // Campo removido, retorna valor padrão para compatibilidade
-    public void setTimeoutMs(Integer timeoutMs) { /* Campo removido */ }
-    
-    public Integer getMaxRetries() { return 3; } // Campo removido, retorna valor padrão para compatibilidade
-    public void setMaxRetries(Integer maxRetries) { /* Campo removido */ }
-    
-    public Integer getRetryDelayMs() { return 1000; } // Campo removido, retorna valor padrão para compatibilidade
-    public void setRetryDelayMs(Integer retryDelayMs) { /* Campo removido */ }
-=======
-    @Column(name = "data_criacao")
-    private LocalDateTime dataCriacao;
-
-    @Column(name = "data_atualizacao")
-    private LocalDateTime dataAtualizacao;
-
-    // @Column(name = "last_test_at")
-    // private LocalDateTime lastTestAt;
-
-    // @Column(name = "last_test_status")
-    // private String lastTestStatus; // SUCCESS, FAILED, NOT_TESTED
-
-    // @Column(name = "last_test_message")
-    // private String lastTestMessage;
->>>>>>> origin/main
+    // (Removidos pois agora são campos reais)
 
     @PrePersist
     protected void onCreate() {

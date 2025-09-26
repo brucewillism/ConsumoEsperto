@@ -19,11 +19,7 @@ import org.springframework.context.annotation.PropertySource;
 @SpringBootApplication
 @EntityScan("com.consumoesperto.model") // Define onde estão as entidades JPA
 @EnableJpaRepositories("com.consumoesperto.repository") // Habilita os repositórios Spring Data
-<<<<<<< HEAD
 
-=======
-@PropertySource({"classpath:mercadopago-config.properties"}) // Carrega configurações do Mercado Pago
->>>>>>> origin/main
 public class ConsumoEspertoApplication {
 
     /**

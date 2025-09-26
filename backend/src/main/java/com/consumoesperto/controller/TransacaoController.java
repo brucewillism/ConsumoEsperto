@@ -36,7 +36,7 @@ import java.util.List;
 @RequestMapping("/api/transacoes") // Base path para endpoints de transações
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Tag(name = "Transações", description = "Endpoints para gestão de transações financeiras")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
 public class TransacaoController {
 
     // Serviço responsável pela lógica de negócio das transações

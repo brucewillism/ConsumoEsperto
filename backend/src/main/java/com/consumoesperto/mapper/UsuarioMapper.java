@@ -1,5 +1,7 @@
 package com.consumoesperto.mapper;
 
+import com.consumoesperto.dto.UsuarioDTO;
+import com.consumoesperto.model.Usuario;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -15,9 +17,9 @@ public interface UsuarioMapper {
     /**
      * Converte Usuario para UsuarioDTO
      */
-    @Mapping(target = "senha", ignore = true) // Não mapeia a senha por segurança
+    @Mapping(target = "password", ignore = true) // Não mapeia a senha por segurança
     @Mapping(target = "dataCriacao", source = "dataCriacao")
-    @Mapping(target = "dataAtualizacao", source = "dataAtualizacao")
+    @Mapping(target = "ultimoAcesso", source = "ultimoAcesso")
     UsuarioDTO toDTO(Usuario usuario);
 
     /**
@@ -25,7 +27,13 @@ public interface UsuarioMapper {
      */
     @Mapping(target = "id", ignore = true) // ID é gerado automaticamente
     @Mapping(target = "dataCriacao", ignore = true) // Data de criação é automática
-    @Mapping(target = "dataAtualizacao", ignore = true) // Data de atualização é automática
+    @Mapping(target = "ultimoAcesso", ignore = true) // Data de último acesso é automática
+    @Mapping(target = "googleId", ignore = true) // Google ID é gerenciado separadamente
+    @Mapping(target = "transacoes", ignore = true) // Relacionamentos são gerenciados separadamente
+    @Mapping(target = "categorias", ignore = true)
+    @Mapping(target = "cartoesCredito", ignore = true)
+    @Mapping(target = "bankApiConfigs", ignore = true)
+    @Mapping(target = "comprasParceladas", ignore = true)
     Usuario toEntity(UsuarioDTO usuarioDTO);
 
     /**
@@ -33,7 +41,13 @@ public interface UsuarioMapper {
      */
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "dataCriacao", ignore = true)
-    @Mapping(target = "dataAtualizacao", ignore = true)
+    @Mapping(target = "ultimoAcesso", ignore = true)
+    @Mapping(target = "googleId", ignore = true)
+    @Mapping(target = "transacoes", ignore = true)
+    @Mapping(target = "categorias", ignore = true)
+    @Mapping(target = "cartoesCredito", ignore = true)
+    @Mapping(target = "bankApiConfigs", ignore = true)
+    @Mapping(target = "comprasParceladas", ignore = true)
     void updateEntity(@MappingTarget Usuario usuario, UsuarioDTO usuarioDTO);
 
     /**
@@ -45,54 +59,4 @@ public interface UsuarioMapper {
      * Converte lista de UsuarioDTO para lista de Usuario
      */
     List<Usuario> toEntityList(List<UsuarioDTO> usuarioDTOs);
-
-    // Classes de exemplo (seriam substituídas pelas classes reais)
-    class Usuario {
-        private Long id;
-        private String nome;
-        private String email;
-        private String senha;
-        private String dataCriacao;
-        private String dataAtualizacao;
-        private Boolean ativo;
-
-        // Getters e Setters
-        public Long getId() { return id; }
-        public void setId(Long id) { this.id = id; }
-        public String getNome() { return nome; }
-        public void setNome(String nome) { this.nome = nome; }
-        public String getEmail() { return email; }
-        public void setEmail(String email) { this.email = email; }
-        public String getSenha() { return senha; }
-        public void setSenha(String senha) { this.senha = senha; }
-        public String getDataCriacao() { return dataCriacao; }
-        public void setDataCriacao(String dataCriacao) { this.dataCriacao = dataCriacao; }
-        public String getDataAtualizacao() { return dataAtualizacao; }
-        public void setDataAtualizacao(String dataAtualizacao) { this.dataAtualizacao = dataAtualizacao; }
-        public Boolean getAtivo() { return ativo; }
-        public void setAtivo(Boolean ativo) { this.ativo = ativo; }
-    }
-
-    class UsuarioDTO {
-        private String nome;
-        private String email;
-        private String senha;
-        private String dataCriacao;
-        private String dataAtualizacao;
-        private Boolean ativo;
-
-        // Getters e Setters
-        public String getNome() { return nome; }
-        public void setNome(String nome) { this.nome = nome; }
-        public String getEmail() { return email; }
-        public void setEmail(String email) { this.email = email; }
-        public String getSenha() { return senha; }
-        public void setSenha(String senha) { this.senha = senha; }
-        public String getDataCriacao() { return dataCriacao; }
-        public void setDataCriacao(String dataCriacao) { this.dataCriacao = dataCriacao; }
-        public String getDataAtualizacao() { return dataAtualizacao; }
-        public void setDataAtualizacao(String dataAtualizacao) { this.dataAtualizacao = dataAtualizacao; }
-        public Boolean getAtivo() { return ativo; }
-        public void setAtivo(Boolean ativo) { this.ativo = ativo; }
-    }
 }

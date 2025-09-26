@@ -32,7 +32,7 @@
         </div>
         <div class="card-content">
           <h3>Limite Total</h3>
-          <p class="valor">{{ formatarMoeda(bankApiService.getTotalCreditLimit()) }}</p>
+          <p class="valor">{{ formatarMoeda(totalCreditLimit) }}</p>
           <small>{{ cartoes.length }} cartão{{ cartoes.length !== 1 ? 'es' : '' }}</small>
         </div>
       </mat-card-content>
@@ -45,7 +45,7 @@
         </div>
         <div class="card-content">
           <h3>Limite Disponível</h3>
-          <p class="valor positivo">{{ formatarMoeda(bankApiService.getTotalAvailableCredit()) }}</p>
+          <p class="valor positivo">{{ formatarMoeda(totalAvailableCredit) }}</p>
           <small>Disponível para uso</small>
         </div>
       </mat-card-content>
@@ -58,8 +58,8 @@
         </div>
         <div class="card-content">
           <h3>Limite Utilizado</h3>
-          <p class="valor negativo">{{ formatarMoeda(bankApiService.getTotalCreditLimit() - bankApiService.getTotalAvailableCredit()) }}</p>
-          <small>{{ ((bankApiService.getTotalCreditLimit() - bankApiService.getTotalAvailableCredit()) / bankApiService.getTotalCreditLimit() * 100) | number:'1.1-1' }}% do total</small>
+          <p class="valor negativo">{{ formatarMoeda(totalCreditLimit - totalAvailableCredit) }}</p>
+          <small>{{ ((totalCreditLimit - totalAvailableCredit) / (totalCreditLimit || 1) * 100) | number:'1.1-1' }}% do total</small>
         </div>
       </mat-card-content>
     </mat-card>
@@ -71,7 +71,7 @@
         </div>
         <div class="card-content">
           <h3>Saldo Contas</h3>
-          <p class="valor">{{ formatarMoeda(bankApiService.getTotalBalance()) }}</p>
+          <p class="valor">{{ formatarMoeda(totalBalance) }}</p>
           <small>{{ contas.length }} conta{{ contas.length !== 1 ? 's' : '' }}</small>
         </div>
       </mat-card-content>

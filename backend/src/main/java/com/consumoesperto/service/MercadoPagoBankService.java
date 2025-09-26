@@ -5,7 +5,10 @@ import com.consumoesperto.model.AutorizacaoBancaria;
 import com.consumoesperto.model.BankApiConfig;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
+import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.BankApiConfigRepository;
+import com.consumoesperto.repository.AutorizacaoBancariaRepository;
+import com.consumoesperto.repository.UsuarioRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.*;
@@ -21,16 +24,21 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
-@ConditionalOnProperty(name = "bank.api.mercadopago.client-id", havingValue = "4223603750190943", matchIfMissing = true)
 @Slf4j
 public class MercadoPagoBankService {
 
     private final RestTemplate restTemplate;
     private final BankApiConfigRepository bankApiConfigRepository;
+    private final AutorizacaoBancariaRepository autorizacaoBancariaRepository;
+    private final UsuarioRepository usuarioRepository;
 
-    public MercadoPagoBankService(RestTemplate restTemplate, BankApiConfigRepository bankApiConfigRepository) {
+    public MercadoPagoBankService(RestTemplate restTemplate, BankApiConfigRepository bankApiConfigRepository, 
+                                 AutorizacaoBancariaRepository autorizacaoBancariaRepository, 
+                                 UsuarioRepository usuarioRepository) {
         this.restTemplate = restTemplate;
         this.bankApiConfigRepository = bankApiConfigRepository;
+        this.autorizacaoBancariaRepository = autorizacaoBancariaRepository;
+        this.usuarioRepository = usuarioRepository;
     }
 
     /**
@@ -104,6 +112,10 @@ public class MercadoPagoBankService {
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> tokenData = response.getBody();
                 log.info("Token obtido com sucesso para Mercado Pago - Usuário: {}", userId);
+                
+                // Salvar autorização bancária na tabela
+                salvarAutorizacaoBancaria(userId, tokenData);
+                
                 return tokenData;
             } else {
                 log.error("Erro ao obter token do Mercado Pago - Usuário: {} - Status: {}", userId, response.getStatusCode());
@@ -738,6 +750,81 @@ public class MercadoPagoBankService {
             return "CONTAS";
         } else {
             return "OUTROS";
+        }
+    }
+
+    /**
+     * Salva autorização bancária na tabela autorizacoes_bancarias
+     */
+    private void salvarAutorizacaoBancaria(Long userId, Map<String, Object> tokenData) {
+        try {
+            log.info("💾 Salvando autorização bancária para usuário: {}", userId);
+            
+            // Buscar usuário
+            Optional<Usuario> usuarioOpt = usuarioRepository.findById(userId);
+            if (usuarioOpt.isEmpty()) {
+                log.error("❌ Usuário não encontrado: {}", userId);
+                return;
+            }
+            
+            // Extrair dados do token
+            String accessToken = (String) tokenData.get("access_token");
+            String tokenType = (String) tokenData.get("token_type");
+            String scope = (String) tokenData.get("scope");
+            Integer expiresIn = (Integer) tokenData.get("expires_in");
+            
+            if (accessToken == null || accessToken.trim().isEmpty()) {
+                log.error("❌ Access token não encontrado nos dados de resposta");
+                return;
+            }
+            
+            // Calcular data de expiração
+            LocalDateTime dataExpiracao = LocalDateTime.now();
+            if (expiresIn != null) {
+                dataExpiracao = dataExpiracao.plusSeconds(expiresIn);
+            } else {
+                // Default: 6 horas
+                dataExpiracao = dataExpiracao.plusHours(6);
+            }
+            
+            // Buscar autorização existente
+            Optional<AutorizacaoBancaria> authExistente = autorizacaoBancariaRepository
+                .findByUsuarioIdAndTipoBanco(userId, "MERCADO_PAGO");
+            
+            AutorizacaoBancaria autorizacao;
+            if (authExistente.isPresent()) {
+                // Atualizar autorização existente
+                autorizacao = authExistente.get();
+                autorizacao.setAccessToken(accessToken);
+                autorizacao.setTokenType(tokenType != null ? tokenType : "Bearer");
+                autorizacao.setScope(scope);
+                autorizacao.setDataAtualizacao(LocalDateTime.now());
+                autorizacao.setDataExpiracao(dataExpiracao);
+                autorizacao.setAtivo(true);
+                log.info("🔄 Atualizando autorização existente para usuário: {}", userId);
+            } else {
+                // Criar nova autorização
+                autorizacao = new AutorizacaoBancaria();
+                autorizacao.setUsuario(usuarioOpt.get());
+                autorizacao.setTipoBanco("MERCADO_PAGO");
+                autorizacao.setBanco("Mercado Pago");
+                autorizacao.setTipoConta("API");
+                autorizacao.setAccessToken(accessToken);
+                autorizacao.setTokenType(tokenType != null ? tokenType : "Bearer");
+                autorizacao.setScope(scope);
+                autorizacao.setDataCriacao(LocalDateTime.now());
+                autorizacao.setDataAtualizacao(LocalDateTime.now());
+                autorizacao.setDataExpiracao(dataExpiracao);
+                autorizacao.setAtivo(true);
+                log.info("✨ Criando nova autorização para usuário: {}", userId);
+            }
+            
+            // Salvar no banco
+            autorizacaoBancariaRepository.save(autorizacao);
+            log.info("✅ Autorização bancária salva com sucesso para usuário: {}", userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Erro ao salvar autorização bancária para usuário {}: {}", userId, e.getMessage(), e);
         }
     }
 }

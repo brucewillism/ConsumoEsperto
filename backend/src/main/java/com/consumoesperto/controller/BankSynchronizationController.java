@@ -43,7 +43,7 @@ import com.consumoesperto.service.BankApiService;
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Slf4j // Lombok: fornece logger automático para a classe
 @Tag(name = "Sincronização Bancária", description = "Endpoints para sincronização de dados bancários")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"}) // Permite CORS de qualquer origem
 public class BankSynchronizationController {
 
     // Serviço responsável pela sincronização bancária

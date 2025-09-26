@@ -39,7 +39,7 @@ import java.util.List;
 @RequestMapping("/api/compras-parceladas") // Base path para endpoints de compras parceladas
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Tag(name = "Compras Parceladas", description = "Endpoints para gestão de compras parceladas")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"}) // Permite CORS de qualquer origem
 public class CompraParceladaController {
 
     // Serviço responsável pela lógica de negócio das compras parceladas

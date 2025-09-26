@@ -29,10 +29,16 @@ public class AutorizacaoBancaria {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-<<<<<<< HEAD
     @NotBlank(message = "Tipo do banco é obrigatório")
     @Column(name = "tipo_banco")
     private String tipoBanco;
+
+    @NotBlank(message = "Banco é obrigatório")
+    @Column(name = "banco", nullable = false)
+    private String banco;
+
+    @Column(name = "tipo_conta")
+    private String tipoConta;
 
     @NotBlank(message = "Token de acesso é obrigatório")
     @Column(name = "access_token", length = 2000)
@@ -55,74 +61,6 @@ public class AutorizacaoBancaria {
     private Boolean ativo = true;
 
     @Column(name = "data_criacao")
-=======
-    /**
-     * Usuário que concedeu a autorização
-     * Relacionamento muitos-para-um: um usuário pode ter várias autorizações
-     */
-    @NotNull(message = "Usuário é obrigatório")
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "usuario_id", nullable = false)
-    private Usuario usuario;
-
-    /**
-     * Nome do banco para o qual a autorização foi concedida
-     */
-    @NotBlank(message = "Banco é obrigatório")
-    @Column(name = "banco", nullable = false, length = 100)
-    private String banco;
-
-    /**
-     * Tipo de conta bancária
-     */
-    @NotBlank(message = "Tipo de conta é obrigatório")
-    @Column(name = "tipo_conta", nullable = false, length = 50)
-    private String tipoConta;
-
-    /**
-     * Número da conta bancária
-     */
-    @Column(name = "numero_conta", length = 50)
-    private String numeroConta;
-
-    /**
-     * Agência bancária
-     */
-    @Column(name = "agencia", length = 20)
-    private String agencia;
-
-    /**
-     * Token de acesso OAuth2 para consultas à API do banco
-     * Deve ser criptografado antes de ser armazenado por questões de segurança
-     * Não pode ser nulo e deve ter tamanho adequado para tokens OAuth2
-     */
-    @Column(name = "token_acesso", columnDefinition = "TEXT")
-    private String accessToken;
-
-    /**
-     * Refresh token OAuth2 para renovação automática do access token
-     */
-    @Column(name = "refresh_token", columnDefinition = "TEXT")
-    private String refreshToken;
-
-    /**
-     * Data e hora de expiração do token de acesso
-     */
-    @Column(name = "data_expiracao")
-    private LocalDateTime dataExpiracao;
-
-    /**
-     * Indica se a autorização está ativa para uso
-     */
-    @Column(name = "ativo", nullable = false)
-    private Boolean ativo = true;
-
-    /**
-     * Data e hora de criação da autorização
-     * Preenchida automaticamente quando a autorização é criada
-     */
-    @Column(name = "data_criacao", nullable = false)
->>>>>>> origin/main
     private LocalDateTime dataCriacao;
 
     @Column(name = "data_atualizacao")
@@ -139,6 +77,12 @@ public class AutorizacaoBancaria {
 
     public String getTipoBanco() { return tipoBanco; }
     public void setTipoBanco(String tipoBanco) { this.tipoBanco = tipoBanco; }
+
+    public String getBanco() { return banco; }
+    public void setBanco(String banco) { this.banco = banco; }
+
+    public String getTipoConta() { return tipoConta; }
+    public void setTipoConta(String tipoConta) { this.tipoConta = tipoConta; }
 
     public String getAccessToken() { return accessToken; }
     public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
@@ -168,8 +112,7 @@ public class AutorizacaoBancaria {
     public void setUsuario(Usuario usuario) { this.usuario = usuario; }
 
     // Métodos de compatibilidade para código existente
-    public String getBanco() { return tipoBanco; }
-    public void setBanco(String banco) { this.tipoBanco = banco; } // Método de compatibilidade
+    public String getBancoName() { return banco; }
     
     public boolean isTokenValido() {
         return ativo && dataExpiracao != null && dataExpiracao.isAfter(LocalDateTime.now());
@@ -193,31 +136,12 @@ public class AutorizacaoBancaria {
     }
 
     /**
-<<<<<<< HEAD
-=======
-     * Verifica se o token de acesso ainda é válido
-     * 
-     * @return true se o token não expirou, false caso contrário
-     */
-    public boolean isTokenValido() {
-        return dataExpiracao != null && 
-               LocalDateTime.now().isBefore(dataExpiracao) && 
-               ativo;
-    }
-
-    /**
->>>>>>> origin/main
      * Verifica se o token de acesso expirou
      * 
      * @return true se o token expirou, false caso contrário
      */
     public boolean isTokenExpirado() {
-<<<<<<< HEAD
         return dataExpiracao != null && LocalDateTime.now().isAfter(dataExpiracao);
-=======
-        return dataExpiracao != null && 
-               LocalDateTime.now().isAfter(dataExpiracao);
->>>>>>> origin/main
     }
 
     /**
@@ -225,19 +149,9 @@ public class AutorizacaoBancaria {
      * 
      * @return true se o token expira em breve, false caso contrário
      */
-<<<<<<< HEAD
     public boolean isTokenExpirandoEmBreve() {
         if (dataExpiracao == null) return false;
         LocalDateTime umaHoraAntes = dataExpiracao.minusHours(1);
         return LocalDateTime.now().isAfter(umaHoraAntes);
     }
-=======
-    public boolean precisaRenovacao() {
-        if (dataExpiracao == null) return false;
-        LocalDateTime umaHoraAntes = dataExpiracao.minusHours(1);
-        return LocalDateTime.now().isAfter(umaHoraAntes) && ativo;
-    }
-
-
->>>>>>> origin/main
 }

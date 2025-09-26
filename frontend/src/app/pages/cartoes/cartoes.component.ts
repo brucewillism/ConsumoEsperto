@@ -45,6 +45,11 @@ export class CartoesComponent implements OnInit {
   contas: any[] = [];
   cartoes: CreditCard[] = [];
   
+  // Summary properties
+  totalCreditLimit: number = 0;
+  totalAvailableCredit: number = 0;
+  totalBalance: number = 0;
+  
   // UI properties
   loading = false;
   error: string | null = null;
@@ -152,6 +157,24 @@ export class CartoesComponent implements OnInit {
         console.error('[CartoesComponent] Status do erro:', err.status);
         console.error('[CartoesComponent] Mensagem do erro:', err.message);
         this.error = 'Erro ao carregar faturas';
+      }
+    });
+
+    // Carrega totais consolidados
+    console.log('[CartoesComponent] Carregando totais consolidados...');
+    this.bankApiService.getConsolidatedStats().subscribe({
+      next: (stats) => {
+        console.log('[CartoesComponent] Estatísticas consolidadas carregadas:', stats);
+        this.totalCreditLimit = stats.totalCreditLimit;
+        this.totalAvailableCredit = stats.totalAvailableCredit;
+        this.totalBalance = stats.totalBalance;
+      },
+      error: (err) => {
+        console.error('[CartoesComponent] Erro ao carregar estatísticas:', err);
+        // Fallback para valores locais
+        this.totalCreditLimit = this.getTotalCreditLimit();
+        this.totalAvailableCredit = this.getTotalAvailableCredit();
+        this.totalBalance = 0; // Não há implementação local para saldo
       },
       complete: () => {
         console.log('[CartoesComponent] Carregamento de dados concluído');
@@ -339,7 +362,7 @@ export class CartoesComponent implements OnInit {
    * Obtém limite utilizado
    */
   getLimiteUtilizado(cartao: any): number {
-    return cartao.limit - cartao.availableLimit;
+    return cartao.limit - cartao.available;
   }
 
   /**
@@ -354,7 +377,7 @@ export class CartoesComponent implements OnInit {
    */
   getPercentualUso(cartao: any): number {
     if (cartao.limit <= 0) return 0;
-    return ((cartao.limit - cartao.availableLimit) / cartao.limit) * 100;
+    return ((cartao.limit - cartao.available) / cartao.limit) * 100;
   }
 
   /**

@@ -12,7 +12,6 @@ import java.util.Optional;
  */
 @Repository
 public interface BankApiConfigRepository extends JpaRepository<BankApiConfig, Long> {
-<<<<<<< HEAD
     Optional<BankApiConfig> findByTipoBanco(String tipoBanco);
     List<BankApiConfig> findByAtivoTrue();
     boolean existsByTipoBanco(String tipoBanco);
@@ -35,15 +34,4 @@ public interface BankApiConfigRepository extends JpaRepository<BankApiConfig, Lo
     default boolean existsByUsuarioIdAndBanco(Long usuarioId, String banco) {
         return existsByUsuarioIdAndTipoBanco(usuarioId, banco);
     }
-=======
-    Optional<BankApiConfig> findByBanco(String banco);
-    List<BankApiConfig> findByAtivoTrue();
-    boolean existsByBanco(String banco);
-    
-    // Novos métodos para configurações por usuário
-    Optional<BankApiConfig> findByUsuarioIdAndBanco(Long usuarioId, String banco);
-    List<BankApiConfig> findByUsuarioId(Long usuarioId);
-    List<BankApiConfig> findByUsuarioIdAndAtivoTrue(Long usuarioId);
-    boolean existsByUsuarioIdAndBanco(Long usuarioId, String banco);
->>>>>>> origin/main
 }

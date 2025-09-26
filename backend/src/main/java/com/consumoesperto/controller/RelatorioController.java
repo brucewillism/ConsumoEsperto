@@ -33,7 +33,7 @@ import java.util.Map;
 @RequestMapping("/api/relatorios") // Base path para endpoints de relatórios
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Tag(name = "Relatórios", description = "Endpoints para geração de relatórios financeiros")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"}) // Permite CORS de qualquer origem
 public class RelatorioController {
 
     // Serviço responsável pela geração de relatórios financeiros

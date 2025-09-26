@@ -41,7 +41,7 @@ public class UsuarioController {
             log.info("🔍 Buscando perfil do usuário autenticado");
             
             Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
-            if (usuarioOpt.isEmpty()) {
+            if (!usuarioOpt.isPresent()) {
                 log.warn("❌ Usuário não autenticado");
                 return ResponseEntity.status(401).build();
             }
@@ -78,7 +78,7 @@ public class UsuarioController {
             log.info("🔄 Atualizando perfil do usuário autenticado");
             
             Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
-            if (usuarioOpt.isEmpty()) {
+            if (!usuarioOpt.isPresent()) {
                 log.warn("❌ Usuário não autenticado");
                 return ResponseEntity.status(401).build();
             }

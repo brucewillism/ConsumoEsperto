@@ -34,7 +34,7 @@ import java.util.List;
 @RequestMapping("/api/cartoes-credito") // Base path para endpoints de cartões de crédito
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Tag(name = "Cartões de Crédito", description = "Endpoints para gestão de cartões de crédito")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"}) // Permite CORS de qualquer origem
 public class CartaoCreditoController {
 
     // Serviço responsável pela lógica de negócio dos cartões de crédito

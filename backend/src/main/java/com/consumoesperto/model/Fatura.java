@@ -50,6 +50,14 @@ public class Fatura {
     private BigDecimal valorTotal;
 
     /**
+     * Valor da fatura (campo obrigatório no banco)
+     * Usado para compatibilidade com a estrutura do banco
+     */
+    @NotNull(message = "Valor da fatura é obrigatório")
+    @Column(name = "valor_fatura")
+    private BigDecimal valorFatura;
+
+    /**
      * Valor mínimo para pagamento
      * Deve ser maior que zero e menor ou igual ao valor total
      */
@@ -170,8 +178,8 @@ public class Fatura {
     public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
 
     // Métodos de compatibilidade para código existente
-    public BigDecimal getValorFatura() { return valorTotal; }
-    public void setValorFatura(BigDecimal valorFatura) { this.valorTotal = valorFatura; }
+    public BigDecimal getValorFatura() { return valorFatura; }
+    public void setValorFatura(BigDecimal valorFatura) { this.valorFatura = valorFatura; }
     
     public StatusFatura getStatusFatura() { return status; }
     public void setStatusFatura(StatusFatura statusFatura) { this.status = statusFatura; }

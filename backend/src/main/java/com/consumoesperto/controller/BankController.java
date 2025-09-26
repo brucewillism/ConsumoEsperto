@@ -4,6 +4,7 @@ import com.consumoesperto.model.AutorizacaoBancaria;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.dto.CartaoCreditoDTO;
+import com.consumoesperto.dto.CreditCardDTO;
 import com.consumoesperto.dto.FaturaDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.AutorizacaoBancariaService;
@@ -44,7 +45,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Operações Bancárias", description = "Endpoints para operações bancárias gerais")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
 public class BankController {
 
     private final AutorizacaoBancariaService autorizacaoBancariaService;
@@ -120,9 +121,7 @@ public class BankController {
         try {
             String bankType = request.get("bankType");
             if (bankType == null || bankType.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "erro", "Tipo de banco é obrigatório"
-                ));
+                return ResponseEntity.badRequest().body(Map.of("erro", "Tipo de banco é obrigatório"));
             }
             
             // Verifica se o banco já está conectado
@@ -363,13 +362,13 @@ public class BankController {
      */
     @GetMapping("/credit-cards")
     @Operation(summary = "Obter cartões de crédito de todos os bancos", description = "Retorna todos os cartões de crédito de todos os bancos conectados")
-    public ResponseEntity<List<CartaoCreditoDTO>> getCreditCards(
+    public ResponseEntity<List<CreditCardDTO>> getCreditCards(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
         try {
             log.info("🔍 Buscando cartões para usuário: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
             
-            List<CartaoCreditoDTO> cartoesReais = new ArrayList<>();
+            List<CreditCardDTO> cartoesReais = new ArrayList<>();
             
             // 1. Busca cartões do Mercado Pago (se configurado)
             try {
@@ -377,15 +376,15 @@ public class BankController {
                 List<com.consumoesperto.dto.MercadoPagoCartaoDTO> cartoesMP = mercadoPagoService.buscarCartoes(currentUser.getId());
                 
                 for (com.consumoesperto.dto.MercadoPagoCartaoDTO cartaoMP : cartoesMP) {
-                    CartaoCreditoDTO cartaoDTO = new CartaoCreditoDTO();
+                    CreditCardDTO cartaoDTO = new CreditCardDTO();
                     cartaoDTO.setId(Long.parseLong(cartaoMP.getId().replaceAll("[^0-9]", ""))); // Extrai números do ID
-                    cartaoDTO.setNome(cartaoMP.getNome());
-                    cartaoDTO.setBanco("Mercado Pago");
-                    cartaoDTO.setNumeroCartao("****" + cartaoMP.getUltimosDigitos());
-                    cartaoDTO.setLimiteCredito(cartaoMP.getLimiteTotal());
-                    cartaoDTO.setLimiteDisponivel(cartaoMP.getLimiteDisponivel());
-                    cartaoDTO.setTipoCartao(com.consumoesperto.model.CartaoCredito.TipoCartao.STANDARD);
-                    cartaoDTO.setAtivo(cartaoMP.getAtivo());
+                    cartaoDTO.setName(cartaoMP.getNome());
+                    cartaoDTO.setBank("Mercado Pago");
+                    cartaoDTO.setNumber("****" + cartaoMP.getUltimosDigitos());
+                    cartaoDTO.setLimit(cartaoMP.getLimiteTotal());
+                    cartaoDTO.setAvailable(cartaoMP.getLimiteDisponivel());
+                    cartaoDTO.setType("STANDARD");
+                    cartaoDTO.setStatus(cartaoMP.getAtivo() ? "ATIVO" : "INATIVO");
                     cartaoDTO.setUsuarioId(currentUser.getId());
                     cartoesReais.add(cartaoDTO);
                     
@@ -411,16 +410,16 @@ public class BankController {
                         List<Map<String, Object>> cartoesBanco = bankSynchronizationService
                             .getCreditCardsFromBank(auth);
                         
-                        // Converte Map para CartaoCreditoDTO
+                        // Converte Map para CreditCardDTO
                         for (Map<String, Object> cartaoMap : cartoesBanco) {
-                            CartaoCreditoDTO cartaoDTO = new CartaoCreditoDTO();
+                            CreditCardDTO cartaoDTO = new CreditCardDTO();
                             cartaoDTO.setId((Long) cartaoMap.get("id"));
-                            cartaoDTO.setNumeroCartao((String) cartaoMap.get("numero"));
-                            cartaoDTO.setLimiteCredito((BigDecimal) cartaoMap.get("limite"));
-                            cartaoDTO.setLimiteDisponivel((BigDecimal) cartaoMap.get("saldoDisponivel"));
-                            cartaoDTO.setBanco(auth.getBanco().toString());
+                            cartaoDTO.setNumber((String) cartaoMap.get("numero"));
+                            cartaoDTO.setLimit((BigDecimal) cartaoMap.get("limite"));
+                            cartaoDTO.setAvailable((BigDecimal) cartaoMap.get("saldoDisponivel"));
+                            cartaoDTO.setBank(auth.getBanco().toString());
                             cartaoDTO.setUsuarioId(currentUser.getId());
-                            cartaoDTO.setAtivo(true);
+                            cartaoDTO.setStatus("ATIVO");
                             cartoesReais.add(cartaoDTO);
                         }
                         
@@ -436,7 +435,22 @@ public class BankController {
             if (cartoesReais.isEmpty()) {
                 log.info("Nenhum cartão real encontrado, retornando dados locais para usuário {}", 
                         currentUser.getId());
-                cartoesReais = cartaoCreditoService.buscarPorUsuario(currentUser.getId());
+                List<CartaoCreditoDTO> cartoesLocais = cartaoCreditoService.buscarPorUsuario(currentUser.getId());
+                
+                // Converte CartaoCreditoDTO para CreditCardDTO
+                for (CartaoCreditoDTO cartaoLocal : cartoesLocais) {
+                    CreditCardDTO cartaoDTO = new CreditCardDTO();
+                    cartaoDTO.setId(cartaoLocal.getId());
+                    cartaoDTO.setName(cartaoLocal.getNome());
+                    cartaoDTO.setBank(cartaoLocal.getBanco());
+                    cartaoDTO.setNumber(cartaoLocal.getNumeroCartao());
+                    cartaoDTO.setLimit(cartaoLocal.getLimiteCredito());
+                    cartaoDTO.setAvailable(cartaoLocal.getLimiteDisponivel());
+                    cartaoDTO.setType(cartaoLocal.getTipoCartao() != null ? cartaoLocal.getTipoCartao().toString() : "STANDARD");
+                    cartaoDTO.setStatus(cartaoLocal.getAtivo() ? "ATIVO" : "INATIVO");
+                    cartaoDTO.setUsuarioId(cartaoLocal.getUsuarioId());
+                    cartoesReais.add(cartaoDTO);
+                }
             }
             
             log.info("🎯 Total de {} cartões retornados para usuário {}", cartoesReais.size(), currentUser.getEmail());
@@ -544,11 +558,11 @@ public class BankController {
                             limiteTotal += limiteBanco;
                             limiteDisponivel += limiteDisponivelBanco;
                             
-                            bancosDetalhes.put(nomeBanco, Map.of(
-                                "saldo", saldoBanco,
-                                "limite", limiteBanco,
-                                "limiteDisponivel", limiteDisponivelBanco
-                            ));
+                            Map<String, Object> bancoDetalhes = new HashMap<>();
+                            bancoDetalhes.put("saldo", saldoBanco);
+                            bancoDetalhes.put("limite", limiteBanco);
+                            bancoDetalhes.put("limiteDisponivel", limiteDisponivelBanco);
+                            bancosDetalhes.put(nomeBanco, bancoDetalhes);
                         }
                         
                     } catch (Exception e) {

@@ -39,4 +39,18 @@ public interface CartaoCreditoRepository extends JpaRepository<CartaoCredito, Lo
      * @return Cartão encontrado ou null
      */
     CartaoCredito findByUsuarioIdAndNome(Long usuarioId, String nome);
+    
+    /**
+     * Busca cartões por usuário, nome e banco
+     * 
+     * @param usuarioId ID do usuário
+     * @param nome Nome do cartão
+     * @param banco Banco do cartão
+     * @return Lista de cartões encontrados
+     */
+    List<CartaoCredito> findByUsuarioIdAndNomeAndBanco(Long usuarioId, String nome, String banco);
+    
+    int deleteByUsuarioIdAndAtivoFalse(Long usuarioId);
+    
+    int deleteByAtivoFalse();
 }
