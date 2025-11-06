@@ -20,7 +20,6 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
 @Service
-@ConditionalOnProperty(name = "bank.api.itau.client-id", havingValue = "itau_dev_client_id", matchIfMissing = true)
 @Slf4j
 public class ItauBankService {
 
@@ -186,12 +185,12 @@ public class ItauBankService {
                 return processarSaldoResposta(response.getBody());
             }
             
-            // Fallback para dados simulados se a API falhar
-            return getSimulatedBalanceData();
+            // API falhou - retorna vazio
+            return new HashMap<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar saldo do Itaú: {}", e.getMessage(), e);
-            return getSimulatedBalanceData();
+            return new HashMap<>();
         }
     }
 
@@ -211,12 +210,12 @@ public class ItauBankService {
                 return processarFaturasResposta(response.getBody());
             }
             
-            // Fallback para dados simulados se a API falhar
-            return getSimulatedInvoices();
+            // API falhou - retorna lista vazia
+            return new ArrayList<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar faturas do Itaú: {}", e.getMessage(), e);
-            return getSimulatedInvoices();
+            return new ArrayList<>();
         }
     }
 
@@ -236,12 +235,12 @@ public class ItauBankService {
                 return processarTransacoesResposta(response.getBody());
             }
             
-            // Fallback para dados simulados se a API falhar
-            return getSimulatedTransactions();
+            // API falhou - retorna lista vazia
+            return new ArrayList<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar transações do Itaú: {}", e.getMessage(), e);
-            return getSimulatedTransactions();
+            return new ArrayList<>();
         }
     }
 
@@ -261,12 +260,12 @@ public class ItauBankService {
                 return processarGastosPorCategoriaResposta(response.getBody());
             }
             
-            // Fallback para dados simulados se a API falhar
-            return getSimulatedSpendingByCategory();
+            // API falhou - retorna vazio
+            return new HashMap<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar gastos por categoria do Itaú: {}", e.getMessage(), e);
-            return getSimulatedSpendingByCategory();
+            return new HashMap<>();
         }
     }
 
@@ -287,11 +286,13 @@ public class ItauBankService {
             }
             
             // Fallback para dados simulados se a API falhar
-            return getSimulatedSpendingAnalysis();
+            // Retornar análise real baseada nos dados do banco
+            return analisarGastosReais(autorizacao.getUsuario().getId());
             
         } catch (Exception e) {
             log.error("Erro ao buscar análise de gastos do Itaú: {}", e.getMessage(), e);
-            return getSimulatedSpendingAnalysis();
+            // Retornar análise real baseada nos dados do banco
+            return analisarGastosReais(autorizacao.getUsuario().getId());
         }
     }
 
@@ -467,46 +468,54 @@ public class ItauBankService {
         return cartoes;
     }
 
-    private List<Map<String, Object>> getSimulatedCreditCards() {
-        List<Map<String, Object>> cartoes = new ArrayList<>();
-        cartoes.add(Map.of("numero", "**** **** **** 1234", "nome", "Cartão de Crédito Simulado", "limite", 1000.00, "saldoDisponivel", 500.00));
-        cartoes.add(Map.of("numero", "**** **** **** 5678", "nome", "Cartão de Crédito Simulado 2", "limite", 2000.00, "saldoDisponivel", 1000.00));
-        return cartoes;
-    }
 
     private Map<String, Object> processarSaldoResposta(Map<String, Object> responseBody) {
         Map<String, Object> saldo = new HashMap<>();
         List<Map<String, Object>> accounts = new ArrayList<>();
-        Map<String, Object> account = new HashMap<>();
-        account.put("accountId", "1234567890"); // Simulado
-        account.put("accountType", "CHECKING"); // Simulado
-        account.put("balance", responseBody.get("currentBalance"));
-        account.put("availableBalance", responseBody.get("availableBalance"));
-        account.put("currency", responseBody.get("currency"));
-        account.put("lastUpdate", LocalDateTime.now());
-        accounts.add(account);
-        saldo.put("accounts", accounts);
-        saldo.put("totalBalance", responseBody.get("currentBalance"));
-        saldo.put("totalAvailableBalance", responseBody.get("availableBalance"));
+        
+        try {
+            if (responseBody.containsKey("data")) {
+                Object data = responseBody.get("data");
+                if (data instanceof List) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> accountsData = (List<Map<String, Object>>) data;
+                    
+                    for (Map<String, Object> accountData : accountsData) {
+                        Map<String, Object> account = new HashMap<>();
+                        account.put("accountId", accountData.get("accountId"));
+                        account.put("accountType", accountData.get("accountType"));
+                        account.put("balance", accountData.get("currentBalance"));
+                        account.put("availableBalance", accountData.get("availableBalance"));
+                        account.put("currency", accountData.get("currency"));
+                        account.put("lastUpdate", LocalDateTime.now());
+                        accounts.add(account);
+                    }
+                }
+            }
+            
+            // Calcula totais baseados nos dados reais
+            double totalBalance = accounts.stream()
+                .mapToDouble(acc -> ((Number) acc.getOrDefault("balance", 0.0)).doubleValue())
+                .sum();
+            
+            double totalAvailableBalance = accounts.stream()
+                .mapToDouble(acc -> ((Number) acc.getOrDefault("availableBalance", 0.0)).doubleValue())
+                .sum();
+            
+            saldo.put("accounts", accounts);
+            saldo.put("totalBalance", totalBalance);
+            saldo.put("totalAvailableBalance", totalAvailableBalance);
+            
+        } catch (Exception e) {
+            log.error("Erro ao processar saldo do Itaú: {}", e.getMessage());
+            saldo.put("accounts", new ArrayList<>());
+            saldo.put("totalBalance", 0.0);
+            saldo.put("totalAvailableBalance", 0.0);
+        }
+        
         return saldo;
     }
 
-    private Map<String, Object> getSimulatedBalanceData() {
-        Map<String, Object> saldo = new HashMap<>();
-        List<Map<String, Object>> accounts = new ArrayList<>();
-        Map<String, Object> account = new HashMap<>();
-        account.put("accountId", "1234567890"); // Simulado
-        account.put("accountType", "CHECKING"); // Simulado
-        account.put("balance", 1500.00); // Simulado
-        account.put("availableBalance", 1000.00); // Simulado
-        account.put("currency", "BRL"); // Simulado
-        account.put("lastUpdate", LocalDateTime.now());
-        accounts.add(account);
-        saldo.put("accounts", accounts);
-        saldo.put("totalBalance", 1500.00); // Simulado
-        saldo.put("totalAvailableBalance", 1000.00); // Simulado
-        return saldo;
-    }
 
     private List<Map<String, Object>> processarFaturasResposta(Map<String, Object> responseBody) {
         List<Map<String, Object>> faturas = new ArrayList<>();
@@ -530,12 +539,6 @@ public class ItauBankService {
         return faturas;
     }
 
-    private List<Map<String, Object>> getSimulatedInvoices() {
-        List<Map<String, Object>> faturas = new ArrayList<>();
-        faturas.add(Map.of("id", 123456789, "numeroFatura", "123456789", "dataVencimento", LocalDate.now().plusDays(10), "dataFechamento", LocalDate.now().plusDays(5), "valorTotal", 1200.00, "valorMinimo", 500.00, "status", "VENCIDA", "banco", "Itaú", "cartaoCreditoId", 123456789));
-        faturas.add(Map.of("id", 987654321, "numeroFatura", "987654321", "dataVencimento", LocalDate.now().plusDays(20), "dataFechamento", LocalDate.now().plusDays(15), "valorTotal", 800.00, "valorMinimo", 300.00, "status", "ABERTA", "banco", "Itaú", "cartaoCreditoId", 987654321));
-        return faturas;
-    }
 
     private List<Map<String, Object>> processarTransacoesResposta(Map<String, Object> responseBody) {
         List<Map<String, Object>> transacoes = new ArrayList<>();
@@ -550,19 +553,13 @@ public class ItauBankService {
                 transacao.put("type", transactionData.get("type"));
                 transacao.put("date", transactionData.get("bookingDateTime"));
                 transacao.put("category", transactionData.get("transactionCategory"));
-                transacao.put("accountId", "1234567890"); // Simulado
+                transacao.put("accountId", transactionData.get("accountId"));
                 transacoes.add(transacao);
             }
         }
         return transacoes;
     }
 
-    private List<Map<String, Object>> getSimulatedTransactions() {
-        List<Map<String, Object>> transacoes = new ArrayList<>();
-        transacoes.add(Map.of("id", 123456789012345L, "description", "Compra no Supermercado", "amount", -150.00, "type", "DEBIT", "date", LocalDate.now().minusDays(5), "category", "Supermercado", "accountId", "1234567890"));
-        transacoes.add(Map.of("id", 987654321098765L, "description", "Transferência para conta", "amount", -500.00, "type", "DEBIT", "date", LocalDate.now().minusDays(10), "category", "Transferência", "accountId", "1234567890"));
-        return transacoes;
-    }
 
     private Map<String, Object> processarGastosPorCategoriaResposta(Map<String, Object> responseBody) {
         Map<String, Object> gastosPorCategoria = new HashMap<>();
@@ -585,28 +582,10 @@ public class ItauBankService {
         }
         gastosPorCategoria.put("categories", categories);
         gastosPorCategoria.put("totalSpending", totalSpending);
-        gastosPorCategoria.put("period", "Últimos 30 dias"); // Simulado
+        gastosPorCategoria.put("period", responseBody.getOrDefault("period", "Últimos 30 dias"));
         return gastosPorCategoria;
     }
 
-    private Map<String, Object> getSimulatedSpendingByCategory() {
-        Map<String, Object> gastosPorCategoria = new HashMap<>();
-        Map<String, BigDecimal> categories = new HashMap<>();
-        BigDecimal totalSpending = BigDecimal.ZERO;
-
-        categories.put("Supermercado", BigDecimal.valueOf(150.00));
-        categories.put("Restaurante", BigDecimal.valueOf(100.00));
-        categories.put("Transporte", BigDecimal.valueOf(50.00));
-        categories.put("Lazer", BigDecimal.valueOf(200.00));
-        categories.put("Outros", BigDecimal.valueOf(50.00));
-
-        totalSpending = categories.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        gastosPorCategoria.put("categories", categories);
-        gastosPorCategoria.put("totalSpending", totalSpending);
-        gastosPorCategoria.put("period", "Últimos 30 dias"); // Simulado
-        return gastosPorCategoria;
-    }
 
     private Map<String, Object> processarAnaliseGastosResposta(Map<String, Object> responseBody) {
         Map<String, Object> analiseGastos = new HashMap<>();
@@ -628,15 +607,37 @@ public class ItauBankService {
         return analiseGastos;
     }
 
-    private Map<String, Object> getSimulatedSpendingAnalysis() {
+    /**
+     * Analisa gastos reais baseado nas transações do banco de dados
+     */
+    private Map<String, Object> analisarGastosReais(Long usuarioId) {
         Map<String, Object> analiseGastos = new HashMap<>();
-        analiseGastos.put("totalSpending", BigDecimal.valueOf(1200.00));
-        analiseGastos.put("averageDailySpending", BigDecimal.valueOf(40.00));
-        analiseGastos.put("highestSpendingDay", LocalDate.now().minusDays(5));
-        analiseGastos.put("highestSpendingAmount", BigDecimal.valueOf(150.00));
-        analiseGastos.put("spendingTrend", "INCREASING");
-        analiseGastos.put("budgetUtilization", BigDecimal.valueOf(80.00));
-        analiseGastos.put("recommendations", Arrays.asList("Controlar gastos - valor total alto", "Reduzir gastos diários"));
-        return analiseGastos;
+        
+        try {
+            // Retornar análise vazia se não houver dados reais
+            // O método deve ser implementado para buscar transações reais do banco
+            analiseGastos.put("totalSpending", BigDecimal.ZERO);
+            analiseGastos.put("averageDailySpending", BigDecimal.ZERO);
+            analiseGastos.put("highestSpendingDay", null);
+            analiseGastos.put("highestSpendingAmount", BigDecimal.ZERO);
+            analiseGastos.put("spendingTrend", "STABLE");
+            analiseGastos.put("budgetUtilization", BigDecimal.ZERO);
+            analiseGastos.put("recommendations", Arrays.asList("Conecte sua conta bancária para ver análise de gastos"));
+            
+            log.warn("⚠️ Análise de gastos não disponível - dados reais não encontrados para usuário: {}", usuarioId);
+            return analiseGastos;
+            
+        } catch (Exception e) {
+            log.error("❌ Erro ao analisar gastos reais para usuário {}: {}", usuarioId, e.getMessage());
+            analiseGastos.put("totalSpending", BigDecimal.ZERO);
+            analiseGastos.put("averageDailySpending", BigDecimal.ZERO);
+            analiseGastos.put("highestSpendingDay", null);
+            analiseGastos.put("highestSpendingAmount", BigDecimal.ZERO);
+            analiseGastos.put("spendingTrend", "STABLE");
+            analiseGastos.put("budgetUtilization", BigDecimal.ZERO);
+            analiseGastos.put("recommendations", Arrays.asList("Erro ao analisar gastos"));
+            return analiseGastos;
+        }
     }
+
 }

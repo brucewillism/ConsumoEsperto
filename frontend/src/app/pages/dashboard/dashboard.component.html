@@ -7,6 +7,10 @@
       <p>Visão geral das suas finanças</p>
     </div>
     <div class="header-actions">
+      <button class="btn btn-success" (click)="sincronizarDadosReais()" [disabled]="isLoading">
+        <i class="fas fa-sync-alt" [class.fa-spin]="isLoading"></i>
+        Sincronizar Dados Reais
+      </button>
       <button class="btn btn-primary" routerLink="/transacoes">
         <i class="fas fa-plus"></i>
         Nova Transação
@@ -28,8 +32,20 @@
 
   <!-- Conteúdo do Dashboard -->
   <div class="dashboard-content" *ngIf="!isLoading">
+    <!-- Mensagem de Erro -->
+    <div class="error-message" *ngIf="errorMessage">
+      <div class="error-content">
+        <i class="fas fa-exclamation-triangle"></i>
+        <p>{{ errorMessage }}</p>
+        <button class="btn btn-primary" (click)="loadDashboardData()">
+          <i class="fas fa-refresh"></i>
+          Tentar Novamente
+        </button>
+      </div>
+    </div>
+
     <!-- Cards Informativos -->
-    <div class="dashboard-cards">
+    <div class="dashboard-cards" *ngIf="!errorMessage">
       <div class="card" *ngFor="let card of dashboardCards" [style.border-left-color]="card.color">
         <div class="card-icon" [style.background-color]="card.color">
           <i [class]="card.icon"></i>
@@ -46,12 +62,12 @@
     </div>
 
     <!-- Gráficos e Estatísticas -->
-    <div class="dashboard-charts">
+    <div class="dashboard-charts" *ngIf="!errorMessage">
       <!-- Gráfico de Gastos Mensais -->
       <div class="chart-card">
         <div class="chart-header">
           <h3>Gastos Mensais</h3>
-          <div class="chart-legend">
+          <div class="chart-legend" *ngIf="spendingChartData">
             <span class="legend-item">
               <span class="legend-color" style="background-color: #3699ff"></span>
               Gastos
@@ -59,10 +75,14 @@
           </div>
         </div>
         <div class="chart-container">
-          <div class="chart-placeholder">
+          <div class="chart-placeholder" *ngIf="!spendingChartData">
             <i class="fas fa-chart-line"></i>
-            <p>Gráfico de gastos mensais</p>
-            <small>Dados dos últimos 6 meses</small>
+            <p>Nenhum gasto registrado</p>
+            <small>Adicione transações para ver o gráfico</small>
+          </div>
+          <div class="chart-content" *ngIf="spendingChartData">
+            <!-- Aqui seria implementado o Chart.js real -->
+            <p>Gráfico de gastos mensais (Chart.js)</p>
           </div>
         </div>
       </div>
@@ -71,18 +91,22 @@
       <div class="chart-card">
         <div class="chart-header">
           <h3>Gastos por Categoria</h3>
-          <div class="chart-legend">
-            <span class="legend-item" *ngFor="let label of categoryChartData?.labels; let i = index">
-              <span class="legend-color" [style.background-color]="categoryChartData?.datasets?.[0]?.backgroundColor?.[i]"></span>
+          <div class="chart-legend" *ngIf="categoryChartData">
+            <span class="legend-item" *ngFor="let label of categoryChartData.labels; let i = index">
+              <span class="legend-color" [style.background-color]="categoryChartData.datasets[0].backgroundColor[i]"></span>
               {{ label }}
             </span>
           </div>
         </div>
         <div class="chart-container">
-          <div class="chart-placeholder">
+          <div class="chart-placeholder" *ngIf="!categoryChartData">
             <i class="fas fa-chart-pie"></i>
-            <p>Gráfico de gastos por categoria</p>
-            <small>Distribuição dos gastos</small>
+            <p>Nenhum gasto por categoria</p>
+            <small>Adicione transações categorizadas para ver o gráfico</small>
+          </div>
+          <div class="chart-content" *ngIf="categoryChartData">
+            <!-- Aqui seria implementado o Chart.js real -->
+            <p>Gráfico de gastos por categoria (Chart.js)</p>
           </div>
         </div>
       </div>
@@ -141,13 +165,13 @@
     </div>
 
     <!-- Transações Recentes -->
-    <div class="recent-transactions">
+    <div class="recent-transactions" *ngIf="!errorMessage">
       <div class="section-header">
         <h3>Transações Recentes</h3>
         <a routerLink="/transacoes" class="view-all">Ver todas</a>
       </div>
       
-      <div class="transactions-list">
+      <div class="transactions-list" *ngIf="recentTransactions.length > 0">
         <div class="transaction-item" *ngFor="let transaction of recentTransactions">
           <div class="transaction-icon" [class]="transaction.type">
             <i [class]="transaction.type === 'credit' ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"></i>
@@ -156,13 +180,23 @@
             <div class="transaction-description">{{ transaction.description }}</div>
             <div class="transaction-meta">
               <span class="transaction-category">{{ transaction.category }}</span>
-              <span class="transaction-date">{{ formatDate(transaction.date) }}</span>
+              <span class="transaction-date">{{ transaction.date | dateFormat }}</span>
             </div>
           </div>
           <div class="transaction-amount" [class]="transaction.type">
             {{ transaction.type === 'credit' ? '+' : '' }}{{ formatCurrency(transaction.amount) }}
           </div>
         </div>
+      </div>
+      
+      <div class="empty-state" *ngIf="recentTransactions.length === 0">
+        <i class="fas fa-receipt"></i>
+        <p>Nenhuma transação encontrada</p>
+        <small>Adicione sua primeira transação para começar</small>
+        <button class="btn btn-primary" routerLink="/transacoes">
+          <i class="fas fa-plus"></i>
+          Nova Transação
+        </button>
       </div>
     </div>
 

@@ -1,0 +1,86 @@
+<!-- Componente de Paginação -->
+<div class="pagination-container" [class.disabled]="disabled">
+  
+  <!-- Informações dos Registros -->
+  <div class="pagination-info" *ngIf="showInfo">
+    <span class="items-info">{{ getItemsInfo() }}</span>
+  </div>
+
+  <!-- Controles de Paginação -->
+  <div class="pagination-controls">
+    
+    <!-- Botão Primeira Página -->
+    <button 
+      class="pagination-btn first-page" 
+      [disabled]="!hasPrevious || disabled"
+      (click)="goToFirst()"
+      title="Primeira página">
+      <i class="fas fa-angle-double-left"></i>
+    </button>
+
+    <!-- Botão Página Anterior -->
+    <button 
+      class="pagination-btn prev-page" 
+      [disabled]="!hasPrevious || disabled"
+      (click)="goToPrevious()"
+      title="Página anterior">
+      <i class="fas fa-angle-left"></i>
+    </button>
+
+    <!-- Números das Páginas -->
+    <div class="pagination-pages">
+      
+      <!-- Ellipsis antes (se necessário) -->
+      <span class="pagination-ellipsis" *ngIf="showEllipsisBefore()">...</span>
+      
+      <!-- Páginas -->
+      <button 
+        *ngFor="let page of pages" 
+        class="pagination-btn page-number"
+        [class.active]="page.isActive"
+        [disabled]="page.isDisabled || disabled"
+        (click)="goToPage(page.number)">
+        {{ page.number }}
+      </button>
+      
+      <!-- Ellipsis depois (se necessário) -->
+      <span class="pagination-ellipsis" *ngIf="showEllipsisAfter()">...</span>
+      
+    </div>
+
+    <!-- Botão Próxima Página -->
+    <button 
+      class="pagination-btn next-page" 
+      [disabled]="!hasNext || disabled"
+      (click)="goToNext()"
+      title="Próxima página">
+      <i class="fas fa-angle-right"></i>
+    </button>
+
+    <!-- Botão Última Página -->
+    <button 
+      class="pagination-btn last-page" 
+      [disabled]="!hasNext || disabled"
+      (click)="goToLast()"
+      title="Última página">
+      <i class="fas fa-angle-double-right"></i>
+    </button>
+
+  </div>
+
+  <!-- Seletor de Itens por Página -->
+  <div class="pagination-items-per-page" *ngIf="showItemsPerPage">
+    <label for="items-per-page">Itens por página:</label>
+    <select 
+      id="items-per-page"
+      class="items-per-page-select"
+      [value]="itemsPerPage"
+      [disabled]="disabled"
+      (change)="onItemsPerPageChange(+$event.target.value)">
+      <option *ngFor="let option of itemsPerPageOptions" [value]="option">
+        {{ option }}
+      </option>
+    </select>
+  </div>
+
+</div>

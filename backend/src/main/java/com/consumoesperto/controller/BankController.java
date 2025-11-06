@@ -4,6 +4,7 @@ import com.consumoesperto.model.AutorizacaoBancaria;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.dto.CartaoCreditoDTO;
+import com.consumoesperto.dto.CreditCardDTO;
 import com.consumoesperto.dto.FaturaDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.AutorizacaoBancariaService;
@@ -44,13 +45,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Operações Bancárias", description = "Endpoints para operações bancárias gerais")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app", "https://*.ngrok-free.app"})
 public class BankController {
 
     private final AutorizacaoBancariaService autorizacaoBancariaService;
     private final BankSynchronizationService bankSynchronizationService;
     private final CartaoCreditoService cartaoCreditoService;
     private final FaturaService faturaService;
+    private final com.consumoesperto.service.MercadoPagoService mercadoPagoService;
 
     /**
      * Obtém bancos conectados do usuário
@@ -61,6 +63,8 @@ public class BankController {
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
         try {
+            log.info("🔍 Usuário autenticado: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
+            
             List<AutorizacaoBancaria> autorizacoes = autorizacaoBancariaService
                 .buscarAutorizacoesPorUsuario(currentUser.getId());
             
@@ -68,22 +72,41 @@ public class BankController {
                 .map(auth -> {
                     Map<String, Object> banco = new HashMap<>();
                     banco.put("id", auth.getId());
-                    banco.put("bankName", auth.getTipoBanco().toString());
+                    banco.put("bankName", auth.getBanco().toString());
                     banco.put("status", "connected");
-                    banco.put("lastSync", auth.getDataUltimaSincronizacao() != null ? 
-                        auth.getDataUltimaSincronizacao().toString() : "Nunca");
+                    banco.put("lastSync", auth.getDataAtualizacao() != null ? 
+                        auth.getDataAtualizacao().toString() : "Nunca");
                     banco.put("cardsCount", 0); // TODO: Implementar contagem real de cartões
                     return banco;
                 })
                 .collect(Collectors.toList());
             
+            log.info("✅ {} bancos conectados encontrados para usuário {}", bancosConectados.size(), currentUser.getEmail());
             return ResponseEntity.ok(bancosConectados);
             
         } catch (Exception e) {
-            log.error("Erro ao buscar bancos conectados para usuário {}: {}", 
-                    currentUser.getId(), e.getMessage());
+            log.error("❌ Erro ao buscar bancos conectados para usuário {}: {}", 
+                    currentUser.getId(), e.getMessage(), e);
             return ResponseEntity.internalServerError().body(null);
         }
+    }
+
+    /**
+     * Endpoint de teste para verificar autenticação
+     */
+    @GetMapping("/test-auth")
+    @Operation(summary = "Testar autenticação", description = "Endpoint para testar se a autenticação está funcionando")
+    public ResponseEntity<Map<String, Object>> testAuth(@AuthenticationPrincipal UserPrincipal currentUser) {
+        log.info("🧪 Teste de autenticação - Usuário: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("authenticated", true);
+        response.put("userId", currentUser.getId());
+        response.put("userEmail", currentUser.getEmail());
+        response.put("timestamp", System.currentTimeMillis());
+        response.put("message", "Autenticação funcionando corretamente!");
+        
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -98,9 +121,7 @@ public class BankController {
         try {
             String bankType = request.get("bankType");
             if (bankType == null || bankType.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "erro", "Tipo de banco é obrigatório"
-                ));
+                return ResponseEntity.badRequest().body(Map.of("erro", "Tipo de banco é obrigatório"));
             }
             
             // Verifica se o banco já está conectado
@@ -108,7 +129,7 @@ public class BankController {
                 .buscarAutorizacoesPorUsuario(currentUser.getId());
             
             boolean jaConectado = autorizacoesExistentes.stream()
-                .anyMatch(auth -> auth.getTipoBanco().toString().equalsIgnoreCase(bankType));
+                .anyMatch(auth -> auth.getBanco().toString().equalsIgnoreCase(bankType));
             
             if (jaConectado) {
                 return ResponseEntity.badRequest().body(Map.of(
@@ -171,13 +192,13 @@ public class BankController {
             autorizacaoBancariaService.removerAutorizacao(bankId);
             
             // Remove cartões e faturas associados a este banco
-            cartaoCreditoService.removerPorBanco(currentUser.getId(), auth.getTipoBanco().toString());
-            faturaService.removerPorBanco(currentUser.getId(), auth.getTipoBanco().toString());
+            cartaoCreditoService.removerPorBanco(currentUser.getId(), auth.getBanco().toString());
+            faturaService.removerPorBanco(currentUser.getId(), auth.getBanco().toString());
             
             return ResponseEntity.ok(Map.of(
                 "status", "SUCESSO",
                 "mensagem", "Banco desconectado com sucesso",
-                "banco", auth.getTipoBanco().toString(),
+                "banco", auth.getBanco().toString(),
                 "usuarioId", currentUser.getId()
             ));
             
@@ -230,7 +251,7 @@ public class BankController {
                 return ResponseEntity.ok(Map.of(
                     "status", "SUCESSO",
                     "mensagem", "Dados sincronizados com sucesso",
-                    "banco", auth.getTipoBanco().toString(),
+                    "banco", auth.getBanco().toString(),
                     "resultado", resultado
                 ));
             } else {
@@ -278,7 +299,7 @@ public class BankController {
                 try {
                     if (auth.isTokenExpirado()) {
                         resultadosIndividuais.add(Map.of(
-                            "banco", auth.getTipoBanco().toString(),
+                            "banco", auth.getBanco().toString(),
                             "status", "TOKEN_EXPIRADO",
                             "mensagem", "Token expirado, renove a autorização"
                         ));
@@ -292,14 +313,14 @@ public class BankController {
                     
                     if (resultado != null && resultado.containsKey("sucesso")) {
                         resultadosIndividuais.add(Map.of(
-                            "banco", auth.getTipoBanco().toString(),
+                            "banco", auth.getBanco().toString(),
                             "status", "SUCESSO",
                             "resultado", resultado
                         ));
                         sucessos++;
                     } else {
                         resultadosIndividuais.add(Map.of(
-                            "banco", auth.getTipoBanco().toString(),
+                            "banco", auth.getBanco().toString(),
                             "status", "FALHA",
                             "resultado", resultado
                         ));
@@ -308,9 +329,9 @@ public class BankController {
                     
                 } catch (Exception e) {
                     log.error("Erro ao sincronizar banco {}: {}", 
-                            auth.getTipoBanco(), e.getMessage());
+                            auth.getBanco(), e.getMessage());
                     resultadosIndividuais.add(Map.of(
-                        "banco", auth.getTipoBanco().toString(),
+                        "banco", auth.getBanco().toString(),
                         "status", "ERRO",
                         "mensagem", e.getMessage()
                     ));
@@ -341,15 +362,45 @@ public class BankController {
      */
     @GetMapping("/credit-cards")
     @Operation(summary = "Obter cartões de crédito de todos os bancos", description = "Retorna todos os cartões de crédito de todos os bancos conectados")
-    public ResponseEntity<List<CartaoCreditoDTO>> getCreditCards(
+    public ResponseEntity<List<CreditCardDTO>> getCreditCards(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
         try {
-            // Busca bancos conectados do usuário
+            log.info("🔍 Buscando cartões para usuário: {} (ID: {})", currentUser.getEmail(), currentUser.getId());
+            
+            List<CreditCardDTO> cartoesReais = new ArrayList<>();
+            
+            // 1. Busca cartões do Mercado Pago (se configurado)
+            try {
+                log.info("💳 Buscando cartões do Mercado Pago...");
+                List<com.consumoesperto.dto.MercadoPagoCartaoDTO> cartoesMP = mercadoPagoService.buscarCartoes(currentUser.getId());
+                
+                for (com.consumoesperto.dto.MercadoPagoCartaoDTO cartaoMP : cartoesMP) {
+                    CreditCardDTO cartaoDTO = new CreditCardDTO();
+                    cartaoDTO.setId(Long.parseLong(cartaoMP.getId().replaceAll("[^0-9]", ""))); // Extrai números do ID
+                    cartaoDTO.setName(cartaoMP.getNome());
+                    cartaoDTO.setBank("Mercado Pago");
+                    cartaoDTO.setNumber("****" + cartaoMP.getUltimosDigitos());
+                    cartaoDTO.setLimit(cartaoMP.getLimiteTotal());
+                    cartaoDTO.setAvailable(cartaoMP.getLimiteDisponivel());
+                    cartaoDTO.setType("STANDARD");
+                    cartaoDTO.setStatus(cartaoMP.getAtivo() ? "ATIVO" : "INATIVO");
+                    cartaoDTO.setUsuarioId(currentUser.getId());
+                    cartoesReais.add(cartaoDTO);
+                    
+                    log.info("✅ Cartão MP adicionado: {} - Limite: {}", cartaoMP.getNome(), cartaoMP.getLimiteTotal());
+                }
+                
+                log.info("✅ {} cartões do Mercado Pago encontrados", cartoesMP.size());
+                
+            } catch (Exception e) {
+                log.warn("⚠️ Erro ao buscar cartões do Mercado Pago: {}", e.getMessage());
+                // Continua com outros bancos
+            }
+            
+            // 2. Busca bancos conectados tradicionais do usuário
             List<AutorizacaoBancaria> autorizacoes = autorizacaoBancariaService
                 .buscarAutorizacoesPorUsuario(currentUser.getId());
-            
-            List<CartaoCreditoDTO> cartoesReais = new ArrayList<>();
             
             // Para cada banco conectado, busca cartões reais
             for (AutorizacaoBancaria auth : autorizacoes) {
@@ -359,39 +410,125 @@ public class BankController {
                         List<Map<String, Object>> cartoesBanco = bankSynchronizationService
                             .getCreditCardsFromBank(auth);
                         
-                        // Converte Map para CartaoCreditoDTO
+                        // Converte Map para CreditCardDTO
                         for (Map<String, Object> cartaoMap : cartoesBanco) {
-                            CartaoCreditoDTO cartaoDTO = new CartaoCreditoDTO();
-                            cartaoDTO.setId((Long) cartaoMap.get("id"));
-                            cartaoDTO.setNumeroCartao((String) cartaoMap.get("numero"));
-                            cartaoDTO.setLimiteCredito((BigDecimal) cartaoMap.get("limite"));
-                            cartaoDTO.setLimiteDisponivel((BigDecimal) cartaoMap.get("saldoDisponivel"));
-                            cartaoDTO.setBanco(auth.getTipoBanco().toString());
-                            cartaoDTO.setUsuarioId(currentUser.getId());
-                            cartaoDTO.setAtivo(true);
-                            cartoesReais.add(cartaoDTO);
+                            try {
+                                CreditCardDTO cartaoDTO = new CreditCardDTO();
+                                
+                                // Converter ID de forma segura
+                                Object idObj = cartaoMap.get("id");
+                                if (idObj != null) {
+                                    if (idObj instanceof Number) {
+                                        cartaoDTO.setId(((Number) idObj).longValue());
+                                    } else if (idObj instanceof String) {
+                                        try {
+                                            cartaoDTO.setId(Long.parseLong((String) idObj));
+                                        } catch (NumberFormatException e) {
+                                            // Se não conseguir converter, usar hash
+                                            cartaoDTO.setId((long) idObj.toString().hashCode());
+                                        }
+                                    }
+                                } else {
+                                    // Gerar ID temporário se não tiver
+                                    cartaoDTO.setId(System.currentTimeMillis() % 1000000000L);
+                                }
+                                
+                                // Número do cartão
+                                Object numeroObj = cartaoMap.get("numero");
+                                if (numeroObj != null) {
+                                    cartaoDTO.setNumber(numeroObj.toString());
+                                } else {
+                                    Object ultimosDigitosObj = cartaoMap.get("ultimosDigitos");
+                                    if (ultimosDigitosObj != null) {
+                                        cartaoDTO.setNumber("****" + ultimosDigitosObj.toString());
+                                    } else {
+                                        cartaoDTO.setNumber("****");
+                                    }
+                                }
+                                
+                                // Nome do cartão
+                                Object nomeObj = cartaoMap.get("nome");
+                                if (nomeObj != null) {
+                                    cartaoDTO.setName(nomeObj.toString());
+                                } else {
+                                    Object cardholderNameObj = cartaoMap.get("cardholderName");
+                                    if (cardholderNameObj != null) {
+                                        cartaoDTO.setName(cardholderNameObj.toString());
+                                    } else {
+                                        cartaoDTO.setName("Cartão " + auth.getBanco());
+                                    }
+                                }
+                                
+                                // Limite
+                                Object limiteObj = cartaoMap.get("limite");
+                                if (limiteObj instanceof BigDecimal) {
+                                    cartaoDTO.setLimit((BigDecimal) limiteObj);
+                                } else if (limiteObj instanceof Number) {
+                                    cartaoDTO.setLimit(BigDecimal.valueOf(((Number) limiteObj).doubleValue()));
+                                } else {
+                                    cartaoDTO.setLimit(BigDecimal.ZERO);
+                                }
+                                
+                                // Saldo disponível
+                                Object saldoDisponivelObj = cartaoMap.get("saldoDisponivel");
+                                if (saldoDisponivelObj instanceof BigDecimal) {
+                                    cartaoDTO.setAvailable((BigDecimal) saldoDisponivelObj);
+                                } else if (saldoDisponivelObj instanceof Number) {
+                                    cartaoDTO.setAvailable(BigDecimal.valueOf(((Number) saldoDisponivelObj).doubleValue()));
+                                } else {
+                                    cartaoDTO.setAvailable(BigDecimal.ZERO);
+                                }
+                                
+                                cartaoDTO.setBank(auth.getBanco().toString());
+                                cartaoDTO.setUsuarioId(currentUser.getId());
+                                cartaoDTO.setStatus("ATIVO");
+                                cartaoDTO.setType("STANDARD");
+                                
+                                cartoesReais.add(cartaoDTO);
+                                log.info("✅ Cartão convertido: {} - {} - {}", 
+                                    cartaoDTO.getName(), cartaoDTO.getNumber(), cartaoDTO.getLimit());
+                            } catch (Exception e) {
+                                log.warn("⚠️ Erro ao converter cartão do mapa: {}", e.getMessage());
+                                // Continua com próximo cartão
+                            }
                         }
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar cartões do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }
             }
             
-            // Se não há cartões reais, retorna os locais como fallback
+            // 3. Se não há cartões reais, retorna os locais como fallback
             if (cartoesReais.isEmpty()) {
                 log.info("Nenhum cartão real encontrado, retornando dados locais para usuário {}", 
                         currentUser.getId());
-                cartoesReais = cartaoCreditoService.buscarPorUsuario(currentUser.getId());
+                List<CartaoCreditoDTO> cartoesLocais = cartaoCreditoService.buscarPorUsuario(currentUser.getId());
+                
+                // Converte CartaoCreditoDTO para CreditCardDTO
+                for (CartaoCreditoDTO cartaoLocal : cartoesLocais) {
+                    CreditCardDTO cartaoDTO = new CreditCardDTO();
+                    cartaoDTO.setId(cartaoLocal.getId());
+                    cartaoDTO.setName(cartaoLocal.getNome());
+                    cartaoDTO.setBank(cartaoLocal.getBanco());
+                    cartaoDTO.setNumber(cartaoLocal.getNumeroCartao());
+                    cartaoDTO.setLimit(cartaoLocal.getLimiteCredito());
+                    cartaoDTO.setAvailable(cartaoLocal.getLimiteDisponivel());
+                    cartaoDTO.setType(cartaoLocal.getTipoCartao() != null ? cartaoLocal.getTipoCartao().toString() : "STANDARD");
+                    cartaoDTO.setStatus(cartaoLocal.getAtivo() ? "ATIVO" : "INATIVO");
+                    cartaoDTO.setUsuarioId(cartaoLocal.getUsuarioId());
+                    cartoesReais.add(cartaoDTO);
+                }
             }
             
+            log.info("🎯 Total de {} cartões retornados para usuário {}", cartoesReais.size(), currentUser.getEmail());
             return ResponseEntity.ok(cartoesReais);
             
         } catch (Exception e) {
-            log.error("Erro ao buscar cartões para usuário {}: {}", 
-                    currentUser.getId(), e.getMessage());
+            log.error("❌ Erro ao buscar cartões para usuário {}: {}", 
+                    currentUser.getId(), e.getMessage(), e);
             return ResponseEntity.internalServerError().body(null);
         }
     }
@@ -421,18 +558,146 @@ public class BankController {
                         
                         // Converte Map para FaturaDTO
                         for (Map<String, Object> faturaMap : faturasBanco) {
-                            FaturaDTO faturaDTO = new FaturaDTO();
-                            faturaDTO.setId((Long) faturaMap.get("id"));
-                            faturaDTO.setValorFatura((BigDecimal) faturaMap.get("valorTotal"));
-                            faturaDTO.setValorPago((BigDecimal) faturaMap.get("valorMinimo"));
-                            faturaDTO.setStatusFatura(Fatura.StatusFatura.valueOf((String) faturaMap.get("status")));
-                            faturaDTO.setCartaoCreditoId(1L); // ID temporário, será ajustado quando implementar a lógica real
-                            faturasReais.add(faturaDTO);
+                            try {
+                                FaturaDTO faturaDTO = new FaturaDTO();
+                                
+                                // Converter ID de forma segura
+                                Object idObj = faturaMap.get("id");
+                                if (idObj != null) {
+                                    if (idObj instanceof Number) {
+                                        faturaDTO.setId(((Number) idObj).longValue());
+                                    } else if (idObj instanceof String) {
+                                        try {
+                                            faturaDTO.setId(Long.parseLong((String) idObj));
+                                        } catch (NumberFormatException e) {
+                                            // Se não conseguir converter para Long, gerar hash
+                                            faturaDTO.setId((long) idObj.toString().hashCode());
+                                        }
+                                    }
+                                }
+                                
+                                // Nome do cartão
+                                Object nomeCartaoObj = faturaMap.get("nomeCartao");
+                                if (nomeCartaoObj != null) {
+                                    faturaDTO.setNomeCartao(nomeCartaoObj.toString());
+                                } else {
+                                    faturaDTO.setNomeCartao("Mercado Pago");
+                                }
+                                
+                                // Converter valores para BigDecimal de forma segura
+                                Object valorTotalObj = faturaMap.get("valorTotal");
+                                BigDecimal valorTotal = BigDecimal.ZERO;
+                                if (valorTotalObj instanceof BigDecimal) {
+                                    valorTotal = (BigDecimal) valorTotalObj;
+                                } else if (valorTotalObj instanceof Number) {
+                                    valorTotal = BigDecimal.valueOf(((Number) valorTotalObj).doubleValue());
+                                }
+                                faturaDTO.setValorTotal(valorTotal);
+                                faturaDTO.setValorFatura(valorTotal); // Alias para compatibilidade
+                                
+                                Object valorMinimoObj = faturaMap.get("valorMinimo");
+                                BigDecimal valorMinimo = BigDecimal.ZERO;
+                                if (valorMinimoObj instanceof BigDecimal) {
+                                    valorMinimo = (BigDecimal) valorMinimoObj;
+                                } else if (valorMinimoObj instanceof Number) {
+                                    valorMinimo = BigDecimal.valueOf(((Number) valorMinimoObj).doubleValue());
+                                }
+                                if (valorMinimo.compareTo(BigDecimal.ZERO) == 0) {
+                                    valorMinimo = valorTotal; // Se não tiver valor mínimo, usar o total
+                                }
+                                faturaDTO.setValorMinimo(valorMinimo);
+                                
+                                // Valor pago
+                                Object valorPagoObj = faturaMap.get("valorPago");
+                                BigDecimal valorPago = BigDecimal.ZERO;
+                                if (valorPagoObj instanceof BigDecimal) {
+                                    valorPago = (BigDecimal) valorPagoObj;
+                                } else if (valorPagoObj instanceof Number) {
+                                    valorPago = BigDecimal.valueOf(((Number) valorPagoObj).doubleValue());
+                                }
+                                faturaDTO.setValorPago(valorPago);
+                                
+                                // Converter status
+                                Object statusObj = faturaMap.get("status");
+                                String status = "ABERTA";
+                                if (statusObj instanceof String) {
+                                    status = (String) statusObj;
+                                }
+                                try {
+                                    faturaDTO.setStatusFatura(Fatura.StatusFatura.valueOf(status.toUpperCase()));
+                                } catch (IllegalArgumentException e) {
+                                    // Usa método fromString que já trata conversões incorretas
+                                    faturaDTO.setStatusFatura(Fatura.StatusFatura.fromString(status));
+                                }
+                                faturaDTO.setStatus(status);
+                                
+                                // Data de vencimento
+                                Object dataVencimentoObj = faturaMap.get("dataVencimento");
+                                if (dataVencimentoObj != null) {
+                                    try {
+                                        String dataVencimentoStr = dataVencimentoObj.toString();
+                                        java.time.LocalDateTime dataVencimento;
+                                        if (dataVencimentoStr.contains("T")) {
+                                            dataVencimento = java.time.LocalDateTime.parse(
+                                                dataVencimentoStr.replace("Z", ""));
+                                        } else {
+                                            java.time.LocalDate date = java.time.LocalDate.parse(dataVencimentoStr);
+                                            dataVencimento = date.atStartOfDay();
+                                        }
+                                        faturaDTO.setDataVencimento(dataVencimento);
+                                    } catch (Exception e) {
+                                        faturaDTO.setDataVencimento(java.time.LocalDateTime.now().plusDays(30));
+                                    }
+                                } else {
+                                    faturaDTO.setDataVencimento(java.time.LocalDateTime.now().plusDays(30));
+                                }
+                                
+                                // Data de fechamento
+                                Object dataFechamentoObj = faturaMap.get("dataFechamento");
+                                if (dataFechamentoObj != null) {
+                                    try {
+                                        String dataFechamentoStr = dataFechamentoObj.toString();
+                                        java.time.LocalDateTime dataFechamento;
+                                        if (dataFechamentoStr.contains("T")) {
+                                            dataFechamento = java.time.LocalDateTime.parse(
+                                                dataFechamentoStr.replace("Z", ""));
+                                        } else {
+                                            java.time.LocalDate date = java.time.LocalDate.parse(dataFechamentoStr);
+                                            dataFechamento = date.atStartOfDay();
+                                        }
+                                        faturaDTO.setDataFechamento(dataFechamento);
+                                    } catch (Exception e) {
+                                        faturaDTO.setDataFechamento(java.time.LocalDateTime.now());
+                                    }
+                                } else {
+                                    faturaDTO.setDataFechamento(java.time.LocalDateTime.now());
+                                }
+                                
+                                // Verificar se está paga
+                                Object pagaObj = faturaMap.get("paga");
+                                if (pagaObj instanceof Boolean) {
+                                    faturaDTO.setPaga((Boolean) pagaObj);
+                                } else {
+                                    faturaDTO.setPaga(status.toUpperCase().equals("PAGA"));
+                                }
+                                
+                                // ID do cartão - usar ID temporário se não tiver cartão associado
+                                faturaDTO.setCartaoCreditoId(1L); // ID temporário, será ajustado quando implementar a lógica real
+                                faturaDTO.setUsuarioId(currentUser.getId());
+                                
+                                faturasReais.add(faturaDTO);
+                                log.debug("✅ Fatura convertida: {} - {} - R$ {}", 
+                                    faturaDTO.getId(), faturaDTO.getNomeCartao(), faturaDTO.getValorFatura());
+                                
+                            } catch (Exception e) {
+                                log.warn("⚠️ Erro ao converter fatura do mapa: {}", e.getMessage(), e);
+                                // Continua com próxima fatura
+                            }
                         }
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar faturas do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }
@@ -482,7 +747,7 @@ public class BankController {
                             .getBankBalanceData(auth);
                         
                         if (dadosBanco != null) {
-                            String nomeBanco = auth.getTipoBanco().toString();
+                            String nomeBanco = auth.getBanco().toString();
                             double saldoBanco = (Double) dadosBanco.getOrDefault("saldo", 0.0);
                             double limiteBanco = (Double) dadosBanco.getOrDefault("limite", 0.0);
                             double limiteDisponivelBanco = (Double) dadosBanco.getOrDefault("limiteDisponivel", 0.0);
@@ -491,16 +756,16 @@ public class BankController {
                             limiteTotal += limiteBanco;
                             limiteDisponivel += limiteDisponivelBanco;
                             
-                            bancosDetalhes.put(nomeBanco, Map.of(
-                                "saldo", saldoBanco,
-                                "limite", limiteBanco,
-                                "limiteDisponivel", limiteDisponivelBanco
-                            ));
+                            Map<String, Object> bancoDetalhes = new HashMap<>();
+                            bancoDetalhes.put("saldo", saldoBanco);
+                            bancoDetalhes.put("limite", limiteBanco);
+                            bancoDetalhes.put("limiteDisponivel", limiteDisponivelBanco);
+                            bancosDetalhes.put(nomeBanco, bancoDetalhes);
                         }
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar dados do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }
@@ -543,8 +808,8 @@ public class BankController {
                     .filter(auth -> !auth.isTokenExpirado())
                     .count(),
                 "ultimaSincronizacao", autorizacoes.stream()
-                    .mapToLong(auth -> auth.getDataUltimaSincronizacao() != null ? 
-                        auth.getDataUltimaSincronizacao().toEpochSecond(java.time.ZoneOffset.UTC) : 0)
+                                    .mapToLong(auth -> auth.getDataAtualizacao() != null ?
+                    auth.getDataAtualizacao().toEpochSecond(java.time.ZoneOffset.UTC) : 0)
                     .max()
                     .orElse(0),
                 "statusGeral", autorizacoes.stream()
@@ -675,13 +940,13 @@ public class BankController {
             
             if (status != null) {
                 status.put("bancoId", bankId);
-                status.put("banco", auth.getTipoBanco().toString());
+                status.put("banco", auth.getBanco().toString());
                 status.put("usuarioId", currentUser.getId());
                 return ResponseEntity.ok(status);
             } else {
                 return ResponseEntity.ok(Map.of(
                     "bancoId", bankId,
-                    "banco", auth.getTipoBanco().toString(),
+                    "banco", auth.getBanco().toString(),
                     "status", "INDEFINIDO",
                     "mensagem", "Não foi possível verificar o status"
                 ));
@@ -707,23 +972,7 @@ public class BankController {
         
         try {
             // TODO: Implementar busca de histórico real
-            // Por enquanto, retorna histórico simulado
-            List<Map<String, Object>> history = java.util.List.of(
-                Map.of(
-                    "id", 1,
-                    "timestamp", java.time.LocalDateTime.now().minusHours(1),
-                    "status", "SUCESSO",
-                    "bancosProcessados", 3,
-                    "detalhes", "Sincronização automática concluída"
-                ),
-                Map.of(
-                    "id", 2,
-                    "timestamp", java.time.LocalDateTime.now().minusHours(2),
-                    "status", "SUCESSO",
-                    "bancosProcessados", 2,
-                    "detalhes", "Sincronização manual do Itaú"
-                )
-            );
+            List<Map<String, Object>> history = new ArrayList<>();
             
             return ResponseEntity.ok(history);
             
@@ -767,7 +1016,7 @@ public class BankController {
                 return ResponseEntity.ok(Map.of(
                     "status", "SUCESSO",
                     "mensagem", "Token renovado com sucesso",
-                    "banco", auth.getTipoBanco().toString(),
+                    "banco", auth.getBanco().toString(),
                     "resultado", resultado
                 ));
             } else {
@@ -817,17 +1066,17 @@ public class BankController {
             
             if (detalhesBanco != null) {
                 detalhesBanco.put("bancoId", bankId);
-                detalhesBanco.put("banco", auth.getTipoBanco().toString());
+                detalhesBanco.put("banco", auth.getBanco().toString());
                 detalhesBanco.put("usuarioId", currentUser.getId());
                 detalhesBanco.put("dataConexao", auth.getDataCriacao());
-                detalhesBanco.put("ultimaSincronizacao", auth.getDataUltimaSincronizacao());
+                detalhesBanco.put("ultimaSincronizacao", auth.getDataAtualizacao());
                 detalhesBanco.put("tokenExpirado", auth.isTokenExpirado());
                 
                 return ResponseEntity.ok(detalhesBanco);
             } else {
                 return ResponseEntity.ok(Map.of(
                     "bancoId", bankId,
-                    "banco", auth.getTipoBanco().toString(),
+                    "banco", auth.getBanco().toString(),
                     "status", "DADOS_INDISPONIVEIS",
                     "mensagem", "Não foi possível obter detalhes do banco"
                 ));
@@ -941,7 +1190,7 @@ public class BankController {
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar gastos do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }
@@ -1019,7 +1268,7 @@ public class BankController {
                         
                     } catch (Exception e) {
                         log.warn("Erro ao buscar análise do banco {}: {}", 
-                                auth.getTipoBanco(), e.getMessage());
+                                auth.getBanco(), e.getMessage());
                         // Continua com outros bancos
                     }
                 }

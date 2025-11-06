@@ -38,7 +38,7 @@ import java.util.List;
 @RequestMapping("/api/faturas") // Base path para endpoints de faturas
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Tag(name = "Faturas", description = "Endpoints para gestão de faturas de cartão de crédito")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"}) // Permite CORS de qualquer origem
 public class FaturaController {
 
     // Serviço responsável pela lógica de negócio das faturas

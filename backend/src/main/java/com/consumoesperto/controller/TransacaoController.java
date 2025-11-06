@@ -36,7 +36,7 @@ import java.util.List;
 @RequestMapping("/api/transacoes") // Base path para endpoints de transações
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Tag(name = "Transações", description = "Endpoints para gestão de transações financeiras")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app", "https://*.ngrok-free.app"})
 public class TransacaoController {
 
     // Serviço responsável pela lógica de negócio das transações
@@ -210,6 +210,44 @@ public class TransacaoController {
         // Busca transações do tipo especificado
         List<TransacaoDTO> transacoes = transacaoService.buscarPorTipo(currentUser.getId(), tipo);
         return ResponseEntity.ok(transacoes);
+    }
+
+    /**
+     * Busca transações do mês atual
+     * 
+     * Retorna apenas as transações do mês atual do usuário,
+     * útil para dashboard e relatórios mensais.
+     * 
+     * @param currentUser Usuário autenticado
+     * @return Lista de transações do mês atual
+     */
+    @GetMapping("/mes-atual")
+    @Operation(summary = "Buscar transações do mês atual", description = "Retorna transações do mês atual do usuário")
+    public ResponseEntity<List<TransacaoDTO>> buscarDoMesAtual(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        
+        // Busca transações do mês atual
+        List<TransacaoDTO> transacoes = transacaoService.buscarDoMesAtual(currentUser.getId());
+        return ResponseEntity.ok(transacoes);
+    }
+
+    /**
+     * Obtém resumo financeiro do mês atual
+     * 
+     * Retorna estatísticas como total de receitas, despesas,
+     * saldo e outras métricas do mês atual.
+     * 
+     * @param currentUser Usuário autenticado
+     * @return Objeto com resumo financeiro do mês atual
+     */
+    @GetMapping("/resumo-mes-atual")
+    @Operation(summary = "Obter resumo do mês atual", description = "Retorna resumo financeiro do mês atual")
+    public ResponseEntity<Object> obterResumoDoMesAtual(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        
+        // Obtém resumo financeiro do mês atual
+        Object resumo = transacaoService.obterResumoDoMesAtual(currentUser.getId());
+        return ResponseEntity.ok(resumo);
     }
 
     /**

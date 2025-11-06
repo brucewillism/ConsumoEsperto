@@ -25,24 +25,53 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
   
   // Debug: log da requisição e token
   console.log(`[AuthInterceptor] Interceptando requisição para: ${request.url}`);
+  console.log(`[AuthInterceptor] Método HTTP: ${request.method}`);
   console.log(`[AuthInterceptor] Token disponível: ${token ? 'SIM' : 'NÃO'}`);
+  
+  // Log detalhado apenas para requisições de login
+  if (request.url.includes('/auth/google') || request.url.includes('/oauth2/google')) {
+    console.log(`[AuthInterceptor] 🔐 Requisição de login Google detectada`);
+    console.log(`[AuthInterceptor] URL completa: ${request.url}`);
+    console.log(`[AuthInterceptor] Headers da requisição:`, request.headers.keys());
+  }
   
   // Se há um token válido, adiciona ao header Authorization
   if (token) {
     request = request.clone({
       setHeaders: {
-        Authorization: `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
+        'ngrok-skip-browser-warning': 'true'
       }
     });
     console.log(`[AuthInterceptor] Token adicionado ao header: Bearer ${token.substring(0, 20)}...`);
+    console.log(`[AuthInterceptor] Headers após modificação:`, request.headers);
   } else {
+    // Adiciona header do ngrok mesmo sem token
+    request = request.clone({
+      setHeaders: {
+        'ngrok-skip-browser-warning': 'true',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
     console.warn(`[AuthInterceptor] Nenhum token encontrado para requisição: ${request.url}`);
+  }
+  
+  // SEMPRE adiciona header do ngrok para todas as requisições
+  if (!request.headers.has('ngrok-skip-browser-warning')) {
+    request = request.clone({
+      setHeaders: {
+        'ngrok-skip-browser-warning': 'true'
+      }
+    });
   }
 
   // Processa a requisição e trata erros de autenticação
   return next(request).pipe(
     catchError((error: HttpErrorResponse) => {
       console.error(`[AuthInterceptor] Erro na requisição ${request.url}:`, error);
+      console.error(`[AuthInterceptor] Status do erro: ${error.status}`);
+      console.error(`[AuthInterceptor] Mensagem do erro: ${error.message}`);
       
       // Se receber 401 (Unauthorized), o token pode ter expirado
       if (error.status === 401) {

@@ -39,8 +39,8 @@ public class DynamicBankConfigService {
         try {
             Map<String, BankApiConfig> userConfigs = new HashMap<>();
             configRepository.findByUsuarioId(usuarioId).forEach(config -> {
-                userConfigs.put(config.getBankCode(), config);
-                log.info("Configuração carregada para usuário {} - banco {}: {}", usuarioId, config.getBankName(), config.getBankCode());
+                            userConfigs.put(config.getBanco(), config);
+            log.info("Configuração carregada para usuário {} - banco {}: {}", usuarioId, config.getBanco(), config.getBanco());
             });
             userConfigCache.put(usuarioId, userConfigs);
             log.info("Total de {} configurações carregadas para usuário {}", userConfigs.size(), usuarioId);
@@ -57,9 +57,11 @@ public class DynamicBankConfigService {
             userConfigCache.clear();
             // Agrupa configurações por usuário
             configRepository.findAll().forEach(config -> {
-                Long usuarioId = config.getUsuario().getId();
-                userConfigCache.computeIfAbsent(usuarioId, k -> new HashMap<>())
-                    .put(config.getBankCode(), config);
+                if (config.getUsuario() != null) {
+                    Long usuarioId = config.getUsuario().getId();
+                    userConfigCache.computeIfAbsent(usuarioId, k -> new HashMap<>())
+                        .put(config.getBanco(), config);
+                }
             });
             log.info("Total de {} usuários com configurações carregadas", userConfigCache.size());
         } catch (Exception e) {
@@ -88,7 +90,7 @@ public class DynamicBankConfigService {
      */
     public Optional<BankApiConfig> getConfig(String bankCode) {
         // Para compatibilidade, busca em todas as configurações
-        return configRepository.findByBankCode(bankCode);
+        return configRepository.findByBanco(bankCode);
     }
 
     /**
@@ -123,11 +125,11 @@ public class DynamicBankConfigService {
      * Atualiza configuração no cache de um usuário específico
      */
     public void updateConfig(BankApiConfig config) {
-        if (config != null && config.getUsuario() != null && config.getBankCode() != null) {
+        if (config != null && config.getBanco() != null && config.getUsuario() != null) {
             Long usuarioId = config.getUsuario().getId();
             userConfigCache.computeIfAbsent(usuarioId, k -> new HashMap<>())
-                .put(config.getBankCode(), config);
-            log.info("Configuração atualizada no cache: usuário {} - banco {}", usuarioId, config.getBankCode());
+                .put(config.getBanco(), config);
+            log.info("Configuração atualizada no cache: usuário {} - banco {}", usuarioId, config.getBanco());
         }
     }
 
@@ -156,7 +158,7 @@ public class DynamicBankConfigService {
      */
     public void reloadUserConfig(Long usuarioId, String bankCode) {
         try {
-            Optional<BankApiConfig> config = configRepository.findByUsuarioIdAndBankCode(usuarioId, bankCode);
+            Optional<BankApiConfig> config = configRepository.findByUsuarioIdAndBanco(usuarioId, bankCode);
             if (config.isPresent()) {
                 userConfigCache.computeIfAbsent(usuarioId, k -> new HashMap<>())
                     .put(bankCode, config.get());
@@ -175,11 +177,11 @@ public class DynamicBankConfigService {
      */
     public void reloadConfig(String bankCode) {
         try {
-            Optional<BankApiConfig> config = configRepository.findByBankCode(bankCode);
+            Optional<BankApiConfig> config = configRepository.findByBanco(bankCode);
             if (config.isPresent()) {
                 // Atualiza em todos os usuários que têm esta configuração
                 configRepository.findAll().stream()
-                    .filter(c -> c.getBankCode().equals(bankCode))
+                    .filter(c -> c.getBanco().equals(bankCode))
                     .forEach(this::updateConfig);
                 log.info("Configuração recarregada: {}", bankCode);
             } else {
@@ -196,7 +198,7 @@ public class DynamicBankConfigService {
      */
     public boolean isConfigActive(Long usuarioId, String bankCode) {
         return getConfig(usuarioId, bankCode)
-                .map(BankApiConfig::getIsActive)
+                .map(BankApiConfig::getAtivo)
                 .orElse(false);
     }
 
@@ -205,7 +207,7 @@ public class DynamicBankConfigService {
      */
     public boolean isConfigActive(String bankCode) {
         return getConfig(bankCode)
-                .map(BankApiConfig::getIsActive)
+                .map(BankApiConfig::getAtivo)
                 .orElse(false);
     }
 
@@ -214,7 +216,7 @@ public class DynamicBankConfigService {
      */
     public boolean isConfigSandbox(Long usuarioId, String bankCode) {
         return getConfig(usuarioId, bankCode)
-                .map(BankApiConfig::getIsSandbox)
+                .map(BankApiConfig::getSandbox)
                 .orElse(true);
     }
 
@@ -223,7 +225,7 @@ public class DynamicBankConfigService {
      */
     public boolean isConfigSandbox(String bankCode) {
         return getConfig(bankCode)
-                .map(BankApiConfig::getIsSandbox)
+                .map(BankApiConfig::getSandbox)
                 .orElse(true);
     }
 
@@ -297,7 +299,7 @@ public class DynamicBankConfigService {
      */
     public java.util.Set<String> getConfiguredBanks() {
         return configRepository.findAll().stream()
-                .map(BankApiConfig::getBankCode)
+                .map(BankApiConfig::getBanco)
                 .collect(java.util.stream.Collectors.toSet());
     }
 
@@ -311,7 +313,7 @@ public class DynamicBankConfigService {
         Map<String, BankApiConfig> userConfigs = userConfigCache.get(usuarioId);
         if (userConfigs != null) {
             return userConfigs.values().stream()
-                    .filter(BankApiConfig::getIsActive)
+                    .filter(BankApiConfig::getAtivo)
                     .collect(java.util.stream.Collectors.toList());
         }
         return java.util.Collections.emptyList();
@@ -321,7 +323,7 @@ public class DynamicBankConfigService {
      * Lista todas as configurações ativas (método legado para compatibilidade)
      */
     public java.util.List<BankApiConfig> getActiveConfigs() {
-        return configRepository.findByIsActiveTrue();
+        return configRepository.findByAtivoTrue();
     }
 
     /**
@@ -357,20 +359,14 @@ public class DynamicBankConfigService {
 
         Map<String, Object> stats = new HashMap<>();
         stats.put("total", userConfigs.size());
-        stats.put("active", userConfigs.values().stream().filter(BankApiConfig::getIsActive).count());
-        stats.put("sandbox", userConfigs.values().stream().filter(BankApiConfig::getIsSandbox).count());
-        stats.put("production", userConfigs.values().stream().filter(c -> !c.getIsSandbox()).count());
+        stats.put("active", userConfigs.values().stream().filter(BankApiConfig::getAtivo).count());
+        stats.put("sandbox", userConfigs.values().stream().filter(BankApiConfig::getSandbox).count());
+        stats.put("production", userConfigs.values().stream().filter(c -> !c.getSandbox()).count());
 
-        // Status dos testes
-        long successTests = userConfigs.values().stream()
-                .filter(c -> "SUCCESS".equals(c.getLastTestStatus()))
-                .count();
-        long failedTests = userConfigs.values().stream()
-                .filter(c -> "FAILED".equals(c.getLastTestStatus()))
-                .count();
-        long notTested = userConfigs.values().stream()
-                .filter(c -> "NOT_TESTED".equals(c.getLastTestStatus()) || c.getLastTestStatus() == null)
-                .count();
+        // Status dos testes - campos temporariamente desabilitados
+        long successTests = 0;
+        long failedTests = 0; 
+        long notTested = userConfigs.size();
 
         stats.put("testsSuccess", successTests);
         stats.put("testsFailed", failedTests);
@@ -387,30 +383,24 @@ public class DynamicBankConfigService {
         stats.put("total", userConfigCache.values().stream().mapToInt(Map::size).sum());
         stats.put("active", userConfigCache.values().stream()
                 .flatMap(userConfigs -> userConfigs.values().stream())
-                .filter(BankApiConfig::getIsActive)
+                .filter(BankApiConfig::getAtivo)
                 .count());
         stats.put("sandbox", userConfigCache.values().stream()
                 .flatMap(userConfigs -> userConfigs.values().stream())
-                .filter(BankApiConfig::getIsSandbox)
+                .filter(BankApiConfig::getSandbox)
                 .count());
         stats.put("production", userConfigCache.values().stream()
                 .flatMap(userConfigs -> userConfigs.values().stream())
-                .filter(c -> !c.getIsSandbox())
+                .filter(c -> !c.getSandbox())
                 .count());
 
-        // Status dos testes
-        long successTests = userConfigCache.values().stream()
-                .flatMap(userConfigs -> userConfigs.values().stream())
-                .filter(c -> "SUCCESS".equals(c.getLastTestStatus()))
-                .count();
-        long failedTests = userConfigCache.values().stream()
-                .flatMap(userConfigs -> userConfigs.values().stream())
-                .filter(c -> "FAILED".equals(c.getLastTestStatus()))
-                .count();
-        long notTested = userConfigCache.values().stream()
-                .flatMap(userConfigs -> userConfigs.values().stream())
-                .filter(c -> "NOT_TESTED".equals(c.getLastTestStatus()) || c.getLastTestStatus() == null)
-                .count();
+        // Status dos testes - campos temporariamente desabilitados
+        long totalConfigs = userConfigCache.values().stream()
+                .mapToInt(userConfigs -> userConfigs.size())
+                .sum();
+        long successTests = 0;
+        long failedTests = 0;
+        long notTested = totalConfigs;
 
         stats.put("testsSuccess", successTests);
         stats.put("testsFailed", failedTests);

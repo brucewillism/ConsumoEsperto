@@ -61,6 +61,7 @@ public class BankSynchronizationService {
     private final FaturaRepository faturaRepository;
     private final UsuarioRepository usuarioRepository;
     private final AutorizacaoBancariaRepository autorizacaoBancariaRepository;
+    private final UrlConfigurationService urlConfigurationService;
     
     // Executor para processamento paralelo de múltiplos bancos
     private final ExecutorService executorService = Executors.newFixedThreadPool(4);
@@ -95,19 +96,19 @@ public class BankSynchronizationService {
                     .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
             
             // Lista de bancos para sincronização (baseado no que o usuário tem)
-            List<AutorizacaoBancaria.TipoBanco> connectedBanks = getConnectedBanks(usuario);
+            List<String> connectedBanks = getConnectedBanks(usuario);
             
             // Executa sincronização paralela para cada banco
             List<CompletableFuture<Map<String, Object>>> syncFutures = new ArrayList<>();
             
-            for (AutorizacaoBancaria.TipoBanco bankType : connectedBanks) {
+            for (String bankName : connectedBanks) {
                 CompletableFuture<Map<String, Object>> future = CompletableFuture.supplyAsync(() -> {
                     try {
-                        return synchronizeBankData(usuario, bankType);
+                        return synchronizeBankData(usuario, bankName);
                     } catch (Exception e) {
-                        log.error("Erro na sincronização do banco {}: {}", bankType, e.getMessage());
+                        log.error("Erro na sincronização do banco {}: {}", bankName, e.getMessage());
                         return Map.of(
-                            "banco", bankType.name(),
+                            "banco", bankName,
                             "status", "ERRO",
                             "erro", e.getMessage()
                         );
@@ -143,43 +144,43 @@ public class BankSynchronizationService {
      * incluindo autenticação, busca de dados e atualização local.
      * 
      * @param usuario Usuário para sincronização
-     * @param bankType Tipo do banco para sincronização
+     * @param bankName Nome do banco para sincronização
      * @return Map com resultado da sincronização
      */
-    private Map<String, Object> synchronizeBankData(Usuario usuario, AutorizacaoBancaria.TipoBanco bankType) {
-        log.info("Sincronizando dados do banco {} para usuário: {}", bankType, usuario.getId());
+    private Map<String, Object> synchronizeBankData(Usuario usuario, String bankName) {
+        log.info("Sincronizando dados do banco {} para usuário: {}", bankName, usuario.getId());
         
         try {
             // Verifica se há dados em cache válidos
-            String cacheKey = generateCacheKey(usuario.getId(), bankType);
+            String cacheKey = generateCacheKey(usuario.getId(), bankName);
             if (isCacheValid(cacheKey)) {
-                log.info("Usando dados em cache para banco {} - usuário: {}", bankType, usuario.getId());
+                log.info("Usando dados em cache para banco {} - usuário: {}", bankName, usuario.getId());
                 return (Map<String, Object>) dataCache.get(cacheKey).getData();
             }
             
             // Busca token de acesso do usuário para este banco
-            String accessToken = getAccessToken(usuario, bankType);
+            String accessToken = getAccessToken(usuario, bankName);
             if (accessToken == null) {
                 return Map.of(
-                    "banco", bankType.name(),
+                    "banco", bankName,
                     "status", "NAO_AUTORIZADO",
                     "mensagem", "Usuário não autorizado neste banco"
                 );
             }
             
             // Executa sincronização específica do banco
-            Map<String, Object> result = executeBankSpecificSync(usuario, bankType, accessToken);
+            Map<String, Object> result = executeBankSpecificSync(usuario, bankName, accessToken);
             
             // Armazena resultado em cache
             cacheData(cacheKey, result);
             
-            log.info("Sincronização do banco {} concluída com sucesso para usuário: {}", bankType, usuario.getId());
+            log.info("Sincronização do banco {} concluída com sucesso para usuário: {}", bankName, usuario.getId());
             return result;
             
         } catch (Exception e) {
-            log.error("Erro na sincronização do banco {} para usuário {}: {}", bankType, usuario.getId(), e.getMessage());
+            log.error("Erro na sincronização do banco {} para usuário {}: {}", bankName, usuario.getId(), e.getMessage());
             return Map.of(
-                "banco", bankType.name(),
+                "banco", bankName,
                 "status", "ERRO",
                 "erro", e.getMessage(),
                 "timestamp", LocalDateTime.now()
@@ -188,17 +189,17 @@ public class BankSynchronizationService {
     }
 
     /**
-     * Executa sincronização específica para cada tipo de banco
+     * Executa sincronização específica para cada banco
      * 
      * @param usuario Usuário para sincronização
-     * @param bankType Tipo do banco
+     * @param bankName Nome do banco
      * @param accessToken Token de acesso
      * @return Resultado da sincronização
      */
-    private Map<String, Object> executeBankSpecificSync(Usuario usuario, AutorizacaoBancaria.TipoBanco bankType, String accessToken) {
+    private Map<String, Object> executeBankSpecificSync(Usuario usuario, String bankName, String accessToken) {
         // Busca a autorização bancária para este usuário e banco
         Optional<AutorizacaoBancaria> autorizacaoOpt = autorizacaoBancariaRepository
-                .findByUsuarioIdAndTipoBanco(usuario.getId(), bankType);
+                .findByUsuarioIdAndBanco(usuario.getId(), bankName);
 
         if (autorizacaoOpt.isEmpty()) {
             return Map.of("status", "error", "message", "Autorização não encontrada");
@@ -206,17 +207,18 @@ public class BankSynchronizationService {
 
         AutorizacaoBancaria autorizacao = autorizacaoOpt.get();
 
-        switch (bankType) {
-            case ITAU:
+        switch (bankName.toUpperCase()) {
+            case "ITAU":
                 return itauBankService.getBankDetails(autorizacao);
-            case MERCADO_PAGO:
+            case "MERCADO_PAGO":
+            case "MERCADOPAGO":
                 return mercadoPagoBankService.getBankDetails(autorizacao);
-            case INTER:
+            case "INTER":
                 return interBankService.getBankDetails(autorizacao);
-            case NUBANK:
+            case "NUBANK":
                 return nubankBankService.getBankDetails(autorizacao);
             default:
-                throw new IllegalArgumentException("Tipo de banco não suportado: " + bankType);
+                throw new IllegalArgumentException("Banco não suportado: " + bankName);
         }
     }
 
@@ -229,16 +231,16 @@ public class BankSynchronizationService {
      * @param usuario Usuário para verificação
      * @return Lista de tipos de banco conectados
      */
-    private List<AutorizacaoBancaria.TipoBanco> getConnectedBanks(Usuario usuario) {
-        List<AutorizacaoBancaria.TipoBanco> connectedBanks = new ArrayList<>();
+    private List<String> getConnectedBanks(Usuario usuario) {
+        List<String> connectedBanks = new ArrayList<>();
         
         // Busca autorizações ativas do usuário
         List<AutorizacaoBancaria> autorizacoes = autorizacaoBancariaRepository
-                .findByUsuarioIdAndStatus(usuario.getId(), AutorizacaoBancaria.StatusAutorizacao.ATIVA);
+                .findByUsuarioIdAndAtivoTrue(usuario.getId());
         
         for (AutorizacaoBancaria autorizacao : autorizacoes) {
             if (autorizacao.isTokenValido()) {
-                connectedBanks.add(autorizacao.getTipoBanco());
+                connectedBanks.add(autorizacao.getBanco());
             }
         }
         
@@ -253,58 +255,54 @@ public class BankSynchronizationService {
      * da expiração, tenta renová-lo automaticamente.
      * 
      * @param usuario Usuário para busca do token
-     * @param bankType Tipo do banco
+     * @param bankName Nome do banco
      * @return Token de acesso OAuth2 ou null se não autorizado
      */
-    private String getAccessToken(Usuario usuario, AutorizacaoBancaria.TipoBanco bankType) {
+    private String getAccessToken(Usuario usuario, String bankName) {
         try {
             // Busca autorização ativa do usuário para este banco
             Optional<AutorizacaoBancaria> autorizacaoOpt = autorizacaoBancariaRepository
-                    .findByUsuarioIdAndTipoBanco(usuario.getId(), bankType);
+                    .findByUsuarioIdAndBanco(usuario.getId(), bankName);
             
             if (autorizacaoOpt.isEmpty()) {
-                log.info("Usuário {} não possui autorização para banco: {}", usuario.getId(), bankType);
+                log.info("Usuário {} não possui autorização para banco: {}", usuario.getId(), bankName);
                 return null;
             }
             
             AutorizacaoBancaria autorizacao = autorizacaoOpt.get();
             
             // Verifica se a autorização está ativa
-            if (autorizacao.getStatus() != AutorizacaoBancaria.StatusAutorizacao.ATIVA) {
-                log.warn("Autorização do usuário {} para banco {} não está ativa. Status: {}", 
-                        usuario.getId(), bankType, autorizacao.getStatus());
+            if (!autorizacao.getAtivo()) {
+                log.warn("Autorização do usuário {} para banco {} não está ativa", 
+                        usuario.getId(), bankName);
                 return null;
             }
             
             // Verifica se o token precisa ser renovado
             if (autorizacao.precisaRenovacao()) {
                 log.info("Token do usuário {} para banco {} precisa ser renovado. Renovando...", 
-                        usuario.getId(), bankType);
+                        usuario.getId(), bankName);
                 
                 try {
                     // Tenta renovar o token automaticamente
                     boolean renovado = renovarTokenAutomaticamente(autorizacao);
                     if (!renovado) {
-                        log.error("Falha ao renovar token do usuário {} para banco {}", usuario.getId(), bankType);
+                        log.error("Falha ao renovar token do usuário {} para banco {}", usuario.getId(), bankName);
                         return null;
                     }
                 } catch (Exception e) {
                     log.error("Erro ao renovar token do usuário {} para banco {}: {}", 
-                            usuario.getId(), bankType, e.getMessage());
+                            usuario.getId(), bankName, e.getMessage());
                     return null;
                 }
             }
             
-            // Marca a autorização como utilizada para auditoria
-            autorizacao.marcarComoUtilizada();
-            autorizacaoBancariaRepository.save(autorizacao);
-            
-            log.info("Token válido obtido para usuário {} no banco {}", usuario.getId(), bankType);
+            log.info("Token válido obtido para usuário {} no banco {}", usuario.getId(), bankName);
             return autorizacao.getAccessToken();
             
         } catch (Exception e) {
             log.error("Erro ao buscar token de acesso para usuário {} no banco {}: {}", 
-                    usuario.getId(), bankType, e.getMessage());
+                    usuario.getId(), bankName, e.getMessage());
             return null;
         }
     }
@@ -327,21 +325,21 @@ public class BankSynchronizationService {
             
             // Tenta renovar o token usando o serviço específico do banco
             boolean renovado = false;
-            switch (autorizacao.getTipoBanco()) {
-                case ITAU:
+            switch (autorizacao.getBanco()) {
+                case "ITAU":
                     renovado = itauBankService.refreshTokenIfNeeded(autorizacao);
                     break;
-                case MERCADO_PAGO:
+                case "MERCADO_PAGO":
                     renovado = mercadoPagoBankService.refreshTokenIfNeeded(autorizacao);
                     break;
-                case INTER:
+                case "INTER":
                     renovado = interBankService.refreshTokenIfNeeded(autorizacao);
                     break;
-                case NUBANK:
+                case "NUBANK":
                     renovado = nubankBankService.refreshTokenIfNeeded(autorizacao);
                     break;
-            default:
-                    log.warn("Tipo de banco não suportado para renovação automática: {}", autorizacao.getTipoBanco());
+                default:
+                    log.warn("Tipo de banco não suportado para renovação automática: {}", autorizacao.getBanco());
                     return false;
             }
             
@@ -371,8 +369,8 @@ public class BankSynchronizationService {
      * @param bankType Tipo do banco
      * @return Chave única para cache
      */
-    private String generateCacheKey(Long usuarioId, AutorizacaoBancaria.TipoBanco bankType) {
-        return usuarioId + "_" + bankType.name();
+    private String generateCacheKey(Long usuarioId, String bankName) {
+        return usuarioId + "_" + bankName.toLowerCase();
     }
 
     /**
@@ -431,13 +429,13 @@ public class BankSynchronizationService {
         try {
             switch (bankType.toUpperCase()) {
                 case "ITAU":
-                    return itauBankService.generateAuthUrl("http://localhost:4200/callback", usuarioId.toString());
+                    return itauBankService.generateAuthUrl(urlConfigurationService.getItauCallbackUrl(), usuarioId.toString());
                 case "NUBANK":
-                    return nubankBankService.generateAuthUrl("http://localhost:4200/callback", usuarioId.toString());
+                    return nubankBankService.generateAuthUrl(urlConfigurationService.getNubankCallbackUrl(), usuarioId.toString());
                 case "INTER":
-                    return interBankService.generateAuthUrl("http://localhost:4200/callback", usuarioId.toString());
+                    return interBankService.generateAuthUrl(urlConfigurationService.getInterCallbackUrl(), usuarioId.toString());
                 case "MERCADO_PAGO":
-                    return mercadoPagoBankService.generateAuthUrl("http://localhost:4200/callback", usuarioId.toString());
+                    return mercadoPagoBankService.generateAuthUrl(urlConfigurationService.getMercadoPagoCallbackUrl(), usuarioId.toString(), usuarioId);
                 default:
                     log.warn("Tipo de banco não suportado: {}", bankType);
                     return null;
@@ -455,13 +453,13 @@ public class BankSynchronizationService {
         try {
             switch (bankType.toUpperCase()) {
                 case "ITAU":
-                    return itauBankService.processOAuthCallback(code, usuarioId.toString(), "http://localhost:4200/callback");
+                    return itauBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getItauCallbackUrl());
                 case "NUBANK":
-                    return nubankBankService.processOAuthCallback(code, usuarioId.toString(), "http://localhost:4200/callback");
+                    return nubankBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getNubankCallbackUrl());
                 case "INTER":
-                    return interBankService.processOAuthCallback(code, usuarioId.toString(), "http://localhost:4200/callback");
+                    return interBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getInterCallbackUrl());
                 case "MERCADO_PAGO":
-                    return mercadoPagoBankService.processOAuthCallback(code, usuarioId.toString(), "http://localhost:4200/callback");
+                    return mercadoPagoBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getMercadoPagoCallbackUrl(), usuarioId);
                 default:
                     log.warn("Tipo de banco não suportado: {}", bankType);
                     return Map.of("sucesso", false, "erro", "Tipo de banco não suportado");
@@ -478,7 +476,7 @@ public class BankSynchronizationService {
     public Map<String, Object> synchronizeBankData(AutorizacaoBancaria autorizacao) {
         try {
             Usuario usuario = autorizacao.getUsuario();
-            AutorizacaoBancaria.TipoBanco bankType = autorizacao.getTipoBanco();
+            String bankType = autorizacao.getBanco();
             
             // Verifica se o token não expirou
             if (autorizacao.isTokenExpirado()) {
@@ -489,8 +487,8 @@ public class BankSynchronizationService {
             Map<String, Object> resultado = executeBankSpecificSync(usuario, bankType, autorizacao.getAccessToken());
             
             if (resultado != null && resultado.containsKey("sucesso")) {
-                // Atualiza data da última sincronização
-                autorizacao.setDataUltimaSincronizacao(LocalDateTime.now());
+                // Atualiza data da última atualização
+                autorizacao.setDataAtualizacao(LocalDateTime.now());
                 autorizacaoBancariaRepository.save(autorizacao);
             }
             
@@ -498,7 +496,7 @@ public class BankSynchronizationService {
             
         } catch (Exception e) {
             log.error("Erro ao sincronizar dados do banco {}: {}", 
-                    autorizacao.getTipoBanco(), e.getMessage());
+                    autorizacao.getBanco(), e.getMessage());
             return Map.of("sucesso", false, "erro", e.getMessage());
         }
     }
@@ -508,22 +506,22 @@ public class BankSynchronizationService {
      */
     public List<Map<String, Object>> getInvoicesFromBank(AutorizacaoBancaria autorizacao) {
         try {
-            switch (autorizacao.getTipoBanco()) {
-                case ITAU:
+            switch (autorizacao.getBanco()) {
+                case "ITAU":
                     return itauBankService.getInvoices(autorizacao);
-                case NUBANK:
+                case "NUBANK":
                     return nubankBankService.getInvoices(autorizacao);
-                case INTER:
+                case "INTER":
                     return interBankService.getInvoices(autorizacao);
-                case MERCADO_PAGO:
+                case "MERCADO_PAGO":
                     return mercadoPagoBankService.getInvoices(autorizacao);
                 default:
-                    log.warn("Tipo de banco não suportado: {}", autorizacao.getTipoBanco());
+                    log.warn("Tipo de banco não suportado: {}", autorizacao.getBanco());
                     return new ArrayList<>();
             }
         } catch (Exception e) {
             log.error("Erro ao buscar faturas do banco {}: {}", 
-                    autorizacao.getTipoBanco(), e.getMessage());
+                    autorizacao.getBanco(), e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -533,23 +531,32 @@ public class BankSynchronizationService {
      */
     public Map<String, Object> getBankBalanceData(AutorizacaoBancaria autorizacao) {
         try {
-            switch (autorizacao.getTipoBanco()) {
-                case ITAU:
+            switch (autorizacao.getBanco().toUpperCase()) {
+                case "ITAU":
                     return itauBankService.getBalanceData(autorizacao);
-                case NUBANK:
+                case "NUBANK":
                     return nubankBankService.getBalanceData(autorizacao);
-                case INTER:
+                case "INTER":
                     return interBankService.getBalanceData(autorizacao);
-                case MERCADO_PAGO:
+                case "MERCADO_PAGO":
+                case "MERCADOPAGO":
                     return mercadoPagoBankService.getBalanceData(autorizacao);
                 default:
-                    log.warn("Tipo de banco não suportado: {}", autorizacao.getTipoBanco());
-                    return Map.of("saldo", 0.0, "limite", 0.0, "limiteDisponivel", 0.0);
+                    log.warn("Tipo de banco não suportado: {}", autorizacao.getBanco());
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("saldo", 0.0);
+                    result.put("limite", 0.0);
+                    result.put("limiteDisponivel", 0.0);
+                    return result;
             }
         } catch (Exception e) {
             log.error("Erro ao buscar dados de saldo do banco {}: {}", 
-                    autorizacao.getTipoBanco(), e.getMessage());
-            return Map.of("saldo", 0.0, "limite", 0.0, "limiteDisponivel", 0.0);
+                    autorizacao.getBanco(), e.getMessage());
+            Map<String, Object> result = new HashMap<>();
+            result.put("saldo", 0.0);
+            result.put("limite", 0.0);
+            result.put("limiteDisponivel", 0.0);
+            return result;
         }
     }
 
@@ -564,23 +571,23 @@ public class BankSynchronizationService {
             // Testa conectividade com o banco
             boolean conectividadeOk = false;
             try {
-                switch (autorizacao.getTipoBanco()) {
-                    case ITAU:
+                switch (autorizacao.getBanco()) {
+                    case "ITAU":
                         conectividadeOk = itauBankService.testConnection(autorizacao);
                         break;
-                    case NUBANK:
+                    case "NUBANK":
                         conectividadeOk = nubankBankService.testConnection(autorizacao);
                         break;
-                    case INTER:
+                    case "INTER":
                         conectividadeOk = interBankService.testConnection(autorizacao);
                         break;
-                    case MERCADO_PAGO:
+                    case "MERCADO_PAGO":
                         conectividadeOk = mercadoPagoBankService.testConnection(autorizacao);
                         break;
                 }
             } catch (Exception e) {
                 log.warn("Erro ao testar conectividade com banco {}: {}", 
-                        autorizacao.getTipoBanco(), e.getMessage());
+                        autorizacao.getBanco(), e.getMessage());
             }
             
             return Map.of(
@@ -588,13 +595,13 @@ public class BankSynchronizationService {
                          (tokenValido ? "TOKEN_VALIDO_SEM_CONECTIVIDADE" : "TOKEN_EXPIRADO"),
                 "tokenValido", tokenValido,
                 "conectividadeOk", conectividadeOk,
-                "ultimaSincronizacao", autorizacao.getDataUltimaSincronizacao(),
+                "ultimaAtualizacao", autorizacao.getDataAtualizacao(),
                 "dataExpiracao", autorizacao.getDataExpiracao()
             );
             
         } catch (Exception e) {
             log.error("Erro ao verificar status de conexão do banco {}: {}", 
-                    autorizacao.getTipoBanco(), e.getMessage());
+                    autorizacao.getBanco(), e.getMessage());
             return Map.of("status", "ERRO", "mensagem", e.getMessage());
         }
     }
@@ -614,7 +621,7 @@ public class BankSynchronizationService {
             
         } catch (Exception e) {
             log.error("Erro ao renovar token do banco {}: {}", 
-                    autorizacao.getTipoBanco(), e.getMessage());
+                    autorizacao.getBanco(), e.getMessage());
             return Map.of("sucesso", false, "erro", e.getMessage());
         }
     }
@@ -624,22 +631,22 @@ public class BankSynchronizationService {
      */
     public Map<String, Object> getBankDetails(AutorizacaoBancaria autorizacao) {
         try {
-            switch (autorizacao.getTipoBanco()) {
-                case ITAU:
+            switch (autorizacao.getBanco()) {
+                case "ITAU":
                     return itauBankService.getBankDetails(autorizacao);
-                case NUBANK:
+                case "NUBANK":
                     return nubankBankService.getBankDetails(autorizacao);
-                case INTER:
+                case "INTER":
                     return interBankService.getBankDetails(autorizacao);
-                case MERCADO_PAGO:
+                case "MERCADO_PAGO":
                     return mercadoPagoBankService.getBankDetails(autorizacao);
                 default:
-                    log.warn("Tipo de banco não suportado: {}", autorizacao.getTipoBanco());
+                    log.warn("Tipo de banco não suportado: {}", autorizacao.getBanco());
                     return Map.of("status", "NAO_SUPORTADO");
             }
         } catch (Exception e) {
             log.error("Erro ao buscar detalhes do banco {}: {}", 
-                    autorizacao.getTipoBanco(), e.getMessage());
+                    autorizacao.getBanco(), e.getMessage());
             return Map.of("status", "ERRO", "mensagem", e.getMessage());
         }
     }
@@ -649,22 +656,22 @@ public class BankSynchronizationService {
      */
     public List<Map<String, Object>> getBankTransactions(AutorizacaoBancaria autorizacao, int limit) {
         try {
-            switch (autorizacao.getTipoBanco()) {
-                case ITAU:
+            switch (autorizacao.getBanco()) {
+                case "ITAU":
                     return itauBankService.getTransactions(autorizacao);
-                case NUBANK:
+                case "NUBANK":
                     return nubankBankService.getTransactions(autorizacao);
-                case INTER:
+                case "INTER":
                     return interBankService.getTransactions(autorizacao);
-                case MERCADO_PAGO:
+                case "MERCADO_PAGO":
                     return mercadoPagoBankService.getTransactions(autorizacao);
                 default:
-                    log.warn("Tipo de banco não suportado: {}", autorizacao.getTipoBanco());
+                    log.warn("Tipo de banco não suportado: {}", autorizacao.getBanco());
                     return new ArrayList<>();
             }
         } catch (Exception e) {
             log.error("Erro ao buscar transações do banco {}: {}", 
-                    autorizacao.getTipoBanco(), e.getMessage());
+                    autorizacao.getBanco(), e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -676,42 +683,109 @@ public class BankSynchronizationService {
      * @return Lista de cartões de crédito
      */
     public List<Map<String, Object>> getCreditCardsFromBank(AutorizacaoBancaria autorizacao) {
-        log.info("Obtendo cartões de crédito para banco: {}", autorizacao.getTipoBanco());
+        log.info("Obtendo cartões de crédito para banco: {}", autorizacao.getBanco());
         
         try {
             List<Map<String, Object>> cartoes = new ArrayList<>();
             
-            switch (autorizacao.getTipoBanco()) {
-                case ITAU:
+            switch (autorizacao.getBanco()) {
+                case "ITAU":
                     cartoes = itauBankService.getCreditCards(autorizacao);
                     break;
-                case NUBANK:
+                case "NUBANK":
                     cartoes = nubankBankService.getCreditCards(autorizacao);
                     break;
-                case INTER:
+                case "INTER":
                     cartoes = interBankService.getCreditCards(autorizacao);
                     break;
-                case MERCADO_PAGO:
+                case "MERCADO_PAGO":
                     cartoes = mercadoPagoBankService.getCreditCards(autorizacao);
                     break;
                 default:
-                    log.warn("Tipo de banco não suportado: {}", autorizacao.getTipoBanco());
+                    log.warn("Tipo de banco não suportado: {}", autorizacao.getBanco());
             }
             
             // Atualiza dados locais se necessário
             if (!cartoes.isEmpty()) {
+                log.info("✅ {} cartões encontrados para banco {}", cartoes.size(), autorizacao.getBanco());
                 for (Map<String, Object> cartao : cartoes) {
-                    // Converte Map para CartaoCredito para salvar no banco local
-                    CartaoCredito cartaoEntity = new CartaoCredito();
-                    cartaoEntity.setUsuario(autorizacao.getUsuario());
-                    cartaoEntity.setBanco(autorizacao.getTipoBanco().toString());
-                    cartaoEntity.setNumeroCartao((String) cartao.get("numero"));
-                    cartaoEntity.setLimiteCredito((BigDecimal) cartao.get("limite"));
-                    cartaoEntity.setLimiteDisponivel((BigDecimal) cartao.get("saldoDisponivel"));
+                    try {
+                        // Converte Map para CartaoCredito para salvar no banco local
+                        CartaoCredito cartaoEntity = new CartaoCredito();
+                        cartaoEntity.setUsuario(autorizacao.getUsuario());
+                        cartaoEntity.setBanco(autorizacao.getBanco().toString());
+                        
+                        // Número do cartão - tratar null
+                        Object numeroObj = cartao.get("numero");
+                        if (numeroObj != null) {
+                            cartaoEntity.setNumeroCartao(numeroObj.toString());
+                        } else {
+                            Object ultimosDigitosObj = cartao.get("ultimosDigitos");
+                            if (ultimosDigitosObj != null) {
+                                cartaoEntity.setNumeroCartao("****" + ultimosDigitosObj.toString());
+                            } else {
+                                cartaoEntity.setNumeroCartao("****");
+                            }
+                        }
+                        
+                        // Limite - tratar null
+                        Object limiteObj = cartao.get("limite");
+                        if (limiteObj instanceof BigDecimal) {
+                            cartaoEntity.setLimiteCredito((BigDecimal) limiteObj);
+                        } else if (limiteObj instanceof Number) {
+                            cartaoEntity.setLimiteCredito(BigDecimal.valueOf(((Number) limiteObj).doubleValue()));
+                        } else {
+                            cartaoEntity.setLimiteCredito(BigDecimal.ZERO);
+                        }
+                        
+                        // Saldo disponível - tratar null
+                        Object saldoDisponivelObj = cartao.get("saldoDisponivel");
+                        if (saldoDisponivelObj instanceof BigDecimal) {
+                            cartaoEntity.setLimiteDisponivel((BigDecimal) saldoDisponivelObj);
+                        } else if (saldoDisponivelObj instanceof Number) {
+                            cartaoEntity.setLimiteDisponivel(BigDecimal.valueOf(((Number) saldoDisponivelObj).doubleValue()));
+                        } else {
+                            cartaoEntity.setLimiteDisponivel(BigDecimal.ZERO);
+                        }
+                        
+                        // Nome do cartão - obrigatório para validação
+                        Object nomeObj = cartao.get("nome");
+                        if (nomeObj != null && !nomeObj.toString().trim().isEmpty()) {
+                            cartaoEntity.setNome(nomeObj.toString());
+                        } else {
+                            // Usar nome padrão se não fornecido
+                            Object cardholderNameObj = cartao.get("cardholderName");
+                            if (cardholderNameObj != null && !cardholderNameObj.toString().trim().isEmpty()) {
+                                cartaoEntity.setNome(cardholderNameObj.toString());
+                            } else {
+                                cartaoEntity.setNome("Cartão Mercado Pago");
+                            }
+                        }
+                        
+                        // Dia de vencimento - obrigatório para validação (padrão: 10)
+                        Object diaVencimentoObj = cartao.get("diaVencimento");
+                        if (diaVencimentoObj != null) {
+                            if (diaVencimentoObj instanceof Number) {
+                                cartaoEntity.setDiaVencimento(((Number) diaVencimentoObj).intValue());
+                            } else {
+                                try {
+                                    cartaoEntity.setDiaVencimento(Integer.parseInt(diaVencimentoObj.toString()));
+                                } catch (NumberFormatException e) {
+                                    cartaoEntity.setDiaVencimento(10); // Padrão: dia 10
+                                }
+                            }
+                        } else {
+                            cartaoEntity.setDiaVencimento(10); // Padrão: dia 10
+                        }
                     
                     // Salva ou atualiza o cartão no banco local
+                    if (autorizacao.getUsuario() == null) {
+                        log.warn("⚠️ Autorização bancária sem usuário associado, pulando cartão");
+                        continue;
+                    }
+                    Long usuarioId = autorizacao.getUsuario().getId();
                     Optional<CartaoCredito> existingCardOpt = cartaoCreditoRepository
-                            .findByUsuarioAndBancoAndNumeroCartao(autorizacao.getUsuario().getId(), cartaoEntity.getBanco(), cartaoEntity.getNumeroCartao());
+                            .findByUsuarioAndBancoAndNumeroCartao(usuarioId, cartaoEntity.getBanco(), cartaoEntity.getNumeroCartao());
                     
                     if (existingCardOpt.isPresent()) {
                         // Atualiza dados existentes
@@ -722,15 +796,26 @@ public class BankSynchronizationService {
                         cartaoCreditoRepository.save(existingCard);
                     } else {
                         // Salva novo cartão
+                        cartaoEntity.setAtivo(true);
                         cartaoCreditoRepository.save(cartaoEntity);
+                        log.info("✅ Novo cartão salvo: {} - {}", cartaoEntity.getNumeroCartao(), cartaoEntity.getBanco());
+                    }
+                    } catch (Exception e) {
+                        log.warn("⚠️ Erro ao processar cartão individual: {} - Continuando com próximo cartão", e.getMessage());
+                        if (log.isDebugEnabled()) {
+                            log.debug("Stack trace completo:", e);
+                        }
+                        // Continua com próximo cartão
                     }
                 }
+            } else {
+                log.warn("⚠️ Nenhum cartão encontrado para banco {}", autorizacao.getBanco());
             }
             
             return cartoes;
         } catch (Exception e) {
             log.error("Erro ao obter cartões de crédito para banco: {}", 
-                    autorizacao.getTipoBanco(), e);
+                    autorizacao.getBanco(), e);
             return new ArrayList<>();
         }
     }
@@ -740,26 +825,26 @@ public class BankSynchronizationService {
      */
     public Map<String, Double> getSpendingByCategory(AutorizacaoBancaria autorizacao, int days) {
         try {
-            switch (autorizacao.getTipoBanco()) {
-                case ITAU:
+            switch (autorizacao.getBanco()) {
+                case "ITAU":
                     Map<String, Object> itauSpending = itauBankService.getSpendingByCategory(autorizacao);
                     return convertSpendingToDouble(itauSpending);
-                case NUBANK:
+                case "NUBANK":
                     Map<String, Object> nubankSpending = nubankBankService.getSpendingByCategory(autorizacao);
                     return convertSpendingToDouble(nubankSpending);
-                case INTER:
+                case "INTER":
                     Map<String, Object> interSpending = interBankService.getSpendingByCategory(autorizacao);
                     return convertSpendingToDouble(interSpending);
-                case MERCADO_PAGO:
+                case "MERCADO_PAGO":
                     Map<String, Object> mpSpending = mercadoPagoBankService.getSpendingByCategory(autorizacao);
                     return convertSpendingToDouble(mpSpending);
                 default:
-                    log.warn("Tipo de banco não suportado: {}", autorizacao.getTipoBanco());
+                    log.warn("Tipo de banco não suportado: {}", autorizacao.getBanco());
                     return new HashMap<>();
             }
         } catch (Exception e) {
             log.error("Erro ao buscar gastos por categoria do banco {}: {}", 
-                    autorizacao.getTipoBanco(), e.getMessage());
+                    autorizacao.getBanco(), e.getMessage());
             return new HashMap<>();
         }
     }
@@ -769,22 +854,22 @@ public class BankSynchronizationService {
      */
     public Map<String, Object> getSpendingAnalysis(AutorizacaoBancaria autorizacao, int days) {
         try {
-            switch (autorizacao.getTipoBanco()) {
-                case ITAU:
+            switch (autorizacao.getBanco()) {
+                case "ITAU":
                     return itauBankService.getSpendingAnalysis(autorizacao);
-                case NUBANK:
+                case "NUBANK":
                     return nubankBankService.getSpendingAnalysis(autorizacao);
-                case INTER:
+                case "INTER":
                     return interBankService.getSpendingAnalysis(autorizacao);
-                case MERCADO_PAGO:
+                case "MERCADO_PAGO":
                     return mercadoPagoBankService.getSpendingAnalysis(autorizacao);
                 default:
-                    log.warn("Tipo de banco não suportado: {}", autorizacao.getTipoBanco());
+                    log.warn("Tipo de banco não suportado: {}", autorizacao.getBanco());
                     return Map.of("gastos", 0.0, "receitas", 0.0, "totalTransacoes", 0, "gastosPorDia", new HashMap<>());
             }
         } catch (Exception e) {
             log.error("Erro ao buscar análise de gastos do banco {}: {}", 
-                    autorizacao.getTipoBanco(), e.getMessage());
+                    autorizacao.getBanco(), e.getMessage());
             return Map.of("gastos", 0.0, "receitas", 0.0, "totalTransacoes", 0, "gastosPorDia", new HashMap<>());
         }
     }

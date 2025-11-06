@@ -13,6 +13,8 @@ public interface CategoriaRepository extends JpaRepository<Categoria, Long> {
     
     boolean existsByNomeAndUsuarioId(String nome, Long usuarioId);
     
+    boolean existsByNome(String nome);
+    
     /**
      * Busca categoria por usuário e nome
      * 

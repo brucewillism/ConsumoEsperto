@@ -1,7 +1,6 @@
 package com.consumoesperto.model;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import javax.persistence.*;
@@ -10,10 +9,10 @@ import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 
 @Entity
 @Table(name = "compras_parceladas")
-@Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CompraParcelada {
@@ -57,14 +56,17 @@ public class CompraParcelada {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cartao_credito_id")
+    @JsonBackReference("cartao-compras")
     private CartaoCredito cartaoCredito;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "categoria_id")
+    @JsonBackReference("categoria-compras")
     private Categoria categoria;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id")
+    @JsonBackReference("usuario-compras")
     private Usuario usuario;
 
     @Column(name = "ativo")
@@ -75,6 +77,55 @@ public class CompraParcelada {
 
     @Column(name = "data_atualizacao")
     private LocalDateTime dataAtualizacao;
+
+    // Getters e Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public BigDecimal getValorTotal() { return valorTotal; }
+    public void setValorTotal(BigDecimal valorTotal) { this.valorTotal = valorTotal; }
+
+    public BigDecimal getValorParcela() { return valorParcela; }
+    public void setValorParcela(BigDecimal valorParcela) { this.valorParcela = valorParcela; }
+
+    public Integer getNumeroParcelas() { return numeroParcelas; }
+    public void setNumeroParcelas(Integer numeroParcelas) { this.numeroParcelas = numeroParcelas; }
+
+    public Integer getParcelaAtual() { return parcelaAtual; }
+    public void setParcelaAtual(Integer parcelaAtual) { this.parcelaAtual = parcelaAtual; }
+
+    public LocalDateTime getDataCompra() { return dataCompra; }
+    public void setDataCompra(LocalDateTime dataCompra) { this.dataCompra = dataCompra; }
+
+    public LocalDateTime getDataPrimeiraParcela() { return dataPrimeiraParcela; }
+    public void setDataPrimeiraParcela(LocalDateTime dataPrimeiraParcela) { this.dataPrimeiraParcela = dataPrimeiraParcela; }
+
+    public LocalDateTime getDataUltimaParcela() { return dataUltimaParcela; }
+    public void setDataUltimaParcela(LocalDateTime dataUltimaParcela) { this.dataUltimaParcela = dataUltimaParcela; }
+
+    public StatusCompra getStatusCompra() { return statusCompra; }
+    public void setStatusCompra(StatusCompra statusCompra) { this.statusCompra = statusCompra; }
+
+    public CartaoCredito getCartaoCredito() { return cartaoCredito; }
+    public void setCartaoCredito(CartaoCredito cartaoCredito) { this.cartaoCredito = cartaoCredito; }
+
+    public Categoria getCategoria() { return categoria; }
+    public void setCategoria(Categoria categoria) { this.categoria = categoria; }
+
+    public Usuario getUsuario() { return usuario; }
+    public void setUsuario(Usuario usuario) { this.usuario = usuario; }
+
+    public Boolean getAtivo() { return ativo; }
+    public void setAtivo(Boolean ativo) { this.ativo = ativo; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public LocalDateTime getDataAtualizacao() { return dataAtualizacao; }
+    public void setDataAtualizacao(LocalDateTime dataAtualizacao) { this.dataAtualizacao = dataAtualizacao; }
 
     @PrePersist
     protected void onCreate() {

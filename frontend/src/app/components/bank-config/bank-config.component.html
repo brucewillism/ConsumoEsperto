@@ -1,0 +1,155 @@
+<div class="bank-config-container">
+  <div class="config-header">
+    <h2>🏦 Configuração de Integração Bancária</h2>
+    <p>Configure suas credenciais para conectar com bancos e fintechs</p>
+  </div>
+
+  <!-- Seletor de Banco -->
+  <div class="bank-selector">
+    <h3>Escolha seu banco:</h3>
+    <div class="bank-grid">
+      <div 
+        *ngFor="let provider of bankProviders" 
+        class="bank-card"
+        [class.selected]="selectedProvider?.id === provider.id"
+        [style.border-color]="selectedProvider?.id === provider.id ? provider.color : '#e1e8ed'"
+        (click)="onProviderChange(provider.id)"
+      >
+        <div class="bank-icon" [style.color]="provider.color">{{ provider.icon }}</div>
+        <div class="bank-name">{{ provider.name }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Formulário Dinâmico -->
+  <div class="config-form-container" *ngIf="selectedProvider">
+    <div class="selected-bank-header" [style.border-color]="selectedProvider.color">
+      <span class="bank-icon" [style.color]="selectedProvider.color">{{ selectedProvider.icon }}</span>
+      <h3>Configurar {{ selectedProvider.name }}</h3>
+      <button 
+        type="button" 
+        class="help-btn"
+        (click)="openBankWebsite()"
+        title="Abrir site do banco"
+      >
+        🌐 Site
+      </button>
+    </div>
+
+    <form [formGroup]="configForm" (ngSubmit)="onSubmit()" class="config-form">
+      
+      <!-- Campos Dinâmicos -->
+      <div class="form-group" *ngFor="let field of selectedProvider.fields">
+        <label [for]="field.name">
+          {{ field.label }}
+          <span *ngIf="field.required" class="required">*</span>
+        </label>
+        <input 
+          [type]="field.type" 
+          [id]="field.name" 
+          [formControlName]="field.name" 
+          class="form-control"
+          [class.error]="isFieldInvalid(field.name)"
+          [placeholder]="field.placeholder"
+        />
+        <div class="error-message" *ngIf="isFieldInvalid(field.name)">
+          <span *ngFor="let error of getFieldErrors(field.name)">{{ error }}</span>
+        </div>
+        <small class="help-text">
+          ℹ️ {{ field.helpText }}
+        </small>
+      </div>
+
+      <!-- Botões -->
+      <div class="form-actions">
+        <button 
+          type="submit" 
+          class="btn btn-primary"
+          [style.background]="selectedProvider.color"
+          [disabled]="configForm.invalid || isLoading"
+        >
+          <span *ngIf="!isLoading">💾 Salvar {{ selectedProvider.name }}</span>
+          <span *ngIf="isLoading">⏳ Salvando...</span>
+        </button>
+        
+        <button 
+          type="button" 
+          class="btn btn-secondary"
+          (click)="testConnection()"
+          [disabled]="isLoading"
+        >
+          🔍 Testar Conexão
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Mensagens -->
+  <div class="message-container" *ngIf="message">
+    <div class="alert" [ngClass]="'alert-' + messageType">
+      <span class="message-text">{{ message }}</span>
+      <button type="button" class="close-btn" (click)="clearMessage()">×</button>
+    </div>
+  </div>
+
+  <!-- Instruções Dinâmicas -->
+  <div class="instructions-container" *ngIf="selectedProvider">
+    <h3>📋 Como configurar {{ selectedProvider.name }}:</h3>
+    
+    <div class="instruction-card" [style.border-color]="selectedProvider.color">
+      <div class="instruction-header">
+        <span class="bank-icon" [style.color]="selectedProvider.color">{{ selectedProvider.icon }}</span>
+        <h4>{{ selectedProvider.name }}</h4>
+        <a 
+          [href]="selectedProvider.websiteUrl" 
+          target="_blank" 
+          class="website-link"
+          [style.color]="selectedProvider.color"
+        >
+          🌐 Acessar Site
+        </a>
+      </div>
+      <ol>
+        <li *ngFor="let instruction of selectedProvider.instructions">{{ instruction }}</li>
+      </ol>
+    </div>
+
+    <div class="instruction-card security-card">
+      <div class="instruction-header">
+        <span class="security-icon">🔒</span>
+        <h4>Segurança & Privacidade</h4>
+      </div>
+      <ul>
+        <li>✅ Suas credenciais são criptografadas e armazenadas com segurança</li>
+        <li>✅ Nunca compartilhe suas credenciais com ninguém</li>
+        <li>✅ Revogue credenciais antigas regularmente</li>
+        <li>✅ Use apenas em dispositivos seguros e confiáveis</li>
+        <li>✅ Monitore suas contas regularmente</li>
+        <li>⚠️ Em caso de suspeita de compromisso, altere suas credenciais imediatamente</li>
+      </ul>
+    </div>
+
+    <!-- Status das Integrações -->
+    <div class="status-card">
+      <h4>📊 Status das Integrações</h4>
+      <div class="integration-status">
+        <div 
+          *ngFor="let provider of bankProviders" 
+          class="status-item"
+          [class.active]="provider.id === selectedProvider.id"
+        >
+          <span class="status-icon" [style.color]="provider.color">{{ provider.icon }}</span>
+          <span class="status-name">{{ provider.name }}</span>
+          <span class="status-badge">
+            <span 
+              class="badge" 
+              [ngClass]="integrationStatus[provider.id] ? 'active' : 'pending'"
+            >
+              {{ integrationStatus[provider.id] ? 'Ativo' : 'Pendente' }}
+            </span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

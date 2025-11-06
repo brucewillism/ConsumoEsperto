@@ -8,6 +8,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -54,6 +59,9 @@ public class FinancialDataSyncService {
     private final CartaoCreditoRepository cartaoCreditoRepository;
     private final UsuarioRepository usuarioRepository;
     private final AutorizacaoBancariaRepository autorizacaoBancariaRepository;
+    
+    // RestTemplate para chamadas HTTP
+    private final RestTemplate restTemplate;
     
     // Executor para processamento paralelo
     private final ExecutorService executorService = Executors.newFixedThreadPool(4);
@@ -136,7 +144,7 @@ public class FinancialDataSyncService {
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao obter transações do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao obter transações do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -176,12 +184,25 @@ public class FinancialDataSyncService {
                     for (Map<String, Object> transacaoBanco : transacoesBanco) {
                         Transacao transacao = convertBankTransactionToLocal(transacaoBanco, usuario, auth);
                         if (transacao != null) {
-                            transacao = transacaoRepository.save(transacao);
-                            transacoesSincronizadas.add(transacao);
+                            // Verificar se já existe para evitar duplicatas
+                            List<Transacao> existentes = transacaoRepository.findByUsuarioIdAndDescricaoAndDataTransacaoAndValor(
+                                usuario.getId(),
+                                transacao.getDescricao(),
+                                transacao.getDataTransacao(),
+                                transacao.getValor()
+                            );
+                            
+                            if (existentes.isEmpty()) {
+                                transacao = transacaoRepository.save(transacao);
+                                transacoesSincronizadas.add(transacao);
+                                log.debug("✅ Transação salva: {} - {}", transacao.getDescricao(), transacao.getValor());
+                            } else {
+                                log.debug("ℹ️ Transação já existe, pulando: {} - {}", transacao.getDescricao(), transacao.getValor());
+                            }
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao sincronizar transações do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao sincronizar transações do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -223,7 +244,7 @@ public class FinancialDataSyncService {
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao sincronizar faturas do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao sincronizar faturas do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -269,7 +290,7 @@ public class FinancialDataSyncService {
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao sincronizar compras parceladas do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao sincronizar compras parceladas do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -311,7 +332,7 @@ public class FinancialDataSyncService {
                         }
                     }
                 } catch (Exception e) {
-                    log.warn("Erro ao sincronizar cartões do banco {}: {}", auth.getTipoBanco(), e.getMessage());
+                    log.warn("Erro ao sincronizar cartões do banco {}: {}", auth.getBanco(), e.getMessage());
                 }
             }
             
@@ -333,17 +354,17 @@ public class FinancialDataSyncService {
      * Obtém transações de um banco específico
      */
     private List<Map<String, Object>> getTransactionsFromBank(AutorizacaoBancaria auth) {
-        switch (auth.getTipoBanco()) {
-            case ITAU:
+        switch (auth.getBanco()) {
+            case "ITAU":
                 return itauBankService.getTransactions(auth);
-            case MERCADO_PAGO:
+            case "MERCADO_PAGO":
                 return mercadoPagoBankService.getTransactions(auth);
-            case INTER:
+            case "INTER":
                 return interBankService.getTransactions(auth);
-            case NUBANK:
+            case "NUBANK":
                 return nubankBankService.getTransactions(auth);
             default:
-                log.warn("Tipo de banco não suportado: {}", auth.getTipoBanco());
+                log.warn("Tipo de banco não suportado: {}", auth.getBanco());
                 return new ArrayList<>();
         }
     }
@@ -352,17 +373,17 @@ public class FinancialDataSyncService {
      * Obtém faturas de um banco específico
      */
     private List<Map<String, Object>> getInvoicesFromBank(AutorizacaoBancaria auth) {
-        switch (auth.getTipoBanco()) {
-            case ITAU:
+        switch (auth.getBanco()) {
+            case "ITAU":
                 return itauBankService.getInvoices(auth);
-            case MERCADO_PAGO:
+            case "MERCADO_PAGO":
                 return mercadoPagoBankService.getInvoices(auth);
-            case INTER:
+            case "INTER":
                 return interBankService.getInvoices(auth);
-            case NUBANK:
+            case "NUBANK":
                 return nubankBankService.getInvoices(auth);
             default:
-                log.warn("Tipo de banco não suportado: {}", auth.getTipoBanco());
+                log.warn("Tipo de banco não suportado: {}", auth.getBanco());
                 return new ArrayList<>();
         }
     }
@@ -371,27 +392,175 @@ public class FinancialDataSyncService {
      * Obtém compras parceladas de um banco específico
      */
     private List<Map<String, Object>> getInstallmentPurchasesFromBank(AutorizacaoBancaria auth) {
-        // Por enquanto, retorna lista vazia pois os métodos não estão implementados
-        // TODO: Implementar métodos getInstallmentPurchases nos serviços bancários
-        log.info("Método getInstallmentPurchases não implementado para banco: {}", auth.getTipoBanco());
-        return new ArrayList<>();
+        log.info("Buscando compras parceladas do banco: {}", auth.getBanco());
+        
+        List<Map<String, Object>> comprasParceladas = new ArrayList<>();
+        
+        try {
+            switch (auth.getBanco()) {
+                case "ITAU":
+                    comprasParceladas = buscarComprasParceladasItau(auth);
+                    break;
+                case "MERCADO_PAGO":
+                    comprasParceladas = buscarComprasParceladasMercadoPago(auth);
+                    break;
+                case "INTER":
+                    comprasParceladas = buscarComprasParceladasInter(auth);
+                    break;
+                case "NUBANK":
+                    comprasParceladas = buscarComprasParceladasNubank(auth);
+                    break;
+                default:
+                    log.warn("Banco não suportado para compras parceladas: {}", auth.getBanco());
+            }
+            
+            log.info("{} compras parceladas encontradas para banco: {}", comprasParceladas.size(), auth.getBanco());
+            
+        } catch (Exception e) {
+            log.error("Erro ao buscar compras parceladas do banco {}: {}", auth.getBanco(), e.getMessage());
+        }
+        
+        return comprasParceladas;
+    }
+    
+    /**
+     * Busca compras parceladas do Itaú
+     */
+    private List<Map<String, Object>> buscarComprasParceladasItau(AutorizacaoBancaria auth) {
+        List<Map<String, Object>> compras = new ArrayList<>();
+        
+        try {
+            // Implementação real para busca de compras parceladas do Itaú
+            log.info("Buscando compras parceladas do Itaú para usuário: {}", auth.getUsuario().getId());
+            
+            // TODO: Implementar chamada real para API do Itaú
+            // Por enquanto retorna lista vazia até implementação completa
+            log.warn("Busca de compras parceladas do Itaú não implementada ainda");
+            
+        } catch (Exception e) {
+            log.error("Erro ao buscar compras parceladas do Itaú: {}", e.getMessage());
+        }
+        
+        return compras;
+    }
+    
+    /**
+     * Busca compras parceladas do Mercado Pago
+     */
+    private List<Map<String, Object>> buscarComprasParceladasMercadoPago(AutorizacaoBancaria auth) {
+        List<Map<String, Object>> compras = new ArrayList<>();
+        
+        try {
+            log.info("Buscando compras parceladas do Mercado Pago para usuário: {}", auth.getUsuario().getId());
+            
+            // Busca transações que podem ser parceladas
+            String url = "https://api.mercadopago.com/v1/payments/search?limit=50&offset=0&sort=date_created&criteria=desc";
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + auth.getAccessToken());
+            headers.set("Content-Type", "application/json");
+            
+            HttpEntity<String> request = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> responseBody = response.getBody();
+                if (responseBody.containsKey("results")) {
+                    Object results = responseBody.get("results");
+                    if (results instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> payments = (List<Map<String, Object>>) results;
+                        
+                        for (Map<String, Object> payment : payments) {
+                            // Verifica se é uma compra parcelada
+                            if (payment.containsKey("installments") && 
+                                ((Number) payment.get("installments")).intValue() > 1) {
+                                
+                                Map<String, Object> compra = new HashMap<>();
+                                compra.put("id", payment.get("id"));
+                                compra.put("descricao", payment.getOrDefault("description", "Compra Mercado Pago"));
+                                compra.put("valorTotal", payment.getOrDefault("transaction_amount", 0.0));
+                                compra.put("parcelas", payment.getOrDefault("installments", 1));
+                                compra.put("valorParcela", ((Number) payment.getOrDefault("transaction_amount", 0.0)).doubleValue() / 
+                                    ((Number) payment.getOrDefault("installments", 1)).intValue());
+                                compra.put("parcelasPagas", 0); // Seria calculado baseado no histórico
+                                compra.put("parcelasRestantes", payment.getOrDefault("installments", 1));
+                                compra.put("dataCompra", payment.getOrDefault("date_created", LocalDateTime.now().toString()));
+                                compra.put("banco", "MERCADO_PAGO");
+                                compras.add(compra);
+                            }
+                        }
+                    }
+                }
+            }
+            
+        } catch (Exception e) {
+            log.error("Erro ao buscar compras parceladas do Mercado Pago: {}", e.getMessage());
+        }
+        
+        return compras;
+    }
+    
+    /**
+     * Busca compras parceladas do Inter
+     */
+    private List<Map<String, Object>> buscarComprasParceladasInter(AutorizacaoBancaria auth) {
+        List<Map<String, Object>> compras = new ArrayList<>();
+        
+        try {
+            log.info("Buscando compras parceladas do Inter para usuário: {}", auth.getUsuario().getId());
+            
+            // Implementação real para busca de compras parceladas do Inter
+            log.info("Buscando compras parceladas do Inter para usuário: {}", auth.getUsuario().getId());
+            
+            // TODO: Implementar chamada real para API do Inter
+            // Por enquanto retorna lista vazia até implementação completa
+            log.warn("Busca de compras parceladas do Inter não implementada ainda");
+            
+        } catch (Exception e) {
+            log.error("Erro ao buscar compras parceladas do Inter: {}", e.getMessage());
+        }
+        
+        return compras;
+    }
+    
+    /**
+     * Busca compras parceladas do Nubank
+     */
+    private List<Map<String, Object>> buscarComprasParceladasNubank(AutorizacaoBancaria auth) {
+        List<Map<String, Object>> compras = new ArrayList<>();
+        
+        try {
+            log.info("Buscando compras parceladas do Nubank para usuário: {}", auth.getUsuario().getId());
+            
+            // Implementação real para busca de compras parceladas do Nubank
+            log.info("Buscando compras parceladas do Nubank para usuário: {}", auth.getUsuario().getId());
+            
+            // TODO: Implementar chamada real para API do Nubank
+            // Por enquanto retorna lista vazia até implementação completa
+            log.warn("Busca de compras parceladas do Nubank não implementada ainda");
+            
+        } catch (Exception e) {
+            log.error("Erro ao buscar compras parceladas do Nubank: {}", e.getMessage());
+        }
+        
+        return compras;
     }
 
     /**
      * Obtém cartões de crédito de um banco específico
      */
     private List<Map<String, Object>> getCreditCardsFromBank(AutorizacaoBancaria auth) {
-        switch (auth.getTipoBanco()) {
-            case ITAU:
+        switch (auth.getBanco()) {
+            case "ITAU":
                 return itauBankService.getCreditCards(auth);
-            case MERCADO_PAGO:
+            case "MERCADO_PAGO":
                 return mercadoPagoBankService.getCreditCards(auth);
-            case INTER:
+            case "INTER":
                 return interBankService.getCreditCards(auth);
-            case NUBANK:
+            case "NUBANK":
                 return nubankBankService.getCreditCards(auth);
             default:
-                log.warn("Tipo de banco não suportado: {}", auth.getTipoBanco());
+                log.warn("Tipo de banco não suportado: {}", auth.getBanco());
                 return new ArrayList<>();
         }
     }
@@ -532,7 +701,7 @@ public class FinancialDataSyncService {
             fatura.setAno((Integer) faturaBanco.get("year"));
             fatura.setValorTotal(new BigDecimal(faturaBanco.get("totalAmount").toString()));
             fatura.setValorPago(new BigDecimal(faturaBanco.get("paidAmount").toString()));
-            fatura.setStatus((String) faturaBanco.get("status"));
+            fatura.setStatus(Fatura.StatusFatura.fromString((String) faturaBanco.get("status")));
             fatura.setDataVencimento(LocalDateTime.parse((String) faturaBanco.get("dueDate")));
             fatura.setDataCriacao(LocalDateTime.now());
             
@@ -595,7 +764,7 @@ public class FinancialDataSyncService {
     private CartaoCredito findOrCreateCreditCard(Usuario usuario, Map<String, Object> dados, AutorizacaoBancaria auth) {
         String nomeCartao = (String) dados.get("cardName");
         if (nomeCartao == null) {
-            nomeCartao = auth.getTipoBanco().toString();
+            nomeCartao = auth.getBanco().toString();
         }
         
         CartaoCredito cartaoExistente = cartaoCreditoRepository.findByUsuarioIdAndNome(usuario.getId(), nomeCartao);
@@ -626,7 +795,7 @@ public class FinancialDataSyncService {
                 parcela.setCompraParcelada(compra);
                 parcela.setNumeroParcela(i);
                 parcela.setValor(valorParcela);
-                parcela.setDataVencimento(dataPrimeiraParcela.plusMonths(i - 1).toLocalDate());
+                parcela.setDataVencimento(dataPrimeiraParcela.plusMonths(i - 1));
                 parcela.setStatus(Parcela.StatusParcela.PENDENTE);
                 parcela.setDataCriacao(LocalDateTime.now());
                 
@@ -730,9 +899,9 @@ public class FinancialDataSyncService {
     }
 
     /**
-     * Sincronização automática agendada (a cada 15 minutos)
+     * Sincronização automática agendada (a cada 15 minutos) - DESABILITADA TEMPORARIAMENTE
      */
-    @Scheduled(fixedRate = 15 * 60 * 1000) // 15 minutos
+    // @Scheduled(fixedRate = 15 * 60 * 1000) // 15 minutos
     public void scheduledSync() {
         log.info("Executando sincronização automática agendada");
         

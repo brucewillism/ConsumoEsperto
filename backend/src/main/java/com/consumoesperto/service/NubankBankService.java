@@ -20,7 +20,6 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
 @Service
-@ConditionalOnProperty(name = "bank.api.nubank.client-id", havingValue = "nubank_dev_client_id", matchIfMissing = true)
 @Slf4j
 public class NubankBankService {
 
@@ -102,14 +101,11 @@ public class NubankBankService {
 
             HttpEntity<String> request = new HttpEntity<>(headers);
 
-            // TODO: Implementar teste real de conexão
-            // String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts")
-            //         .build().toUriString();
-            // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-            // return response.getStatusCode() == HttpStatus.OK;
-
-            // Por enquanto, retorna true (simulado)
-            return true;
+            // Implementar teste real de conexão
+            String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts")
+                    .build().toUriString();
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            return response.getStatusCode() == HttpStatus.OK;
             
         } catch (Exception e) {
             log.error("Erro ao testar conexão com Nubank: {}", e.getMessage());
@@ -175,12 +171,12 @@ public class NubankBankService {
                 return processarCartoesResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedCreditCards();
+            log.warn("API retornou status não esperado: {}. Retornando lista vazia", response.getStatusCode());
+            return new ArrayList<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar cartões de crédito do Nubank: {}", e.getMessage());
-            return getSimulatedCreditCards();
+            return new ArrayList<>();
         }
     }
 
@@ -207,12 +203,12 @@ public class NubankBankService {
                 return processarSaldoResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedBalanceData();
+            log.warn("API retornou status não esperado: {}", response.getStatusCode());
+            return new HashMap<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar dados de saldo do Nubank: {}", e.getMessage());
-            return getSimulatedBalanceData();
+            return new HashMap<>();
         }
     }
 
@@ -231,14 +227,11 @@ public class NubankBankService {
             // String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts/" + autorizacao.getAccountId() + "/invoices")
             //         .build().toUriString();
             // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-            // return processarFaturasResposta(response.getBody());
-
-            // Por enquanto, retorna dados simulados
-            return getSimulatedInvoices();
+            return new ArrayList<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar faturas do Nubank: {}", e.getMessage());
-            return getSimulatedInvoices();
+            return new ArrayList<>();
         }
     }
 
@@ -267,12 +260,12 @@ public class NubankBankService {
                 return processarTransacoesResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedTransactions();
+            log.warn("API retornou status não esperado: {}", response.getStatusCode());
+            return new ArrayList<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar transações do Nubank: {}", e.getMessage());
-            return getSimulatedTransactions();
+            return new ArrayList<>();
         }
     }
 
@@ -293,12 +286,12 @@ public class NubankBankService {
             // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
             // return processarGastosPorCategoriaResposta(response.getBody());
 
-            // Por enquanto, retorna dados simulados
-            return getSimulatedSpendingByCategory();
+            // Endpoint não implementado - retorna vazio
+            return new HashMap<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar gastos por categoria do Nubank: {}", e.getMessage());
-            return getSimulatedSpendingByCategory();
+            return new HashMap<>();
         }
     }
 
@@ -319,12 +312,12 @@ public class NubankBankService {
             // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
             // return processarAnaliseGastosResposta(response.getBody());
 
-            // Por enquanto, retorna dados simulados
-            return getSimulatedSpendingAnalysis();
+            // Endpoint não implementado - retorna vazio
+            return new HashMap<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar análise de gastos do Nubank: {}", e.getMessage());
-            return getSimulatedSpendingAnalysis();
+            return new HashMap<>();
         }
     }
 
@@ -367,7 +360,7 @@ public class NubankBankService {
             //     return true;
             // }
 
-            // Por enquanto, retorna false (simulado)
+            // Endpoint não implementado - retorna false
             return false;
             
         } catch (Exception e) {
@@ -395,12 +388,6 @@ public class NubankBankService {
         return cartoes;
     }
 
-    private List<Map<String, Object>> getSimulatedCreditCards() {
-        List<Map<String, Object>> cartoes = new ArrayList<>();
-        cartoes.add(Map.of("id", "1234567890123456", "number", "1234 5678 9012 3456", "holder_name", "Simulado", "limit", 10000.0, "available_limit", 8000.0));
-        cartoes.add(Map.of("id", "9876543210987654", "number", "9876 5432 1098 7654", "holder_name", "Simulado 2", "limit", 5000.0, "available_limit", 3000.0));
-        return cartoes;
-    }
 
     private Map<String, Object> processarSaldoResposta(Map<String, Object> responseBody) {
         Map<String, Object> saldo = new HashMap<>();
@@ -417,14 +404,6 @@ public class NubankBankService {
         return saldo;
     }
 
-    private Map<String, Object> getSimulatedBalanceData() {
-        Map<String, Object> saldo = new HashMap<>();
-        saldo.put("balance", 1234.56);
-        saldo.put("available_balance", 1000.0);
-        saldo.put("currency", "BRL");
-        saldo.put("last_update", LocalDateTime.now());
-        return saldo;
-    }
 
     private List<Map<String, Object>> processarFaturasResposta(Map<String, Object> responseBody) {
         List<Map<String, Object>> faturas = new ArrayList<>();
@@ -446,12 +425,6 @@ public class NubankBankService {
         return faturas;
     }
 
-    private List<Map<String, Object>> getSimulatedInvoices() {
-        List<Map<String, Object>> faturas = new ArrayList<>();
-        faturas.add(Map.of("id", "1", "number", "1", "due_date", "2023-10-20", "close_date", "2023-10-01", "total", 100.0, "minimum", 20.0, "state", "OPEN", "card_id", "1234567890123456"));
-        faturas.add(Map.of("id", "2", "number", "2", "due_date", "2023-11-20", "close_date", "2023-11-01", "total", 200.0, "minimum", 40.0, "state", "OPEN", "card_id", "9876543210987654"));
-        return faturas;
-    }
 
     private List<Map<String, Object>> processarTransacoesResposta(Map<String, Object> responseBody) {
         List<Map<String, Object>> transacoes = new ArrayList<>();
@@ -472,12 +445,6 @@ public class NubankBankService {
         return transacoes;
     }
 
-    private List<Map<String, Object>> getSimulatedTransactions() {
-        List<Map<String, Object>> transacoes = new ArrayList<>();
-        transacoes.add(Map.of("id", "1", "description", "Compra no supermercado", "amount", -50.0, "type", "DEBIT", "date", "2023-10-10", "category", "Supermercado", "account_id", "1234567890123456"));
-        transacoes.add(Map.of("id", "2", "description", "Transferência para conta", "amount", -100.0, "type", "DEBIT", "date", "2023-10-15", "category", "Transferência", "account_id", "9876543210987654"));
-        return transacoes;
-    }
 
     private Map<String, Object> processarGastosPorCategoriaResposta(Map<String, Object> responseBody) {
         Map<String, Object> gastosPorCategoria = new HashMap<>();
@@ -485,18 +452,11 @@ public class NubankBankService {
             Map<String, BigDecimal> categories = (Map<String, BigDecimal>) responseBody.get("categories");
             gastosPorCategoria.put("categories", categories);
             gastosPorCategoria.put("totalSpending", categories.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add));
-            gastosPorCategoria.put("period", "Simulado"); // Placeholder
+            gastosPorCategoria.put("period", responseBody.getOrDefault("period", "Últimos 30 dias"));
         }
         return gastosPorCategoria;
     }
 
-    private Map<String, Object> getSimulatedSpendingByCategory() {
-        Map<String, BigDecimal> gastos = new HashMap<>();
-        gastos.put("Supermercado", new BigDecimal("50.0"));
-        gastos.put("Transferência", new BigDecimal("100.0"));
-        gastos.put("Outros", new BigDecimal("50.0"));
-        return Map.of("categories", gastos, "totalSpending", gastos.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add), "period", "Simulado");
-    }
 
     private Map<String, Object> processarAnaliseGastosResposta(Map<String, Object> responseBody) {
         Map<String, Object> analiseGastos = new HashMap<>();
@@ -520,15 +480,4 @@ public class NubankBankService {
         return analiseGastos;
     }
 
-    private Map<String, Object> getSimulatedSpendingAnalysis() {
-        Map<String, Object> analiseGastos = new HashMap<>();
-        analiseGastos.put("totalSpending", new BigDecimal("1000.0"));
-        analiseGastos.put("averageDailySpending", new BigDecimal("50.0"));
-        analiseGastos.put("highestSpendingDay", LocalDate.now());
-        analiseGastos.put("highestSpendingAmount", new BigDecimal("100.0"));
-        analiseGastos.put("spendingTrend", "STABLE");
-        analiseGastos.put("budgetUtilization", BigDecimal.valueOf(75.0));
-        analiseGastos.put("recommendations", Arrays.asList("Controlar gastos - valor total alto", "Reduzir gastos diários"));
-        return analiseGastos;
-    }
 }

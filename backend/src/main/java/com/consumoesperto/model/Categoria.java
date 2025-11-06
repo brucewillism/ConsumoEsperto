@@ -1,6 +1,5 @@
 package com.consumoesperto.model;
 
-import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
@@ -10,6 +9,8 @@ import javax.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 /**
  * Entidade que representa uma categoria de transação financeira
@@ -24,7 +25,6 @@ import java.util.Set;
  */
 @Entity
 @Table(name = "categorias") // Nome da tabela no banco de dados
-@Data // Lombok: gera getters, setters, toString, equals e hashCode
 @NoArgsConstructor // Lombok: gera construtor sem argumentos
 @AllArgsConstructor // Lombok: gera construtor com todos os argumentos
 public class Categoria {
@@ -81,6 +81,7 @@ public class Categoria {
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id")
+    @JsonBackReference("usuario-categorias")
     private Usuario usuario;
 
     /**
@@ -89,7 +90,17 @@ public class Categoria {
      * Carregamento lazy para melhor performance
      */
     @OneToMany(mappedBy = "categoria", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference("categoria-transacoes")
     private Set<Transacao> transacoes = new HashSet<>();
+
+    /**
+     * Lista de compras parceladas associadas a esta categoria
+     * Relacionamento um-para-muitos: uma categoria pode ter várias compras parceladas
+     * Carregamento lazy para melhor performance
+     */
+    @OneToMany(mappedBy = "categoria", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference("categoria-compras")
+    private Set<CompraParcelada> comprasParceladas = new HashSet<>();
 
     /**
      * Data e hora de criação da categoria no sistema
@@ -97,6 +108,37 @@ public class Categoria {
      */
     @Column(name = "data_criacao")
     private LocalDateTime dataCriacao;
+
+    // Getters e Setters
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public String getCor() { return cor; }
+    public void setCor(String cor) { this.cor = cor; }
+
+    public String getIcone() { return icone; }
+    public void setIcone(String icone) { this.icone = icone; }
+
+    public Boolean getAtivo() { return ativo; }
+    public void setAtivo(Boolean ativo) { this.ativo = ativo; }
+
+    public Usuario getUsuario() { return usuario; }
+    public void setUsuario(Usuario usuario) { this.usuario = usuario; }
+
+    public Set<Transacao> getTransacoes() { return transacoes; }
+    public void setTransacoes(Set<Transacao> transacoes) { this.transacoes = transacoes; }
+
+    public Set<CompraParcelada> getComprasParceladas() { return comprasParceladas; }
+    public void setComprasParceladas(Set<CompraParcelada> comprasParceladas) { this.comprasParceladas = comprasParceladas; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
 
     /**
      * Método executado automaticamente antes de persistir a entidade

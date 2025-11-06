@@ -41,7 +41,10 @@ export class AuthService {
    * @param http Cliente HTTP para comunicação com o backend
    * @param router Serviço de roteamento para navegação
    */
-  constructor(private http: HttpClient, private router: Router) {
+  constructor(
+    private http: HttpClient, 
+    private router: Router
+  ) {
     // Carrega usuário armazenado no localStorage (se existir)
     this.loadStoredUser();
     
@@ -95,6 +98,9 @@ export class AuthService {
           console.log('[AuthService] Login bem-sucedido, resposta recebida:', response);
           this.handleAuthSuccess(response.token); // Armazena o token
           this.loadUserInfo(response.token); // Carrega informações do usuário
+          
+          // Renovar tokens automaticamente após login bem-sucedido
+          this.renovarTokensNoLogin();
         })
       );
   }
@@ -123,8 +129,8 @@ export class AuthService {
    * 
    * @returns Observable com o resultado da autenticação
    */
-  loginWithGoogle(): Observable<any> {
-    return new Observable(observer => {
+  loginWithGoogle(): Observable<GoogleLoginResponse> {
+    return new Observable<GoogleLoginResponse>((observer: any) => {
       // Verifica se o Google OAuth está configurado corretamente
       if (!this.isGoogleOAuthConfigured()) {
         observer.error({
@@ -239,7 +245,7 @@ export class AuthService {
           username: userInfo.email,
           nome: userInfo.name || `${userInfo.given_name || ''} ${userInfo.family_name || ''}`.trim(),
           email: userInfo.email,
-          foto: userInfo.picture || '', // Foto do usuário do Google
+          fotoUrl: userInfo.picture || '', // Foto do usuário do Google
           cpf: '', // Google não fornece CPF
           dataNascimento: new Date(), // Google não fornece data de nascimento
           telefone: '', // Google não fornece telefone
@@ -251,23 +257,53 @@ export class AuthService {
           ativo: true
         };
 
-        // Gera token mock (em produção seria validado pelo backend)
-        const mockToken = 'google_token_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        // Envia dados do usuário Google para o backend para criar/autenticar
+        console.log('[AuthService] Enviando requisição para login Google:', {
+          url: `${this.API_URL}/google`,
+          accessToken: accessToken ? 'Presente' : 'Ausente',
+          userInfo: userInfo ? 'Presente' : 'Ausente'
+        });
+        
+        this.http.post<GoogleLoginResponse>(`${this.API_URL}/google`, {
+          accessToken: accessToken,
+          userInfo: userInfo
+        }).subscribe({
+          next: (response) => {
+            console.log('Resposta do backend para login Google:', response);
+            
+            // Atualiza o estado da aplicação com o token JWT real
+            this.handleAuthSuccess(response.token);
+            this.loadUserInfo(response.token);
+            
+            // Prepara a resposta de sucesso
+            const responseData: GoogleLoginResponse = {
+              token: response.token,
+              type: 'Bearer',
+              user: response.user || googleUser
+            };
 
-        // Atualiza o estado da aplicação
-        this.handleAuthSuccess(mockToken);
-        this.currentUserSubject.next(googleUser);
-        localStorage.setItem('user', JSON.stringify(googleUser));
-
-        // Prepara a resposta de sucesso
-        const response = {
-          token: mockToken,
-          user: googleUser,
-          message: 'Login com Google realizado com sucesso'
-        };
-
-        observer.next(response);
-        observer.complete();
+            observer.next(responseData);
+            observer.complete();
+          },
+          error: (error) => {
+            console.error('Erro no backend para login Google:', error);
+            
+            // Tratamento específico para erro de conexão (0 Unknown Error)
+            let errorMessage = 'Erro no servidor';
+            if (error.status === 0) {
+              errorMessage = 'Erro de conexão: Não foi possível conectar ao servidor. Verifique se o Ngrok está rodando e se a URL está correta.';
+            } else if (error.error?.message) {
+              errorMessage = 'Erro no servidor: ' + error.error.message;
+            } else if (error.message) {
+              errorMessage = 'Erro no servidor: ' + error.message;
+            }
+            
+            observer.error({
+              status: error.status || 500,
+              error: { message: errorMessage }
+            });
+          }
+        });
       })
       .catch(error => {
         console.error('Erro ao buscar dados do usuário Google:', error);
@@ -315,33 +351,39 @@ export class AuthService {
   /**
    * Carrega informações do usuário após login bem-sucedido
    * 
-   * Em produção, este método faria uma requisição para o backend
-   * para obter os dados completos do usuário.
+   * Este método faz uma requisição para o backend para obter
+   * os dados completos do usuário autenticado.
    * 
    * @param token Token JWT para autenticação
    */
   private loadUserInfo(token: string): void {
-    // Usuário mock para desenvolvimento (em produção viria do backend)
-    const mockUser: Usuario = {
-      id: 1,
-      username: 'usuario@email.com',
-      nome: 'Usuário Teste',
-      email: 'usuario@email.com',
-      foto: '', // Sem foto para usuário mock
-      cpf: '123.456.789-00',
-      dataNascimento: new Date('1990-01-01'),
-      telefone: '(11) 99999-9999',
-      endereco: 'Rua Teste, 123',
-      cidade: 'São Paulo',
-      estado: 'SP',
-      cep: '01234-567',
-      dataCadastro: new Date(),
-      ativo: true
-    };
-
-    // Atualiza o usuário atual e armazena no localStorage
-    this.currentUserSubject.next(mockUser);
-    localStorage.setItem('user', JSON.stringify(mockUser));
+    // Busca dados reais do usuário no backend
+    this.http.get<any>(`${environment.apiUrl}/usuarios/perfil`).subscribe({
+      next: (response) => {
+        console.log('[AuthService] Dados do usuário carregados:', response);
+        
+        // Mapeia fotoUrl do backend para foto do frontend
+        const user: Usuario = {
+          id: response.id,
+          username: response.username,
+          email: response.email,
+          nome: response.nome,
+          fotoUrl: response.fotoUrl, // Usa fotoUrl diretamente
+          dataCriacao: response.dataCriacao ? new Date(response.dataCriacao) : undefined,
+          ultimoAcesso: response.ultimoAcesso ? new Date(response.ultimoAcesso) : undefined,
+          ativo: true
+        };
+        
+        // Atualiza o usuário atual e armazena no localStorage
+        this.currentUserSubject.next(user);
+        localStorage.setItem('user', JSON.stringify(user));
+      },
+      error: (error) => {
+        console.error('[AuthService] Erro ao carregar dados do usuário:', error);
+        // Em caso de erro, mantém o usuário logado mas sem dados completos
+        // O usuário pode tentar recarregar a página
+      }
+    });
   }
 
   /**
@@ -382,6 +424,10 @@ export class AuthService {
     if (hasToken) {
       const token = localStorage.getItem('token');
       console.log(`[AuthService] Token encontrado: ${token?.substring(0, 20)}...`);
+      console.log(`[AuthService] Token completo: ${token}`);
+    } else {
+      console.log(`[AuthService] Nenhum token encontrado no localStorage`);
+      console.log(`[AuthService] Conteúdo do localStorage:`, localStorage);
     }
     return hasToken;
   }
@@ -394,6 +440,69 @@ export class AuthService {
   getToken(): string | null {
     const token = localStorage.getItem('token');
     console.log(`[AuthService] Obtendo token: ${token ? 'SIM' : 'NÃO'}`);
+    if (token) {
+      console.log(`[AuthService] Token encontrado: ${token.substring(0, 20)}...`);
+      console.log(`[AuthService] Token completo: ${token}`);
+    } else {
+      console.log(`[AuthService] Nenhum token encontrado`);
+    }
     return token;
   }
+
+  /**
+   * Obtém o ID do usuário atualmente autenticado
+   * 
+   * @returns ID do usuário ou null se não autenticado
+   */
+  getUserId(): number | null {
+    const user = this.getCurrentUser();
+    return user?.id ?? null;
+  }
+
+  /**
+   * Renova tokens automaticamente após login
+   * 
+   * Este método é chamado automaticamente após um login bem-sucedido
+   * para garantir que os tokens bancários sejam sempre atualizados.
+   */
+  private renovarTokensNoLogin(): void {
+    const userId = this.getUserId();
+    
+    if (!userId) {
+      console.warn('[AuthService] Não é possível renovar tokens: usuário não autenticado');
+      return;
+    }
+    
+    console.log(`[AuthService] Renovando tokens automaticamente para usuário: ${userId}`);
+    
+    // Chamar endpoint de renovação de tokens
+    this.http.post(`${environment.apiUrl}/token-renewal/login/${userId}`, {})
+      .subscribe({
+        next: (response: any) => {
+          console.log('[AuthService] ✅ Tokens renovados automaticamente:', response);
+        },
+        error: (error) => {
+          console.warn('[AuthService] ⚠️ Falha ao renovar tokens automaticamente:', error);
+          // Não falhar o login por causa disso
+        }
+      });
+  }
+
+  /**
+   * Força renovação de token para o usuário atual
+   * 
+   * @returns Observable com o resultado da renovação
+   */
+  forcarRenovacaoToken(): Observable<any> {
+    const userId = this.getUserId();
+    
+    if (!userId) {
+      throw new Error('Usuário não autenticado');
+    }
+    
+    console.log(`[AuthService] Forçando renovação de token para usuário: ${userId}`);
+    
+    return this.http.post(`${environment.apiUrl}/token-renewal/force/${userId}`, {});
+  }
+
 }

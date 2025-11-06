@@ -27,7 +27,7 @@ import java.util.Map;
 @RequestMapping("/api/financial-sync")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
 public class FinancialSyncController {
 
     private final FinancialDataSyncService financialDataSyncService;

@@ -1,0 +1,239 @@
+/* Componente de Paginação - ConsumoEsperto */
+
+.pagination-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin: 1rem 0;
+
+  &.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+/* Informações dos Registros */
+.pagination-info {
+  .items-info {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+  }
+}
+
+/* Controles de Paginação */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0.5rem;
+}
+
+/* Botões de Paginação */
+.pagination-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 0.5rem;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  color: #333;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  font-weight: 500;
+
+  &:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #007bff;
+    color: #007bff;
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #f8f9fa;
+  }
+
+  &.active {
+    background: #007bff;
+    border-color: #007bff;
+    color: #fff;
+    font-weight: 600;
+
+    &:hover {
+      background: #0056b3;
+      border-color: #0056b3;
+    }
+  }
+
+  /* Botões especiais */
+  &.first-page,
+  &.last-page {
+    min-width: 40px;
+  }
+
+  &.prev-page,
+  &.next-page {
+    min-width: 40px;
+  }
+
+  /* Páginas numéricas */
+  &.page-number {
+    min-width: 40px;
+  }
+}
+
+/* Ellipsis */
+.pagination-ellipsis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+  color: #666;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+/* Seletor de Itens por Página */
+.pagination-items-per-page {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  label {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .items-per-page-select {
+    padding: 0.5rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #fff;
+    color: #333;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+
+    &:hover:not(:disabled) {
+      border-color: #007bff;
+    }
+
+    &:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: #f8f9fa;
+    }
+  }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .pagination-container {
+    padding: 0.75rem;
+  }
+
+  .pagination-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pagination-pages {
+    margin: 0.25rem 0;
+  }
+
+  .pagination-btn {
+    min-width: 36px;
+    height: 36px;
+    font-size: 0.8rem;
+  }
+
+  .pagination-ellipsis {
+    min-width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  .pagination-items-per-page {
+    flex-direction: column;
+    gap: 0.25rem;
+    text-align: center;
+
+    label {
+      font-size: 0.8rem;
+    }
+
+    .items-per-page-select {
+      font-size: 0.8rem;
+      padding: 0.4rem;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .pagination-container {
+    padding: 0.5rem;
+  }
+
+  .pagination-btn {
+    min-width: 32px;
+    height: 32px;
+    font-size: 0.75rem;
+  }
+
+  .pagination-ellipsis {
+    min-width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Estados especiais */
+.pagination-container:not(.disabled) {
+  .pagination-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  }
+}
+
+/* Animações */
+.pagination-btn {
+  transition: all 0.2s ease;
+}
+
+.pagination-container {
+  transition: opacity 0.2s ease;
+}

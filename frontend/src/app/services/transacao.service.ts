@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Transacao } from '../models/transacao.model';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment';
 
 /**
  * Serviço responsável por gerenciar operações relacionadas a transações financeiras
@@ -21,7 +22,7 @@ import { AuthService } from './auth.service';
 export class TransacaoService {
   
   // URL base da API de transações no backend
-  private readonly API_URL = 'http://localhost:8080/api/transacoes';
+  private readonly API_URL = `${environment.apiUrl}/transacoes`;
 
   /**
    * Construtor do serviço
@@ -163,5 +164,29 @@ export class TransacaoService {
    */
   getTransacoesPorPeriodo(dataInicio: string, dataFim: string): Observable<Transacao[]> {
     return this.http.get<Transacao[]>(`${this.API_URL}/periodo?inicio=${dataInicio}&fim=${dataFim}`, { headers: this.getHeaders() });
+  }
+
+  /**
+   * Busca transações do mês atual
+   * 
+   * Método específico para buscar apenas transações do mês atual,
+   * útil para dashboard e relatórios mensais.
+   * 
+   * @returns Observable com lista de transações do mês atual
+   */
+  buscarDoMesAtual(): Observable<Transacao[]> {
+    return this.http.get<Transacao[]>(`${this.API_URL}/mes-atual`, { headers: this.getHeaders() });
+  }
+
+  /**
+   * Obtém resumo financeiro do mês atual
+   * 
+   * Retorna estatísticas como total de receitas, despesas,
+   * saldo e outras métricas do mês atual.
+   * 
+   * @returns Observable com resumo financeiro do mês atual
+   */
+  obterResumoDoMesAtual(): Observable<any> {
+    return this.http.get<any>(`${this.API_URL}/resumo-mes-atual`, { headers: this.getHeaders() });
   }
 }

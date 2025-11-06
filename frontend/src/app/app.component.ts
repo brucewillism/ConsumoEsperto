@@ -119,7 +119,7 @@ export class AppComponent implements OnInit {
       if (user) {
         this.userName = user.nome || user.email || 'Usuário';
         this.userEmail = user.email || '';
-        this.userPhoto = user.foto || '';
+        this.userPhoto = user.fotoUrl || '';
         this.notificationCount = this.getUnreadNotificationsCount();
       }
     });

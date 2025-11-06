@@ -45,6 +45,15 @@ export class CartoesComponent implements OnInit {
   contas: any[] = [];
   cartoes: CreditCard[] = [];
   
+  // Summary properties
+  totalCreditLimit: number = 0;
+  totalAvailableCredit: number = 0;
+  totalBalance: number = 0;
+
+  // Mercado Pago status
+  mercadoPagoStatus: any = null;
+  showMercadoPagoConfig = false;
+  
   // UI properties
   loading = false;
   error: string | null = null;
@@ -68,6 +77,9 @@ export class CartoesComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    console.log('[CartoesComponent] ngOnInit iniciado');
+    console.log('[CartoesComponent] Verificando autenticação...');
+    
     // Verifica se o usuário está autenticado
     if (!this.authService.isAuthenticated()) {
       console.log('[CartoesComponent] Usuário não autenticado, redirecionando para login...');
@@ -76,6 +88,7 @@ export class CartoesComponent implements OnInit {
     }
 
     console.log('[CartoesComponent] Usuário autenticado, carregando dados...');
+    console.log('[CartoesComponent] Token disponível:', this.authService.getToken());
     this.loadData();
   }
 
@@ -98,6 +111,7 @@ export class CartoesComponent implements OnInit {
    */
   loadData(): void {
     console.log('[CartoesComponent] Iniciando carregamento de dados...');
+    console.log('[CartoesComponent] Token atual:', this.authService.getToken());
     this.loading = true;
     this.error = null;
 
@@ -111,6 +125,8 @@ export class CartoesComponent implements OnInit {
       },
       error: (err) => {
         console.error('[CartoesComponent] Erro ao carregar bancos:', err);
+        console.error('[CartoesComponent] Status do erro:', err.status);
+        console.error('[CartoesComponent] Mensagem do erro:', err.message);
         this.error = 'Erro ao carregar bancos conectados';
       }
     });
@@ -126,9 +142,14 @@ export class CartoesComponent implements OnInit {
       },
       error: (err) => {
         console.error('[CartoesComponent] Erro ao carregar cartões:', err);
+        console.error('[CartoesComponent] Status do erro:', err.status);
+        console.error('[CartoesComponent] Mensagem do erro:', err.message);
         this.error = 'Erro ao carregar cartões de crédito';
       }
     });
+
+    // Verificar status do Mercado Pago
+    this.verificarStatusMercadoPago();
 
     // Carrega faturas
     console.log('[CartoesComponent] Carregando faturas...');
@@ -140,7 +161,27 @@ export class CartoesComponent implements OnInit {
       },
       error: (err) => {
         console.error('[CartoesComponent] Erro ao carregar faturas:', err);
+        console.error('[CartoesComponent] Status do erro:', err.status);
+        console.error('[CartoesComponent] Mensagem do erro:', err.message);
         this.error = 'Erro ao carregar faturas';
+      }
+    });
+
+    // Carrega totais consolidados
+    console.log('[CartoesComponent] Carregando totais consolidados...');
+    this.bankApiService.getConsolidatedStats().subscribe({
+      next: (stats) => {
+        console.log('[CartoesComponent] Estatísticas consolidadas carregadas:', stats);
+        this.totalCreditLimit = stats.totalCreditLimit;
+        this.totalAvailableCredit = stats.totalAvailableCredit;
+        this.totalBalance = stats.totalBalance;
+      },
+      error: (err) => {
+        console.error('[CartoesComponent] Erro ao carregar estatísticas:', err);
+        // Fallback para valores locais
+        this.totalCreditLimit = this.getTotalCreditLimit();
+        this.totalAvailableCredit = this.getTotalAvailableCredit();
+        this.totalBalance = 0; // Não há implementação local para saldo
       },
       complete: () => {
         console.log('[CartoesComponent] Carregamento de dados concluído');
@@ -328,7 +369,7 @@ export class CartoesComponent implements OnInit {
    * Obtém limite utilizado
    */
   getLimiteUtilizado(cartao: any): number {
-    return cartao.limit - cartao.availableLimit;
+    return cartao.limit - cartao.available;
   }
 
   /**
@@ -343,7 +384,7 @@ export class CartoesComponent implements OnInit {
    */
   getPercentualUso(cartao: any): number {
     if (cartao.limit <= 0) return 0;
-    return ((cartao.limit - cartao.availableLimit) / cartao.limit) * 100;
+    return ((cartao.limit - cartao.available) / cartao.limit) * 100;
   }
 
   /**
@@ -525,5 +566,57 @@ export class CartoesComponent implements OnInit {
    */
   refreshData(): void {
     this.loadData();
+  }
+
+  /**
+   * Verifica o status da configuração do Mercado Pago
+   */
+  verificarStatusMercadoPago(): void {
+    console.log('[CartoesComponent] Verificando status do Mercado Pago...');
+    this.bankApiService.obterStatusMercadoPago().subscribe({
+      next: (status) => {
+        console.log('[CartoesComponent] Status do Mercado Pago:', status);
+        this.mercadoPagoStatus = status;
+        
+        // Usar o campo isConfigured que considera tanto BankApiConfig quanto AutorizacaoBancaria
+        if (status.isConfigured === false) {
+          this.showMercadoPagoConfig = true;
+        } else {
+          // Se está configurado (qualquer método), esconder o card de configuração
+          this.showMercadoPagoConfig = false;
+        }
+      },
+      error: (err) => {
+        console.error('[CartoesComponent] Erro ao verificar status do Mercado Pago:', err);
+        this.showMercadoPagoConfig = true; // Mostrar configuração em caso de erro
+      }
+    });
+  }
+
+  /**
+   * Configura credenciais do Mercado Pago
+   */
+  configurarMercadoPago(): void {
+    // Para simplificar, vou usar credenciais de exemplo
+    // Em produção, isso viria de um formulário
+    const credentials = {
+      clientId: 'SEU_CLIENT_ID_AQUI',
+      clientSecret: 'SEU_CLIENT_SECRET_AQUI',
+      accessToken: 'SEU_ACCESS_TOKEN_AQUI',
+      banco: 'MERCADOPAGO'
+    };
+
+    console.log('[CartoesComponent] Configurando Mercado Pago...');
+    this.bankApiService.configurarMercadoPago(credentials).subscribe({
+      next: (response) => {
+        console.log('[CartoesComponent] Mercado Pago configurado:', response);
+        this.showMercadoPagoConfig = false;
+        this.loadData(); // Recarregar dados
+      },
+      error: (err) => {
+        console.error('[CartoesComponent] Erro ao configurar Mercado Pago:', err);
+        this.error = 'Erro ao configurar Mercado Pago';
+      }
+    });
   }
 }

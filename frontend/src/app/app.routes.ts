@@ -76,6 +76,27 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   
+  // Teste da API do Mercado Pago (protegida)
+  { 
+    path: 'test-mercado-pago', 
+    loadComponent: () => import('./pages/test-mercado-pago/test-mercado-pago.component').then(m => m.TestMercadoPagoComponent),
+    canActivate: [AuthGuard]
+  },
+  
+          // Setup seguro do Mercado Pago (protegida)
+          { 
+            path: 'mercadopago-setup', 
+            loadComponent: () => import('./pages/mercadopago-setup/mercadopago-setup.component').then(m => m.MercadoPagoSetupComponent),
+            canActivate: [AuthGuard]
+          },
+  // Configuração automática do Mercado Pago (protegida)
+  {
+    path: 'mercadopago-auto-config',
+    loadComponent: () => import('./components/mercadopago-auto-config/mercadopago-auto-config.component').then(m => m.MercadoPagoAutoConfigComponent),
+    canActivate: [AuthGuard]
+  },
+
+  
   // Rota wildcard: captura todas as rotas inexistentes
   // Redireciona para o dashboard (útil para SPA)
   { path: '**', redirectTo: '/dashboard' }

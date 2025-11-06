@@ -21,7 +21,6 @@ import org.springframework.util.MultiValueMap;
 import java.util.stream.Collectors;
 
 @Service
-@ConditionalOnProperty(name = "bank.api.inter.client-id", havingValue = "inter_dev_client_id", matchIfMissing = true)
 @Slf4j
 public class InterBankService {
 
@@ -190,33 +189,12 @@ public class InterBankService {
                     .collect(Collectors.toList());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            List<CartaoCredito> cartoes = getSimulatedCreditCards();
-            return cartoes.stream()
-                    .map(cartao -> {
-                        Map<String, Object> cartaoMap = new HashMap<>();
-                        cartaoMap.put("id", cartao.getId());
-                        cartaoMap.put("numero", cartao.getNumeroCartao());
-                        cartaoMap.put("limite", cartao.getLimiteCredito());
-                        cartaoMap.put("saldoDisponivel", cartao.getLimiteDisponivel());
-                        return cartaoMap;
-                    })
-                    .collect(Collectors.toList());
+            log.warn("⚠️ API retornou status não esperado: {}. Nenhum cartão encontrado", response.getStatusCode());
+            return new ArrayList<>();
             
         } catch (Exception e) {
-            log.error("Erro ao buscar cartões de crédito do Inter: {}", e.getMessage());
-            List<CartaoCredito> cartoes = getSimulatedCreditCards();
-            return cartoes.stream()
-                    .map(cartao -> {
-                        Map<String, Object> cartaoMap = new HashMap<>();
-                        cartaoMap.put("id", cartao.getId());
-                        cartaoMap.put("numero", cartao.getNumeroCartao());
-                        cartaoMap.put("limite", cartao.getLimiteCredito());
-                        cartaoMap.put("saldoDisponivel", cartao.getLimiteDisponivel());
-                        // cartaoMap.put("saldoFatura", cartao.getSaldoFatura()); // Campo não existe no modelo
-                        return cartaoMap;
-                    })
-                    .collect(Collectors.toList());
+            log.error("❌ Erro ao buscar cartões de crédito do Inter: {}", e.getMessage());
+            return new ArrayList<>();
         }
     }
 
@@ -243,12 +221,12 @@ public class InterBankService {
                 return processarSaldoResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedBalanceData();
+            log.warn("⚠️ API retornou status não esperado: {}. Nenhum saldo encontrado", response.getStatusCode());
+            return new HashMap<>();
             
         } catch (Exception e) {
-            log.error("Erro ao buscar dados de saldo do Inter: {}", e.getMessage());
-            return getSimulatedBalanceData();
+            log.error("❌ Erro ao buscar dados de saldo do Inter: {}", e.getMessage());
+            return new HashMap<>();
         }
     }
 
@@ -269,34 +247,13 @@ public class InterBankService {
             // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
             // return processarFaturasResposta(response.getBody());
 
-            // Por enquanto, retorna dados simulados
-            List<FaturaDTO> faturas = getSimulatedInvoices();
-            return faturas.stream()
-                    .map(fatura -> {
-                        Map<String, Object> faturaMap = new HashMap<>();
-                        faturaMap.put("id", fatura.getId());
-                        faturaMap.put("valorTotal", fatura.getValorFatura());
-                        faturaMap.put("valorMinimo", fatura.getValorPago());
-                        faturaMap.put("status", fatura.getStatusFatura());
-                        faturaMap.put("banco", "Inter");
-                        return faturaMap;
-                    })
-                    .collect(Collectors.toList());
+            // TODO: Implementar chamada real para API do Inter
+            log.warn("⚠️ Endpoint de faturas não implementado. Nenhuma fatura encontrada");
+            return new ArrayList<>();
             
         } catch (Exception e) {
-            log.error("Erro ao buscar faturas do Inter: {}", e.getMessage());
-            List<FaturaDTO> faturas = getSimulatedInvoices();
-            return faturas.stream()
-                    .map(fatura -> {
-                        Map<String, Object> faturaMap = new HashMap<>();
-                        faturaMap.put("id", fatura.getId());
-                        faturaMap.put("valorTotal", fatura.getValorFatura());
-                        faturaMap.put("valorMinimo", fatura.getValorPago());
-                        faturaMap.put("status", fatura.getStatusFatura());
-                        faturaMap.put("banco", "Inter");
-                        return faturaMap;
-                    })
-                    .collect(Collectors.toList());
+            log.error("❌ Erro ao buscar faturas do Inter: {}", e.getMessage());
+            return new ArrayList<>();
         }
     }
 
@@ -325,12 +282,12 @@ public class InterBankService {
                 return processarTransacoesResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedTransactions();
+            log.warn("⚠️ API retornou status não esperado: {}. Nenhuma transação encontrada", response.getStatusCode());
+            return new ArrayList<>();
             
         } catch (Exception e) {
-            log.error("Erro ao buscar transações do Inter: {}", e.getMessage());
-            return getSimulatedTransactions();
+            log.error("❌ Erro ao buscar transações do Inter: {}", e.getMessage());
+            return new ArrayList<>();
         }
     }
 
@@ -357,12 +314,12 @@ public class InterBankService {
                 return processarGastosPorCategoriaResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedSpendingByCategory();
+            log.warn("⚠️ API retornou status não esperado: {}. Nenhum dado de gastos encontrado", response.getStatusCode());
+            return new HashMap<>();
             
         } catch (Exception e) {
-            log.error("Erro ao buscar gastos por categoria do Inter: {}", e.getMessage());
-            return getSimulatedSpendingByCategory();
+            log.error("❌ Erro ao buscar gastos por categoria do Inter: {}", e.getMessage());
+            return new HashMap<>();
         }
     }
 
@@ -389,12 +346,12 @@ public class InterBankService {
                 return processarAnaliseGastosResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedSpendingAnalysis();
+            log.warn("⚠️ API retornou status não esperado: {}. Nenhuma análise encontrada", response.getStatusCode());
+            return new HashMap<>();
             
         } catch (Exception e) {
-            log.error("Erro ao buscar análise de gastos do Inter: {}", e.getMessage());
-            return getSimulatedSpendingAnalysis();
+            log.error("❌ Erro ao buscar análise de gastos do Inter: {}", e.getMessage());
+            return new HashMap<>();
         }
     }
 
@@ -437,7 +394,9 @@ public class InterBankService {
             //     return true;
             // }
 
-            // Por enquanto, retorna false (simulado)
+            // Implementar renovação real de token
+            // TODO: Implementar chamada real para API do Inter
+            log.warn("Renovação de token do Inter não implementada ainda");
             return false;
             
         } catch (Exception e) {
@@ -455,178 +414,240 @@ public class InterBankService {
     
     // Métodos de processamento de resposta da API
     private List<CartaoCredito> processarCartoesResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
         log.info("Processando resposta de cartões da API do Inter");
-        return getSimulatedCreditCards();
-    }
-    
-    private Map<String, Object> processarSaldoResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de saldo da API do Inter");
-        return getSimulatedBalanceData();
-    }
-    
-    private List<FaturaDTO> processarFaturasResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de faturas da API do Inter");
-        return getSimulatedInvoices();
-    }
-    
-    private List<Map<String, Object>> processarTransacoesResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de transações da API do Inter");
-        return getSimulatedTransactions();
-    }
-    
-    private Map<String, Object> processarGastosPorCategoriaResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de gastos por categoria da API do Inter");
-        return getSimulatedSpendingByCategory();
-    }
-    
-    private Map<String, Object> processarAnaliseGastosResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de análise de gastos da API do Inter");
-        return getSimulatedSpendingAnalysis();
-    }
-    
-    // Métodos simulados para dados de teste
-    private List<CartaoCredito> getSimulatedCreditCards() {
+        
         List<CartaoCredito> cartoes = new ArrayList<>();
         
-        CartaoCredito cartao1 = new CartaoCredito();
-        cartao1.setId(1L);
-        cartao1.setNumeroCartao("**** **** **** 1234");
-        cartao1.setLimiteCredito(new BigDecimal("5000.00"));
-        cartao1.setLimiteDisponivel(new BigDecimal("3500.00"));
-                    // cartao1.setSaldoFatura(new BigDecimal("1500.00")); // Campo não existe no modelo
-        cartao1.setTipoCartao(CartaoCredito.TipoCartao.STANDARD);
-        cartao1.setAtivo(true);
-        cartoes.add(cartao1);
-        
-        CartaoCredito cartao2 = new CartaoCredito();
-        cartao2.setId(2L);
-        cartao2.setNumeroCartao("**** **** **** 5678");
-        cartao2.setLimiteCredito(new BigDecimal("8000.00"));
-        cartao2.setLimiteDisponivel(new BigDecimal("6000.00"));
-                    // cartao2.setSaldoFatura(new BigDecimal("2000.00")); // Campo não existe no modelo
-        cartao2.setTipoCartao(CartaoCredito.TipoCartao.GOLD);
-        cartao2.setAtivo(true);
-        cartoes.add(cartao2);
+        try {
+            if (response instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> responseMap = (Map<String, Object>) response;
+                
+                if (responseMap.containsKey("data")) {
+                    Object data = responseMap.get("data");
+                    if (data instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> cardsList = (List<Map<String, Object>>) data;
+                        
+                        for (Map<String, Object> card : cardsList) {
+                            CartaoCredito cartao = new CartaoCredito();
+                            cartao.setNumeroCartao("****" + card.getOrDefault("lastFourDigits", "****"));
+                            cartao.setLimiteCredito(new BigDecimal(card.getOrDefault("creditLimit", 0).toString()));
+                            cartao.setLimiteDisponivel(new BigDecimal(card.getOrDefault("availableLimit", 0).toString()));
+                            cartao.setNome(card.getOrDefault("cardName", "Cartão Inter").toString());
+                            cartao.setBanco("INTER");
+                            cartao.setAtivo(true);
+                            cartoes.add(cartao);
+                        }
+                    }
+                }
+            }
+            
+            log.info("{} cartões do Inter processados", cartoes.size());
+            
+        } catch (Exception e) {
+            log.error("Erro ao processar cartões do Inter: {}", e.getMessage());
+        }
         
         return cartoes;
     }
     
-    private Map<String, Object> getSimulatedBalanceData() {
-        Map<String, Object> balanceData = new HashMap<>();
-        balanceData.put("saldoConta", new BigDecimal("2500.00"));
-        balanceData.put("saldoDisponivel", new BigDecimal("2500.00"));
-        balanceData.put("saldoBloqueado", new BigDecimal("0.00"));
-        balanceData.put("moeda", "BRL");
-        balanceData.put("ultimaAtualizacao", LocalDateTime.now());
-        return balanceData;
+    private Map<String, Object> processarSaldoResposta(Object response) {
+        log.info("Processando resposta de saldo da API do Inter");
+        
+        Map<String, Object> resultado = new HashMap<>();
+        
+        try {
+            if (response instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> responseMap = (Map<String, Object>) response;
+                
+                resultado.put("saldo", responseMap.getOrDefault("availableBalance", 0.0));
+                resultado.put("limite", responseMap.getOrDefault("creditLimit", 0.0));
+                resultado.put("limiteDisponivel", responseMap.getOrDefault("availableCredit", 0.0));
+            } else {
+                resultado.put("saldo", 0.0);
+                resultado.put("limite", 0.0);
+                resultado.put("limiteDisponivel", 0.0);
+            }
+            
+            log.info("Saldo do Inter processado: {}", resultado);
+            
+        } catch (Exception e) {
+            log.error("Erro ao processar saldo do Inter: {}", e.getMessage());
+            resultado.put("saldo", 0.0);
+            resultado.put("limite", 0.0);
+            resultado.put("limiteDisponivel", 0.0);
+        }
+        
+        return resultado;
     }
     
-    private List<FaturaDTO> getSimulatedInvoices() {
+    private List<FaturaDTO> processarFaturasResposta(Object response) {
+        log.info("Processando resposta de faturas da API do Inter");
+        
         List<FaturaDTO> faturas = new ArrayList<>();
         
-        FaturaDTO fatura1 = new FaturaDTO();
-        fatura1.setId(1L);
-        fatura1.setValorFatura(new BigDecimal("1500.00"));
-        fatura1.setValorPago(new BigDecimal("0.00"));
-                        fatura1.setDataVencimento(LocalDateTime.now().plusDays(15));
-        fatura1.setStatusFatura(Fatura.StatusFatura.ABERTA);
-                        fatura1.setDataFechamento(LocalDateTime.now().minusDays(5));
-        faturas.add(fatura1);
-        
-        FaturaDTO fatura2 = new FaturaDTO();
-        fatura2.setId(2L);
-        fatura2.setValorFatura(new BigDecimal("2000.00"));
-        fatura2.setValorPago(new BigDecimal("2000.00"));
-                        fatura2.setDataVencimento(LocalDateTime.now().minusDays(10));
-        fatura2.setStatusFatura(Fatura.StatusFatura.PAGA);
-                        fatura2.setDataFechamento(LocalDateTime.now().minusDays(35));
-        faturas.add(fatura2);
+        try {
+            if (response instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> responseMap = (Map<String, Object>) response;
+                
+                if (responseMap.containsKey("invoices")) {
+                    Object invoices = responseMap.get("invoices");
+                    if (invoices instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> invoicesList = (List<Map<String, Object>>) invoices;
+                        
+                        for (Map<String, Object> invoice : invoicesList) {
+                            FaturaDTO fatura = new FaturaDTO();
+                            fatura.setId(Long.valueOf(invoice.getOrDefault("id", 0).toString()));
+                            fatura.setValorFatura(new BigDecimal(invoice.getOrDefault("totalAmount", 0).toString()));
+                            fatura.setValorPago(new BigDecimal(invoice.getOrDefault("minimumAmount", 0).toString()));
+                            fatura.setStatusFatura(Fatura.StatusFatura.valueOf(
+                                invoice.getOrDefault("status", "PENDING").toString()));
+                            faturas.add(fatura);
+                        }
+                    }
+                }
+            }
+            
+            log.info("{} faturas do Inter processadas", faturas.size());
+            
+        } catch (Exception e) {
+            log.error("Erro ao processar faturas do Inter: {}", e.getMessage());
+        }
         
         return faturas;
     }
     
-    private List<Map<String, Object>> getSimulatedTransactions() {
+    private List<Map<String, Object>> processarTransacoesResposta(Object response) {
+        log.info("Processando resposta de transações da API do Inter");
+        
         List<Map<String, Object>> transacoes = new ArrayList<>();
         
-        Map<String, Object> transacao1 = new HashMap<>();
-        transacao1.put("id", 1L);
-        transacao1.put("descricao", "Supermercado Extra");
-        transacao1.put("valor", new BigDecimal("150.50"));
-        transacao1.put("data", LocalDateTime.now().minusDays(2));
-        transacao1.put("categoria", "Alimentação");
-        transacao1.put("tipo", "DEBITO");
-        transacoes.add(transacao1);
-        
-        Map<String, Object> transacao2 = new HashMap<>();
-        transacao2.put("id", 2L);
-        transacao2.put("descricao", "Posto de Gasolina");
-        transacao2.put("valor", new BigDecimal("80.00"));
-        transacao2.put("data", LocalDateTime.now().minusDays(1));
-        transacao2.put("categoria", "Transporte");
-        transacao2.put("tipo", "CREDITO");
-        transacoes.add(transacao2);
-        
-        Map<String, Object> transacao3 = new HashMap<>();
-        transacao3.put("id", 3L);
-        transacao3.put("descricao", "Shopping Center");
-        transacao3.put("valor", new BigDecimal("250.00"));
-        transacao3.put("data", LocalDateTime.now().minusDays(3));
-        transacao3.put("categoria", "Lazer");
-        transacao3.put("tipo", "CREDITO");
-        transacoes.add(transacao3);
+        try {
+            if (response instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> responseMap = (Map<String, Object>) response;
+                
+                if (responseMap.containsKey("transactions")) {
+                    Object transactions = responseMap.get("transactions");
+                    if (transactions instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> transactionsList = (List<Map<String, Object>>) transactions;
+                        
+                        for (Map<String, Object> transaction : transactionsList) {
+                            Map<String, Object> transacao = new HashMap<>();
+                            transacao.put("id", transaction.get("id"));
+                            transacao.put("description", transaction.getOrDefault("description", "Transação Inter"));
+                            transacao.put("amount", transaction.getOrDefault("amount", 0.0));
+                            transacao.put("date", transaction.getOrDefault("date", LocalDateTime.now().toString()));
+                            transacao.put("type", transaction.getOrDefault("type", "DEBIT"));
+                            transacao.put("category", transaction.getOrDefault("category", "Outros"));
+                            transacoes.add(transacao);
+                        }
+                    }
+                }
+            }
+            
+            log.info("{} transações do Inter processadas", transacoes.size());
+            
+        } catch (Exception e) {
+            log.error("Erro ao processar transações do Inter: {}", e.getMessage());
+        }
         
         return transacoes;
     }
     
-    private Map<String, Object> getSimulatedSpendingByCategory() {
-        Map<String, Object> gastosPorCategoria = new HashMap<>();
+    private Map<String, Object> processarGastosPorCategoriaResposta(Object response) {
+        log.info("Processando resposta de gastos por categoria da API do Inter");
         
-        Map<String, Object> alimentacao = new HashMap<>();
-        alimentacao.put("categoria", "Alimentação");
-        alimentacao.put("valor", new BigDecimal("450.50"));
-        alimentacao.put("percentual", 35.5);
+        Map<String, Object> resultado = new HashMap<>();
+        Map<String, Double> categorias = new HashMap<>();
         
-        Map<String, Object> transporte = new HashMap<>();
-        transporte.put("categoria", "Transporte");
-        transporte.put("valor", new BigDecimal("320.00"));
-        transporte.put("percentual", 25.2);
+        try {
+            if (response instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> responseMap = (Map<String, Object>) response;
+                
+                if (responseMap.containsKey("categories")) {
+                    Object categories = responseMap.get("categories");
+                    if (categories instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> categoriesMap = (Map<String, Object>) categories;
+                        
+                        for (Map.Entry<String, Object> entry : categoriesMap.entrySet()) {
+                            if (entry.getValue() instanceof Number) {
+                                categorias.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
+                            }
+                        }
+                    }
+                }
+            }
+            
+            resultado.put("categories", categorias);
+            log.info("Gastos por categoria do Inter processados: {}", categorias.size());
+            
+        } catch (Exception e) {
+            log.error("Erro ao processar gastos por categoria do Inter: {}", e.getMessage());
+            resultado.put("categories", new HashMap<>());
+        }
         
-        Map<String, Object> lazer = new HashMap<>();
-        lazer.put("categoria", "Lazer");
-        lazer.put("valor", new BigDecimal("250.00"));
-        lazer.put("percentual", 19.7);
-        
-        Map<String, Object> outros = new HashMap<>();
-        outros.put("categoria", "Outros");
-        outros.put("valor", new BigDecimal("250.50"));
-        outros.put("percentual", 19.6);
-        
-        gastosPorCategoria.put("total", new BigDecimal("1270.00"));
-        gastosPorCategoria.put("categorias", Arrays.asList(alimentacao, transporte, lazer, outros));
-        gastosPorCategoria.put("periodo", "Último mês");
-        
-        return gastosPorCategoria;
+        return resultado;
     }
     
-    private Map<String, Object> getSimulatedSpendingAnalysis() {
-        Map<String, Object> analise = new HashMap<>();
+    private Map<String, Object> processarAnaliseGastosResposta(Object response) {
+        log.info("Processando resposta de análise de gastos da API do Inter");
         
-        analise.put("totalGasto", new BigDecimal("1270.00"));
-        analise.put("totalReceita", new BigDecimal("3500.00"));
-        analise.put("saldo", new BigDecimal("2230.00"));
-        analise.put("percentualGasto", 36.3);
-        analise.put("tendencia", "ESTAVEL");
-        analise.put("categoriaMaiorGasto", "Alimentação");
-        analise.put("valorMaiorGasto", new BigDecimal("450.50"));
-        analise.put("periodo", "Último mês");
-        analise.put("projecaoMes", new BigDecimal("1350.00"));
+        Map<String, Object> resultado = new HashMap<>();
         
-        return analise;
+        try {
+            double gastosTotal = 0.0;
+            double receitasTotal = 0.0;
+            int totalTransacoes = 0;
+            Map<String, Double> gastosPorDia = new HashMap<>();
+            
+            if (response instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> responseMap = (Map<String, Object>) response;
+                
+                gastosTotal = ((Number) responseMap.getOrDefault("totalExpenses", 0.0)).doubleValue();
+                receitasTotal = ((Number) responseMap.getOrDefault("totalIncome", 0.0)).doubleValue();
+                totalTransacoes = ((Number) responseMap.getOrDefault("totalTransactions", 0)).intValue();
+                
+                if (responseMap.containsKey("dailyExpenses")) {
+                    Object dailyExpenses = responseMap.get("dailyExpenses");
+                    if (dailyExpenses instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> dailyMap = (Map<String, Object>) dailyExpenses;
+                        
+                        for (Map.Entry<String, Object> entry : dailyMap.entrySet()) {
+                            if (entry.getValue() instanceof Number) {
+                                gastosPorDia.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
+                            }
+                        }
+                    }
+                }
+            }
+            
+            resultado.put("gastos", gastosTotal);
+            resultado.put("receitas", receitasTotal);
+            resultado.put("totalTransacoes", totalTransacoes);
+            resultado.put("gastosPorDia", gastosPorDia);
+            
+            log.info("Análise de gastos do Inter processada: gastos={}, receitas={}, transações={}", 
+                gastosTotal, receitasTotal, totalTransacoes);
+            
+        } catch (Exception e) {
+            log.error("Erro ao processar análise de gastos do Inter: {}", e.getMessage());
+            resultado.put("gastos", 0.0);
+            resultado.put("receitas", 0.0);
+            resultado.put("totalTransacoes", 0);
+            resultado.put("gastosPorDia", new HashMap<>());
+        }
+        
+        return resultado;
     }
+    
 }
