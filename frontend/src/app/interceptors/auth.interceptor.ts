@@ -27,6 +27,7 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
   console.log(`[AuthInterceptor] Interceptando requisição para: ${request.url}`);
   console.log(`[AuthInterceptor] Método HTTP: ${request.method}`);
   console.log(`[AuthInterceptor] Token disponível: ${token ? 'SIM' : 'NÃO'}`);
+  console.log(`[AuthInterceptor] Headers da requisição:`, request.headers);
   
   // Log detalhado apenas para requisições de login
   if (request.url.includes('/auth/google') || request.url.includes('/oauth2/google')) {
@@ -49,9 +50,13 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
     // Adiciona header do ngrok mesmo sem token
     request = request.clone({
       setHeaders: {
+<<<<<<< HEAD
         'ngrok-skip-browser-warning': 'true',
         'Content-Type': 'application/json',
         'Accept': 'application/json'
+=======
+        'ngrok-skip-browser-warning': 'true'
+>>>>>>> origin/main
       }
     });
     console.warn(`[AuthInterceptor] Nenhum token encontrado para requisição: ${request.url}`);

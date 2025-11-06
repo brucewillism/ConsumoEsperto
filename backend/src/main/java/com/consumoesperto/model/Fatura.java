@@ -168,12 +168,15 @@ public class Fatura {
     public BigDecimal getValorPago() { return valorPago; }
     public void setValorPago(BigDecimal valorPago) { this.valorPago = valorPago; }
 
+<<<<<<< HEAD
     // Métodos de compatibilidade para código existente
     public BigDecimal getValor() { return valorTotal; }
     public void setValor(BigDecimal valor) { this.valorTotal = valor; }
     
     public boolean isPaga() { return paga != null && paga; }
 
+=======
+>>>>>>> origin/main
     public CartaoCredito getCartaoCredito() { return cartaoCredito; }
     public void setCartaoCredito(CartaoCredito cartaoCredito) { this.cartaoCredito = cartaoCredito; }
 

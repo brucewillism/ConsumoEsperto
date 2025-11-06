@@ -37,7 +37,11 @@ import java.util.Map;
 @RequestMapping("/api/simulacoes") // Base path para endpoints de simulações
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Tag(name = "Simulações", description = "Endpoints para simulações financeiras")
+<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"}) // Permite CORS de qualquer origem
+=======
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"}) // Permite CORS de qualquer origem
+>>>>>>> origin/main
 public class SimulacaoController {
 
     // Serviço responsável pela lógica de simulações financeiras

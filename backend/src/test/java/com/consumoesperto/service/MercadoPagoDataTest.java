@@ -63,7 +63,11 @@ public class MercadoPagoDataTest {
         // 3. Testar busca de cartões
         System.out.println("\n💳 Testando busca de cartões...");
         try {
+<<<<<<< HEAD
             var cartoes = mercadoPagoService.buscarCartoesReais(config);
+=======
+            var cartoes = mercadoPagoService.buscarCartoesReais(usuario.getId());
+>>>>>>> origin/main
             System.out.println("📊 Cartões encontrados: " + cartoes.size());
             
             if (cartoes.isEmpty()) {
@@ -74,7 +78,11 @@ public class MercadoPagoDataTest {
             } else {
                 System.out.println("✅ Cartões encontrados com sucesso!");
                 cartoes.forEach(cartao -> {
+<<<<<<< HEAD
                     System.out.println("   💳 " + cartao.getNome() + " - ****" + cartao.getUltimosDigitos());
+=======
+                    System.out.println("   💳 " + cartao.getNome() + " - " + cartao.getNumeroCartao());
+>>>>>>> origin/main
                 });
             }
         } catch (Exception e) {
@@ -102,6 +110,7 @@ public class MercadoPagoDataTest {
             System.out.println("❌ Erro ao buscar faturas: " + e.getMessage());
         }
         
+<<<<<<< HEAD
         // 5. Testar sincronização de dados (inclui transações)
         System.out.println("\n🔄 Testando sincronização de dados...");
         try {
@@ -110,6 +119,27 @@ public class MercadoPagoDataTest {
             System.out.println("ℹ️ As transações foram sincronizadas e salvas no banco de dados");
         } catch (Exception e) {
             System.out.println("❌ Erro ao sincronizar dados: " + e.getMessage());
+=======
+        // 5. Testar busca de transações
+        System.out.println("\n🔄 Testando busca de transações...");
+        try {
+            var transacoes = mercadoPagoService.buscarTransacoes(usuario.getId());
+            System.out.println("📊 Transações encontradas: " + transacoes.size());
+            
+            if (transacoes.isEmpty()) {
+                System.out.println("ℹ️ Nenhuma transação encontrada. Possíveis motivos:");
+                System.out.println("   - Conta do Mercado Pago não tem transações");
+                System.out.println("   - Credenciais incorretas");
+                System.out.println("   - API retornou erro");
+            } else {
+                System.out.println("✅ Transações encontradas com sucesso!");
+                transacoes.forEach(transacao -> {
+                    System.out.println("   🔄 " + transacao.getDescricao() + " - R$ " + transacao.getValor());
+                });
+            }
+        } catch (Exception e) {
+            System.out.println("❌ Erro ao buscar transações: " + e.getMessage());
+>>>>>>> origin/main
         }
         
         System.out.println("\n🎯 Resumo do Teste:");

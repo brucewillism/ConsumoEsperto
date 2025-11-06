@@ -5,7 +5,10 @@ import com.consumoesperto.model.BankApiConfig;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.AutorizacaoBancariaService;
 import com.consumoesperto.service.BankApiConfigService;
+<<<<<<< HEAD
 import com.consumoesperto.service.UsuarioService;
+=======
+>>>>>>> origin/main
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +29,10 @@ public class MercadoPagoConfigController {
 
     private final AutorizacaoBancariaService autorizacaoBancariaService;
     private final BankApiConfigService bankApiConfigService;
+<<<<<<< HEAD
     private final UsuarioService usuarioService;
+=======
+>>>>>>> origin/main
 
     /**
      * Configura credenciais reais do Mercado Pago
@@ -66,16 +72,24 @@ public class MercadoPagoConfigController {
                 // Criar nova configuração
                 BankApiConfig newConfig = new BankApiConfig();
                 newConfig.setTipoBanco("MERCADOPAGO");
+<<<<<<< HEAD
                 newConfig.setBanco("MERCADOPAGO"); // Campo obrigatório
+=======
+>>>>>>> origin/main
                 newConfig.setNome("Mercado Pago");
                 newConfig.setClientId(clientId);
                 newConfig.setClientSecret(clientSecret);
                 newConfig.setApiUrl("https://api.mercadopago.com/v1");
+<<<<<<< HEAD
                 newConfig.setRedirectUri("https://0d723f1e294f.ngrok-free.app/api/bank/oauth/mercadopago/callback");
+=======
+                newConfig.setRedirectUri("https://85766d45517b.ngrok-free.app/api/auth/mercadopago/callback");
+>>>>>>> origin/main
                 newConfig.setScope("read write");
                 newConfig.setAtivo(true);
                 newConfig.setDataCriacao(LocalDateTime.now());
                 newConfig.setDataAtualizacao(LocalDateTime.now());
+<<<<<<< HEAD
                 
                 // Buscar o usuário e associar à configuração
                 try {
@@ -89,6 +103,8 @@ public class MercadoPagoConfigController {
                     ));
                 }
                 
+=======
+>>>>>>> origin/main
                 bankApiConfigService.saveConfig(newConfig);
                 log.info("✅ Nova configuração da API criada");
             }
@@ -175,6 +191,7 @@ public class MercadoPagoConfigController {
                 status.put("hasRefreshToken", auth.getRefreshToken() != null);
                 status.put("isTokenExpired", auth.getDataExpiracao().isBefore(LocalDateTime.now()));
                 status.put("isActive", auth.getAtivo());
+<<<<<<< HEAD
                 
                 // Se tem autorização bancária, considerar como configurado mesmo sem BankApiConfig
                 if (auth.getAccessToken() != null && auth.getAtivo()) {
@@ -182,6 +199,8 @@ public class MercadoPagoConfigController {
                 }
             } else {
                 status.put("isConfigured", false);
+=======
+>>>>>>> origin/main
             }
             
             status.put("timestamp", LocalDateTime.now());

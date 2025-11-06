@@ -62,7 +62,11 @@ public class SetupController {
                 config.setClientId("4223603750190943");
                 config.setClientSecret("CONFIGURAR_MERCADOPAGO_CLIENT_SECRET");
                 config.setApiUrl("https://api.mercadopago.com/v1");
+<<<<<<< HEAD
                 config.setRedirectUri("https://0d723f1e294f.ngrok-free.app/api/bank/oauth/mercadopago/callback");
+=======
+                config.setRedirectUri("https://85766d45517b.ngrok-free.app/api/auth/mercadopago/callback");
+>>>>>>> origin/main
                 config.setScope("read write");
                 config.setAtivo(true);
                 config.setDataCriacao(LocalDateTime.now());
@@ -83,8 +87,13 @@ public class SetupController {
                 auth.setTipoBanco("MERCADO_PAGO");
                 auth.setBanco("Mercado Pago");
                 auth.setTipoConta("CONTA_CORRENTE");
+<<<<<<< HEAD
                 auth.setAccessToken("REAL_TOKEN_PLACEHOLDER");
                 auth.setRefreshToken("REAL_REFRESH_TOKEN_PLACEHOLDER");
+=======
+                auth.setAccessToken("APP_USR_4223603750190943-091315-1234567890abcdef1234567890abcdef-123456789");
+                auth.setRefreshToken("TG-1234567890abcdef1234567890abcdef-123456789");
+>>>>>>> origin/main
                 auth.setTokenType("Bearer");
                 auth.setScope("read write");
                 auth.setDataExpiracao(LocalDateTime.now().plusHours(6));

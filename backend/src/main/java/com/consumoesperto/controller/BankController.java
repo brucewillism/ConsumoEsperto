@@ -45,7 +45,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Operações Bancárias", description = "Endpoints para operações bancárias gerais")
+<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app", "https://*.ngrok-free.app"})
+=======
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
+>>>>>>> origin/main
 public class BankController {
 
     private final AutorizacaoBancariaService autorizacaoBancariaService;
@@ -412,6 +416,7 @@ public class BankController {
                         
                         // Converte Map para CreditCardDTO
                         for (Map<String, Object> cartaoMap : cartoesBanco) {
+<<<<<<< HEAD
                             try {
                                 CreditCardDTO cartaoDTO = new CreditCardDTO();
                                 
@@ -491,6 +496,17 @@ public class BankController {
                                 log.warn("⚠️ Erro ao converter cartão do mapa: {}", e.getMessage());
                                 // Continua com próximo cartão
                             }
+=======
+                            CreditCardDTO cartaoDTO = new CreditCardDTO();
+                            cartaoDTO.setId((Long) cartaoMap.get("id"));
+                            cartaoDTO.setNumber((String) cartaoMap.get("numero"));
+                            cartaoDTO.setLimit((BigDecimal) cartaoMap.get("limite"));
+                            cartaoDTO.setAvailable((BigDecimal) cartaoMap.get("saldoDisponivel"));
+                            cartaoDTO.setBank(auth.getBanco().toString());
+                            cartaoDTO.setUsuarioId(currentUser.getId());
+                            cartaoDTO.setStatus("ATIVO");
+                            cartoesReais.add(cartaoDTO);
+>>>>>>> origin/main
                         }
                         
                     } catch (Exception e) {

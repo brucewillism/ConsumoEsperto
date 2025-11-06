@@ -46,7 +46,10 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     
     List<Transacao> findByUsuarioIdAndDescricaoAndDataTransacaoAndValor(Long usuarioId, String descricao, LocalDateTime dataTransacao, BigDecimal valor);
     
+<<<<<<< HEAD
     List<Transacao> findByUsuarioIdAndDescricaoContaining(Long usuarioId, String descricao);
     
+=======
+>>>>>>> origin/main
     int deleteByUsuarioId(Long usuarioId);
 }

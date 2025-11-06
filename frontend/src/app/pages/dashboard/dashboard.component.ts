@@ -6,7 +6,10 @@ import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { RelatorioService } from '../../services/relatorio.service';
 import { AuthService } from '../../services/auth.service';
 import { BankApiService } from '../../services/bank-api.service';
+<<<<<<< HEAD
 import { DateFormatPipe } from '../../pipes/date-format.pipe';
+=======
+>>>>>>> origin/main
 import { forkJoin, catchError, of } from 'rxjs';
 
 /**
@@ -86,10 +89,13 @@ export class DashboardComponent implements OnInit {
   // Dados de erro para tratamento
   errorMessage = '';
   
+<<<<<<< HEAD
   // Controle de carregamento para evitar duplicação
   private isLoadingData = false;
   private lastLoadTime = 0;
   
+=======
+>>>>>>> origin/main
   constructor(
     private transacaoService: TransacaoService,
     private cartaoCreditoService: CartaoCreditoService,
@@ -111,6 +117,7 @@ export class DashboardComponent implements OnInit {
    * Carrega todos os dados do dashboard
    * 
    * Faz chamadas reais para o backend para obter dados
+<<<<<<< HEAD
    * financeiros do usuário autenticado. SEM DADOS MOCK.
    * Sempre sincroniza dados reais do Mercado Pago primeiro.
    * Implementa controle anti-duplicação.
@@ -137,6 +144,56 @@ export class DashboardComponent implements OnInit {
     
     // SEMPRE sincronizar dados reais primeiro
     this.sincronizarDadosReais();
+=======
+   * financeiros do usuário autenticado.
+   */
+  private loadDashboardData() {
+    console.log('📊 Carregando dados do dashboard...');
+    this.isLoading = true;
+    this.errorMessage = '';
+    
+    // Primeiro, tenta sincronizar dados do Mercado Pago automaticamente
+    console.log('🔄 Iniciando sincronização do Mercado Pago...');
+    this.syncMercadoPagoData();
+    
+    // Calcula datas para o mês atual
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    // Faz múltiplas chamadas em paralelo para obter todos os dados
+    forkJoin({
+      transacoes: this.transacaoService.buscarPorUsuario().pipe(
+        catchError(() => of([]))
+      ),
+      transacoesMes: this.transacaoService.buscarPorPeriodo(startOfMonth, endOfMonth).pipe(
+        catchError(() => of([]))
+      ),
+      cartoes: this.cartaoCreditoService.buscarPorUsuario().pipe(
+        catchError(() => of([]))
+      ),
+      limiteTotal: this.cartaoCreditoService.getLimiteTotal().pipe(
+        catchError(() => of(0))
+      ),
+      limiteDisponivel: this.cartaoCreditoService.getLimiteDisponivel().pipe(
+        catchError(() => of(0))
+      ),
+      resumoFinanceiro: this.relatorioService.getResumoFinanceiro().pipe(
+        catchError(() => of({}))
+      )
+    }).subscribe({
+      next: (data) => {
+        this.processarDadosReais(data);
+        this.isLoading = false;
+      },
+      error: (error) => {
+        console.error('Erro ao carregar dados do dashboard:', error);
+        this.errorMessage = 'Erro ao carregar dados. Usando dados de demonstração.';
+        this.loadMockData(); // Fallback para dados mock
+        this.isLoading = false;
+      }
+    });
+>>>>>>> origin/main
   }
   
   /**
@@ -146,11 +203,17 @@ export class DashboardComponent implements OnInit {
    * e atualiza os cards e gráficos do dashboard.
    */
   private processarDadosReais(data: any) {
+<<<<<<< HEAD
     console.log('📊 Processando dados reais do backend:', data);
     
     // Processa transações do mês atual
     const transacoesMes = data.transacoesMes || [];
     console.log('📊 Transações do mês:', transacoesMes.length, 'transações encontradas');
+=======
+    // Processa transações do mês atual
+    const transacoesMes = data.transacoesMes || [];
+    const todasTransacoes = data.transacoes || [];
+>>>>>>> origin/main
     
     // Calcula totais do mês
     this.totalSpent = this.calcularTotalPorTipo(transacoesMes, 'DESPESA');
@@ -161,6 +224,7 @@ export class DashboardComponent implements OnInit {
     this.creditCardLimit = data.limiteTotal || 0;
     this.creditCardUsed = this.creditCardLimit - (data.limiteDisponivel || 0);
     
+<<<<<<< HEAD
     console.log('📊 Totais calculados:', {
       totalSpent: this.totalSpent,
       totalIncome: this.totalIncome,
@@ -175,11 +239,22 @@ export class DashboardComponent implements OnInit {
     // Processa transações recentes (últimas 5 do mês atual)
     this.recentTransactions = transacoesMes
       .filter((t: any) => t.dataTransacao) // Filtra transações com data válida
+=======
+    // Atualiza cards com dados reais
+    this.atualizarCardsComDadosReais();
+    
+    // Processa transações recentes (últimas 5)
+    this.recentTransactions = todasTransacoes
+>>>>>>> origin/main
       .sort((a: any, b: any) => new Date(b.dataTransacao).getTime() - new Date(a.dataTransacao).getTime())
       .slice(0, 5)
       .map((t: any) => ({
         id: t.id,
+<<<<<<< HEAD
         description: t.descricao || 'Transação sem descrição',
+=======
+        description: t.descricao,
+>>>>>>> origin/main
         amount: t.tipoTransacao === 'RECEITA' ? t.valor : -t.valor,
         category: t.categoriaNome || 'Sem categoria',
         date: new Date(t.dataTransacao),
@@ -187,6 +262,7 @@ export class DashboardComponent implements OnInit {
       }));
     
     // Atualiza gráficos com dados reais
+<<<<<<< HEAD
     this.atualizarGraficosComDadosReais(transacoesMes);
     
     console.log('✅ Dados processados:', {
@@ -197,6 +273,9 @@ export class DashboardComponent implements OnInit {
       creditCardUsed: this.creditCardUsed,
       recentTransactionsCount: this.recentTransactions.length
     });
+=======
+    this.atualizarGraficosComDadosReais(todasTransacoes);
+>>>>>>> origin/main
   }
   
   /**
@@ -212,6 +291,7 @@ export class DashboardComponent implements OnInit {
    * Atualiza os cards com dados reais calculados
    */
   private atualizarCardsComDadosReais() {
+<<<<<<< HEAD
     const limiteDisponivel = this.creditCardLimit - this.creditCardUsed;
     
     console.log('📊 Atualizando cards do dashboard:', {
@@ -222,11 +302,17 @@ export class DashboardComponent implements OnInit {
       limiteDisponivel: limiteDisponivel
     });
     
+=======
+>>>>>>> origin/main
     this.dashboardCards = [
       {
         title: 'Gastos do Mês',
         value: this.formatCurrency(this.totalSpent),
+<<<<<<< HEAD
         change: this.totalSpent > 0 ? 'Dados do mês atual' : 'Nenhum gasto registrado',
+=======
+        change: this.calcularVariacaoPercentual(this.totalSpent, 0), // TODO: Comparar com mês anterior
+>>>>>>> origin/main
         changeType: this.totalSpent > 0 ? 'negative' : 'neutral',
         icon: 'fas fa-arrow-up',
         color: '#f64e60'
@@ -234,7 +320,11 @@ export class DashboardComponent implements OnInit {
       {
         title: 'Receitas do Mês',
         value: this.formatCurrency(this.totalIncome),
+<<<<<<< HEAD
         change: this.totalIncome > 0 ? 'Dados do mês atual' : 'Nenhuma receita registrada',
+=======
+        change: this.calcularVariacaoPercentual(this.totalIncome, 0), // TODO: Comparar com mês anterior
+>>>>>>> origin/main
         changeType: this.totalIncome > 0 ? 'positive' : 'neutral',
         icon: 'fas fa-arrow-down',
         color: '#1c3238'
@@ -242,15 +332,24 @@ export class DashboardComponent implements OnInit {
       {
         title: 'Saldo Atual',
         value: this.formatCurrency(this.balance),
+<<<<<<< HEAD
         change: this.balance > 0 ? 'Saldo positivo' : this.balance < 0 ? 'Saldo negativo' : 'Saldo zerado',
+=======
+        change: this.calcularVariacaoPercentual(this.balance, 0), // TODO: Comparar com período anterior
+>>>>>>> origin/main
         changeType: this.balance >= 0 ? 'positive' : 'negative',
         icon: 'fas fa-wallet',
         color: '#3699ff'
       },
       {
         title: 'Limite Disponível',
+<<<<<<< HEAD
         value: this.formatCurrency(limiteDisponivel),
         change: this.creditCardLimit > 0 ? `${((limiteDisponivel / this.creditCardLimit) * 100).toFixed(1)}% disponível` : 'Sem cartão cadastrado',
+=======
+        value: this.formatCurrency(this.creditCardLimit - this.creditCardUsed),
+        change: this.calcularVariacaoPercentual(this.creditCardLimit - this.creditCardUsed, 0), // TODO: Comparar com período anterior
+>>>>>>> origin/main
         changeType: 'neutral',
         icon: 'fas fa-credit-card',
         color: '#3f2b13'
@@ -273,34 +372,47 @@ export class DashboardComponent implements OnInit {
    * Atualiza gráficos com dados reais
    */
   private atualizarGraficosComDadosReais(transacoes: any[]) {
+<<<<<<< HEAD
     console.log('📊 Atualizando gráficos com dados reais...');
     
+=======
+>>>>>>> origin/main
     // Gráfico de gastos por mês (últimos 6 meses)
     this.spendingChartData = this.gerarGraficoGastosMensais(transacoes);
     
     // Gráfico de gastos por categoria
     this.categoryChartData = this.gerarGraficoGastosPorCategoria(transacoes);
+<<<<<<< HEAD
     
     console.log('📊 Gráficos atualizados:', {
       spendingChart: this.spendingChartData ? 'Dados disponíveis' : 'Sem dados',
       categoryChart: this.categoryChartData ? 'Dados disponíveis' : 'Sem dados'
     });
+=======
+>>>>>>> origin/main
   }
   
   /**
    * Gera dados para gráfico de gastos mensais
    */
+<<<<<<< HEAD
   private gerarGraficoGastosMensais(transacoes: any[]): ChartData | null {
     if (!transacoes || transacoes.length === 0) {
       console.log('📊 Nenhuma transação encontrada para gráfico mensal');
       return null;
     }
     
+=======
+  private gerarGraficoGastosMensais(transacoes: any[]): ChartData {
+>>>>>>> origin/main
     const ultimos6Meses = this.obterUltimos6Meses();
     const gastosMensais = ultimos6Meses.map(mes => {
       const gastos = transacoes
         .filter(t => {
+<<<<<<< HEAD
           if (!t.dataTransacao) return false;
+=======
+>>>>>>> origin/main
           const dataTransacao = new Date(t.dataTransacao);
           return dataTransacao.getMonth() === mes.mes && 
                  dataTransacao.getFullYear() === mes.ano &&
@@ -310,6 +422,7 @@ export class DashboardComponent implements OnInit {
       return gastos;
     });
     
+<<<<<<< HEAD
     // Verifica se há dados para exibir
     const temDados = gastosMensais.some(gasto => gasto > 0);
     if (!temDados) {
@@ -317,6 +430,8 @@ export class DashboardComponent implements OnInit {
       return null;
     }
     
+=======
+>>>>>>> origin/main
     return {
       labels: ultimos6Meses.map(m => m.nome),
       datasets: [{
@@ -332,6 +447,7 @@ export class DashboardComponent implements OnInit {
   /**
    * Gera dados para gráfico de gastos por categoria
    */
+<<<<<<< HEAD
   private gerarGraficoGastosPorCategoria(transacoes: any[]): ChartData | null {
     if (!transacoes || transacoes.length === 0) {
       console.log('📊 Nenhuma transação encontrada para gráfico de categorias');
@@ -342,6 +458,13 @@ export class DashboardComponent implements OnInit {
     
     transacoes
       .filter(t => t.tipoTransacao === 'DESPESA' && t.valor > 0)
+=======
+  private gerarGraficoGastosPorCategoria(transacoes: any[]): ChartData {
+    const gastosPorCategoria = new Map<string, number>();
+    
+    transacoes
+      .filter(t => t.tipoTransacao === 'DESPESA')
+>>>>>>> origin/main
       .forEach(t => {
         const categoria = t.categoriaNome || 'Sem categoria';
         const valorAtual = gastosPorCategoria.get(categoria) || 0;
@@ -351,12 +474,15 @@ export class DashboardComponent implements OnInit {
     const categorias = Array.from(gastosPorCategoria.keys());
     const valores = Array.from(gastosPorCategoria.values());
     
+<<<<<<< HEAD
     // Verifica se há dados para exibir
     if (categorias.length === 0) {
       console.log('📊 Nenhum gasto por categoria encontrado');
       return null;
     }
     
+=======
+>>>>>>> origin/main
     return {
       labels: categorias,
       datasets: [{
@@ -371,11 +497,57 @@ export class DashboardComponent implements OnInit {
   
   /**
    * Obtém os últimos 6 meses
+<<<<<<< HEAD
+=======
    */
   private obterUltimos6Meses() {
     const meses = [];
     const agora = new Date();
     
+    for (let i = 5; i >= 0; i--) {
+      const data = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+      meses.push({
+        mes: data.getMonth(),
+        ano: data.getFullYear(),
+        nome: data.toLocaleDateString('pt-BR', { month: 'short' })
+      });
+    }
+    
+    return meses;
+  }
+  
+  /**
+   * Gera cores para gráficos
+   */
+  private gerarCores(quantidade: number, transparente = true): string[] {
+    const cores = [
+      'rgba(54, 153, 255, 0.8)',
+      'rgba(28, 50, 56, 0.8)',
+      'rgba(63, 43, 19, 0.8)',
+      'rgba(246, 78, 96, 0.8)',
+      'rgba(43, 50, 82, 0.8)',
+      'rgba(58, 36, 52, 0.8)'
+    ];
+    
+    if (!transparente) {
+      return cores.map(cor => cor.replace('0.8', '1'));
+    }
+    
+    return cores.slice(0, quantidade);
+  }
+  
+  
+  /**
+   * Carrega dados mock para demonstração (fallback)
+   * 
+   * Usado apenas quando há erro ao carregar dados reais do backend.
+>>>>>>> origin/main
+   */
+  private obterUltimos6Meses() {
+    const meses = [];
+    const agora = new Date();
+    
+<<<<<<< HEAD
     for (let i = 5; i >= 0; i--) {
       const data = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
       meses.push({
@@ -424,6 +596,69 @@ export class DashboardComponent implements OnInit {
     this.spendingChartData = null;
     this.categoryChartData = null;
     this.dashboardCards = [];
+=======
+    // Atualiza cards com dados mock
+    this.atualizarCardsComDadosReais();
+    
+    // Transações recentes para demonstração
+    this.recentTransactions = [
+      {
+        id: 1,
+        description: 'Supermercado Extra',
+        amount: -120.50, // Valor negativo = despesa
+        category: 'Alimentação',
+        date: new Date(),
+        type: 'debit'
+      },
+      {
+        id: 2,
+        description: 'Uber',
+        amount: -25.80,
+        category: 'Transporte',
+        date: new Date(Date.now() - 86400000), // 1 dia atrás
+        type: 'debit'
+      },
+      {
+        id: 3,
+        description: 'Salário',
+        amount: 5200.00, // Valor positivo = receita
+        category: 'Receita',
+        date: new Date(Date.now() - 172800000), // 2 dias atrás
+        type: 'credit'
+      },
+      {
+        id: 4,
+        description: 'Netflix',
+        amount: -39.90,
+        category: 'Lazer',
+        date: new Date(Date.now() - 259200000), // 3 dias atrás
+        type: 'debit'
+      }
+    ];
+    
+    // Gráficos com dados mock
+    this.spendingChartData = {
+      labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'],
+      datasets: [{
+        label: 'Gastos Mensais',
+        data: [1800, 2200, 1950, 2450, 2100, 2800],
+        backgroundColor: ['rgba(54, 153, 255, 0.2)'],
+        borderColor: ['rgba(54, 153, 255, 1)'],
+        borderWidth: 2
+      }]
+    };
+    
+    this.categoryChartData = {
+      labels: ['Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Educação', 'Outros'],
+      datasets: [{
+        label: 'Gastos por Categoria',
+        data: [800, 450, 300, 200, 150, 550],
+        backgroundColor: this.gerarCores(6),
+        borderColor: this.gerarCores(6, false),
+        borderWidth: 1
+      }]
+    };
+>>>>>>> origin/main
   }
   
   /**
@@ -589,6 +824,74 @@ export class DashboardComponent implements OnInit {
         this.errorMessage = 'Erro ao carregar dados. Tente novamente.';
         this.isLoading = false;
         this.isLoadingData = false;
+      }
+    });
+  }
+
+  /**
+   * Sincroniza dados do Mercado Pago automaticamente
+   * 
+   * Este método é chamado automaticamente quando o dashboard carrega
+   * para tentar buscar dados reais do Mercado Pago.
+   */
+  private syncMercadoPagoData() {
+    console.log('🔄 Sincronizando dados do Mercado Pago automaticamente...');
+    
+    this.bankApiService.syncMercadoPagoData().subscribe({
+      next: (response) => {
+        console.log('✅ Dados do Mercado Pago sincronizados com sucesso:', response);
+        // Recarrega os dados do dashboard após sincronização
+        this.loadDashboardDataAfterSync();
+      },
+      error: (error) => {
+        console.log('⚠️ Erro ao sincronizar dados do Mercado Pago:', error);
+        // Continua carregando dados mesmo se a sincronização falhar
+        this.loadDashboardDataAfterSync();
+      }
+    });
+  }
+
+  /**
+   * Carrega dados do dashboard após tentativa de sincronização
+   * 
+   * Este método é chamado após a sincronização do Mercado Pago
+   * para carregar os dados atualizados.
+   */
+  private loadDashboardDataAfterSync() {
+    // Calcula datas para o mês atual
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    // Faz múltiplas chamadas em paralelo para obter todos os dados
+    forkJoin({
+      transacoes: this.transacaoService.buscarPorUsuario().pipe(
+        catchError(() => of([]))
+      ),
+      transacoesMes: this.transacaoService.buscarPorPeriodo(startOfMonth, endOfMonth).pipe(
+        catchError(() => of([]))
+      ),
+      cartoes: this.cartaoCreditoService.buscarPorUsuario().pipe(
+        catchError(() => of([]))
+      ),
+      limiteTotal: this.cartaoCreditoService.getLimiteTotal().pipe(
+        catchError(() => of(0))
+      ),
+      limiteDisponivel: this.cartaoCreditoService.getLimiteDisponivel().pipe(
+        catchError(() => of(0))
+      ),
+      resumoFinanceiro: this.relatorioService.getResumoFinanceiro().pipe(
+        catchError(() => of({}))
+      )
+    }).subscribe({
+      next: (data) => {
+        this.processarDadosReais(data);
+        this.isLoading = false;
+      },
+      error: (error) => {
+        console.error('❌ Erro ao carregar dados do dashboard:', error);
+        this.errorMessage = 'Erro ao carregar dados. Tente novamente.';
+        this.isLoading = false;
       }
     });
   }

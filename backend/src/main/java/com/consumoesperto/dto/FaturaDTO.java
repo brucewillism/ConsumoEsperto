@@ -7,10 +7,13 @@ import lombok.AllArgsConstructor;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
+<<<<<<< HEAD
 import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.DecimalMax;
 import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Future;
+=======
+>>>>>>> origin/main
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -34,6 +37,7 @@ public class FaturaDTO {
     private Long cartaoCreditoId;
 
     @NotBlank(message = "Nome do cartão é obrigatório")
+<<<<<<< HEAD
     @Size(min = 2, max = 100, message = "Nome do cartão deve ter entre 2 e 100 caracteres")
     @Pattern(regexp = "^[a-zA-Z0-9\\s\\-]+$", message = "Nome do cartão contém caracteres inválidos")
     private String nomeCartao;
@@ -46,6 +50,15 @@ public class FaturaDTO {
     @NotNull(message = "Valor mínimo é obrigatório")
     @DecimalMin(value = "0.01", message = "Valor mínimo deve ser maior que zero")
     @DecimalMax(value = "999999.99", message = "Valor mínimo não pode exceder R$ 999.999,99")
+=======
+    @Size(max = 100, message = "Nome do cartão deve ter no máximo 100 caracteres")
+    private String nomeCartao;
+
+    @NotNull(message = "Valor total é obrigatório")
+    private BigDecimal valorTotal;
+
+    @NotNull(message = "Valor mínimo é obrigatório")
+>>>>>>> origin/main
     private BigDecimal valorMinimo;
 
     // Campo adicional para compatibilidade com código existente
@@ -58,8 +71,12 @@ public class FaturaDTO {
     private LocalDateTime dataFechamento;
 
     @NotBlank(message = "Status é obrigatório")
+<<<<<<< HEAD
     @Size(min = 2, max = 20, message = "Status deve ter entre 2 e 20 caracteres")
     @Pattern(regexp = "^(ABERTA|FECHADA|PAGA|VENCIDA|CANCELADA)$", message = "Status deve ser: ABERTA, FECHADA, PAGA, VENCIDA ou CANCELADA")
+=======
+    @Size(max = 20, message = "Status deve ter no máximo 20 caracteres")
+>>>>>>> origin/main
     private String status;
 
     // Campo adicional para compatibilidade com código existente

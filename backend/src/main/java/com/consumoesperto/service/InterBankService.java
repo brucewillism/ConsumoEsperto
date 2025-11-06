@@ -415,6 +415,7 @@ public class InterBankService {
     // Métodos de processamento de resposta da API
     private List<CartaoCredito> processarCartoesResposta(Object response) {
         log.info("Processando resposta de cartões da API do Inter");
+<<<<<<< HEAD
         
         List<CartaoCredito> cartoes = new ArrayList<>();
         
@@ -648,6 +649,39 @@ public class InterBankService {
         }
         
         return resultado;
+=======
+        return new ArrayList<>();
+    }
+    
+    private Map<String, Object> processarSaldoResposta(Object response) {
+        // TODO: Implementar processamento real da resposta da API
+        log.info("Processando resposta de saldo da API do Inter");
+        return new HashMap<>();
+    }
+    
+    private List<FaturaDTO> processarFaturasResposta(Object response) {
+        // TODO: Implementar processamento real da resposta da API
+        log.info("Processando resposta de faturas da API do Inter");
+        return new ArrayList<>();
+    }
+    
+    private List<Map<String, Object>> processarTransacoesResposta(Object response) {
+        // TODO: Implementar processamento real da resposta da API
+        log.info("Processando resposta de transações da API do Inter");
+        return new ArrayList<>();
+    }
+    
+    private Map<String, Object> processarGastosPorCategoriaResposta(Object response) {
+        // TODO: Implementar processamento real da resposta da API
+        log.info("Processando resposta de gastos por categoria da API do Inter");
+        return new HashMap<>();
+    }
+    
+    private Map<String, Object> processarAnaliseGastosResposta(Object response) {
+        // TODO: Implementar processamento real da resposta da API
+        log.info("Processando resposta de análise de gastos da API do Inter");
+        return new HashMap<>();
+>>>>>>> origin/main
     }
     
 }

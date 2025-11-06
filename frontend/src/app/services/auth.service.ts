@@ -258,12 +258,15 @@ export class AuthService {
         };
 
         // Envia dados do usuário Google para o backend para criar/autenticar
+<<<<<<< HEAD
         console.log('[AuthService] Enviando requisição para login Google:', {
           url: `${this.API_URL}/google`,
           accessToken: accessToken ? 'Presente' : 'Ausente',
           userInfo: userInfo ? 'Presente' : 'Ausente'
         });
         
+=======
+>>>>>>> origin/main
         this.http.post<GoogleLoginResponse>(`${this.API_URL}/google`, {
           accessToken: accessToken,
           userInfo: userInfo
@@ -287,6 +290,7 @@ export class AuthService {
           },
           error: (error) => {
             console.error('Erro no backend para login Google:', error);
+<<<<<<< HEAD
             
             // Tratamento específico para erro de conexão (0 Unknown Error)
             let errorMessage = 'Erro no servidor';
@@ -301,6 +305,11 @@ export class AuthService {
             observer.error({
               status: error.status || 500,
               error: { message: errorMessage }
+=======
+            observer.error({
+              status: error.status || 500,
+              error: { message: 'Erro no servidor: ' + (error.error?.message || error.message) }
+>>>>>>> origin/main
             });
           }
         });
@@ -368,7 +377,11 @@ export class AuthService {
           username: response.username,
           email: response.email,
           nome: response.nome,
+<<<<<<< HEAD
           fotoUrl: response.fotoUrl, // Usa fotoUrl diretamente
+=======
+          foto: response.fotoUrl, // Mapeia fotoUrl -> foto
+>>>>>>> origin/main
           dataCriacao: response.dataCriacao ? new Date(response.dataCriacao) : undefined,
           ultimoAcesso: response.ultimoAcesso ? new Date(response.ultimoAcesso) : undefined,
           ativo: true

@@ -33,7 +33,11 @@ public class SecureMercadoPagoController {
     private final RestTemplate restTemplate = new RestTemplate();
 
     @GetMapping("/dados")
+<<<<<<< HEAD
     @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
+=======
+    @CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
+>>>>>>> origin/main
     public Map<String, Object> obterDadosMercadoPago(HttpServletRequest request) {
         try {
             // Verificar autenticação

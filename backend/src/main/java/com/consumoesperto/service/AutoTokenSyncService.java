@@ -13,12 +13,15 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+<<<<<<< HEAD
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import java.util.Map;
+=======
+>>>>>>> origin/main
 
 /**
  * Serviço para verificar e sincronizar automaticamente tokens de APIs bancárias
@@ -44,9 +47,12 @@ public class AutoTokenSyncService {
     @Autowired
     private MercadoPagoService mercadoPagoService;
     
+<<<<<<< HEAD
     @Autowired
     private RealMercadoPagoTokenService realMercadoPagoTokenService;
     
+=======
+>>>>>>> origin/main
     /**
      * Verifica e sincroniza automaticamente tokens bancários para o usuário
      * ATIVADO: Sistema sincroniza automaticamente todos os dados do Mercado Pago
@@ -67,7 +73,11 @@ public class AutoTokenSyncService {
             Usuario usuario = usuarioOpt.get();
             
             // Verificar configuração do Mercado Pago
+<<<<<<< HEAD
             verificarMercadoPagoSimplificado(usuario);
+=======
+            verificarMercadoPago(usuario);
+>>>>>>> origin/main
             
             // Aqui você pode adicionar verificações para outros bancos
             // verificarNubank(usuario);
@@ -82,6 +92,7 @@ public class AutoTokenSyncService {
     }
     
     /**
+<<<<<<< HEAD
      * Verifica e sincroniza token do Mercado Pago (versão simplificada)
      */
     private void verificarMercadoPagoSimplificado(Usuario usuario) {
@@ -104,6 +115,9 @@ public class AutoTokenSyncService {
 
     /**
      * Verifica e sincroniza token do Mercado Pago (método antigo - mantido para compatibilidade)
+=======
+     * Verifica e sincroniza token do Mercado Pago
+>>>>>>> origin/main
      */
     private void verificarMercadoPago(Usuario usuario) {
         try {
@@ -142,6 +156,7 @@ public class AutoTokenSyncService {
             }
             
             if (auth.getDataExpiracao() != null && auth.getDataExpiracao().isBefore(LocalDateTime.now())) {
+<<<<<<< HEAD
                 log.info("⚠️ Token do Mercado Pago expirado para usuário {} - RENOVANDO AUTOMATICAMENTE", usuario.getId());
                 
                 // RENOVAR TOKEN AUTOMATICAMENTE
@@ -166,6 +181,10 @@ public class AutoTokenSyncService {
                     log.error("❌ Erro ao renovar token para usuário {}: {}", usuario.getId(), e.getMessage(), e);
                     return;
                 }
+=======
+                log.info("ℹ️ Token do Mercado Pago expirado para usuário {}", usuario.getId());
+                return;
+>>>>>>> origin/main
             }
             
             // 4. Token válido encontrado - testar conectividade
@@ -237,6 +256,7 @@ public class AutoTokenSyncService {
             return false;
         }
     }
+<<<<<<< HEAD
     
     /**
      * Renova automaticamente o token do Mercado Pago usando OAuth2
@@ -307,4 +327,6 @@ public class AutoTokenSyncService {
             return false;
         }
     }
+=======
+>>>>>>> origin/main
 }

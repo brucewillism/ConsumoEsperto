@@ -15,7 +15,11 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/inicializacao")
+<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
+=======
+@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
+>>>>>>> origin/main
 public class InicializacaoController {
 
     private static final Logger logger = LoggerFactory.getLogger(InicializacaoController.class);

@@ -75,6 +75,7 @@ public class MercadoPagoFaturaDTO {
      * Valor pago (se paga)
      */
     private BigDecimal valorPago;
+<<<<<<< HEAD
 
     /**
      * Descrição da fatura
@@ -90,4 +91,6 @@ public class MercadoPagoFaturaDTO {
      * Tipo da fatura
      */
     private String tipo;
+=======
+>>>>>>> origin/main
 }

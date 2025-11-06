@@ -46,6 +46,7 @@ public class MercadoPagoBankService {
      * Busca configuração do Mercado Pago para um usuário
      */
     private Optional<BankApiConfig> getMercadoPagoConfig(Long userId) {
+<<<<<<< HEAD
         try {
             log.debug("🔍 Buscando configuração do Mercado Pago para usuário: {}", userId);
             Optional<BankApiConfig> config = bankApiConfigRepository.findByUsuarioIdAndBanco(userId, "MERCADOPAGO");
@@ -53,6 +54,198 @@ public class MercadoPagoBankService {
             if (config.isPresent() && config.get().getAtivo()) {
                 log.debug("✅ Configuração encontrada para usuário: {}", userId);
                 return config;
+=======
+        try {
+            log.debug("🔍 Buscando configuração do Mercado Pago para usuário: {}", userId);
+            Optional<BankApiConfig> config = bankApiConfigRepository.findByUsuarioIdAndBanco(userId, "MERCADOPAGO");
+            if (config.isPresent() && config.get().getAtivo()) {
+                return config;
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("❌ Erro ao buscar configuração do Mercado Pago para usuário {}: {}", userId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public String generateAuthUrl(String redirectUri, String state, Long userId) {
+        log.info("Gerando URL de autorização para Mercado Pago - Usuário: {}", userId);
+        
+        Optional<BankApiConfig> config = getMercadoPagoConfig(userId);
+        if (config.isEmpty()) {
+            log.error("❌ Usuário {} não possui configuração do Mercado Pago", userId);
+            throw new RuntimeException("Configuração do Mercado Pago não encontrada");
+        }
+        
+        BankApiConfig mpConfig = config.get();
+        
+        return UriComponentsBuilder.fromHttpUrl(mpConfig.getAuthUrl())
+                .queryParam("client_id", mpConfig.getClientId())
+                .queryParam("redirect_uri", redirectUri)
+                .queryParam("response_type", "code")
+                .queryParam("scope", mpConfig.getScope())
+                .queryParam("state", state)
+                .build()
+                .toUriString();
+    }
+
+    public Map<String, Object> processOAuthCallback(String code, String state, String redirectUri, Long userId) {
+        log.info("Processando callback OAuth para Mercado Pago - Usuário: {}", userId);
+        
+        Optional<BankApiConfig> config = getMercadoPagoConfig(userId);
+        if (config.isEmpty()) {
+            log.error("❌ Usuário {} não possui configuração do Mercado Pago", userId);
+            throw new RuntimeException("Configuração do Mercado Pago não encontrada");
+        }
+        
+        BankApiConfig mpConfig = config.get();
+        
+        try {
+            // Preparar headers para troca do código por token
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            headers.setBasicAuth(mpConfig.getClientId(), mpConfig.getClientSecret());
+
+            // Preparar body da requisição
+            String body = String.format("grant_type=authorization_code&code=%s&redirect_uri=%s", 
+                    code, redirectUri);
+
+            HttpEntity<String> request = new HttpEntity<>(body, headers);
+
+            // Fazer chamada para trocar código por token
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    mpConfig.getTokenUrl(), 
+                    request, 
+                    Map.class
+            );
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                Map<String, Object> tokenData = response.getBody();
+                log.info("Token obtido com sucesso para Mercado Pago - Usuário: {}", userId);
+                
+                // Salvar autorização bancária na tabela
+                salvarAutorizacaoBancaria(userId, tokenData);
+                
+                return tokenData;
+            } else {
+                log.error("Erro ao obter token do Mercado Pago - Usuário: {} - Status: {}", userId, response.getStatusCode());
+                throw new RuntimeException("Falha na autenticação com Mercado Pago");
+            }
+
+        } catch (Exception e) {
+            log.error("Erro ao processar callback OAuth do Mercado Pago - Usuário: {} - Erro: {}", userId, e.getMessage());
+            throw new RuntimeException("Erro na autenticação com Mercado Pago", e);
+        }
+    }
+
+    public boolean testConnection(AutorizacaoBancaria auth) {
+        log.info("Testando conexão com Mercado Pago para usuário {}", auth.getUsuario().getId());
+        
+        try {
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(auth.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", auth.getUsuario().getId());
+                return false;
+            }
+            
+            // Preparar headers com token de acesso
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(auth.getAccessToken());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<String> request = new HttpEntity<>(headers);
+
+            // Fazer chamada de teste para API do Mercado Pago
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    "https://api.mercadopago.com/v1/users/" + config.get().getUserId() + "/accounts",
+                    HttpMethod.GET,
+                    request,
+                    Map.class
+            );
+
+            boolean isConnected = response.getStatusCode() == HttpStatus.OK;
+            log.info("Teste de conexão com Mercado Pago: {}", isConnected ? "SUCESSO" : "FALHA");
+            return isConnected;
+
+        } catch (Exception e) {
+            log.error("Erro ao testar conexão com Mercado Pago: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    public Map<String, Object> getBankDetails(AutorizacaoBancaria autorizacao) {
+        try {
+            // Verifica se o token precisa ser renovado
+            if (autorizacao.precisaRenovacao()) {
+                refreshTokenIfNeeded(autorizacao);
+            }
+
+            Map<String, Object> result = new HashMap<>();
+            
+            // Busca dados do cartão
+            List<Map<String, Object>> cartoes = getCreditCards(autorizacao);
+            result.put("cartoes", cartoes);
+            
+            // Busca dados de saldo
+            Map<String, Object> saldo = getBalanceData(autorizacao);
+            result.put("saldo", saldo);
+            
+            // Busca faturas
+            List<Map<String, Object>> faturas = getInvoices(autorizacao);
+            result.put("faturas", faturas);
+            
+            // Busca transações
+            List<Map<String, Object>> transacoes = getTransactions(autorizacao);
+            result.put("transacoes", transacoes);
+            
+            // Busca análise de gastos
+            Map<String, Object> gastosPorCategoria = getSpendingByCategory(autorizacao);
+            result.put("gastosPorCategoria", gastosPorCategoria);
+            
+            Map<String, Object> analiseGastos = getSpendingAnalysis(autorizacao);
+            result.put("analiseGastos", analiseGastos);
+            
+            result.put("status", "success");
+            result.put("message", "Dados sincronizados com sucesso");
+            
+            return result;
+            
+        } catch (Exception e) {
+            log.error("Erro ao obter detalhes do banco Mercado Pago: {}", e.getMessage(), e);
+            return Map.of("status", "error", "message", "Erro ao sincronizar dados: " + e.getMessage());
+        }
+    }
+
+    public List<Map<String, Object>> getCreditCards(AutorizacaoBancaria autorizacao) {
+        try {
+            log.info("Buscando cartões reais do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
+            
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+                return getSimulatedCreditCards();
+            }
+
+            // Chamada real para API do Mercado Pago
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/cards")
+                    .queryParam("access_token", autorizacao.getAccessToken())
+                    .build()
+                    .toUriString();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(autorizacao.getAccessToken());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<String> request = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                log.info("Cartões obtidos com sucesso da API do Mercado Pago");
+                return processarCartoesResposta(response.getBody());
+>>>>>>> origin/main
             }
             
             log.warn("⚠️ Usuário {} não possui configuração do Mercado Pago", userId);
@@ -71,6 +264,7 @@ public class MercadoPagoBankService {
         try {
             log.info("Buscando saldo real do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
             
+<<<<<<< HEAD
             // Tentar diferentes endpoints para saldo
             List<String> endpoints = Arrays.asList(
                 "https://api.mercadopago.com/v1/account/balance",
@@ -78,6 +272,22 @@ public class MercadoPagoBankService {
                 "https://api.mercadopago.com/v1/account/settings"
             );
             
+=======
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+                return getSimulatedBalanceData();
+            }
+
+            // Chamada real para API do Mercado Pago
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/accounts/balance")
+                    .queryParam("access_token", autorizacao.getAccessToken())
+                    .build()
+                    .toUriString();
+
+>>>>>>> origin/main
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + autorizacao.getAccessToken());
             headers.set("Content-Type", "application/json");
@@ -111,6 +321,7 @@ public class MercadoPagoBankService {
      */
     private String buscarCustomerId(String accessToken, String email) {
         try {
+<<<<<<< HEAD
             log.info("🔍 Buscando customer_id para email: {}", email);
             
             String searchUrl = "https://api.mercadopago.com/v1/customers/search?email=" + email;
@@ -124,6 +335,23 @@ public class MercadoPagoBankService {
                     searchUrl, HttpMethod.GET, request, Map.class);
             
             log.info("📥 Resposta recebida - Status: {}", response.getStatusCode());
+=======
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+                return getSimulatedInvoices();
+            }
+
+            // TODO: Implementar chamada real para API do Mercado Pago
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(config.get().getApiUrl() + "/invoices")
+                    .queryParam("access_token", autorizacao.getAccessToken())
+                    .build()
+                    .toUriString();
+
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+>>>>>>> origin/main
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> responseBody = response.getBody();
@@ -299,7 +527,11 @@ public class MercadoPagoBankService {
             Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
             if (config.isEmpty()) {
                 log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+<<<<<<< HEAD
                 return new ArrayList<>();
+=======
+                return getSimulatedTransactions();
+>>>>>>> origin/main
             }
 
             // Chamada real para API do Mercado Pago
@@ -337,18 +569,30 @@ public class MercadoPagoBankService {
      */
     public Map<String, Object> getSpendingByCategory(AutorizacaoBancaria autorizacao) {
         try {
+<<<<<<< HEAD
             log.info("Buscando gastos por categoria reais do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
             
+=======
+>>>>>>> origin/main
             // Buscar configuração do usuário
             Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
             if (config.isEmpty()) {
                 log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+<<<<<<< HEAD
                 return new HashMap<>();
             }
 
             // Chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
                     .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/spending/category")
+=======
+                return getSimulatedSpendingByCategory();
+            }
+
+            // TODO: Implementar chamada real para API do Mercado Pago
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(config.get().getApiUrl() + "/spending/category")
+>>>>>>> origin/main
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .queryParam("period", "month")
                     .build()
@@ -375,18 +619,30 @@ public class MercadoPagoBankService {
      */
     public Map<String, Object> getSpendingAnalysis(AutorizacaoBancaria autorizacao) {
         try {
+<<<<<<< HEAD
             log.info("Buscando análise de gastos reais do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
             
+=======
+>>>>>>> origin/main
             // Buscar configuração do usuário
             Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
             if (config.isEmpty()) {
                 log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
+<<<<<<< HEAD
                 return new HashMap<>();
             }
 
             // Chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
                     .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/spending/analysis")
+=======
+                return getSimulatedSpendingAnalysis();
+            }
+
+            // TODO: Implementar chamada real para API do Mercado Pago
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(config.get().getApiUrl() + "/spending/analysis")
+>>>>>>> origin/main
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .queryParam("period", "month")
                     .build()
@@ -404,7 +660,104 @@ public class MercadoPagoBankService {
             
         } catch (Exception e) {
             log.error("Erro ao buscar análise de gastos do Mercado Pago: {}", e.getMessage(), e);
+<<<<<<< HEAD
             return new HashMap<>();
+=======
+            return getSimulatedSpendingAnalysis();
+        }
+    }
+
+    public boolean refreshTokenIfNeeded(AutorizacaoBancaria autorizacao) {
+        try {
+            if (!autorizacao.precisaRenovacao()) {
+                return false;
+            }
+
+            // Buscar configuração do usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
+            if (config.isEmpty()) {
+                log.error("❌ Usuário {} não possui configuração do Mercado Pago para renovar token", autorizacao.getUsuario().getId());
+                return false;
+            }
+
+            BankApiConfig mpConfig = config.get();
+
+            // TODO: Implementar renovação real do token
+            String url = mpConfig.getTokenUrl();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+            body.add("grant_type", "refresh_token");
+            body.add("refresh_token", autorizacao.getRefreshToken());
+            body.add("client_id", mpConfig.getClientId());
+            body.add("client_secret", mpConfig.getClientSecret());
+
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> tokenData = response.getBody();
+                
+                // Atualizar tokens na autorização
+                autorizacao.setAccessToken((String) tokenData.get("access_token"));
+                if (tokenData.containsKey("refresh_token")) {
+                    autorizacao.setRefreshToken((String) tokenData.get("refresh_token"));
+                }
+                
+                // Calcular nova data de expiração
+                Integer expiresIn = (Integer) tokenData.get("expires_in");
+                if (expiresIn != null) {
+                    LocalDateTime novaExpiracao = LocalDateTime.now().plusSeconds(expiresIn);
+                    autorizacao.setDataExpiracao(novaExpiracao);
+                }
+                
+                autorizacao.setDataAtualizacao(LocalDateTime.now());
+                
+                log.info("Token renovado com sucesso para Mercado Pago - Usuário: {}", autorizacao.getUsuario().getId());
+                return true;
+            }
+
+            return false;
+        } catch (Exception e) {
+            log.error("Erro ao renovar token do Mercado Pago: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    // Métodos auxiliares para processar respostas da API
+    private List<Map<String, Object>> processarCartoesResposta(Map<String, Object> response) {
+        log.info("Processando resposta real de cartões do Mercado Pago");
+        
+        try {
+            List<Map<String, Object>> cartoes = new ArrayList<>();
+            
+            if (response.containsKey("data") && response.get("data") instanceof List) {
+                List<Map<String, Object>> cartoesData = (List<Map<String, Object>>) response.get("data");
+                
+                for (Map<String, Object> cartaoData : cartoesData) {
+                    Map<String, Object> cartao = new HashMap<>();
+                    cartao.put("id", cartaoData.get("id"));
+                    cartao.put("numeroCartao", mascararNumeroCartao((String) cartaoData.get("card_number")));
+                    cartao.put("nome", cartaoData.get("cardholder_name"));
+                    cartao.put("limiteCredito", new BigDecimal(cartaoData.getOrDefault("credit_limit", "0").toString()));
+                    cartao.put("limiteDisponivel", new BigDecimal(cartaoData.getOrDefault("available_credit", "0").toString()));
+                    cartao.put("saldoFatura", new BigDecimal(cartaoData.getOrDefault("current_balance", "0").toString()));
+                    cartao.put("dataVencimento", LocalDate.now().plusDays(25)); // Mercado Pago não fornece data de vencimento
+                    cartao.put("tipo", "CREDITO");
+                    cartao.put("banco", "MERCADO_PAGO");
+                    
+                    cartoes.add(cartao);
+                }
+            }
+            
+            log.info("Processados {} cartões reais do Mercado Pago", cartoes.size());
+            return cartoes;
+            
+        } catch (Exception e) {
+            log.error("Erro ao processar cartões do Mercado Pago: {}", e.getMessage(), e);
+            return getSimulatedCreditCards();
+>>>>>>> origin/main
         }
     }
 
@@ -1268,6 +1621,7 @@ public class MercadoPagoBankService {
         }
     }
 
+<<<<<<< HEAD
     public String generateAuthUrl(String clientId, String redirectUri, Long userId) {
         // TODO: Implementar geração de URL de autorização
         return "";
@@ -1299,4 +1653,80 @@ public class MercadoPagoBankService {
     public List<Map<String, Object>> getCreditCards(AutorizacaoBancaria autorizacao) {
         return getRealCreditCards(autorizacao);
     }
+=======
+    /**
+     * Salva autorização bancária na tabela autorizacoes_bancarias
+     */
+    private void salvarAutorizacaoBancaria(Long userId, Map<String, Object> tokenData) {
+        try {
+            log.info("💾 Salvando autorização bancária para usuário: {}", userId);
+            
+            // Buscar usuário
+            Optional<Usuario> usuarioOpt = usuarioRepository.findById(userId);
+            if (usuarioOpt.isEmpty()) {
+                log.error("❌ Usuário não encontrado: {}", userId);
+                return;
+            }
+            
+            // Extrair dados do token
+            String accessToken = (String) tokenData.get("access_token");
+            String tokenType = (String) tokenData.get("token_type");
+            String scope = (String) tokenData.get("scope");
+            Integer expiresIn = (Integer) tokenData.get("expires_in");
+            
+            if (accessToken == null || accessToken.trim().isEmpty()) {
+                log.error("❌ Access token não encontrado nos dados de resposta");
+                return;
+            }
+            
+            // Calcular data de expiração
+            LocalDateTime dataExpiracao = LocalDateTime.now();
+            if (expiresIn != null) {
+                dataExpiracao = dataExpiracao.plusSeconds(expiresIn);
+            } else {
+                // Default: 6 horas
+                dataExpiracao = dataExpiracao.plusHours(6);
+            }
+            
+            // Buscar autorização existente
+            Optional<AutorizacaoBancaria> authExistente = autorizacaoBancariaRepository
+                .findByUsuarioIdAndTipoBanco(userId, "MERCADO_PAGO");
+            
+            AutorizacaoBancaria autorizacao;
+            if (authExistente.isPresent()) {
+                // Atualizar autorização existente
+                autorizacao = authExistente.get();
+                autorizacao.setAccessToken(accessToken);
+                autorizacao.setTokenType(tokenType != null ? tokenType : "Bearer");
+                autorizacao.setScope(scope);
+                autorizacao.setDataAtualizacao(LocalDateTime.now());
+                autorizacao.setDataExpiracao(dataExpiracao);
+                autorizacao.setAtivo(true);
+                log.info("🔄 Atualizando autorização existente para usuário: {}", userId);
+            } else {
+                // Criar nova autorização
+                autorizacao = new AutorizacaoBancaria();
+                autorizacao.setUsuario(usuarioOpt.get());
+                autorizacao.setTipoBanco("MERCADO_PAGO");
+                autorizacao.setBanco("Mercado Pago");
+                autorizacao.setTipoConta("API");
+                autorizacao.setAccessToken(accessToken);
+                autorizacao.setTokenType(tokenType != null ? tokenType : "Bearer");
+                autorizacao.setScope(scope);
+                autorizacao.setDataCriacao(LocalDateTime.now());
+                autorizacao.setDataAtualizacao(LocalDateTime.now());
+                autorizacao.setDataExpiracao(dataExpiracao);
+                autorizacao.setAtivo(true);
+                log.info("✨ Criando nova autorização para usuário: {}", userId);
+            }
+            
+            // Salvar no banco
+            autorizacaoBancariaRepository.save(autorizacao);
+            log.info("✅ Autorização bancária salva com sucesso para usuário: {}", userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Erro ao salvar autorização bancária para usuário {}: {}", userId, e.getMessage(), e);
+        }
+    }
+>>>>>>> origin/main
 }

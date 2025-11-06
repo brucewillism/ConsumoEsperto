@@ -1,9 +1,13 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.model.Categoria;
+<<<<<<< HEAD
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+=======
+import com.consumoesperto.repository.CategoriaRepository;
+>>>>>>> origin/main
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,14 +32,18 @@ public class AutoSyncService {
     
     @Autowired
     private MercadoPagoService mercadoPagoService;
+<<<<<<< HEAD
     
     @Autowired
     private UsuarioRepository usuarioRepository;
+=======
+>>>>>>> origin/main
 
 
 
     /**
      * Executa sincronização automática quando a aplicação estiver pronta
+<<<<<<< HEAD
      * DESATIVADO: Sistema NÃO sincroniza automaticamente dados simulados
      */
     @EventListener(ApplicationReadyEvent.class)
@@ -53,6 +61,26 @@ public class AutoSyncService {
             
         } catch (Exception e) {
             logger.error("❌ Erro na inicialização: {}", e.getMessage(), e);
+=======
+     * ATIVADO: Sistema sincroniza automaticamente todos os dados do Mercado Pago
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        logger.info("🚀 Iniciando sincronização automática de dados...");
+        
+        try {
+            // 1. Criar categorias padrão
+            criarCategoriasPadrao();
+            
+            // 2. Sincronizar dados reais do Mercado Pago para todos os usuários
+            // (sem limpar dados antigos para preservar histórico de parcelas)
+            sincronizarDadosReais();
+            
+            logger.info("✅ Sincronização automática concluída com sucesso!");
+            
+        } catch (Exception e) {
+            logger.error("❌ Erro na sincronização automática: {}", e.getMessage(), e);
+>>>>>>> origin/main
         }
     }
 
@@ -111,6 +139,7 @@ public class AutoSyncService {
         logger.info("🔄 Iniciando sincronização de dados reais do Mercado Pago...");
         
         try {
+<<<<<<< HEAD
             // Buscar todos os usuários e sincronizar dados para cada um
             List<Usuario> usuarios = usuarioRepository.findAll();
             for (Usuario usuario : usuarios) {
@@ -120,6 +149,10 @@ public class AutoSyncService {
                     logger.error("❌ Erro ao sincronizar dados para usuário {}: {}", usuario.getId(), e.getMessage());
                 }
             }
+=======
+            // Sincronizar dados do Mercado Pago para todos os usuários
+            mercadoPagoService.sincronizarDadosReais();
+>>>>>>> origin/main
             
             logger.info("✅ Sincronização de dados reais concluída!");
             

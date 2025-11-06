@@ -56,8 +56,11 @@ public class CartaoCreditoDTO {
     @DecimalMax(value = "999999.99", message = "Limite disponível não pode exceder R$ 999.999,99")
     private BigDecimal limiteDisponivel;
 
+<<<<<<< HEAD
     @Min(value = 1, message = "Dia de vencimento deve ser entre 1 e 31")
     @Max(value = 31, message = "Dia de vencimento deve ser entre 1 e 31")
+=======
+>>>>>>> origin/main
     private Integer diaVencimento;
 
     private Boolean ativo = true;

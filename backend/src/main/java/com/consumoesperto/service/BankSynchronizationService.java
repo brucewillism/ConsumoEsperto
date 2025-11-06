@@ -429,6 +429,7 @@ public class BankSynchronizationService {
         try {
             switch (bankType.toUpperCase()) {
                 case "ITAU":
+<<<<<<< HEAD
                     return itauBankService.generateAuthUrl(urlConfigurationService.getItauCallbackUrl(), usuarioId.toString());
                 case "NUBANK":
                     return nubankBankService.generateAuthUrl(urlConfigurationService.getNubankCallbackUrl(), usuarioId.toString());
@@ -436,6 +437,15 @@ public class BankSynchronizationService {
                     return interBankService.generateAuthUrl(urlConfigurationService.getInterCallbackUrl(), usuarioId.toString());
                 case "MERCADO_PAGO":
                     return mercadoPagoBankService.generateAuthUrl(urlConfigurationService.getMercadoPagoCallbackUrl(), usuarioId.toString(), usuarioId);
+=======
+                    return itauBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString());
+                case "NUBANK":
+                    return nubankBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString());
+                case "INTER":
+                    return interBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString());
+                case "MERCADO_PAGO":
+                    return mercadoPagoBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString(), usuarioId);
+>>>>>>> origin/main
                 default:
                     log.warn("Tipo de banco não suportado: {}", bankType);
                     return null;
@@ -453,6 +463,7 @@ public class BankSynchronizationService {
         try {
             switch (bankType.toUpperCase()) {
                 case "ITAU":
+<<<<<<< HEAD
                     return itauBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getItauCallbackUrl());
                 case "NUBANK":
                     return nubankBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getNubankCallbackUrl());
@@ -460,6 +471,15 @@ public class BankSynchronizationService {
                     return interBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getInterCallbackUrl());
                 case "MERCADO_PAGO":
                     return mercadoPagoBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getMercadoPagoCallbackUrl(), usuarioId);
+=======
+                    return itauBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback");
+                case "NUBANK":
+                    return nubankBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback");
+                case "INTER":
+                    return interBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback");
+                case "MERCADO_PAGO":
+                    return mercadoPagoBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback", usuarioId);
+>>>>>>> origin/main
                 default:
                     log.warn("Tipo de banco não suportado: {}", bankType);
                     return Map.of("sucesso", false, "erro", "Tipo de banco não suportado");
@@ -709,6 +729,7 @@ public class BankSynchronizationService {
             if (!cartoes.isEmpty()) {
                 log.info("✅ {} cartões encontrados para banco {}", cartoes.size(), autorizacao.getBanco());
                 for (Map<String, Object> cartao : cartoes) {
+<<<<<<< HEAD
                     try {
                         // Converte Map para CartaoCredito para salvar no banco local
                         CartaoCredito cartaoEntity = new CartaoCredito();
@@ -777,6 +798,15 @@ public class BankSynchronizationService {
                         } else {
                             cartaoEntity.setDiaVencimento(10); // Padrão: dia 10
                         }
+=======
+                    // Converte Map para CartaoCredito para salvar no banco local
+                    CartaoCredito cartaoEntity = new CartaoCredito();
+                    cartaoEntity.setUsuario(autorizacao.getUsuario());
+                    cartaoEntity.setBanco(autorizacao.getBanco().toString());
+                    cartaoEntity.setNumeroCartao((String) cartao.get("numero"));
+                    cartaoEntity.setLimiteCredito((BigDecimal) cartao.get("limite"));
+                    cartaoEntity.setLimiteDisponivel((BigDecimal) cartao.get("saldoDisponivel"));
+>>>>>>> origin/main
                     
                     // Salva ou atualiza o cartão no banco local
                     if (autorizacao.getUsuario() == null) {

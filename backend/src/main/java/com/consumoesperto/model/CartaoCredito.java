@@ -161,6 +161,7 @@ public class CartaoCredito {
     public BigDecimal getLimiteCredito() { return limiteCredito; }
     public void setLimiteCredito(BigDecimal limiteCredito) { this.limiteCredito = limiteCredito; }
 
+<<<<<<< HEAD
     // Métodos de compatibilidade para código existente
     public BigDecimal getLimiteTotal() { return limiteCredito; }
     public void setLimiteTotal(BigDecimal limiteTotal) { this.limiteCredito = limiteTotal; }
@@ -177,6 +178,8 @@ public class CartaoCredito {
         }
     }
 
+=======
+>>>>>>> origin/main
     public BigDecimal getLimiteDisponivel() { return limiteDisponivel; }
     public void setLimiteDisponivel(BigDecimal limiteDisponivel) { this.limiteDisponivel = limiteDisponivel; }
 
