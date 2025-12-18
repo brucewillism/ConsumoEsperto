@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 import { Injectable, Inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-=======
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
->>>>>>> origin/main
 import { Observable, of, BehaviorSubject, forkJoin } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
@@ -425,7 +420,6 @@ export class BankApiService {
    */
   verificarStatusMercadoPago(): Observable<any> {
     return this.http.get(`${this.apiUrl}/mercadopago/auto-config/status`);
-<<<<<<< HEAD
   }
 
   /**
@@ -463,7 +457,5 @@ export class BankApiService {
 
   obterStatusMercadoPago(): Observable<any> {
     return this.http.get(`${this.apiUrl}/mercadopago/config/status`);
-=======
->>>>>>> origin/main
   }
 }

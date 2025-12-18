@@ -8,6 +8,7 @@ import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.repository.AutorizacaoBancariaRepository;
+import com.consumoesperto.service.AutorizacaoBancariaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,6 +63,7 @@ public class BankSynchronizationService {
     private final FaturaRepository faturaRepository;
     private final UsuarioRepository usuarioRepository;
     private final AutorizacaoBancariaRepository autorizacaoBancariaRepository;
+    private final AutorizacaoBancariaService autorizacaoBancariaService;
     private final UrlConfigurationService urlConfigurationService;
     
     // Executor para processamento paralelo de múltiplos bancos
@@ -345,8 +348,17 @@ public class BankSynchronizationService {
             
             if (renovado) {
                 log.info("Token renovado com sucesso para autorização {}", autorizacao.getId());
-                // TODO: Atualizar a autorização com o novo token e data de expiração
-                // autorizacaoBancariaService.atualizarTokenRenovado(autorizacao.getId(), novoToken, novaDataExpiracao);
+                
+                // Atualiza a autorização com o novo token e data de expiração
+                // Busca a autorização atualizada do banco para obter os novos tokens
+                Optional<AutorizacaoBancaria> autorizacaoAtualizada = autorizacaoBancariaService.buscarPorId(autorizacao.getId());
+                if (autorizacaoAtualizada.isPresent()) {
+                    AutorizacaoBancaria auth = autorizacaoAtualizada.get();
+                    // A autorização já foi atualizada pelo serviço específico do banco
+                    // Apenas confirma que está atualizada
+                    log.debug("Autorização {} atualizada com novo token", auth.getId());
+                }
+                
                 return true;
                     } else {
                 log.error("Falha ao renovar token para autorização {}", autorizacao.getId());
@@ -429,7 +441,6 @@ public class BankSynchronizationService {
         try {
             switch (bankType.toUpperCase()) {
                 case "ITAU":
-<<<<<<< HEAD
                     return itauBankService.generateAuthUrl(urlConfigurationService.getItauCallbackUrl(), usuarioId.toString());
                 case "NUBANK":
                     return nubankBankService.generateAuthUrl(urlConfigurationService.getNubankCallbackUrl(), usuarioId.toString());
@@ -437,15 +448,6 @@ public class BankSynchronizationService {
                     return interBankService.generateAuthUrl(urlConfigurationService.getInterCallbackUrl(), usuarioId.toString());
                 case "MERCADO_PAGO":
                     return mercadoPagoBankService.generateAuthUrl(urlConfigurationService.getMercadoPagoCallbackUrl(), usuarioId.toString(), usuarioId);
-=======
-                    return itauBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString());
-                case "NUBANK":
-                    return nubankBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString());
-                case "INTER":
-                    return interBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString());
-                case "MERCADO_PAGO":
-                    return mercadoPagoBankService.generateAuthUrl("https://85766d45517b.ngrok-free.app/callback", usuarioId.toString(), usuarioId);
->>>>>>> origin/main
                 default:
                     log.warn("Tipo de banco não suportado: {}", bankType);
                     return null;
@@ -463,7 +465,6 @@ public class BankSynchronizationService {
         try {
             switch (bankType.toUpperCase()) {
                 case "ITAU":
-<<<<<<< HEAD
                     return itauBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getItauCallbackUrl());
                 case "NUBANK":
                     return nubankBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getNubankCallbackUrl());
@@ -471,15 +472,6 @@ public class BankSynchronizationService {
                     return interBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getInterCallbackUrl());
                 case "MERCADO_PAGO":
                     return mercadoPagoBankService.processOAuthCallback(code, usuarioId.toString(), urlConfigurationService.getMercadoPagoCallbackUrl(), usuarioId);
-=======
-                    return itauBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback");
-                case "NUBANK":
-                    return nubankBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback");
-                case "INTER":
-                    return interBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback");
-                case "MERCADO_PAGO":
-                    return mercadoPagoBankService.processOAuthCallback(code, usuarioId.toString(), "https://85766d45517b.ngrok-free.app/callback", usuarioId);
->>>>>>> origin/main
                 default:
                     log.warn("Tipo de banco não suportado: {}", bankType);
                     return Map.of("sucesso", false, "erro", "Tipo de banco não suportado");
@@ -729,7 +721,6 @@ public class BankSynchronizationService {
             if (!cartoes.isEmpty()) {
                 log.info("✅ {} cartões encontrados para banco {}", cartoes.size(), autorizacao.getBanco());
                 for (Map<String, Object> cartao : cartoes) {
-<<<<<<< HEAD
                     try {
                         // Converte Map para CartaoCredito para salvar no banco local
                         CartaoCredito cartaoEntity = new CartaoCredito();
@@ -798,15 +789,6 @@ public class BankSynchronizationService {
                         } else {
                             cartaoEntity.setDiaVencimento(10); // Padrão: dia 10
                         }
-=======
-                    // Converte Map para CartaoCredito para salvar no banco local
-                    CartaoCredito cartaoEntity = new CartaoCredito();
-                    cartaoEntity.setUsuario(autorizacao.getUsuario());
-                    cartaoEntity.setBanco(autorizacao.getBanco().toString());
-                    cartaoEntity.setNumeroCartao((String) cartao.get("numero"));
-                    cartaoEntity.setLimiteCredito((BigDecimal) cartao.get("limite"));
-                    cartaoEntity.setLimiteDisponivel((BigDecimal) cartao.get("saldoDisponivel"));
->>>>>>> origin/main
                     
                     // Salva ou atualiza o cartão no banco local
                     if (autorizacao.getUsuario() == null) {
@@ -901,6 +883,82 @@ public class BankSynchronizationService {
             log.error("Erro ao buscar análise de gastos do banco {}: {}", 
                     autorizacao.getBanco(), e.getMessage());
             return Map.of("gastos", 0.0, "receitas", 0.0, "totalTransacoes", 0, "gastosPorDia", new HashMap<>());
+        }
+    }
+
+    /**
+     * Obtém status da última sincronização bancária de um usuário
+     * 
+     * @param usuarioId ID do usuário
+     * @return Map com status da sincronização
+     */
+    public Map<String, Object> getSyncStatus(Long usuarioId) {
+        try {
+            Map<String, Object> status = new HashMap<>();
+            status.put("usuario_id", usuarioId);
+            
+            // Busca todas as autorizações ativas do usuário
+            List<AutorizacaoBancaria> autorizacoes = autorizacaoBancariaService.buscarAutorizacoesAtivas(usuarioId);
+            
+            if (autorizacoes.isEmpty()) {
+                status.put("status_geral", "SEM_CONEXOES");
+                status.put("ultima_sincronizacao", null);
+                status.put("bancos", new HashMap<>());
+                status.put("proxima_sincronizacao", null);
+                return status;
+            }
+            
+            // Encontra a última data de atualização entre todas as autorizações
+            LocalDateTime ultimaSincronizacao = autorizacoes.stream()
+                    .map(AutorizacaoBancaria::getDataAtualizacao)
+                    .filter(Objects::nonNull)
+                    .max(LocalDateTime::compareTo)
+                    .orElse(null);
+            
+            // Monta status por banco
+            Map<String, Object> bancosStatus = new HashMap<>();
+            String statusGeral = "OK";
+            
+            for (AutorizacaoBancaria auth : autorizacoes) {
+                Map<String, Object> bancoStatus = new HashMap<>();
+                bancoStatus.put("conectado", true);
+                bancoStatus.put("ultima_atualizacao", auth.getDataAtualizacao());
+                bancoStatus.put("data_expiracao", auth.getDataExpiracao());
+                bancoStatus.put("ativo", auth.getAtivo());
+                
+                // Verifica se está próximo da expiração
+                if (auth.getDataExpiracao() != null && 
+                    auth.getDataExpiracao().isBefore(LocalDateTime.now().plusHours(1))) {
+                    bancoStatus.put("precisa_renovacao", true);
+                    statusGeral = "ATENCAO";
+                } else {
+                    bancoStatus.put("precisa_renovacao", false);
+                }
+                
+                bancosStatus.put(auth.getBanco(), bancoStatus);
+            }
+            
+            status.put("status_geral", statusGeral);
+            status.put("ultima_sincronizacao", ultimaSincronizacao);
+            status.put("bancos", bancosStatus);
+            status.put("total_bancos_conectados", autorizacoes.size());
+            
+            // Calcula próxima sincronização recomendada (1 hora após a última)
+            if (ultimaSincronizacao != null) {
+                status.put("proxima_sincronizacao", ultimaSincronizacao.plusHours(1));
+            } else {
+                status.put("proxima_sincronizacao", null);
+            }
+            
+            return status;
+            
+        } catch (Exception e) {
+            log.error("Erro ao obter status de sincronização para usuário {}: {}", usuarioId, e.getMessage(), e);
+            Map<String, Object> errorStatus = new HashMap<>();
+            errorStatus.put("usuario_id", usuarioId);
+            errorStatus.put("status_geral", "ERRO");
+            errorStatus.put("erro", e.getMessage());
+            return errorStatus;
         }
     }
 

@@ -13,7 +13,7 @@ export const environment = {
   production: false,
   
   /** URL base da API backend para desenvolvimento local (via NGROK) */
-  apiUrl: 'https://0d723f1e294f.ngrok-free.app/api',
+  apiUrl: 'https://79c3d0af5801.ngrok-free.app/api',
   
   /** ID do cliente Google OAuth2 para autenticação via Google
    * 

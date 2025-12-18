@@ -37,10 +37,6 @@ public class BankApiConfig {
     @Column(name = "tipo_banco")
     private String tipoBanco;
 
-<<<<<<< HEAD
-=======
-    @NotBlank(message = "Banco é obrigatório")
->>>>>>> origin/main
     @Column(name = "banco", nullable = false)
     private String banco;
 

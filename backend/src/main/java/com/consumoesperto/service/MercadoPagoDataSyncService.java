@@ -30,17 +30,12 @@ public class MercadoPagoDataSyncService {
     private final CategoriaRepository categoriaRepository;
     private final UsuarioRepository usuarioRepository;
 
-<<<<<<< HEAD
-=======
-    @Transactional
->>>>>>> origin/main
     public void sincronizarPagamentos(Long usuarioId, List<Map<String, Object>> pagamentos) {
         log.info("🔄 Iniciando sincronização de {} pagamentos para usuário: {}", pagamentos.size(), usuarioId);
         
         Usuario usuario = usuarioRepository.findById(usuarioId)
             .orElseThrow(() -> new RuntimeException("Usuário não encontrado: " + usuarioId));
 
-<<<<<<< HEAD
         int sucessos = 0;
         int erros = 0;
         
@@ -58,17 +53,6 @@ public class MercadoPagoDataSyncService {
         }
         
         log.info("✅ Sincronização de pagamentos concluída para usuário: {} - Sucessos: {}, Erros: {}", usuarioId, sucessos, erros);
-=======
-        for (Map<String, Object> pagamento : pagamentos) {
-            try {
-                sincronizarPagamento(usuario, pagamento);
-            } catch (Exception e) {
-                log.error("❌ Erro ao sincronizar pagamento {}: {}", pagamento.get("id"), e.getMessage());
-            }
-        }
-        
-        log.info("✅ Sincronização de pagamentos concluída para usuário: {}", usuarioId);
->>>>>>> origin/main
     }
 
     private void sincronizarPagamento(Usuario usuario, Map<String, Object> pagamento) {
@@ -79,7 +63,6 @@ public class MercadoPagoDataSyncService {
         LocalDateTime dataTransacao = LocalDateTime.parse(dateCreated, 
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"));
         
-<<<<<<< HEAD
         // Verificar campos obrigatórios (exceto descrição que pode ser null)
         Object descriptionObj = pagamento.get("description");
         Object transactionAmountObj = pagamento.get("transaction_amount");
@@ -119,14 +102,6 @@ public class MercadoPagoDataSyncService {
             description,
             dataTransacao,
             valor
-=======
-        // Verificar se já existe (usando método disponível)
-        List<Transacao> existentes = transacaoRepository.findByUsuarioIdAndDescricaoAndDataTransacaoAndValor(
-            usuario.getId(),
-            pagamento.get("description").toString(),
-            dataTransacao,
-            new BigDecimal(pagamento.get("transaction_amount").toString())
->>>>>>> origin/main
         );
         
         if (!existentes.isEmpty()) {
@@ -137,20 +112,11 @@ public class MercadoPagoDataSyncService {
         // Criar nova transação
         Transacao transacao = new Transacao();
         transacao.setUsuario(usuario);
-<<<<<<< HEAD
         transacao.setDescricao(description);
         transacao.setValor(valor);
         transacao.setDataTransacao(dataTransacao);
         
         // Determinar tipo de transação
-=======
-        transacao.setDescricao(pagamento.get("description").toString());
-        transacao.setValor(new BigDecimal(pagamento.get("transaction_amount").toString()));
-        transacao.setDataTransacao(dataTransacao);
-        
-        // Determinar tipo de transação
-        String status = pagamento.get("status").toString();
->>>>>>> origin/main
         if ("refunded".equals(status)) {
             transacao.setTipoTransacao(Transacao.TipoTransacao.DESPESA); // Estorno é despesa
         } else if ("approved".equals(status)) {
@@ -159,7 +125,6 @@ public class MercadoPagoDataSyncService {
             transacao.setTipoTransacao(Transacao.TipoTransacao.DESPESA); // Outros como despesa
         }
         
-<<<<<<< HEAD
         // Categorizar automaticamente - usar categoria padrão simples
         try {
             Categoria categoria = criarCategoria("Outros", usuario.getId());
@@ -168,11 +133,6 @@ public class MercadoPagoDataSyncService {
             log.error("❌ Erro ao criar categoria para pagamento {}: {}", pagamentoId, e.getMessage());
             // Continuar sem categoria se houver erro
         }
-=======
-        // Categorizar automaticamente
-        Categoria categoria = categorizarTransacao(transacao.getDescricao());
-        transacao.setCategoria(categoria);
->>>>>>> origin/main
         
         transacaoRepository.save(transacao);
         log.info("✅ Pagamento {} sincronizado: {} - R$ {}", 
@@ -231,7 +191,6 @@ public class MercadoPagoDataSyncService {
             cartaoId, cartaoCredito.getNome(), cartao.get("last_four_digits"));
     }
 
-<<<<<<< HEAD
     private Categoria categorizarTransacao(String descricao, Long usuarioId) {
         String descricaoLower = descricao.toLowerCase();
         
@@ -258,28 +217,6 @@ public class MercadoPagoDataSyncService {
         }
         
         Usuario usuario = usuarioRepository.findById(usuarioId)
-=======
-    private Categoria categorizarTransacao(String descricao) {
-        String descricaoLower = descricao.toLowerCase();
-        
-        if (descricaoLower.contains("aspirador") || descricaoLower.contains("eletro")) {
-            Categoria categoria = categoriaRepository.findByUsuarioIdAndNome(1L, "Casa e Eletrodomésticos");
-            return categoria != null ? categoria : criarCategoria("Casa e Eletrodomésticos");
-        } else if (descricaoLower.contains("comida") || descricaoLower.contains("alimento")) {
-            Categoria categoria = categoriaRepository.findByUsuarioIdAndNome(1L, "Alimentação");
-            return categoria != null ? categoria : criarCategoria("Alimentação");
-        } else if (descricaoLower.contains("transporte") || descricaoLower.contains("uber")) {
-            Categoria categoria = categoriaRepository.findByUsuarioIdAndNome(1L, "Transporte");
-            return categoria != null ? categoria : criarCategoria("Transporte");
-        } else {
-            Categoria categoria = categoriaRepository.findByUsuarioIdAndNome(1L, "Outros");
-            return categoria != null ? categoria : criarCategoria("Outros");
-        }
-    }
-
-    private Categoria criarCategoria(String nome) {
-        Usuario usuario = usuarioRepository.findById(1L)
->>>>>>> origin/main
             .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
             
         Categoria categoria = new Categoria();
@@ -289,7 +226,4 @@ public class MercadoPagoDataSyncService {
         return categoriaRepository.save(categoria);
     }
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> origin/main

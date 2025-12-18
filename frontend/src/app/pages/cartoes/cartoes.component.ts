@@ -49,13 +49,10 @@ export class CartoesComponent implements OnInit {
   totalCreditLimit: number = 0;
   totalAvailableCredit: number = 0;
   totalBalance: number = 0;
-<<<<<<< HEAD
 
   // Mercado Pago status
   mercadoPagoStatus: any = null;
   showMercadoPagoConfig = false;
-=======
->>>>>>> origin/main
   
   // UI properties
   loading = false;

@@ -38,11 +38,7 @@ import java.util.Optional;
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Slf4j // Lombok: gera logger
 @Tag(name = "Autenticação", description = "Endpoints para autenticação e registro de usuários")
-<<<<<<< HEAD
-@CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app", "https://*.ngrok-free.app"}) // Permite CORS de qualquer origem
-=======
-@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"}) // Permite CORS de qualquer origem
->>>>>>> origin/main
+@CrossOrigin(origins = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"}) // Permite CORS do frontend e Ngrok
 public class AuthController {
 
     // Gerenciador de autenticação do Spring Security

@@ -141,7 +141,6 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
            "a.ativo = true AND a.dataExpiracao <= CURRENT_TIMESTAMP")
     List<AutorizacaoBancaria> findAutorizacoesQuePrecisamAtencao();
     
-<<<<<<< HEAD
     /**
      * Remove tokens temporários e expirados do Mercado Pago
      * 
@@ -178,8 +177,6 @@ public interface AutorizacaoBancariaRepository extends JpaRepository<Autorizacao
         @Param("usuarioId") Long usuarioId
     );
     
-=======
->>>>>>> origin/main
     // Métodos de compatibilidade para código existente
     default Optional<AutorizacaoBancaria> findByUsuarioIdAndBanco(Long usuarioId, String banco) {
         return findByUsuarioIdAndTipoBanco(usuarioId, banco);

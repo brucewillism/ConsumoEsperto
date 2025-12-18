@@ -290,7 +290,6 @@ public class TransacaoService {
         double saldo = (totalReceitas != null ? totalReceitas.doubleValue() : 0.0) - 
                       (totalDespesas != null ? totalDespesas.doubleValue() : 0.0);
         resumo.put("saldo", saldo);
-<<<<<<< HEAD
         
         return resumo;
     }
@@ -359,8 +358,6 @@ public class TransacaoService {
         // Calcular saldo do mês
         double saldo = totalReceitas - totalDespesas;
         resumo.put("saldo", saldo);
-=======
->>>>>>> origin/main
         
         return resumo;
     }

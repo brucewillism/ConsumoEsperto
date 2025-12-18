@@ -45,11 +45,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Operações Bancárias", description = "Endpoints para operações bancárias gerais")
-<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app", "https://*.ngrok-free.app"})
-=======
-@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
->>>>>>> origin/main
 public class BankController {
 
     private final AutorizacaoBancariaService autorizacaoBancariaService;
@@ -80,7 +76,20 @@ public class BankController {
                     banco.put("status", "connected");
                     banco.put("lastSync", auth.getDataAtualizacao() != null ? 
                         auth.getDataAtualizacao().toString() : "Nunca");
-                    banco.put("cardsCount", 0); // TODO: Implementar contagem real de cartões
+                    
+                    // Contagem real de cartões do banco
+                    try {
+                        List<CartaoCreditoDTO> cartoes = cartaoCreditoService.buscarPorUsuario(currentUser.getId());
+                        long cardsCount = cartoes.stream()
+                            .filter(cartao -> cartao.getBanco() != null && 
+                                    cartao.getBanco().equalsIgnoreCase(auth.getBanco().toString()))
+                            .count();
+                        banco.put("cardsCount", cardsCount);
+                    } catch (Exception e) {
+                        log.warn("Erro ao contar cartões do banco {}: {}", auth.getBanco(), e.getMessage());
+                        banco.put("cardsCount", 0);
+                    }
+                    
                     return banco;
                 })
                 .collect(Collectors.toList());
@@ -416,7 +425,6 @@ public class BankController {
                         
                         // Converte Map para CreditCardDTO
                         for (Map<String, Object> cartaoMap : cartoesBanco) {
-<<<<<<< HEAD
                             try {
                                 CreditCardDTO cartaoDTO = new CreditCardDTO();
                                 
@@ -496,17 +504,6 @@ public class BankController {
                                 log.warn("⚠️ Erro ao converter cartão do mapa: {}", e.getMessage());
                                 // Continua com próximo cartão
                             }
-=======
-                            CreditCardDTO cartaoDTO = new CreditCardDTO();
-                            cartaoDTO.setId((Long) cartaoMap.get("id"));
-                            cartaoDTO.setNumber((String) cartaoMap.get("numero"));
-                            cartaoDTO.setLimit((BigDecimal) cartaoMap.get("limite"));
-                            cartaoDTO.setAvailable((BigDecimal) cartaoMap.get("saldoDisponivel"));
-                            cartaoDTO.setBank(auth.getBanco().toString());
-                            cartaoDTO.setUsuarioId(currentUser.getId());
-                            cartaoDTO.setStatus("ATIVO");
-                            cartoesReais.add(cartaoDTO);
->>>>>>> origin/main
                         }
                         
                     } catch (Exception e) {
@@ -697,13 +694,95 @@ public class BankController {
                                     faturaDTO.setPaga(status.toUpperCase().equals("PAGA"));
                                 }
                                 
-                                // ID do cartão - usar ID temporário se não tiver cartão associado
-                                faturaDTO.setCartaoCreditoId(1L); // ID temporário, será ajustado quando implementar a lógica real
+                                // Buscar cartão de crédito pelo nome e banco
                                 faturaDTO.setUsuarioId(currentUser.getId());
                                 
-                                faturasReais.add(faturaDTO);
-                                log.debug("✅ Fatura convertida: {} - {} - R$ {}", 
-                                    faturaDTO.getId(), faturaDTO.getNomeCartao(), faturaDTO.getValorFatura());
+                                // Buscar cartão de crédito do banco correspondente
+                                List<CartaoCreditoDTO> cartoes = cartaoCreditoService
+                                    .buscarPorUsuario(currentUser.getId());
+                                
+                                Long cartaoId = null;
+                                for (CartaoCreditoDTO cartao : cartoes) {
+                                    if (cartao.getBanco().equals(auth.getBanco().toString()) &&
+                                        (cartao.getNome().contains(faturaDTO.getNomeCartao()) ||
+                                         faturaDTO.getNomeCartao().contains(cartao.getNome()))) {
+                                        cartaoId = cartao.getId();
+                                        break;
+                                    }
+                                }
+                                
+                                // Se não encontrou cartão, usar o primeiro cartão do banco
+                                if (cartaoId == null && !cartoes.isEmpty()) {
+                                    for (CartaoCreditoDTO cartao : cartoes) {
+                                        if (cartao.getBanco().equals(auth.getBanco().toString())) {
+                                            cartaoId = cartao.getId();
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                // Se ainda não encontrou, criar um cartão virtual temporário
+                                if (cartaoId == null) {
+                                    log.warn("⚠️ Nenhum cartão encontrado para banco {}, criando cartão virtual", auth.getBanco());
+                                    // Usar o primeiro cartão disponível ou criar um virtual
+                                    if (!cartoes.isEmpty()) {
+                                        cartaoId = cartoes.get(0).getId();
+                                    } else {
+                                        log.warn("⚠️ Nenhum cartão disponível, pulando fatura");
+                                        continue; // Pula esta fatura se não houver cartão
+                                    }
+                                }
+                                
+                                faturaDTO.setCartaoCreditoId(cartaoId);
+                                
+                                // Salvar fatura no banco de dados
+                                try {
+                                    // Verificar se a fatura já existe (evitar duplicatas)
+                                    String numeroFatura = faturaMap.get("id") != null ? 
+                                        faturaMap.get("id").toString() : null;
+                                    
+                                    if (numeroFatura != null) {
+                                        // Tentar buscar fatura existente pelo número
+                                        List<FaturaDTO> faturasExistentes = faturaService
+                                            .buscarPorUsuario(currentUser.getId());
+                                        
+                                        boolean faturaExiste = false;
+                                        for (FaturaDTO faturaExistente : faturasExistentes) {
+                                            if (faturaExistente.getCartaoCreditoId().equals(cartaoId) &&
+                                                faturaExistente.getValorTotal().equals(faturaDTO.getValorTotal()) &&
+                                                faturaExistente.getDataVencimento() != null &&
+                                                faturaDTO.getDataVencimento() != null &&
+                                                faturaExistente.getDataVencimento().toLocalDate()
+                                                    .equals(faturaDTO.getDataVencimento().toLocalDate())) {
+                                                faturaExiste = true;
+                                                faturaDTO = faturaExistente; // Usa a existente
+                                                break;
+                                            }
+                                        }
+                                        
+                                        if (!faturaExiste) {
+                                            // Criar nova fatura
+                                            faturaDTO = faturaService.criarFatura(faturaDTO);
+                                            log.debug("✅ Fatura salva no banco: {} - {} - R$ {}", 
+                                                faturaDTO.getId(), faturaDTO.getNomeCartao(), faturaDTO.getValorFatura());
+                                        } else {
+                                            log.debug("✅ Fatura já existe no banco: {} - {} - R$ {}", 
+                                                faturaDTO.getId(), faturaDTO.getNomeCartao(), faturaDTO.getValorFatura());
+                                        }
+                                    } else {
+                                        // Se não tiver número, criar mesmo assim
+                                        faturaDTO = faturaService.criarFatura(faturaDTO);
+                                        log.debug("✅ Fatura salva no banco (sem número): {} - {} - R$ {}", 
+                                            faturaDTO.getId(), faturaDTO.getNomeCartao(), faturaDTO.getValorFatura());
+                                    }
+                                    
+                                    faturasReais.add(faturaDTO);
+                                    
+                                } catch (Exception e) {
+                                    log.warn("⚠️ Erro ao salvar fatura no banco: {}", e.getMessage(), e);
+                                    // Adiciona mesmo assim para não perder os dados
+                                    faturasReais.add(faturaDTO);
+                                }
                                 
                             } catch (Exception e) {
                                 log.warn("⚠️ Erro ao converter fatura do mapa: {}", e.getMessage(), e);

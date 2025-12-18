@@ -5,6 +5,7 @@ import com.consumoesperto.service.MercadoPagoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,20 +17,21 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/auto-sync")
-<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
-=======
-@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
->>>>>>> origin/main
+@ConditionalOnBean(AutoSyncService.class)
 public class AutoSyncController {
 
     private static final Logger logger = LoggerFactory.getLogger(AutoSyncController.class);
 
-    @Autowired
+    @Autowired(required = false)
     private AutoSyncService autoSyncService;
 
     @Autowired
     private MercadoPagoService mercadoPagoService;
+    
+    private boolean isAutoSyncServiceAvailable() {
+        return autoSyncService != null;
+    }
 
     /**
      * Força a sincronização de dados para um usuário específico
@@ -81,6 +83,12 @@ public class AutoSyncController {
         try {
             logger.info("🔄 Iniciando sincronização manual para todos os usuários");
             
+            if (!isAutoSyncServiceAvailable()) {
+                response.put("success", false);
+                response.put("message", "Serviço de sincronização automática não disponível");
+                return ResponseEntity.ok(response);
+            }
+            
             // Executar sincronização automática
             autoSyncService.onApplicationReady();
             
@@ -108,6 +116,12 @@ public class AutoSyncController {
         
         try {
             logger.info("🔄 Iniciando sincronização completa (preservando dados históricos)");
+            
+            if (!isAutoSyncServiceAvailable()) {
+                response.put("success", false);
+                response.put("message", "Serviço de sincronização automática não disponível");
+                return ResponseEntity.ok(response);
+            }
             
             // Executar sincronização sem limpar dados antigos
             autoSyncService.onApplicationReady();

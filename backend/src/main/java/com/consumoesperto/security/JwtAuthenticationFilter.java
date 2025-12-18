@@ -55,7 +55,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
         
-<<<<<<< HEAD
         // Não aplica filtro JWT para endpoints públicos de autenticação
         if (path.startsWith("/api/auth/") || 
             path.startsWith("/api/oauth2/") ||
@@ -73,12 +72,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             path.equals("/relatorios") || 
             path.equals("/simulacoes") || 
             path.equals("/bank-config") ||
-=======
-        // Não aplica filtro JWT para rotas de SPA e arquivos estáticos
-        if (path.equals("/login") || path.equals("/register") || path.equals("/dashboard") || 
-            path.equals("/transacoes") || path.equals("/cartoes") || path.equals("/faturas") || 
-            path.equals("/relatorios") || path.equals("/simulacoes") || path.equals("/bank-config") ||
->>>>>>> origin/main
             path.equals("/error") ||
             path.matches(".*\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$")) {
             return true;

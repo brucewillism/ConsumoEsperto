@@ -17,11 +17,7 @@ public class SecureAuthController {
     private final AuthService authService;
 
     @PostMapping("/login")
-<<<<<<< HEAD
-    @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
-=======
-    @CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
->>>>>>> origin/main
+    @CrossOrigin(origins = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
     public Map<String, Object> login(@RequestBody Map<String, String> credentials) {
         String email = credentials.get("email");
         String password = credentials.get("password");
@@ -31,11 +27,7 @@ public class SecureAuthController {
     }
 
     @GetMapping("/me")
-<<<<<<< HEAD
     @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
-=======
-    @CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
->>>>>>> origin/main
     public Map<String, Object> getCurrentUser(HttpServletRequest request) {
         try {
             String authHeader = request.getHeader("Authorization");
@@ -64,11 +56,7 @@ public class SecureAuthController {
     }
 
     @PostMapping("/validate")
-<<<<<<< HEAD
     @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
-=======
-    @CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
->>>>>>> origin/main
     public Map<String, Object> validateToken(@RequestBody Map<String, String> request) {
         String token = request.get("token");
         

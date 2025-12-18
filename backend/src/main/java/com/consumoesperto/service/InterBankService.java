@@ -1,9 +1,12 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.*;
+import com.consumoesperto.dto.FaturaDTO;
 import com.consumoesperto.model.AutorizacaoBancaria;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
+import com.consumoesperto.repository.AutorizacaoBancariaRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -34,9 +37,11 @@ public class InterBankService {
     private String baseUrl;
 
     private final RestTemplate restTemplate;
+    private final AutorizacaoBancariaRepository autorizacaoBancariaRepository;
 
-    public InterBankService(RestTemplate restTemplate) {
+    public InterBankService(RestTemplate restTemplate, AutorizacaoBancariaRepository autorizacaoBancariaRepository) {
         this.restTemplate = restTemplate;
+        this.autorizacaoBancariaRepository = autorizacaoBancariaRepository;
     }
 
     public String generateAuthUrl(String redirectUri, String state) {
@@ -241,14 +246,38 @@ public class InterBankService {
 
             HttpEntity<String> request = new HttpEntity<>(headers);
 
-            // TODO: Implementar chamada real para API do Inter
-            // String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts/" + autorizacao.getUsuario().getId() + "/invoices")
-            //         .build().toUriString();
-            // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-            // return processarFaturasResposta(response.getBody());
-
-            // TODO: Implementar chamada real para API do Inter
-            log.warn("⚠️ Endpoint de faturas não implementado. Nenhuma fatura encontrada");
+            // Chamada real para API do Inter Open Banking - buscar faturas
+            try {
+                String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/open-banking/v1/credit-cards-accounts/bills")
+                        .queryParam("access_token", autorizacao.getAccessToken())
+                        .build().toUriString();
+                
+                ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
+                
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    log.info("Faturas obtidas com sucesso da API do Inter");
+                    List<FaturaDTO> faturasDTO = processarFaturasResposta(response.getBody());
+                    // Converter FaturaDTO para Map
+                    return faturasDTO.stream()
+                            .map(fatura -> {
+                                Map<String, Object> faturaMap = new HashMap<>();
+                                faturaMap.put("id", fatura.getId());
+                                // Usar valorTotal como valor principal da fatura
+                                faturaMap.put("valor", fatura.getValorTotal() != null ? fatura.getValorTotal() : 
+                                        (fatura.getValorFatura() != null ? fatura.getValorFatura() : BigDecimal.ZERO));
+                                faturaMap.put("dataVencimento", fatura.getDataVencimento());
+                                faturaMap.put("paga", fatura.getPaga());
+                                faturaMap.put("status", fatura.getStatus());
+                                return faturaMap;
+                            })
+                            .collect(Collectors.toList());
+                }
+                
+                log.warn("⚠️ API retornou status não esperado: {}", response.getStatusCode());
+            } catch (Exception apiException) {
+                log.warn("Erro ao buscar faturas do Inter: {}", apiException.getMessage());
+            }
+            
             return new ArrayList<>();
             
         } catch (Exception e) {
@@ -376,28 +405,62 @@ public class InterBankService {
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-            // TODO: Implementar chamada real para renovar token
-            // ResponseEntity<Map> response = restTemplate.postForEntity(
-            //         baseUrl + "/oauth/token", 
-            //         request, 
-            //         Map.class
-            // );
-            // 
-            // if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-            //     Map<String, Object> tokenData = response.getBody();
-            //     // Atualizar a autorização com o novo token
-            //     autorizacao.setAccessToken((String) tokenData.get("access_token"));
-            //     autorizacao.setRefreshToken((String) tokenData.get("refresh_token"));
-            //     autorizacao.setTokenExpiration(LocalDateTime.now().plusSeconds(
-            //             Long.parseLong(tokenData.get("expires_in").toString())
-            //     ));
-            //     return true;
-            // }
-
-            // Implementar renovação real de token
-            // TODO: Implementar chamada real para API do Inter
-            log.warn("Renovação de token do Inter não implementada ainda");
-            return false;
+            // Chamada real para renovar token do Inter Open Banking
+            try {
+                ResponseEntity<Map> response = restTemplate.postForEntity(
+                        baseUrl + "/oauth/token", 
+                        request, 
+                        Map.class
+                );
+                
+                if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                    Map<String, Object> tokenData = response.getBody();
+                    
+                    // Atualizar a autorização com o novo token
+                    String newAccessToken = (String) tokenData.get("access_token");
+                    String newRefreshToken = (String) tokenData.getOrDefault("refresh_token", autorizacao.getRefreshToken());
+                    Object expiresInObj = tokenData.get("expires_in");
+                    
+                    if (newAccessToken != null) {
+                        autorizacao.setAccessToken(newAccessToken);
+                        if (newRefreshToken != null) {
+                            autorizacao.setRefreshToken(newRefreshToken);
+                        }
+                        
+                        // Calcular nova data de expiração
+                        if (expiresInObj != null) {
+                            long expiresIn = 0;
+                            if (expiresInObj instanceof Number) {
+                                expiresIn = ((Number) expiresInObj).longValue();
+                            } else if (expiresInObj instanceof String) {
+                                expiresIn = Long.parseLong((String) expiresInObj);
+                            }
+                            
+                            if (expiresIn > 0) {
+                                autorizacao.setDataExpiracao(LocalDateTime.now().plusSeconds(expiresIn));
+                            }
+                        }
+                        
+                        autorizacao.setDataAtualizacao(LocalDateTime.now());
+                        
+                        // Salvar autorização atualizada no banco de dados
+                        autorizacaoBancariaRepository.save(autorizacao);
+                        
+                        log.info("Token renovado com sucesso para Inter - usuário {}", autorizacao.getUsuario().getId());
+                        return true;
+                    } else {
+                        log.warn("Resposta de renovação de token não contém access_token");
+                        return false;
+                    }
+                } else {
+                    log.warn("Falha ao renovar token - status: {}", response.getStatusCode());
+                    return false;
+                }
+                
+            } catch (Exception e) {
+                log.error("Erro ao renovar token do Inter: {}", e.getMessage(), e);
+                return false;
+            }
             
         } catch (Exception e) {
             log.error("Erro ao renovar token do Inter: {}", e.getMessage());
@@ -415,7 +478,6 @@ public class InterBankService {
     // Métodos de processamento de resposta da API
     private List<CartaoCredito> processarCartoesResposta(Object response) {
         log.info("Processando resposta de cartões da API do Inter");
-<<<<<<< HEAD
         
         List<CartaoCredito> cartoes = new ArrayList<>();
         
@@ -649,39 +711,6 @@ public class InterBankService {
         }
         
         return resultado;
-=======
-        return new ArrayList<>();
-    }
-    
-    private Map<String, Object> processarSaldoResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de saldo da API do Inter");
-        return new HashMap<>();
-    }
-    
-    private List<FaturaDTO> processarFaturasResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de faturas da API do Inter");
-        return new ArrayList<>();
-    }
-    
-    private List<Map<String, Object>> processarTransacoesResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de transações da API do Inter");
-        return new ArrayList<>();
-    }
-    
-    private Map<String, Object> processarGastosPorCategoriaResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de gastos por categoria da API do Inter");
-        return new HashMap<>();
-    }
-    
-    private Map<String, Object> processarAnaliseGastosResposta(Object response) {
-        // TODO: Implementar processamento real da resposta da API
-        log.info("Processando resposta de análise de gastos da API do Inter");
-        return new HashMap<>();
->>>>>>> origin/main
     }
     
 }

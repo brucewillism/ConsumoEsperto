@@ -19,13 +19,9 @@ public interface BankApiConfigRepository extends JpaRepository<BankApiConfig, Lo
     boolean existsByTipoBanco(String tipoBanco);
     
     // Novos métodos para configurações por usuário
-<<<<<<< HEAD
     @Query("SELECT b FROM BankApiConfig b WHERE b.usuario.id = :usuarioId AND b.tipoBanco = :tipoBanco")
     Optional<BankApiConfig> findByUsuarioIdAndTipoBanco(@Param("usuarioId") Long usuarioId, @Param("tipoBanco") String tipoBanco);
     
-=======
-    Optional<BankApiConfig> findByUsuarioIdAndTipoBanco(Long usuarioId, String tipoBanco);
->>>>>>> origin/main
     List<BankApiConfig> findByUsuarioId(Long usuarioId);
     List<BankApiConfig> findByUsuarioIdAndAtivoTrue(Long usuarioId);
     boolean existsByUsuarioIdAndTipoBanco(Long usuarioId, String tipoBanco);

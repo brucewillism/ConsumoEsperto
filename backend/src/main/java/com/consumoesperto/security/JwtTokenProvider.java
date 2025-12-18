@@ -2,10 +2,7 @@ package com.consumoesperto.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
-<<<<<<< HEAD
 import lombok.extern.slf4j.Slf4j;
-=======
->>>>>>> origin/main
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -136,17 +133,10 @@ public class JwtTokenProvider {
 
             // Converte o subject (que contém o ID) para Long
             String subject = claims.getSubject();
-<<<<<<< HEAD
             log.debug("JWT Token - Subject extraído: {}", subject);
             return Long.parseLong(subject);
         } catch (Exception ex) {
             log.error("Erro ao extrair user ID do token: {}", ex.getMessage(), ex);
-=======
-            System.out.println("JWT Token - Subject extraído: " + subject);
-            return Long.parseLong(subject);
-        } catch (Exception ex) {
-            System.out.println("Erro ao extrair user ID do token: " + ex.getMessage());
->>>>>>> origin/main
             throw ex;
         }
     }
@@ -167,7 +157,6 @@ public class JwtTokenProvider {
             return true; // Token válido
         } catch (SignatureException ex) {
             // Assinatura JWT inválida (token foi modificado)
-<<<<<<< HEAD
             log.warn("JWT Token inválido: Assinatura inválida - {}", ex.getMessage());
             return false;
         } catch (MalformedJwtException ex) {
@@ -185,25 +174,6 @@ public class JwtTokenProvider {
         } catch (IllegalArgumentException ex) {
             // String de claims JWT está vazia
             log.warn("JWT Token inválido: Claims vazio - {}", ex.getMessage());
-=======
-            System.out.println("JWT Token inválido: Assinatura inválida - " + ex.getMessage());
-            return false;
-        } catch (MalformedJwtException ex) {
-            // Token JWT malformado (estrutura incorreta)
-            System.out.println("JWT Token inválido: Token malformado - " + ex.getMessage());
-            return false;
-        } catch (ExpiredJwtException ex) {
-            // Token JWT expirado
-            System.out.println("JWT Token inválido: Token expirado - " + ex.getMessage());
-            return false;
-        } catch (UnsupportedJwtException ex) {
-            // Token JWT não suportado (versão ou formato incorreto)
-            System.out.println("JWT Token inválido: Token não suportado - " + ex.getMessage());
-            return false;
-        } catch (IllegalArgumentException ex) {
-            // String de claims JWT está vazia
-            System.out.println("JWT Token inválido: Claims vazio - " + ex.getMessage());
->>>>>>> origin/main
             return false;
         }
     }

@@ -392,7 +392,6 @@ public class FinancialDataSyncService {
      * Obtém compras parceladas de um banco específico
      */
     private List<Map<String, Object>> getInstallmentPurchasesFromBank(AutorizacaoBancaria auth) {
-<<<<<<< HEAD
         log.info("Buscando compras parceladas do banco: {}", auth.getBanco());
         
         List<Map<String, Object>> comprasParceladas = new ArrayList<>();
@@ -545,12 +544,6 @@ public class FinancialDataSyncService {
         }
         
         return compras;
-=======
-        // Por enquanto, retorna lista vazia pois os métodos não estão implementados
-        // TODO: Implementar métodos getInstallmentPurchases nos serviços bancários
-        log.info("Método getInstallmentPurchases não implementado para banco: {}", auth.getBanco());
-        return new ArrayList<>();
->>>>>>> origin/main
     }
 
     /**

@@ -46,7 +46,6 @@ public class MercadoPagoBankService {
      * Busca configuração do Mercado Pago para um usuário
      */
     private Optional<BankApiConfig> getMercadoPagoConfig(Long userId) {
-<<<<<<< HEAD
         try {
             log.debug("🔍 Buscando configuração do Mercado Pago para usuário: {}", userId);
             Optional<BankApiConfig> config = bankApiConfigRepository.findByUsuarioIdAndBanco(userId, "MERCADOPAGO");
@@ -54,198 +53,6 @@ public class MercadoPagoBankService {
             if (config.isPresent() && config.get().getAtivo()) {
                 log.debug("✅ Configuração encontrada para usuário: {}", userId);
                 return config;
-=======
-        try {
-            log.debug("🔍 Buscando configuração do Mercado Pago para usuário: {}", userId);
-            Optional<BankApiConfig> config = bankApiConfigRepository.findByUsuarioIdAndBanco(userId, "MERCADOPAGO");
-            if (config.isPresent() && config.get().getAtivo()) {
-                return config;
-            }
-            return Optional.empty();
-        } catch (Exception e) {
-            log.error("❌ Erro ao buscar configuração do Mercado Pago para usuário {}: {}", userId, e.getMessage());
-            return Optional.empty();
-        }
-    }
-
-    public String generateAuthUrl(String redirectUri, String state, Long userId) {
-        log.info("Gerando URL de autorização para Mercado Pago - Usuário: {}", userId);
-        
-        Optional<BankApiConfig> config = getMercadoPagoConfig(userId);
-        if (config.isEmpty()) {
-            log.error("❌ Usuário {} não possui configuração do Mercado Pago", userId);
-            throw new RuntimeException("Configuração do Mercado Pago não encontrada");
-        }
-        
-        BankApiConfig mpConfig = config.get();
-        
-        return UriComponentsBuilder.fromHttpUrl(mpConfig.getAuthUrl())
-                .queryParam("client_id", mpConfig.getClientId())
-                .queryParam("redirect_uri", redirectUri)
-                .queryParam("response_type", "code")
-                .queryParam("scope", mpConfig.getScope())
-                .queryParam("state", state)
-                .build()
-                .toUriString();
-    }
-
-    public Map<String, Object> processOAuthCallback(String code, String state, String redirectUri, Long userId) {
-        log.info("Processando callback OAuth para Mercado Pago - Usuário: {}", userId);
-        
-        Optional<BankApiConfig> config = getMercadoPagoConfig(userId);
-        if (config.isEmpty()) {
-            log.error("❌ Usuário {} não possui configuração do Mercado Pago", userId);
-            throw new RuntimeException("Configuração do Mercado Pago não encontrada");
-        }
-        
-        BankApiConfig mpConfig = config.get();
-        
-        try {
-            // Preparar headers para troca do código por token
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-            headers.setBasicAuth(mpConfig.getClientId(), mpConfig.getClientSecret());
-
-            // Preparar body da requisição
-            String body = String.format("grant_type=authorization_code&code=%s&redirect_uri=%s", 
-                    code, redirectUri);
-
-            HttpEntity<String> request = new HttpEntity<>(body, headers);
-
-            // Fazer chamada para trocar código por token
-            ResponseEntity<Map> response = restTemplate.postForEntity(
-                    mpConfig.getTokenUrl(), 
-                    request, 
-                    Map.class
-            );
-
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                Map<String, Object> tokenData = response.getBody();
-                log.info("Token obtido com sucesso para Mercado Pago - Usuário: {}", userId);
-                
-                // Salvar autorização bancária na tabela
-                salvarAutorizacaoBancaria(userId, tokenData);
-                
-                return tokenData;
-            } else {
-                log.error("Erro ao obter token do Mercado Pago - Usuário: {} - Status: {}", userId, response.getStatusCode());
-                throw new RuntimeException("Falha na autenticação com Mercado Pago");
-            }
-
-        } catch (Exception e) {
-            log.error("Erro ao processar callback OAuth do Mercado Pago - Usuário: {} - Erro: {}", userId, e.getMessage());
-            throw new RuntimeException("Erro na autenticação com Mercado Pago", e);
-        }
-    }
-
-    public boolean testConnection(AutorizacaoBancaria auth) {
-        log.info("Testando conexão com Mercado Pago para usuário {}", auth.getUsuario().getId());
-        
-        try {
-            // Buscar configuração do usuário
-            Optional<BankApiConfig> config = getMercadoPagoConfig(auth.getUsuario().getId());
-            if (config.isEmpty()) {
-                log.error("❌ Usuário {} não possui configuração do Mercado Pago", auth.getUsuario().getId());
-                return false;
-            }
-            
-            // Preparar headers com token de acesso
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(auth.getAccessToken());
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<String> request = new HttpEntity<>(headers);
-
-            // Fazer chamada de teste para API do Mercado Pago
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    "https://api.mercadopago.com/v1/users/" + config.get().getUserId() + "/accounts",
-                    HttpMethod.GET,
-                    request,
-                    Map.class
-            );
-
-            boolean isConnected = response.getStatusCode() == HttpStatus.OK;
-            log.info("Teste de conexão com Mercado Pago: {}", isConnected ? "SUCESSO" : "FALHA");
-            return isConnected;
-
-        } catch (Exception e) {
-            log.error("Erro ao testar conexão com Mercado Pago: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    public Map<String, Object> getBankDetails(AutorizacaoBancaria autorizacao) {
-        try {
-            // Verifica se o token precisa ser renovado
-            if (autorizacao.precisaRenovacao()) {
-                refreshTokenIfNeeded(autorizacao);
-            }
-
-            Map<String, Object> result = new HashMap<>();
-            
-            // Busca dados do cartão
-            List<Map<String, Object>> cartoes = getCreditCards(autorizacao);
-            result.put("cartoes", cartoes);
-            
-            // Busca dados de saldo
-            Map<String, Object> saldo = getBalanceData(autorizacao);
-            result.put("saldo", saldo);
-            
-            // Busca faturas
-            List<Map<String, Object>> faturas = getInvoices(autorizacao);
-            result.put("faturas", faturas);
-            
-            // Busca transações
-            List<Map<String, Object>> transacoes = getTransactions(autorizacao);
-            result.put("transacoes", transacoes);
-            
-            // Busca análise de gastos
-            Map<String, Object> gastosPorCategoria = getSpendingByCategory(autorizacao);
-            result.put("gastosPorCategoria", gastosPorCategoria);
-            
-            Map<String, Object> analiseGastos = getSpendingAnalysis(autorizacao);
-            result.put("analiseGastos", analiseGastos);
-            
-            result.put("status", "success");
-            result.put("message", "Dados sincronizados com sucesso");
-            
-            return result;
-            
-        } catch (Exception e) {
-            log.error("Erro ao obter detalhes do banco Mercado Pago: {}", e.getMessage(), e);
-            return Map.of("status", "error", "message", "Erro ao sincronizar dados: " + e.getMessage());
-        }
-    }
-
-    public List<Map<String, Object>> getCreditCards(AutorizacaoBancaria autorizacao) {
-        try {
-            log.info("Buscando cartões reais do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
-            
-            // Buscar configuração do usuário
-            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
-            if (config.isEmpty()) {
-                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
-                return getSimulatedCreditCards();
-            }
-
-            // Chamada real para API do Mercado Pago
-            String url = UriComponentsBuilder
-                    .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/cards")
-                    .queryParam("access_token", autorizacao.getAccessToken())
-                    .build()
-                    .toUriString();
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(autorizacao.getAccessToken());
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<String> request = new HttpEntity<>(headers);
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
-            
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                log.info("Cartões obtidos com sucesso da API do Mercado Pago");
-                return processarCartoesResposta(response.getBody());
->>>>>>> origin/main
             }
             
             log.warn("⚠️ Usuário {} não possui configuração do Mercado Pago", userId);
@@ -264,7 +71,6 @@ public class MercadoPagoBankService {
         try {
             log.info("Buscando saldo real do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
             
-<<<<<<< HEAD
             // Tentar diferentes endpoints para saldo
             List<String> endpoints = Arrays.asList(
                 "https://api.mercadopago.com/v1/account/balance",
@@ -272,22 +78,6 @@ public class MercadoPagoBankService {
                 "https://api.mercadopago.com/v1/account/settings"
             );
             
-=======
-            // Buscar configuração do usuário
-            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
-            if (config.isEmpty()) {
-                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
-                return getSimulatedBalanceData();
-            }
-
-            // Chamada real para API do Mercado Pago
-            String url = UriComponentsBuilder
-                    .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/accounts/balance")
-                    .queryParam("access_token", autorizacao.getAccessToken())
-                    .build()
-                    .toUriString();
-
->>>>>>> origin/main
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + autorizacao.getAccessToken());
             headers.set("Content-Type", "application/json");
@@ -321,7 +111,6 @@ public class MercadoPagoBankService {
      */
     private String buscarCustomerId(String accessToken, String email) {
         try {
-<<<<<<< HEAD
             log.info("🔍 Buscando customer_id para email: {}", email);
             
             String searchUrl = "https://api.mercadopago.com/v1/customers/search?email=" + email;
@@ -335,23 +124,6 @@ public class MercadoPagoBankService {
                     searchUrl, HttpMethod.GET, request, Map.class);
             
             log.info("📥 Resposta recebida - Status: {}", response.getStatusCode());
-=======
-            // Buscar configuração do usuário
-            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
-            if (config.isEmpty()) {
-                log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
-                return getSimulatedInvoices();
-            }
-
-            // TODO: Implementar chamada real para API do Mercado Pago
-            String url = UriComponentsBuilder
-                    .fromHttpUrl(config.get().getApiUrl() + "/invoices")
-                    .queryParam("access_token", autorizacao.getAccessToken())
-                    .build()
-                    .toUriString();
-
-            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
->>>>>>> origin/main
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> responseBody = response.getBody();
@@ -413,60 +185,104 @@ public class MercadoPagoBankService {
             log.info("✅ Customer ID obtido com sucesso: {}", customerId);
 
             // Usar endpoint correto da API do Mercado Pago
-            String url = "https://api.mercadopago.com/v1/customers/" + customerId + "/cards";
-            log.info("🌐 Fazendo requisição para: {}", url);
+            // Tentar múltiplos endpoints para encontrar cartões digitais
+            List<String> endpoints = Arrays.asList(
+                "https://api.mercadopago.com/v1/customers/" + customerId + "/cards",
+                "https://api.mercadopago.com/v1/customers/" + customerId + "/cards?status=active",
+                "https://api.mercadopago.com/v1/customers/" + customerId + "/cards?status=all"
+            );
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + autorizacao.getAccessToken());
             headers.set("Content-Type", "application/json");
             
             HttpEntity<String> request = new HttpEntity<>(headers);
-            ResponseEntity<Object> response = restTemplate.exchange(
-                    url, HttpMethod.GET, request, Object.class);
             
-            log.info("📥 Resposta recebida - Status: {}", response.getStatusCode());
+            List<Map<String, Object>> cartoes = new ArrayList<>();
             
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                log.info("✅ Cartões obtidos com sucesso da API do Mercado Pago");
-                
-                // Processar resposta (pode ser List ou Map)
-                Object body = response.getBody();
-                log.debug("📦 Tipo do body da resposta: {}", body.getClass().getName());
-                
-                List<Map<String, Object>> cartoes = new ArrayList<>();
-                
-                if (body instanceof List) {
-                    // API retorna lista diretamente
-                    @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> cardsList = (List<Map<String, Object>>) body;
-                    log.info("📋 API retornou {} cartões diretamente como lista", cardsList.size());
+            // Tentar cada endpoint
+            for (String url : endpoints) {
+                try {
+                    log.info("🌐 Tentando buscar cartões em: {}", url);
+                    ResponseEntity<Object> response = restTemplate.exchange(
+                            url, HttpMethod.GET, request, Object.class);
                     
-                    // Processar lista diretamente
-                    cartoes = processarListaCartoes(cardsList);
-                } else if (body instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> bodyMap = (Map<String, Object>) body;
-                    log.debug("📋 API retornou objeto Map com chaves: {}", bodyMap.keySet());
-                    cartoes = processarCartoesResposta(bodyMap);
-                } else {
-                    log.warn("⚠️ Resposta em formato desconhecido: {}", body.getClass().getName());
-                }
-                
-                // Se não encontrou cartões na API, criar cartão virtual baseado nos pagamentos
-                if (cartoes.isEmpty()) {
-                    log.info("📋 Nenhum cartão encontrado na API. Criando cartão virtual baseado nos pagamentos...");
-                    List<Map<String, Object>> cartaoVirtual = criarCartaoVirtualDosPagamentos(autorizacao);
-                    if (!cartaoVirtual.isEmpty()) {
-                        log.info("✅ Cartão virtual criado: {}", cartaoVirtual.size());
-                        return cartaoVirtual;
+                    log.info("📥 Resposta recebida - Status: {} - URL: {}", response.getStatusCode(), url);
+                    
+                    if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                        log.info("✅ Resposta bem-sucedida do endpoint: {}", url);
+                        
+                        // Processar resposta (pode ser List ou Map)
+                        Object body = response.getBody();
+                        log.info("📦 Tipo do body da resposta: {} - Tamanho: {}", 
+                            body.getClass().getName(), 
+                            body instanceof List ? ((List<?>) body).size() : "N/A");
+                        
+                        // Log detalhado do conteúdo
+                        if (body instanceof List) {
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> cardsList = (List<Map<String, Object>>) body;
+                            log.info("📋 Lista de cartões encontrada: {} cartões", cardsList.size());
+                            if (!cardsList.isEmpty()) {
+                                log.info("📋 Primeiro cartão - Chaves: {}", cardsList.get(0).keySet());
+                                log.info("📋 Primeiro cartão - Conteúdo: {}", cardsList.get(0));
+                            }
+                        } else if (body instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> bodyMap = (Map<String, Object>) body;
+                            log.info("📋 Objeto Map encontrado com chaves: {}", bodyMap.keySet());
+                            log.info("📋 Conteúdo completo: {}", bodyMap);
+                        }
+                        
+                        List<Map<String, Object>> cartoesEncontrados = new ArrayList<>();
+                        
+                        if (body instanceof List) {
+                            // API retorna lista diretamente
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> cardsList = (List<Map<String, Object>>) body;
+                            log.info("📋 API retornou {} cartões diretamente como lista", cardsList.size());
+                            
+                            // Processar lista diretamente
+                            cartoesEncontrados = processarListaCartoes(cardsList);
+                        } else if (body instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> bodyMap = (Map<String, Object>) body;
+                            log.debug("📋 API retornou objeto Map com chaves: {}", bodyMap.keySet());
+                            cartoesEncontrados = processarCartoesResposta(bodyMap);
+                        } else {
+                            log.warn("⚠️ Resposta em formato desconhecido: {}", body.getClass().getName());
+                        }
+                        
+                        // Se encontrou cartões, adiciona à lista e para de tentar outros endpoints
+                        if (!cartoesEncontrados.isEmpty()) {
+                            log.info("✅ {} cartões encontrados no endpoint: {}", cartoesEncontrados.size(), url);
+                            cartoes.addAll(cartoesEncontrados);
+                            break; // Para de tentar outros endpoints se encontrou cartões
+                        } else {
+                            log.info("⚠️ Nenhum cartão encontrado no endpoint: {}", url);
+                        }
+                    } else {
+                        log.warn("⚠️ Endpoint {} retornou status não esperado: {}", url, response.getStatusCode());
                     }
+                } catch (Exception e) {
+                    log.warn("⚠️ Erro ao buscar cartões no endpoint {}: {}", url, e.getMessage());
+                    // Continua tentando outros endpoints
                 }
-                
-                return cartoes;
             }
             
-            log.warn("⚠️ API retornou status não esperado: {}", response.getStatusCode());
-            return new ArrayList<>();
+            // Se não encontrou cartões na API, criar cartão virtual baseado nos pagamentos
+            if (cartoes.isEmpty()) {
+                log.info("📋 Nenhum cartão encontrado em nenhum endpoint. Criando cartão virtual baseado nos pagamentos...");
+                List<Map<String, Object>> cartaoVirtual = criarCartaoVirtualDosPagamentos(autorizacao);
+                if (!cartaoVirtual.isEmpty()) {
+                    log.info("✅ Cartão virtual criado: {}", cartaoVirtual.size());
+                    return cartaoVirtual;
+                }
+            } else {
+                log.info("✅ Total de {} cartões encontrados nos endpoints", cartoes.size());
+            }
+            
+            return cartoes;
             
         } catch (Exception e) {
             log.error("Erro ao buscar cartões do Mercado Pago: {}", e.getMessage(), e);
@@ -527,11 +343,7 @@ public class MercadoPagoBankService {
             Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
             if (config.isEmpty()) {
                 log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
-<<<<<<< HEAD
                 return new ArrayList<>();
-=======
-                return getSimulatedTransactions();
->>>>>>> origin/main
             }
 
             // Chamada real para API do Mercado Pago
@@ -569,30 +381,18 @@ public class MercadoPagoBankService {
      */
     public Map<String, Object> getSpendingByCategory(AutorizacaoBancaria autorizacao) {
         try {
-<<<<<<< HEAD
             log.info("Buscando gastos por categoria reais do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
             
-=======
->>>>>>> origin/main
             // Buscar configuração do usuário
             Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
             if (config.isEmpty()) {
                 log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
-<<<<<<< HEAD
                 return new HashMap<>();
             }
 
             // Chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
                     .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/spending/category")
-=======
-                return getSimulatedSpendingByCategory();
-            }
-
-            // TODO: Implementar chamada real para API do Mercado Pago
-            String url = UriComponentsBuilder
-                    .fromHttpUrl(config.get().getApiUrl() + "/spending/category")
->>>>>>> origin/main
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .queryParam("period", "month")
                     .build()
@@ -619,30 +419,18 @@ public class MercadoPagoBankService {
      */
     public Map<String, Object> getSpendingAnalysis(AutorizacaoBancaria autorizacao) {
         try {
-<<<<<<< HEAD
             log.info("Buscando análise de gastos reais do Mercado Pago para usuário {}", autorizacao.getUsuario().getId());
             
-=======
->>>>>>> origin/main
             // Buscar configuração do usuário
             Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
             if (config.isEmpty()) {
                 log.error("❌ Usuário {} não possui configuração do Mercado Pago", autorizacao.getUsuario().getId());
-<<<<<<< HEAD
                 return new HashMap<>();
             }
 
             // Chamada real para API do Mercado Pago
             String url = UriComponentsBuilder
                     .fromHttpUrl(config.get().getApiUrl() + "/v1/users/" + config.get().getUserId() + "/spending/analysis")
-=======
-                return getSimulatedSpendingAnalysis();
-            }
-
-            // TODO: Implementar chamada real para API do Mercado Pago
-            String url = UriComponentsBuilder
-                    .fromHttpUrl(config.get().getApiUrl() + "/spending/analysis")
->>>>>>> origin/main
                     .queryParam("access_token", autorizacao.getAccessToken())
                     .queryParam("period", "month")
                     .build()
@@ -660,104 +448,7 @@ public class MercadoPagoBankService {
             
         } catch (Exception e) {
             log.error("Erro ao buscar análise de gastos do Mercado Pago: {}", e.getMessage(), e);
-<<<<<<< HEAD
             return new HashMap<>();
-=======
-            return getSimulatedSpendingAnalysis();
-        }
-    }
-
-    public boolean refreshTokenIfNeeded(AutorizacaoBancaria autorizacao) {
-        try {
-            if (!autorizacao.precisaRenovacao()) {
-                return false;
-            }
-
-            // Buscar configuração do usuário
-            Optional<BankApiConfig> config = getMercadoPagoConfig(autorizacao.getUsuario().getId());
-            if (config.isEmpty()) {
-                log.error("❌ Usuário {} não possui configuração do Mercado Pago para renovar token", autorizacao.getUsuario().getId());
-                return false;
-            }
-
-            BankApiConfig mpConfig = config.get();
-
-            // TODO: Implementar renovação real do token
-            String url = mpConfig.getTokenUrl();
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-            body.add("grant_type", "refresh_token");
-            body.add("refresh_token", autorizacao.getRefreshToken());
-            body.add("client_id", mpConfig.getClientId());
-            body.add("client_secret", mpConfig.getClientSecret());
-
-            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> tokenData = response.getBody();
-                
-                // Atualizar tokens na autorização
-                autorizacao.setAccessToken((String) tokenData.get("access_token"));
-                if (tokenData.containsKey("refresh_token")) {
-                    autorizacao.setRefreshToken((String) tokenData.get("refresh_token"));
-                }
-                
-                // Calcular nova data de expiração
-                Integer expiresIn = (Integer) tokenData.get("expires_in");
-                if (expiresIn != null) {
-                    LocalDateTime novaExpiracao = LocalDateTime.now().plusSeconds(expiresIn);
-                    autorizacao.setDataExpiracao(novaExpiracao);
-                }
-                
-                autorizacao.setDataAtualizacao(LocalDateTime.now());
-                
-                log.info("Token renovado com sucesso para Mercado Pago - Usuário: {}", autorizacao.getUsuario().getId());
-                return true;
-            }
-
-            return false;
-        } catch (Exception e) {
-            log.error("Erro ao renovar token do Mercado Pago: {}", e.getMessage(), e);
-            return false;
-        }
-    }
-
-    // Métodos auxiliares para processar respostas da API
-    private List<Map<String, Object>> processarCartoesResposta(Map<String, Object> response) {
-        log.info("Processando resposta real de cartões do Mercado Pago");
-        
-        try {
-            List<Map<String, Object>> cartoes = new ArrayList<>();
-            
-            if (response.containsKey("data") && response.get("data") instanceof List) {
-                List<Map<String, Object>> cartoesData = (List<Map<String, Object>>) response.get("data");
-                
-                for (Map<String, Object> cartaoData : cartoesData) {
-                    Map<String, Object> cartao = new HashMap<>();
-                    cartao.put("id", cartaoData.get("id"));
-                    cartao.put("numeroCartao", mascararNumeroCartao((String) cartaoData.get("card_number")));
-                    cartao.put("nome", cartaoData.get("cardholder_name"));
-                    cartao.put("limiteCredito", new BigDecimal(cartaoData.getOrDefault("credit_limit", "0").toString()));
-                    cartao.put("limiteDisponivel", new BigDecimal(cartaoData.getOrDefault("available_credit", "0").toString()));
-                    cartao.put("saldoFatura", new BigDecimal(cartaoData.getOrDefault("current_balance", "0").toString()));
-                    cartao.put("dataVencimento", LocalDate.now().plusDays(25)); // Mercado Pago não fornece data de vencimento
-                    cartao.put("tipo", "CREDITO");
-                    cartao.put("banco", "MERCADO_PAGO");
-                    
-                    cartoes.add(cartao);
-                }
-            }
-            
-            log.info("Processados {} cartões reais do Mercado Pago", cartoes.size());
-            return cartoes;
-            
-        } catch (Exception e) {
-            log.error("Erro ao processar cartões do Mercado Pago: {}", e.getMessage(), e);
-            return getSimulatedCreditCards();
->>>>>>> origin/main
         }
     }
 
@@ -942,58 +633,129 @@ public class MercadoPagoBankService {
         
         for (Map<String, Object> card : cardsList) {
             try {
+                // Log detalhado de cada cartão recebido
+                log.info("📋 Processando cartão - Chaves disponíveis: {}", card.keySet());
+                log.info("📋 Conteúdo completo do cartão: {}", card);
+                
                 Map<String, Object> cartao = new HashMap<>();
                 
-                // ID do cartão
+                // ID do cartão - tentar múltiplos campos
                 Object idObj = card.get("id");
+                if (idObj == null) {
+                    idObj = card.get("card_id");
+                }
+                if (idObj == null) {
+                    idObj = card.get("token");
+                }
                 if (idObj != null) {
                     cartao.put("id", idObj.toString());
+                    log.info("✅ ID do cartão encontrado: {}", idObj.toString());
                 } else {
-                    log.warn("⚠️ Cartão sem ID, pulando...");
+                    log.warn("⚠️ Cartão sem ID em nenhum campo conhecido, pulando...");
+                    log.warn("⚠️ Campos disponíveis no cartão: {}", card.keySet());
                     continue;
                 }
                 
-                // Últimos dígitos
+                // Últimos dígitos - tentar múltiplos campos
                 Object ultimosDigitosObj = card.get("last_four_digits");
+                if (ultimosDigitosObj == null) {
+                    ultimosDigitosObj = card.get("last4");
+                }
+                if (ultimosDigitosObj == null) {
+                    ultimosDigitosObj = card.get("last_four");
+                }
                 String ultimosDigitos = "****";
                 if (ultimosDigitosObj != null) {
                     ultimosDigitos = ultimosDigitosObj.toString();
+                    log.info("✅ Últimos dígitos encontrados: {}", ultimosDigitos);
+                } else {
+                    log.warn("⚠️ Últimos dígitos não encontrados, usando padrão");
                 }
                 cartao.put("numero", "****" + ultimosDigitos);
+                cartao.put("ultimosDigitos", ultimosDigitos);
                 
-                // Limite do cartão
+                // Limite do cartão - tentar múltiplos campos
                 Object limiteObj = card.get("credit_limit");
+                if (limiteObj == null) {
+                    limiteObj = card.get("limit");
+                }
+                if (limiteObj == null) {
+                    limiteObj = card.get("available_limit");
+                }
+                double limite = 0.0;
                 if (limiteObj != null) {
                     if (limiteObj instanceof Number) {
-                        cartao.put("limite", ((Number) limiteObj).doubleValue());
+                        limite = ((Number) limiteObj).doubleValue();
+                        log.info("✅ Limite encontrado: R$ {}", limite);
                     } else {
-                        cartao.put("limite", 500.0);
+                        try {
+                            limite = Double.parseDouble(limiteObj.toString());
+                        } catch (NumberFormatException e) {
+                            log.warn("⚠️ Não foi possível converter limite: {}", limiteObj);
+                            limite = 0.0;
+                        }
                     }
                 } else {
-                    cartao.put("limite", 500.0);
+                    log.warn("⚠️ Limite não encontrado, usando 0.0");
                 }
+                cartao.put("limite", limite);
+                cartao.put("credit_limit", limite);
                 
-                // Saldo disponível
+                // Saldo disponível - tentar múltiplos campos
                 Object saldoObj = card.get("available_amount");
+                if (saldoObj == null) {
+                    saldoObj = card.get("available_balance");
+                }
+                if (saldoObj == null) {
+                    saldoObj = card.get("balance");
+                }
+                double saldoDisponivel = limite; // Por padrão, usa o limite
                 if (saldoObj != null) {
                     if (saldoObj instanceof Number) {
-                        cartao.put("saldoDisponivel", ((Number) saldoObj).doubleValue());
+                        saldoDisponivel = ((Number) saldoObj).doubleValue();
+                        log.info("✅ Saldo disponível encontrado: R$ {}", saldoDisponivel);
                     } else {
-                        cartao.put("saldoDisponivel", cartao.get("limite"));
+                        try {
+                            saldoDisponivel = Double.parseDouble(saldoObj.toString());
+                        } catch (NumberFormatException e) {
+                            log.warn("⚠️ Não foi possível converter saldo: {}", saldoObj);
+                            saldoDisponivel = limite;
+                        }
                     }
                 } else {
-                    cartao.put("saldoDisponivel", cartao.get("limite"));
+                    log.warn("⚠️ Saldo disponível não encontrado, usando limite como padrão");
                 }
+                cartao.put("saldoDisponivel", saldoDisponivel);
+                cartao.put("available_amount", saldoDisponivel);
                 
-                // Nome do portador
+                // Nome do portador - tentar múltiplos campos
                 Object nomeObj = card.get("cardholder_name");
+                if (nomeObj == null) {
+                    nomeObj = card.get("cardholder");
+                }
+                if (nomeObj == null) {
+                    nomeObj = card.get("name");
+                }
                 String nome = "Cartão Mercado Pago";
                 if (nomeObj != null && !nomeObj.toString().trim().isEmpty()) {
-                    nome = nomeObj.toString();
+                    if (nomeObj instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> cardholderMap = (Map<String, Object>) nomeObj;
+                        Object nameInMap = cardholderMap.get("name");
+                        if (nameInMap != null) {
+                            nome = nameInMap.toString();
+                        }
+                    } else {
+                        nome = nomeObj.toString();
+                    }
+                    log.info("✅ Nome do cartão encontrado: {}", nome);
+                } else {
+                    log.warn("⚠️ Nome do cartão não encontrado, usando padrão");
                 }
                 cartao.put("nome", nome);
+                cartao.put("cardholderName", nome);
                 
-                // Bandeira do cartão
+                // Bandeira do cartão - tentar múltiplos campos
                 Object paymentMethodObj = card.get("payment_method");
                 String bandeira = "VISA";
                 if (paymentMethodObj instanceof Map) {
@@ -1001,13 +763,64 @@ public class MercadoPagoBankService {
                     Map<String, Object> pm = (Map<String, Object>) paymentMethodObj;
                     Object pmIdObj = pm.get("id");
                     if (pmIdObj != null) {
-                        bandeira = pmIdObj.toString().toUpperCase();
+                        String pmId = pmIdObj.toString().toUpperCase();
+                        if (pmId.contains("MASTERCARD") || pmId.contains("MASTER")) {
+                            bandeira = "MASTERCARD";
+                        } else if (pmId.contains("VISA")) {
+                            bandeira = "VISA";
+                        } else if (pmId.contains("AMEX") || pmId.contains("AMERICAN")) {
+                            bandeira = "AMEX";
+                        } else if (pmId.contains("ELO")) {
+                            bandeira = "ELO";
+                        } else {
+                            bandeira = pmId;
+                        }
+                        log.info("✅ Bandeira encontrada: {}", bandeira);
+                    }
+                } else if (paymentMethodObj != null) {
+                    String pmId = paymentMethodObj.toString().toUpperCase();
+                    if (pmId.contains("MASTERCARD") || pmId.contains("MASTER")) {
+                        bandeira = "MASTERCARD";
+                    } else if (pmId.contains("VISA")) {
+                        bandeira = "VISA";
+                    } else if (pmId.contains("AMEX") || pmId.contains("AMERICAN")) {
+                        bandeira = "AMEX";
+                    } else if (pmId.contains("ELO")) {
+                        bandeira = "ELO";
+                    }
+                }
+                // Tentar campo brand também
+                Object brandObj = card.get("brand");
+                if (brandObj != null) {
+                    String brand = brandObj.toString().toUpperCase();
+                    if (brand.contains("MASTERCARD") || brand.contains("MASTER")) {
+                        bandeira = "MASTERCARD";
+                    } else if (brand.contains("VISA")) {
+                        bandeira = "VISA";
+                    } else if (brand.contains("AMEX") || brand.contains("AMERICAN")) {
+                        bandeira = "AMEX";
+                    } else if (brand.contains("ELO")) {
+                        bandeira = "ELO";
                     }
                 }
                 cartao.put("bandeira", bandeira);
+                cartao.put("payment_method", bandeira.toLowerCase());
+                
+                // Dia de vencimento - padrão 10 se não tiver
+                Object diaVencimentoObj = card.get("expiration_month");
+                int diaVencimento = 10; // Padrão
+                if (diaVencimentoObj != null) {
+                    try {
+                        diaVencimento = Integer.parseInt(diaVencimentoObj.toString());
+                    } catch (NumberFormatException e) {
+                        log.warn("⚠️ Não foi possível converter dia de vencimento: {}", diaVencimentoObj);
+                    }
+                }
+                cartao.put("diaVencimento", diaVencimento);
                 
                 cartoes.add(cartao);
-                log.debug("✅ Cartão processado: {} - {} - Limite: {}", nome, ultimosDigitos, cartao.get("limite"));
+                log.info("✅ Cartão processado com sucesso: {} - ****{} - {} - Limite: R$ {} - Disponível: R$ {}", 
+                    nome, ultimosDigitos, bandeira, limite, saldoDisponivel);
                 
             } catch (Exception e) {
                 log.warn("⚠️ Erro ao processar cartão individual: {}", e.getMessage());
@@ -1115,7 +928,10 @@ public class MercadoPagoBankService {
                                                     @SuppressWarnings("unchecked")
                                                     Map<String, Object> cardholder = (Map<String, Object>) cardholderObj;
                                                     if (cardholder.containsKey("name")) {
-                                                        cardholderName = cardholder.get("name").toString();
+                                                        Object nameObj = cardholder.get("name");
+                                                        if (nameObj != null) {
+                                                            cardholderName = nameObj.toString();
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1263,11 +1079,11 @@ public class MercadoPagoBankService {
                             fatura.put("valorMinimo", valor); // Valor mínimo igual ao total por padrão
                             
                             // Status da fatura - converter para formato esperado
-                            Object statusObj = invoice.getOrDefault("status", "pending");
-                            String status = statusObj.toString();
+                            Object statusObj = invoice.get("status");
+                            String status = (statusObj != null) ? statusObj.toString() : "pending";
                             // Converter status do Mercado Pago para status do sistema
                             String statusConvertido = "ABERTA";
-                            if (status != null) {
+                            if (status != null && !status.isEmpty()) {
                                 String statusLower = status.toLowerCase();
                                 if (statusLower.equals("approved") || statusLower.equals("paid")) {
                                     statusConvertido = "PAGA";
@@ -1332,7 +1148,10 @@ public class MercadoPagoBankService {
                                             @SuppressWarnings("unchecked")
                                             Map<String, Object> cardholder = (Map<String, Object>) cardholderObj;
                                             if (cardholder.containsKey("name")) {
-                                                nomeCartao = cardholder.get("name").toString();
+                                                Object nameObj = cardholder.get("name");
+                                                if (nameObj != null) {
+                                                    nomeCartao = nameObj.toString();
+                                                }
                                             }
                                         }
                                     }
@@ -1621,15 +1440,160 @@ public class MercadoPagoBankService {
         }
     }
 
-<<<<<<< HEAD
+    /**
+     * Gera URL de autorização OAuth2 para o Mercado Pago
+     * 
+     * @param clientId Client ID do Mercado Pago
+     * @param redirectUri URI de redirecionamento após autorização
+     * @param userId ID do usuário (usado para state parameter)
+     * @return URL completa de autorização OAuth2
+     */
     public String generateAuthUrl(String clientId, String redirectUri, Long userId) {
-        // TODO: Implementar geração de URL de autorização
-        return "";
+        try {
+            log.info("Gerando URL de autorização OAuth2 do Mercado Pago para usuário {}", userId);
+            
+            // URL base de autorização do Mercado Pago
+            String authUrl = "https://auth.mercadolivre.com.br/authorization";
+            
+            // Gera state parameter com userId para segurança (pode ser criptografado)
+            String state = userId != null ? userId.toString() : UUID.randomUUID().toString();
+            
+            // Constrói URL de autorização com parâmetros OAuth2
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(authUrl)
+                    .queryParam("response_type", "code")
+                    .queryParam("client_id", clientId)
+                    .queryParam("redirect_uri", redirectUri)
+                    .queryParam("state", state);
+            
+            String fullAuthUrl = builder.toUriString();
+            log.info("URL de autorização gerada: {}", fullAuthUrl);
+            
+            return fullAuthUrl;
+            
+        } catch (Exception e) {
+            log.error("Erro ao gerar URL de autorização do Mercado Pago: {}", e.getMessage(), e);
+            throw new RuntimeException("Falha ao gerar URL de autorização", e);
+        }
     }
 
+    /**
+     * Processa callback OAuth2 do Mercado Pago
+     * 
+     * Troca o código de autorização por token de acesso e salva a autorização
+     * 
+     * @param code Código de autorização recebido do Mercado Pago
+     * @param state Estado retornado (deve conter userId)
+     * @param redirectUri URI de redirecionamento (deve ser igual à usada na autorização)
+     * @param userId ID do usuário
+     * @return Map com tokens e informações da autorização
+     */
     public Map<String, Object> processOAuthCallback(String code, String state, String redirectUri, Long userId) {
-        // TODO: Implementar processamento de callback OAuth
-        return new HashMap<>();
+        try {
+            log.info("Processando callback OAuth2 do Mercado Pago para usuário {}", userId);
+            
+            if (code == null || code.isEmpty()) {
+                throw new IllegalArgumentException("Código de autorização não pode ser vazio");
+            }
+            
+            // Busca configuração do Mercado Pago para o usuário
+            Optional<BankApiConfig> config = getMercadoPagoConfig(userId);
+            if (!config.isPresent()) {
+                throw new RuntimeException("Configuração do Mercado Pago não encontrada para usuário " + userId);
+            }
+            
+            BankApiConfig mpConfig = config.get();
+            String clientId = mpConfig.getClientId();
+            String clientSecret = mpConfig.getClientSecret();
+            
+            // URL do endpoint de token do Mercado Pago
+            String tokenUrl = "https://api.mercadopago.com/oauth/token";
+            
+            // Prepara requisição para trocar código por token
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/x-www-form-urlencoded");
+            headers.setBasicAuth(clientId, clientSecret);
+            
+            // Corpo da requisição OAuth2
+            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+            body.add("grant_type", "authorization_code");
+            body.add("code", code);
+            body.add("redirect_uri", redirectUri);
+            
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+            
+            // Faz requisição para trocar código por token
+            log.debug("Trocando código de autorização por token de acesso...");
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    tokenUrl, 
+                    HttpMethod.POST, 
+                    request, 
+                    Map.class
+            );
+            
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new RuntimeException("Falha ao obter token de acesso do Mercado Pago");
+            }
+            
+            Map<String, Object> tokenResponse = response.getBody();
+            log.info("Token de acesso obtido com sucesso para usuário {}", userId);
+            
+            // Salva autorização no banco de dados
+            Usuario usuario = usuarioRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado: " + userId));
+            
+            // Verifica se já existe autorização
+            Optional<AutorizacaoBancaria> autorizacaoExistente = autorizacaoBancariaRepository
+                    .findByUsuarioIdAndBanco(userId, "MERCADOPAGO");
+            
+            AutorizacaoBancaria autorizacao;
+            if (autorizacaoExistente.isPresent()) {
+                // Atualiza autorização existente
+                autorizacao = autorizacaoExistente.get();
+                autorizacao.setAccessToken((String) tokenResponse.get("access_token"));
+                if (tokenResponse.containsKey("refresh_token")) {
+                    autorizacao.setRefreshToken((String) tokenResponse.get("refresh_token"));
+                }
+                autorizacao.setDataAtualizacao(LocalDateTime.now());
+                autorizacao.setAtivo(true);
+            } else {
+                // Cria nova autorização
+                autorizacao = new AutorizacaoBancaria();
+                autorizacao.setUsuario(usuario);
+                autorizacao.setBanco("MERCADOPAGO");
+                autorizacao.setAccessToken((String) tokenResponse.get("access_token"));
+                autorizacao.setRefreshToken((String) tokenResponse.getOrDefault("refresh_token", ""));
+                autorizacao.setDataCriacao(LocalDateTime.now());
+                autorizacao.setDataAtualizacao(LocalDateTime.now());
+                autorizacao.setAtivo(true);
+            }
+            
+            // Calcula data de expiração (se disponível)
+            if (tokenResponse.containsKey("expires_in")) {
+                Integer expiresIn = (Integer) tokenResponse.get("expires_in");
+                autorizacao.setDataExpiracao(LocalDateTime.now().plusSeconds(expiresIn));
+            }
+            
+            autorizacaoBancariaRepository.save(autorizacao);
+            log.info("Autorização do Mercado Pago salva com sucesso para usuário {}", userId);
+            
+            // Retorna resposta completa
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("access_token", tokenResponse.get("access_token"));
+            result.put("refresh_token", tokenResponse.getOrDefault("refresh_token", ""));
+            result.put("expires_in", tokenResponse.getOrDefault("expires_in", 0));
+            result.put("autorizacao_id", autorizacao.getId());
+            result.put("message", "Autorização processada com sucesso");
+            
+            return result;
+            
+        } catch (Exception e) {
+            log.error("Erro ao processar callback OAuth2 do Mercado Pago: {}", e.getMessage(), e);
+            Map<String, Object> errorResult = new HashMap<>();
+            errorResult.put("success", false);
+            errorResult.put("error", e.getMessage());
+            throw new RuntimeException("Falha ao processar callback OAuth2", e);
+        }
     }
 
     public List<Map<String, Object>> getInvoices(AutorizacaoBancaria autorizacao) {
@@ -1653,80 +1617,4 @@ public class MercadoPagoBankService {
     public List<Map<String, Object>> getCreditCards(AutorizacaoBancaria autorizacao) {
         return getRealCreditCards(autorizacao);
     }
-=======
-    /**
-     * Salva autorização bancária na tabela autorizacoes_bancarias
-     */
-    private void salvarAutorizacaoBancaria(Long userId, Map<String, Object> tokenData) {
-        try {
-            log.info("💾 Salvando autorização bancária para usuário: {}", userId);
-            
-            // Buscar usuário
-            Optional<Usuario> usuarioOpt = usuarioRepository.findById(userId);
-            if (usuarioOpt.isEmpty()) {
-                log.error("❌ Usuário não encontrado: {}", userId);
-                return;
-            }
-            
-            // Extrair dados do token
-            String accessToken = (String) tokenData.get("access_token");
-            String tokenType = (String) tokenData.get("token_type");
-            String scope = (String) tokenData.get("scope");
-            Integer expiresIn = (Integer) tokenData.get("expires_in");
-            
-            if (accessToken == null || accessToken.trim().isEmpty()) {
-                log.error("❌ Access token não encontrado nos dados de resposta");
-                return;
-            }
-            
-            // Calcular data de expiração
-            LocalDateTime dataExpiracao = LocalDateTime.now();
-            if (expiresIn != null) {
-                dataExpiracao = dataExpiracao.plusSeconds(expiresIn);
-            } else {
-                // Default: 6 horas
-                dataExpiracao = dataExpiracao.plusHours(6);
-            }
-            
-            // Buscar autorização existente
-            Optional<AutorizacaoBancaria> authExistente = autorizacaoBancariaRepository
-                .findByUsuarioIdAndTipoBanco(userId, "MERCADO_PAGO");
-            
-            AutorizacaoBancaria autorizacao;
-            if (authExistente.isPresent()) {
-                // Atualizar autorização existente
-                autorizacao = authExistente.get();
-                autorizacao.setAccessToken(accessToken);
-                autorizacao.setTokenType(tokenType != null ? tokenType : "Bearer");
-                autorizacao.setScope(scope);
-                autorizacao.setDataAtualizacao(LocalDateTime.now());
-                autorizacao.setDataExpiracao(dataExpiracao);
-                autorizacao.setAtivo(true);
-                log.info("🔄 Atualizando autorização existente para usuário: {}", userId);
-            } else {
-                // Criar nova autorização
-                autorizacao = new AutorizacaoBancaria();
-                autorizacao.setUsuario(usuarioOpt.get());
-                autorizacao.setTipoBanco("MERCADO_PAGO");
-                autorizacao.setBanco("Mercado Pago");
-                autorizacao.setTipoConta("API");
-                autorizacao.setAccessToken(accessToken);
-                autorizacao.setTokenType(tokenType != null ? tokenType : "Bearer");
-                autorizacao.setScope(scope);
-                autorizacao.setDataCriacao(LocalDateTime.now());
-                autorizacao.setDataAtualizacao(LocalDateTime.now());
-                autorizacao.setDataExpiracao(dataExpiracao);
-                autorizacao.setAtivo(true);
-                log.info("✨ Criando nova autorização para usuário: {}", userId);
-            }
-            
-            // Salvar no banco
-            autorizacaoBancariaRepository.save(autorizacao);
-            log.info("✅ Autorização bancária salva com sucesso para usuário: {}", userId);
-            
-        } catch (Exception e) {
-            log.error("❌ Erro ao salvar autorização bancária para usuário {}: {}", userId, e.getMessage(), e);
-        }
-    }
->>>>>>> origin/main
 }

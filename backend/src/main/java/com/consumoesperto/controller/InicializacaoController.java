@@ -4,6 +4,7 @@ import com.consumoesperto.service.AutoSyncService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,16 +16,13 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/inicializacao")
-<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
-=======
-@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
->>>>>>> origin/main
+@ConditionalOnBean(AutoSyncService.class)
 public class InicializacaoController {
 
     private static final Logger logger = LoggerFactory.getLogger(InicializacaoController.class);
 
-    @Autowired
+    @Autowired(required = false)
     private AutoSyncService autoSyncService;
 
     /**
@@ -33,6 +31,14 @@ public class InicializacaoController {
     @PostMapping("/categorias")
     public ResponseEntity<Map<String, Object>> inicializarCategorias() {
         logger.info("🔧 Inicializando categorias padrão manualmente...");
+        
+        if (autoSyncService == null) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Serviço de sincronização automática não disponível");
+            response.put("timestamp", System.currentTimeMillis());
+            return ResponseEntity.ok(response);
+        }
         
         try {
             autoSyncService.criarCategoriasPadrao();

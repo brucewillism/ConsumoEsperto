@@ -30,11 +30,7 @@ import com.consumoesperto.service.UsuarioService;
 @RequestMapping("/api/mercadopago")
 @RequiredArgsConstructor
 @Slf4j
-<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app", "https://*.ngrok-free.app"})
-=======
-@CrossOrigin(origins = {"http://localhost:4200", "https://85766d45517b.ngrok-free.app", "https://ngrok-free.app"})
->>>>>>> origin/main
 public class MercadoPagoController {
 
     private final MercadoPagoService mercadoPagoService;
@@ -49,7 +45,6 @@ public class MercadoPagoController {
         try {
             log.info("🔄 Sincronização de dados Mercado Pago solicitada");
             
-<<<<<<< HEAD
             // Buscar usuário autenticado atual
             Optional<Usuario> usuarioOpt = securityService.getCurrentUser();
             if (usuarioOpt.isEmpty()) {
@@ -62,10 +57,6 @@ public class MercadoPagoController {
             
             Usuario usuario = usuarioOpt.get();
             Long usuarioId = usuario.getId();
-=======
-            // Buscar usuário atual (assumindo que está autenticado)
-            Long usuarioId = 1L; // TODO: Pegar do contexto de segurança
->>>>>>> origin/main
             
             return ResponseEntity.ok(Map.of(
                 "status", "success",

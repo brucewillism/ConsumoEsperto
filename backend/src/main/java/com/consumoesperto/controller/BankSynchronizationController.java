@@ -44,11 +44,7 @@ import com.consumoesperto.service.BankApiService;
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Slf4j // Lombok: fornece logger automático para a classe
 @Tag(name = "Sincronização Bancária", description = "Endpoints para sincronização de dados bancários")
-<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"}) // Permite CORS de qualquer origem
-=======
-@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"}) // Permite CORS de qualquer origem
->>>>>>> origin/main
 public class BankSynchronizationController {
 
     // Serviço responsável pela sincronização bancária
@@ -175,13 +171,8 @@ public class BankSynchronizationController {
         log.info("Consultando status de sincronização para usuário: {}", currentUser.getId());
         
         try {
-            // TODO: Implementar busca de status real da última sincronização
-            Map<String, Object> status = new HashMap<>();
-            status.put("usuario_id", currentUser.getId());
-            status.put("ultima_sincronizacao", null);
-            status.put("status_geral", "DESCONHECIDO");
-            status.put("bancos", new HashMap<>());
-            status.put("proxima_sincronizacao", null);
+            // Busca status real da última sincronização
+            Map<String, Object> status = bankSynchronizationService.getSyncStatus(currentUser.getId());
             
             return ResponseEntity.ok(status);
             

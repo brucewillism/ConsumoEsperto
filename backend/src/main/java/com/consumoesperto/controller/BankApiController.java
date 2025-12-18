@@ -49,11 +49,7 @@ import java.util.Objects;
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Slf4j
 @Tag(name = "APIs Bancárias", description = "Endpoints para integração com APIs bancárias")
-<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"}) // Permite CORS de qualquer origem
-=======
-@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"}) // Permite CORS de qualquer origem
->>>>>>> origin/main
 public class BankApiController {
 
     // Serviço responsável pela integração com APIs bancárias
@@ -565,7 +561,6 @@ public class BankApiController {
             }
             
             // Verificar se houve mudança no Client Secret (para Mercado Pago)
-<<<<<<< HEAD
             // Ignorar mudanças se o novo valor for placeholder
             String newClientSecret = config.getClientSecret();
             if ("YOUR_MERCADOPAGO_CLIENT_SECRET".equals(newClientSecret) || 
@@ -576,18 +571,12 @@ public class BankApiController {
             }
             
             boolean clientSecretChanged = !Objects.equals(currentConfig.getClientSecret(), newClientSecret);
-=======
-            boolean clientSecretChanged = !Objects.equals(currentConfig.getClientSecret(), config.getClientSecret());
->>>>>>> origin/main
             boolean wasInactive = !currentConfig.getAtivo();
             boolean isNowActive = config.getAtivo();
             
             // Atualizar campos
-<<<<<<< HEAD
             currentConfig.setNome(config.getNome() != null && !config.getNome().trim().isEmpty() ? 
                 config.getNome() : currentConfig.getNome()); // Manter nome atual se vazio
-=======
->>>>>>> origin/main
             currentConfig.setClientId(config.getClientId());
             currentConfig.setClientSecret(config.getClientSecret());
             currentConfig.setUserId(config.getUserId());
@@ -614,12 +603,9 @@ public class BankApiController {
             }
             
             // Garantir que AMBAS as colunas sejam preenchidas
-<<<<<<< HEAD
             if (bancoValue == null || bancoValue.trim().isEmpty()) {
                 bancoValue = "MERCADO_PAGO"; // Valor padrão
             }
-=======
->>>>>>> origin/main
             currentConfig.setBanco(bancoValue); // Coluna NOT NULL
             currentConfig.setTipoBanco(bancoValue); // Coluna nullable
             
@@ -938,11 +924,7 @@ public class BankApiController {
                 
                 // Atualizar autorização existente
                 AutorizacaoBancaria auth = authExistente.get();
-<<<<<<< HEAD
                 // NÃO atualizar access_token aqui - isso deve ser feito via OAuth2 flow
-=======
-                auth.setAccessToken(config.getClientSecret());
->>>>>>> origin/main
                 auth.setBanco(config.getBanco()); // Preencher coluna NOT NULL
                 auth.setTipoConta("CREDITO"); // Preencher coluna NOT NULL
                 auth.setDataAtualizacao(LocalDateTime.now());
@@ -959,11 +941,7 @@ public class BankApiController {
             novaAuth.setTipoBanco(config.getBanco());
             novaAuth.setBanco(config.getBanco()); // Preencher coluna NOT NULL
             novaAuth.setTipoConta("CREDITO"); // Preencher coluna NOT NULL
-<<<<<<< HEAD
             // NÃO definir access_token aqui - deve ser obtido via OAuth2 flow
-=======
-            novaAuth.setAccessToken(config.getClientSecret());
->>>>>>> origin/main
             novaAuth.setTokenType("Bearer");
             novaAuth.setScope(config.getScope() != null ? config.getScope() : "read,write");
             novaAuth.setAtivo(config.getAtivo());

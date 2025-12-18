@@ -17,11 +17,7 @@ import java.util.Map;
 @RequestMapping("/api/bank-config/stats")
 @RequiredArgsConstructor
 @Slf4j
-<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
-=======
-@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
->>>>>>> origin/main
 public class BankConfigStatsController {
 
     private final DynamicBankConfigService dynamicConfigService;

@@ -34,11 +34,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Callbacks OAuth2 Bancários", description = "Endpoints para callbacks OAuth2 dos bancos")
-<<<<<<< HEAD
 @CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"})
-=======
-@CrossOrigin(origins = {"http://localhost:4200", "https://22e294954ab2.ngrok-free.app"})
->>>>>>> origin/main
 public class BankOAuthCallbackController {
 
     private final BankApiService bankApiService;

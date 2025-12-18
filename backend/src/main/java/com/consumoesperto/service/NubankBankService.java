@@ -4,6 +4,8 @@ import com.consumoesperto.dto.*;
 import com.consumoesperto.model.AutorizacaoBancaria;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
+import com.consumoesperto.repository.AutorizacaoBancariaRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -33,9 +35,11 @@ public class NubankBankService {
     private String baseUrl;
 
     private final RestTemplate restTemplate;
+    private final AutorizacaoBancariaRepository autorizacaoBancariaRepository;
 
-    public NubankBankService(RestTemplate restTemplate) {
+    public NubankBankService(RestTemplate restTemplate, AutorizacaoBancariaRepository autorizacaoBancariaRepository) {
         this.restTemplate = restTemplate;
+        this.autorizacaoBancariaRepository = autorizacaoBancariaRepository;
     }
 
     public String generateAuthUrl(String redirectUri, String state) {
@@ -223,10 +227,41 @@ public class NubankBankService {
 
             HttpEntity<String> request = new HttpEntity<>(headers);
 
-            // TODO: Implementar chamada real para API do Nubank
-            // String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts/" + autorizacao.getAccountId() + "/invoices")
-            //         .build().toUriString();
-            // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            // Chamada real para API do Nubank - buscar faturas
+            // A API do Nubank usa o endpoint /api/bills para faturas
+            String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/api/bills")
+                    .queryParam("access_token", autorizacao.getAccessToken())
+                    .build().toUriString();
+            
+            try {
+                ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
+                
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    log.info("Faturas obtidas com sucesso da API do Nubank");
+                    return processarFaturasResposta(response.getBody());
+                }
+                
+                log.warn("API retornou status não esperado: {}", response.getStatusCode());
+            } catch (Exception apiException) {
+                log.warn("Erro ao buscar faturas do endpoint /api/bills, tentando alternativa: {}", apiException.getMessage());
+                
+                // Tentar endpoint alternativo se o principal falhar
+                try {
+                    String altUrl = UriComponentsBuilder.fromHttpUrl(baseUrl + "/api/invoices")
+                            .queryParam("access_token", autorizacao.getAccessToken())
+                            .build().toUriString();
+                    
+                    ResponseEntity<Map> altResponse = restTemplate.exchange(altUrl, HttpMethod.GET, request, Map.class);
+                    
+                    if (altResponse.getStatusCode().is2xxSuccessful() && altResponse.getBody() != null) {
+                        log.info("Faturas obtidas com sucesso usando endpoint alternativo");
+                        return processarFaturasResposta(altResponse.getBody());
+                    }
+                } catch (Exception altException) {
+                    log.warn("Endpoint alternativo também falhou: {}", altException.getMessage());
+                }
+            }
+            
             return new ArrayList<>();
             
         } catch (Exception e) {
@@ -280,14 +315,53 @@ public class NubankBankService {
 
             HttpEntity<String> request = new HttpEntity<>(headers);
 
-            // TODO: Implementar chamada real para API do Nubank
-            // String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts/" + autorizacao.getAccountId() + "/spending/category")
-            //         .build().toUriString();
-            // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-            // return processarGastosPorCategoriaResposta(response.getBody());
-
-            // Endpoint não implementado - retorna vazio
-            return new HashMap<>();
+            // Como a API do Nubank pode não ter endpoint direto de gastos por categoria,
+            // vamos calcular a partir das transações
+            try {
+                // Buscar transações primeiro
+                List<Map<String, Object>> transacoes = getTransactions(autorizacao);
+                
+                if (transacoes == null || transacoes.isEmpty()) {
+                    log.warn("Nenhuma transação encontrada para calcular gastos por categoria");
+                    return new HashMap<>();
+                }
+                
+                // Calcular gastos por categoria a partir das transações
+                Map<String, Double> gastosPorCategoria = new HashMap<>();
+                
+                for (Map<String, Object> transacao : transacoes) {
+                    String categoria = (String) transacao.getOrDefault("category", "OUTROS");
+                    Object valorObj = transacao.get("amount");
+                    
+                    if (valorObj != null) {
+                        double valor = 0.0;
+                        if (valorObj instanceof Number) {
+                            valor = ((Number) valorObj).doubleValue();
+                        } else if (valorObj instanceof String) {
+                            try {
+                                valor = Double.parseDouble((String) valorObj);
+                            } catch (NumberFormatException e) {
+                                log.warn("Valor inválido na transação: {}", valorObj);
+                                continue;
+                            }
+                        }
+                        
+                        // Considerar apenas valores negativos (gastos)
+                        if (valor < 0) {
+                            valor = Math.abs(valor); // Converter para positivo para soma
+                            gastosPorCategoria.put(categoria, 
+                                gastosPorCategoria.getOrDefault(categoria, 0.0) + valor);
+                        }
+                    }
+                }
+                
+                log.info("Gastos por categoria calculados: {} categorias encontradas", gastosPorCategoria.size());
+                return processarGastosPorCategoriaResposta(Map.of("categories", gastosPorCategoria));
+                
+            } catch (Exception e) {
+                log.error("Erro ao calcular gastos por categoria do Nubank: {}", e.getMessage(), e);
+                return new HashMap<>();
+            }
             
         } catch (Exception e) {
             log.error("Erro ao buscar gastos por categoria do Nubank: {}", e.getMessage());
@@ -342,26 +416,61 @@ public class NubankBankService {
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-            // TODO: Implementar chamada real para renovar token
-            // ResponseEntity<Map> response = restTemplate.postForEntity(
-            //         baseUrl + "/oauth/token", 
-            //         request, 
-            //         Map.class
-            // );
-            // 
-            // if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-            //     Map<String, Object> tokenData = response.getBody();
-            //     // Atualizar a autorização com o novo token
-            //     autorizacao.setAccessToken((String) tokenData.get("access_token"));
-            //     autorizacao.setRefreshToken((String) tokenData.get("refresh_token"));
-            //     autorizacao.setTokenExpiration(LocalDateTime.now().plusSeconds(
-            //             Long.parseLong(tokenData.get("expires_in").toString())
-            //     ));
-            //     return true;
-            // }
-
-            // Endpoint não implementado - retorna false
-            return false;
+            // Chamada real para renovar token do Nubank
+            try {
+                ResponseEntity<Map> response = restTemplate.postForEntity(
+                        baseUrl + "/oauth/token", 
+                        request, 
+                        Map.class
+                );
+                
+                if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                    Map<String, Object> tokenData = response.getBody();
+                    
+                    // Atualizar a autorização com o novo token
+                    String newAccessToken = (String) tokenData.get("access_token");
+                    String newRefreshToken = (String) tokenData.getOrDefault("refresh_token", autorizacao.getRefreshToken());
+                    Object expiresInObj = tokenData.get("expires_in");
+                    
+                    if (newAccessToken != null) {
+                        autorizacao.setAccessToken(newAccessToken);
+                        if (newRefreshToken != null) {
+                            autorizacao.setRefreshToken(newRefreshToken);
+                        }
+                        
+                        // Calcular nova data de expiração
+                        if (expiresInObj != null) {
+                            long expiresIn = 0;
+                            if (expiresInObj instanceof Number) {
+                                expiresIn = ((Number) expiresInObj).longValue();
+                            } else if (expiresInObj instanceof String) {
+                                expiresIn = Long.parseLong((String) expiresInObj);
+                            }
+                            
+                            if (expiresIn > 0) {
+                                autorizacao.setDataExpiracao(LocalDateTime.now().plusSeconds(expiresIn));
+                            }
+                        }
+                        
+                        // Salvar autorização atualizada no banco de dados
+                        autorizacao.setDataAtualizacao(LocalDateTime.now());
+                        autorizacaoBancariaRepository.save(autorizacao);
+                        
+                        log.info("Token renovado com sucesso para Nubank - usuário {}", autorizacao.getUsuario().getId());
+                        return true;
+                    } else {
+                        log.warn("Resposta de renovação de token não contém access_token");
+                        return false;
+                    }
+                } else {
+                    log.warn("Falha ao renovar token - status: {}", response.getStatusCode());
+                    return false;
+                }
+                
+            } catch (Exception e) {
+                log.error("Erro ao renovar token do Nubank: {}", e.getMessage(), e);
+                return false;
+            }
             
         } catch (Exception e) {
             log.error("Erro ao renovar token do Nubank: {}", e.getMessage());
