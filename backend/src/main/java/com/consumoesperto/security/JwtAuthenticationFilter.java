@@ -1,6 +1,7 @@
 package com.consumoesperto.security;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -14,6 +15,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+@Slf4j
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -25,9 +27,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         try {
             String jwt = getJwtFromRequest(request);
+            
+            log.debug("JWT Filter - Request URI: {}, JWT present: {}", request.getRequestURI(), StringUtils.hasText(jwt));
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
                 Long userId = tokenProvider.getUserIdFromJWT(jwt);
+                log.debug("JWT Filter - Valid token for user ID: {}", userId);
 
                 UserDetails userDetails = customUserDetailsService.loadUserById(userId);
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -35,12 +40,44 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                log.debug("JWT Filter - Authentication set for user: {}", userDetails.getUsername());
+            } else {
+                log.debug("JWT Filter - No valid JWT found for request: {}", request.getRequestURI());
             }
         } catch (Exception ex) {
-            logger.error("Could not set user authentication in security context", ex);
+            log.error("Could not set user authentication in security context", ex);
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+        
+        // Não aplica filtro JWT para endpoints públicos de autenticação
+        if (path.startsWith("/api/auth/") || 
+            path.startsWith("/api/oauth2/") ||
+            path.startsWith("/api/public/") ||
+            path.startsWith("/api/mercadopago/oauth/") ||
+            path.startsWith("/swagger-ui/") ||
+            path.startsWith("/v3/api-docs/") ||
+            path.startsWith("/actuator/") ||
+            path.equals("/login") || 
+            path.equals("/register") || 
+            path.equals("/dashboard") || 
+            path.equals("/transacoes") || 
+            path.equals("/cartoes") || 
+            path.equals("/faturas") || 
+            path.equals("/relatorios") || 
+            path.equals("/simulacoes") || 
+            path.equals("/bank-config") ||
+            path.equals("/error") ||
+            path.matches(".*\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$")) {
+            return true;
+        }
+        
+        return false;
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

@@ -21,7 +21,7 @@ export interface Usuario {
   nome: string;
   
   /** URL da foto de perfil do usuário (opcional) */
-  foto?: string;
+  fotoUrl?: string;
   
   /** CPF do usuário para validação e identificação fiscal */
   cpf?: string;

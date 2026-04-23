@@ -12,8 +12,8 @@ export const environment = {
   /** Indica se está em modo de produção (false para desenvolvimento) */
   production: false,
   
-  /** URL base da API backend para desenvolvimento local */
-  apiUrl: 'http://localhost:8080/api',
+  /** URL base da API backend para desenvolvimento local (via NGROK) */
+  apiUrl: 'https://79c3d0af5801.ngrok-free.app/api',
   
   /** ID do cliente Google OAuth2 para autenticação via Google
    * 

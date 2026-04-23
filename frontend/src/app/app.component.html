@@ -50,6 +50,30 @@
             <span *ngIf="!sidebarCollapsed">Simulações</span>
           </a>
         </li>
+        <li class="nav-item">
+          <a routerLink="/bank-config" routerLinkActive="active" class="nav-link">
+            <i class="fas fa-cogs"></i>
+            <span *ngIf="!sidebarCollapsed">APIs Bancárias</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a routerLink="/test-mercado-pago" routerLinkActive="active" class="nav-link">
+            <i class="fas fa-vial"></i>
+            <span *ngIf="!sidebarCollapsed">Teste MP</span>
+          </a>
+        </li>
+                <li class="nav-item">
+                  <a routerLink="/mercadopago-setup" routerLinkActive="active" class="nav-link">
+                    <i class="fas fa-shield-alt"></i>
+                    <span *ngIf="!sidebarCollapsed">Setup Seguro</span>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a routerLink="/mercadopago-auto-config" routerLinkActive="active" class="nav-link">
+                    <i class="fas fa-magic"></i>
+                    <span *ngIf="!sidebarCollapsed">Auto Config</span>
+                  </a>
+                </li>
       </ul>
     </nav>
     

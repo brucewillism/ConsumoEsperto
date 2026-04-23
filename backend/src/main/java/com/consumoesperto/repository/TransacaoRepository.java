@@ -30,6 +30,9 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     
     List<Transacao> findByUsuarioIdAndDataTransacaoBetweenOrderByDataTransacaoDesc(Long usuarioId, LocalDateTime dataInicio, LocalDateTime dataFim);
     
+    // Método de compatibilidade para código existente
+    List<Transacao> findByUsuarioIdAndDataTransacaoBetween(Long usuarioId, LocalDateTime dataInicio, LocalDateTime dataFim);
+    
     @Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
     BigDecimal sumByUsuarioIdAndTipoAndPeriodo(@Param("usuarioId") Long usuarioId, 
                                               @Param("tipoTransacao") TipoTransacao tipoTransacao,
@@ -40,4 +43,10 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     List<Object[]> findByUsuarioIdAndPeriodoGroupByCategoria(@Param("usuarioId") Long usuarioId,
                                                             @Param("dataInicio") LocalDateTime dataInicio,
                                                             @Param("dataFim") LocalDateTime dataFim);
+    
+    List<Transacao> findByUsuarioIdAndDescricaoAndDataTransacaoAndValor(Long usuarioId, String descricao, LocalDateTime dataTransacao, BigDecimal valor);
+    
+    List<Transacao> findByUsuarioIdAndDescricaoContaining(Long usuarioId, String descricao);
+    
+    int deleteByUsuarioId(Long usuarioId);
 }

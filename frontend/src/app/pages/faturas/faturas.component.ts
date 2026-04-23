@@ -92,33 +92,31 @@ export class FaturasComponent implements OnInit, OnDestroy {
   public loadData(): void {
     this.loading = true;
     
-    // Primeiro tenta carregar do backend
+    // Carrega dados do backend
     this.faturaService.getFaturasCartao()
       .pipe(
         takeUntil(this.destroy$),
         catchError(error => {
-          console.warn('Erro ao carregar do backend, usando dados mock:', error);
-          // Se falhar, usa dados mock
-          return this.faturaService.getFaturasFallback();
+          console.error('Erro ao carregar faturas do backend:', error);
+          this.snackBar.open('Erro ao carregar faturas. Verifique sua conexão.', 'Fechar', { duration: 3000 });
+          // Retorna lista vazia em caso de erro
+          return of([]);
         })
       )
       .subscribe({
         next: (faturas) => {
-          this.faturas = faturas;
+          this.faturas = faturas || [];
           this.aplicarFiltros();
           this.calcularResumos();
           this.loading = false;
         },
         error: (error) => {
           console.error('Erro ao carregar faturas:', error);
-          this.snackBar.open('Erro ao carregar faturas. Usando dados de exemplo.', 'Fechar', { duration: 3000 });
-          // Em caso de erro, carrega dados mock
-          this.faturaService.getFaturasFallback().subscribe(faturas => {
-            this.faturas = faturas;
-            this.aplicarFiltros();
-            this.calcularResumos();
-            this.loading = false;
-          });
+          this.snackBar.open('Erro ao carregar faturas. Verifique sua conexão.', 'Fechar', { duration: 3000 });
+          this.faturas = [];
+          this.aplicarFiltros();
+          this.calcularResumos();
+          this.loading = false;
         }
       });
   }

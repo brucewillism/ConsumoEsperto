@@ -11,33 +11,202 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     
     <style>
+        body {
+            background: #1a1a2e; /* Dark navy blue como na segunda imagem */
+            color: #ffffff; /* Texto branco */
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: #16213e !important; /* Dark navy blue mais claro */
+            border-bottom: 1px solid #2a2a3e;
+        }
+        
+        .navbar-brand {
+            color: #f4a261 !important; /* Laranja claro */
+        }
+        
+        .nav-link {
+            color: #e0e0e0 !important; /* Cinza claro */
+        }
+        
+        .nav-link:hover {
+            color: #f4a261 !important; /* Laranja claro no hover */
+        }
+        
+        .card {
+            background: #16213e; /* Dark navy blue mais claro */
+            border: 1px solid #2a2a3e;
+            color: #ffffff;
+        }
+        
+        .card-header {
+            background: #1a1a2e; /* Fundo escuro */
+            border-bottom: 1px solid #2a2a3e;
+            color: #ffffff;
+        }
+        
         .config-card {
             transition: transform 0.2s, box-shadow 0.2s;
+            background: #d4a574; /* Dark yellow/orange como na segunda imagem */
+            border: 2px solid #c19a6b;
         }
+        
         .config-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            background: #e6b17e; /* Ligeiramente mais claro no hover */
         }
+        
         .status-badge {
             font-size: 0.8rem;
         }
+        
         .bank-icon {
             width: 40px;
             height: 40px;
             object-fit: contain;
         }
+        
         .stats-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #f4a261 0%, #e76f51 100%); /* Gradiente laranja */
             color: white;
+            border: none;
         }
+        
         .stats-card.success {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); /* Verde azulado */
         }
+        
         .stats-card.warning {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: linear-gradient(135deg, #ff9a56 0%, #ff6b6b 100%); /* Laranja/vermelho */
         }
+        
         .stats-card.info {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Azul/roxo */
+        }
+        
+        .btn-success {
+            background: #4ecdc4; /* Verde azulado */
+            border-color: #4ecdc4;
+        }
+        
+        .btn-success:hover {
+            background: #44a08d;
+            border-color: #44a08d;
+        }
+        
+        .btn-primary {
+            background: #f4a261; /* Laranja claro */
+            border-color: #f4a261;
+        }
+        
+        .btn-primary:hover {
+            background: #e76f51;
+            border-color: #e76f51;
+        }
+        
+        .form-control, .form-select {
+            background: #1a1a2e; /* Fundo escuro */
+            border: 2px solid #2a2a3e;
+            color: #ffffff;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background: #1a1a2e;
+            border-color: #f4a261; /* Borda laranja no foco */
+            color: #ffffff;
+            box-shadow: 0 0 0 0.2rem rgba(244, 162, 97, 0.25);
+        }
+        
+        .form-control::placeholder {
+            color: #a0a0a0; /* Placeholder cinza */
+        }
+        
+        .form-label {
+            color: #ffffff; /* Label branco */
+        }
+        
+        .modal-content {
+            background: #16213e; /* Dark navy blue mais claro */
+            color: #ffffff;
+            border: 1px solid #2a2a3e;
+        }
+        
+        .modal-header {
+            background: #1a1a2e; /* Fundo escuro */
+            border-bottom: 1px solid #2a2a3e;
+        }
+        
+        .modal-footer {
+            background: #1a1a2e; /* Fundo escuro */
+            border-top: 1px solid #2a2a3e;
+        }
+        
+        .btn-close {
+            filter: invert(1); /* Ícone de fechar branco */
+        }
+        
+        .dropdown-menu {
+            background: #16213e; /* Dark navy blue mais claro */
+            border: 1px solid #2a2a3e;
+        }
+        
+        .dropdown-item {
+            color: #ffffff; /* Item branco */
+        }
+        
+        .dropdown-item:hover {
+            background: #2a2a3e; /* Fundo mais claro no hover */
+            color: #ffffff;
+        }
+        
+        .dropdown-divider {
+            border-color: #2a2a3e; /* Divisor escuro */
+        }
+        
+        .badge {
+            color: #ffffff; /* Texto do badge branco */
+        }
+        
+        .bg-secondary {
+            background: #6c757d !important; /* Cinza */
+        }
+        
+        .bg-success {
+            background: #4ecdc4 !important; /* Verde azulado */
+        }
+        
+        .bg-warning {
+            background: #ff9a56 !important; /* Laranja */
+        }
+        
+        .bg-info {
+            background: #667eea !important; /* Azul */
+        }
+        
+        .bg-danger {
+            background: #ff6b6b !important; /* Vermelho */
+        }
+        
+        .text-muted {
+            color: #b0b0b0 !important; /* Texto cinza claro */
+        }
+        
+        h2, h4, h5, h6 {
+            color: #ffffff; /* Títulos brancos */
+        }
+        
+        .text-center.py-5 {
+            color: #b0b0b0; /* Texto de carregamento cinza claro */
+        }
+        
+        .bi {
+            color: #f4a261; /* Ícones laranja claro */
+        }
+        
+        .text-muted .bi {
+            color: #b0b0b0; /* Ícones cinza para texto muted */
         }
     </style>
 </head>

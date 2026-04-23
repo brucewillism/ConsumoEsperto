@@ -4,6 +4,8 @@ import com.consumoesperto.dto.*;
 import com.consumoesperto.model.AutorizacaoBancaria;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
+import com.consumoesperto.repository.AutorizacaoBancariaRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,7 +22,6 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
 @Service
-@ConditionalOnProperty(name = "bank.api.nubank.client-id", havingValue = "nubank_dev_client_id", matchIfMissing = true)
 @Slf4j
 public class NubankBankService {
 
@@ -34,9 +35,11 @@ public class NubankBankService {
     private String baseUrl;
 
     private final RestTemplate restTemplate;
+    private final AutorizacaoBancariaRepository autorizacaoBancariaRepository;
 
-    public NubankBankService(RestTemplate restTemplate) {
+    public NubankBankService(RestTemplate restTemplate, AutorizacaoBancariaRepository autorizacaoBancariaRepository) {
         this.restTemplate = restTemplate;
+        this.autorizacaoBancariaRepository = autorizacaoBancariaRepository;
     }
 
     public String generateAuthUrl(String redirectUri, String state) {
@@ -102,14 +105,11 @@ public class NubankBankService {
 
             HttpEntity<String> request = new HttpEntity<>(headers);
 
-            // TODO: Implementar teste real de conexão
-            // String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts")
-            //         .build().toUriString();
-            // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-            // return response.getStatusCode() == HttpStatus.OK;
-
-            // Por enquanto, retorna true (simulado)
-            return true;
+            // Implementar teste real de conexão
+            String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts")
+                    .build().toUriString();
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            return response.getStatusCode() == HttpStatus.OK;
             
         } catch (Exception e) {
             log.error("Erro ao testar conexão com Nubank: {}", e.getMessage());
@@ -175,12 +175,12 @@ public class NubankBankService {
                 return processarCartoesResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedCreditCards();
+            log.warn("API retornou status não esperado: {}. Retornando lista vazia", response.getStatusCode());
+            return new ArrayList<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar cartões de crédito do Nubank: {}", e.getMessage());
-            return getSimulatedCreditCards();
+            return new ArrayList<>();
         }
     }
 
@@ -207,12 +207,12 @@ public class NubankBankService {
                 return processarSaldoResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedBalanceData();
+            log.warn("API retornou status não esperado: {}", response.getStatusCode());
+            return new HashMap<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar dados de saldo do Nubank: {}", e.getMessage());
-            return getSimulatedBalanceData();
+            return new HashMap<>();
         }
     }
 
@@ -227,18 +227,46 @@ public class NubankBankService {
 
             HttpEntity<String> request = new HttpEntity<>(headers);
 
-            // TODO: Implementar chamada real para API do Nubank
-            // String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts/" + autorizacao.getAccountId() + "/invoices")
-            //         .build().toUriString();
-            // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-            // return processarFaturasResposta(response.getBody());
-
-            // Por enquanto, retorna dados simulados
-            return getSimulatedInvoices();
+            // Chamada real para API do Nubank - buscar faturas
+            // A API do Nubank usa o endpoint /api/bills para faturas
+            String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/api/bills")
+                    .queryParam("access_token", autorizacao.getAccessToken())
+                    .build().toUriString();
+            
+            try {
+                ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, request, Map.class);
+                
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    log.info("Faturas obtidas com sucesso da API do Nubank");
+                    return processarFaturasResposta(response.getBody());
+                }
+                
+                log.warn("API retornou status não esperado: {}", response.getStatusCode());
+            } catch (Exception apiException) {
+                log.warn("Erro ao buscar faturas do endpoint /api/bills, tentando alternativa: {}", apiException.getMessage());
+                
+                // Tentar endpoint alternativo se o principal falhar
+                try {
+                    String altUrl = UriComponentsBuilder.fromHttpUrl(baseUrl + "/api/invoices")
+                            .queryParam("access_token", autorizacao.getAccessToken())
+                            .build().toUriString();
+                    
+                    ResponseEntity<Map> altResponse = restTemplate.exchange(altUrl, HttpMethod.GET, request, Map.class);
+                    
+                    if (altResponse.getStatusCode().is2xxSuccessful() && altResponse.getBody() != null) {
+                        log.info("Faturas obtidas com sucesso usando endpoint alternativo");
+                        return processarFaturasResposta(altResponse.getBody());
+                    }
+                } catch (Exception altException) {
+                    log.warn("Endpoint alternativo também falhou: {}", altException.getMessage());
+                }
+            }
+            
+            return new ArrayList<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar faturas do Nubank: {}", e.getMessage());
-            return getSimulatedInvoices();
+            return new ArrayList<>();
         }
     }
 
@@ -267,12 +295,12 @@ public class NubankBankService {
                 return processarTransacoesResposta(response.getBody());
             }
             
-            log.warn("API retornou status não esperado: {}. Usando dados simulados", response.getStatusCode());
-            return getSimulatedTransactions();
+            log.warn("API retornou status não esperado: {}", response.getStatusCode());
+            return new ArrayList<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar transações do Nubank: {}", e.getMessage());
-            return getSimulatedTransactions();
+            return new ArrayList<>();
         }
     }
 
@@ -287,18 +315,57 @@ public class NubankBankService {
 
             HttpEntity<String> request = new HttpEntity<>(headers);
 
-            // TODO: Implementar chamada real para API do Nubank
-            // String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/accounts/" + autorizacao.getAccountId() + "/spending/category")
-            //         .build().toUriString();
-            // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-            // return processarGastosPorCategoriaResposta(response.getBody());
-
-            // Por enquanto, retorna dados simulados
-            return getSimulatedSpendingByCategory();
+            // Como a API do Nubank pode não ter endpoint direto de gastos por categoria,
+            // vamos calcular a partir das transações
+            try {
+                // Buscar transações primeiro
+                List<Map<String, Object>> transacoes = getTransactions(autorizacao);
+                
+                if (transacoes == null || transacoes.isEmpty()) {
+                    log.warn("Nenhuma transação encontrada para calcular gastos por categoria");
+                    return new HashMap<>();
+                }
+                
+                // Calcular gastos por categoria a partir das transações
+                Map<String, Double> gastosPorCategoria = new HashMap<>();
+                
+                for (Map<String, Object> transacao : transacoes) {
+                    String categoria = (String) transacao.getOrDefault("category", "OUTROS");
+                    Object valorObj = transacao.get("amount");
+                    
+                    if (valorObj != null) {
+                        double valor = 0.0;
+                        if (valorObj instanceof Number) {
+                            valor = ((Number) valorObj).doubleValue();
+                        } else if (valorObj instanceof String) {
+                            try {
+                                valor = Double.parseDouble((String) valorObj);
+                            } catch (NumberFormatException e) {
+                                log.warn("Valor inválido na transação: {}", valorObj);
+                                continue;
+                            }
+                        }
+                        
+                        // Considerar apenas valores negativos (gastos)
+                        if (valor < 0) {
+                            valor = Math.abs(valor); // Converter para positivo para soma
+                            gastosPorCategoria.put(categoria, 
+                                gastosPorCategoria.getOrDefault(categoria, 0.0) + valor);
+                        }
+                    }
+                }
+                
+                log.info("Gastos por categoria calculados: {} categorias encontradas", gastosPorCategoria.size());
+                return processarGastosPorCategoriaResposta(Map.of("categories", gastosPorCategoria));
+                
+            } catch (Exception e) {
+                log.error("Erro ao calcular gastos por categoria do Nubank: {}", e.getMessage(), e);
+                return new HashMap<>();
+            }
             
         } catch (Exception e) {
             log.error("Erro ao buscar gastos por categoria do Nubank: {}", e.getMessage());
-            return getSimulatedSpendingByCategory();
+            return new HashMap<>();
         }
     }
 
@@ -319,12 +386,12 @@ public class NubankBankService {
             // ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
             // return processarAnaliseGastosResposta(response.getBody());
 
-            // Por enquanto, retorna dados simulados
-            return getSimulatedSpendingAnalysis();
+            // Endpoint não implementado - retorna vazio
+            return new HashMap<>();
             
         } catch (Exception e) {
             log.error("Erro ao buscar análise de gastos do Nubank: {}", e.getMessage());
-            return getSimulatedSpendingAnalysis();
+            return new HashMap<>();
         }
     }
 
@@ -349,26 +416,61 @@ public class NubankBankService {
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-            // TODO: Implementar chamada real para renovar token
-            // ResponseEntity<Map> response = restTemplate.postForEntity(
-            //         baseUrl + "/oauth/token", 
-            //         request, 
-            //         Map.class
-            // );
-            // 
-            // if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-            //     Map<String, Object> tokenData = response.getBody();
-            //     // Atualizar a autorização com o novo token
-            //     autorizacao.setAccessToken((String) tokenData.get("access_token"));
-            //     autorizacao.setRefreshToken((String) tokenData.get("refresh_token"));
-            //     autorizacao.setTokenExpiration(LocalDateTime.now().plusSeconds(
-            //             Long.parseLong(tokenData.get("expires_in").toString())
-            //     ));
-            //     return true;
-            // }
-
-            // Por enquanto, retorna false (simulado)
-            return false;
+            // Chamada real para renovar token do Nubank
+            try {
+                ResponseEntity<Map> response = restTemplate.postForEntity(
+                        baseUrl + "/oauth/token", 
+                        request, 
+                        Map.class
+                );
+                
+                if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                    Map<String, Object> tokenData = response.getBody();
+                    
+                    // Atualizar a autorização com o novo token
+                    String newAccessToken = (String) tokenData.get("access_token");
+                    String newRefreshToken = (String) tokenData.getOrDefault("refresh_token", autorizacao.getRefreshToken());
+                    Object expiresInObj = tokenData.get("expires_in");
+                    
+                    if (newAccessToken != null) {
+                        autorizacao.setAccessToken(newAccessToken);
+                        if (newRefreshToken != null) {
+                            autorizacao.setRefreshToken(newRefreshToken);
+                        }
+                        
+                        // Calcular nova data de expiração
+                        if (expiresInObj != null) {
+                            long expiresIn = 0;
+                            if (expiresInObj instanceof Number) {
+                                expiresIn = ((Number) expiresInObj).longValue();
+                            } else if (expiresInObj instanceof String) {
+                                expiresIn = Long.parseLong((String) expiresInObj);
+                            }
+                            
+                            if (expiresIn > 0) {
+                                autorizacao.setDataExpiracao(LocalDateTime.now().plusSeconds(expiresIn));
+                            }
+                        }
+                        
+                        // Salvar autorização atualizada no banco de dados
+                        autorizacao.setDataAtualizacao(LocalDateTime.now());
+                        autorizacaoBancariaRepository.save(autorizacao);
+                        
+                        log.info("Token renovado com sucesso para Nubank - usuário {}", autorizacao.getUsuario().getId());
+                        return true;
+                    } else {
+                        log.warn("Resposta de renovação de token não contém access_token");
+                        return false;
+                    }
+                } else {
+                    log.warn("Falha ao renovar token - status: {}", response.getStatusCode());
+                    return false;
+                }
+                
+            } catch (Exception e) {
+                log.error("Erro ao renovar token do Nubank: {}", e.getMessage(), e);
+                return false;
+            }
             
         } catch (Exception e) {
             log.error("Erro ao renovar token do Nubank: {}", e.getMessage());
@@ -395,12 +497,6 @@ public class NubankBankService {
         return cartoes;
     }
 
-    private List<Map<String, Object>> getSimulatedCreditCards() {
-        List<Map<String, Object>> cartoes = new ArrayList<>();
-        cartoes.add(Map.of("id", "1234567890123456", "number", "1234 5678 9012 3456", "holder_name", "Simulado", "limit", 10000.0, "available_limit", 8000.0));
-        cartoes.add(Map.of("id", "9876543210987654", "number", "9876 5432 1098 7654", "holder_name", "Simulado 2", "limit", 5000.0, "available_limit", 3000.0));
-        return cartoes;
-    }
 
     private Map<String, Object> processarSaldoResposta(Map<String, Object> responseBody) {
         Map<String, Object> saldo = new HashMap<>();
@@ -417,14 +513,6 @@ public class NubankBankService {
         return saldo;
     }
 
-    private Map<String, Object> getSimulatedBalanceData() {
-        Map<String, Object> saldo = new HashMap<>();
-        saldo.put("balance", 1234.56);
-        saldo.put("available_balance", 1000.0);
-        saldo.put("currency", "BRL");
-        saldo.put("last_update", LocalDateTime.now());
-        return saldo;
-    }
 
     private List<Map<String, Object>> processarFaturasResposta(Map<String, Object> responseBody) {
         List<Map<String, Object>> faturas = new ArrayList<>();
@@ -446,12 +534,6 @@ public class NubankBankService {
         return faturas;
     }
 
-    private List<Map<String, Object>> getSimulatedInvoices() {
-        List<Map<String, Object>> faturas = new ArrayList<>();
-        faturas.add(Map.of("id", "1", "number", "1", "due_date", "2023-10-20", "close_date", "2023-10-01", "total", 100.0, "minimum", 20.0, "state", "OPEN", "card_id", "1234567890123456"));
-        faturas.add(Map.of("id", "2", "number", "2", "due_date", "2023-11-20", "close_date", "2023-11-01", "total", 200.0, "minimum", 40.0, "state", "OPEN", "card_id", "9876543210987654"));
-        return faturas;
-    }
 
     private List<Map<String, Object>> processarTransacoesResposta(Map<String, Object> responseBody) {
         List<Map<String, Object>> transacoes = new ArrayList<>();
@@ -472,12 +554,6 @@ public class NubankBankService {
         return transacoes;
     }
 
-    private List<Map<String, Object>> getSimulatedTransactions() {
-        List<Map<String, Object>> transacoes = new ArrayList<>();
-        transacoes.add(Map.of("id", "1", "description", "Compra no supermercado", "amount", -50.0, "type", "DEBIT", "date", "2023-10-10", "category", "Supermercado", "account_id", "1234567890123456"));
-        transacoes.add(Map.of("id", "2", "description", "Transferência para conta", "amount", -100.0, "type", "DEBIT", "date", "2023-10-15", "category", "Transferência", "account_id", "9876543210987654"));
-        return transacoes;
-    }
 
     private Map<String, Object> processarGastosPorCategoriaResposta(Map<String, Object> responseBody) {
         Map<String, Object> gastosPorCategoria = new HashMap<>();
@@ -485,18 +561,11 @@ public class NubankBankService {
             Map<String, BigDecimal> categories = (Map<String, BigDecimal>) responseBody.get("categories");
             gastosPorCategoria.put("categories", categories);
             gastosPorCategoria.put("totalSpending", categories.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add));
-            gastosPorCategoria.put("period", "Simulado"); // Placeholder
+            gastosPorCategoria.put("period", responseBody.getOrDefault("period", "Últimos 30 dias"));
         }
         return gastosPorCategoria;
     }
 
-    private Map<String, Object> getSimulatedSpendingByCategory() {
-        Map<String, BigDecimal> gastos = new HashMap<>();
-        gastos.put("Supermercado", new BigDecimal("50.0"));
-        gastos.put("Transferência", new BigDecimal("100.0"));
-        gastos.put("Outros", new BigDecimal("50.0"));
-        return Map.of("categories", gastos, "totalSpending", gastos.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add), "period", "Simulado");
-    }
 
     private Map<String, Object> processarAnaliseGastosResposta(Map<String, Object> responseBody) {
         Map<String, Object> analiseGastos = new HashMap<>();
@@ -520,15 +589,4 @@ public class NubankBankService {
         return analiseGastos;
     }
 
-    private Map<String, Object> getSimulatedSpendingAnalysis() {
-        Map<String, Object> analiseGastos = new HashMap<>();
-        analiseGastos.put("totalSpending", new BigDecimal("1000.0"));
-        analiseGastos.put("averageDailySpending", new BigDecimal("50.0"));
-        analiseGastos.put("highestSpendingDay", LocalDate.now());
-        analiseGastos.put("highestSpendingAmount", new BigDecimal("100.0"));
-        analiseGastos.put("spendingTrend", "STABLE");
-        analiseGastos.put("budgetUtilization", BigDecimal.valueOf(75.0));
-        analiseGastos.put("recommendations", Arrays.asList("Controlar gastos - valor total alto", "Reduzir gastos diários"));
-        return analiseGastos;
-    }
 }

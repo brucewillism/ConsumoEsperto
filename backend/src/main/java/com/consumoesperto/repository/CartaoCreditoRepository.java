@@ -20,7 +20,8 @@ public interface CartaoCreditoRepository extends JpaRepository<CartaoCredito, Lo
 
     boolean existsByNumeroCartaoAndUsuarioId(String numeroCartao, Long usuarioId);
 
-    Optional<CartaoCredito> findByUsuarioAndBancoAndNumeroCartao(Long usuarioId, String banco, String numeroCartao);
+    @Query("SELECT c FROM CartaoCredito c WHERE c.usuario.id = :usuarioId AND c.banco = :banco AND c.numeroCartao = :numeroCartao")
+    Optional<CartaoCredito> findByUsuarioAndBancoAndNumeroCartao(@Param("usuarioId") Long usuarioId, @Param("banco") String banco, @Param("numeroCartao") String numeroCartao);
 
     @Query("SELECT c FROM CartaoCredito c WHERE c.usuario.id = :usuarioId AND c.ativo = true")
     List<CartaoCredito> findActiveCardsByUsuarioId(@Param("usuarioId") Long usuarioId);
@@ -39,4 +40,18 @@ public interface CartaoCreditoRepository extends JpaRepository<CartaoCredito, Lo
      * @return Cartão encontrado ou null
      */
     CartaoCredito findByUsuarioIdAndNome(Long usuarioId, String nome);
+    
+    /**
+     * Busca cartões por usuário, nome e banco
+     * 
+     * @param usuarioId ID do usuário
+     * @param nome Nome do cartão
+     * @param banco Banco do cartão
+     * @return Lista de cartões encontrados
+     */
+    List<CartaoCredito> findByUsuarioIdAndNomeAndBanco(Long usuarioId, String nome, String banco);
+    
+    int deleteByUsuarioIdAndAtivoFalse(Long usuarioId);
+    
+    int deleteByAtivoFalse();
 }

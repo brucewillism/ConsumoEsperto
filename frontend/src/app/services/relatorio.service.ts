@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment';
 
 export interface RelatorioGastos {
   categoria: string;
@@ -28,7 +29,7 @@ export interface RelatorioCartao {
   providedIn: 'root'
 })
 export class RelatorioService {
-  private readonly API_URL = 'http://localhost:8080/api/relatorios';
+  private readonly API_URL = `${environment.apiUrl}/relatorios`;
 
   constructor(
     private http: HttpClient,

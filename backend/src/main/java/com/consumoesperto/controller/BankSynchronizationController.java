@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import com.consumoesperto.service.BankApiService;
 
 /**
@@ -43,7 +44,7 @@ import com.consumoesperto.service.BankApiService;
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
 @Slf4j // Lombok: fornece logger automático para a classe
 @Tag(name = "Sincronização Bancária", description = "Endpoints para sincronização de dados bancários")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app"}) // Permite CORS de qualquer origem
 public class BankSynchronizationController {
 
     // Serviço responsável pela sincronização bancária
@@ -170,20 +171,8 @@ public class BankSynchronizationController {
         log.info("Consultando status de sincronização para usuário: {}", currentUser.getId());
         
         try {
-            // TODO: Implementar busca de status real da última sincronização
-            // Por enquanto, retorna status simulado
-            Map<String, Object> status = Map.of(
-                "usuario_id", currentUser.getId(),
-                "ultima_sincronizacao", java.time.LocalDateTime.now().minusMinutes(30),
-                "status_geral", "ATUALIZADO",
-                "bancos", Map.of(
-                    "ITAU", Map.of("status", "ATUALIZADO", "ultima_atualizacao", "2024-12-10T18:00:00"),
-                    "NUBANK", Map.of("status", "ATUALIZADO", "ultima_atualizacao", "2024-12-10T18:00:00"),
-                    "INTER", Map.of("status", "PENDENTE", "ultima_atualizacao", "2024-12-10T17:30:00"),
-                    "MERCADO_PAGO", Map.of("status", "ERRO", "ultima_atualizacao", "2024-12-10T17:00:00", "erro", "Token expirado")
-                ),
-                "proxima_sincronizacao", java.time.LocalDateTime.now().plusMinutes(30)
-            );
+            // Busca status real da última sincronização
+            Map<String, Object> status = bankSynchronizationService.getSyncStatus(currentUser.getId());
             
             return ResponseEntity.ok(status);
             
@@ -273,26 +262,13 @@ public class BankSynchronizationController {
         
         try {
             // TODO: Implementar busca de histórico real
-            // Por enquanto, retorna histórico simulado
             List<Map<String, Object>> history = new ArrayList<>();
             
-            for (int i = 0; i < Math.min(limit, 5); i++) {
-                history.add(Map.of(
-                    "id", i + 1,
-                    "timestamp", java.time.LocalDateTime.now().minusHours(i),
-                    "status", i % 3 == 0 ? "SUCESSO" : (i % 3 == 1 ? "ERRO" : "PENDENTE"),
-                    "bancos_processados", i + 1,
-                    "detalhes", i % 3 == 0 ? "Sincronização concluída com sucesso" : 
-                               (i % 3 == 1 ? "Erro na API do Itaú" : "Aguardando resposta do Inter")
-                ));
-            }
-            
-            Map<String, Object> response = Map.of(
-                "usuario_id", currentUser.getId(),
-                "total_registros", history.size(),
-                "limite_solicitado", limit,
-                "historico", history
-            );
+            Map<String, Object> response = new HashMap<>();
+            response.put("usuario_id", currentUser.getId());
+            response.put("total_registros", 0);
+            response.put("limite_solicitado", limit);
+            response.put("historico", history);
             
             return ResponseEntity.ok(response);
             

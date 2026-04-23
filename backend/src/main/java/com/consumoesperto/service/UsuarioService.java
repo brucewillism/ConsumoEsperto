@@ -1,6 +1,8 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.UsuarioDTO;
+import com.consumoesperto.exception.DataConflictException;
+import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -54,12 +56,12 @@ public class UsuarioService {
     public UsuarioDTO criarUsuario(UsuarioDTO usuarioDTO) {
         // Validação de unicidade: verifica se o username já existe
         if (usuarioRepository.existsByUsername(usuarioDTO.getUsername())) {
-            throw new RuntimeException("Username já existe");
+            throw new DataConflictException("Username já existe");
         }
 
         // Validação de unicidade: verifica se o email já está cadastrado
         if (usuarioRepository.existsByEmail(usuarioDTO.getEmail())) {
-            throw new RuntimeException("Email já existe");
+            throw new DataConflictException("Email já existe");
         }
 
         // Cria uma nova instância de usuário a partir dos dados do DTO
@@ -96,7 +98,7 @@ public class UsuarioService {
     public UsuarioDTO buscarPorId(Long id) {
         // Busca o usuário pelo ID ou lança exceção se não encontrar
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
         return converterParaDTO(usuario);
     }
 
@@ -113,7 +115,7 @@ public class UsuarioService {
     public UsuarioDTO buscarPorUsername(String username) {
         // Busca o usuário pelo username ou lança exceção se não encontrar
         Usuario usuario = usuarioRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
         return converterParaDTO(usuario);
     }
 
@@ -130,7 +132,7 @@ public class UsuarioService {
     public UsuarioDTO buscarPorEmail(String email) {
         // Busca o usuário pelo email ou lança exceção se não encontrar
         Usuario usuario = usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
         return converterParaDTO(usuario);
     }
 
@@ -167,7 +169,7 @@ public class UsuarioService {
     public UsuarioDTO atualizarUsuario(Long id, UsuarioDTO usuarioDTO) {
         // Verifica se o usuário existe antes de tentar atualizar
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
 
         // Atualiza apenas os campos permitidos (nome e email)
         usuario.setNome(usuarioDTO.getNome());
@@ -197,7 +199,7 @@ public class UsuarioService {
     public void excluirUsuario(Long id) {
         // Verifica se o usuário existe antes de tentar excluir
         if (!usuarioRepository.existsById(id)) {
-            throw new RuntimeException("Usuário não encontrado");
+            throw new ResourceNotFoundException("Usuário não encontrado");
         }
         // Remove o usuário do banco de dados
         usuarioRepository.deleteById(id);
@@ -212,7 +214,7 @@ public class UsuarioService {
      */
     public Long getUsuarioIdByUsername(String username) {
         Usuario usuario = usuarioRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
         return usuario.getId();
     }
 
@@ -225,7 +227,7 @@ public class UsuarioService {
      */
     public Usuario findById(Long id) {
         return usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
     }
 
     /**

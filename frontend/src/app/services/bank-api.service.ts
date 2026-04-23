@@ -1,6 +1,7 @@
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, of, BehaviorSubject } from 'rxjs';
+import { Injectable, Inject } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable, of, BehaviorSubject, forkJoin } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
 export interface BankData {
@@ -73,6 +74,17 @@ export class BankApiService {
   constructor(private http: HttpClient) { }
 
   /**
+   * Obtém headers de autenticação
+   */
+  private getHeaders(): HttpHeaders {
+    const token = localStorage.getItem('token');
+    return new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    });
+  }
+
+  /**
    * Observable para bancos conectados
    */
   get connectedBanks$(): Observable<BankConnection[]> {
@@ -83,7 +95,7 @@ export class BankApiService {
    * Obtém bancos conectados do usuário
    */
   getConnectedBanks(): Observable<BankConnection[]> {
-    return this.http.get<BankConnection[]>(`${this.apiUrl}/bank/connected`);
+    return this.http.get<BankConnection[]>(`${this.apiUrl}/bank/connected`, { headers: this.getHeaders() });
   }
 
   /**
@@ -118,21 +130,21 @@ export class BankApiService {
    * Obtém cartões de crédito de todos os bancos conectados
    */
   getCreditCards(): Observable<CreditCard[]> {
-    return this.http.get<CreditCard[]>(`${this.apiUrl}/bank/credit-cards`);
+    return this.http.get<CreditCard[]>(`${this.apiUrl}/bank/credit-cards`, { headers: this.getHeaders() });
   }
 
   /**
    * Obtém faturas de todos os cartões
    */
   getInvoices(): Observable<Invoice[]> {
-    return this.http.get<Invoice[]>(`${this.apiUrl}/bank/invoices`);
+    return this.http.get<Invoice[]>(`${this.apiUrl}/bank/invoices`, { headers: this.getHeaders() });
   }
 
   /**
    * Obtém saldo consolidado de todos os bancos
    */
   getConsolidatedBalance(): Observable<any> {
-    return this.http.get(`${this.apiUrl}/bank/balance/consolidated`);
+    return this.http.get(`${this.apiUrl}/bank/balance/consolidated`, { headers: this.getHeaders() });
   }
 
   /**
@@ -228,26 +240,222 @@ export class BankApiService {
   }
 
   /**
-   * Obtém total de limite de crédito
+   * Obtém total de limite de crédito de todos os cartões
    */
-  getTotalCreditLimit(): number {
-    // TODO: Implementar cálculo real baseado nos dados dos cartões
-    return 0;
+  getTotalCreditLimit(): Observable<number> {
+    return this.getCreditCards().pipe(
+      map(cards => cards.reduce((total, card) => total + (card.limit || 0), 0)),
+      catchError(() => of(0))
+    );
   }
 
   /**
-   * Obtém total de limite disponível
+   * Obtém total de limite disponível de todos os cartões
    */
-  getTotalAvailableCredit(): number {
-    // TODO: Implementar cálculo real baseado nos dados dos cartões
-    return 0;
+  getTotalAvailableCredit(): Observable<number> {
+    return this.getCreditCards().pipe(
+      map(cards => cards.reduce((total, card) => total + (card.available || 0), 0)),
+      catchError(() => of(0))
+    );
   }
 
   /**
-   * Obtém total de saldo das contas
+   * Obtém total de saldo das contas bancárias
    */
-  getTotalBalance(): number {
-    // TODO: Implementar cálculo real baseado nos dados das contas
-    return 0;
+  getTotalBalance(): Observable<number> {
+    return this.getConsolidatedBalance().pipe(
+      map(data => data?.totalBalance || 0),
+      catchError(() => of(0))
+    );
+  }
+
+  /**
+   * Obtém estatísticas consolidadas de todos os bancos
+   */
+  getConsolidatedStats(): Observable<{
+    totalCreditLimit: number;
+    totalAvailableCredit: number;
+    totalBalance: number;
+    totalCards: number;
+    connectedBanks: number;
+  }> {
+    return forkJoin({
+      creditCards: this.getCreditCards().pipe(catchError(() => of([]))),
+      balance: this.getConsolidatedBalance().pipe(catchError(() => of({ totalBalance: 0 }))),
+      connectedBanks: this.getConnectedBanks().pipe(catchError(() => of([])))
+    }).pipe(
+      map(data => {
+        const totalCreditLimit = data.creditCards.reduce((total, card) => total + (card.limit || 0), 0);
+        const totalAvailableCredit = data.creditCards.reduce((total, card) => total + (card.available || 0), 0);
+        
+        return {
+          totalCreditLimit,
+          totalAvailableCredit,
+          totalBalance: data.balance?.totalBalance || 0,
+          totalCards: data.creditCards.length,
+          connectedBanks: data.connectedBanks.length
+        };
+      }),
+      catchError(() => of({
+        totalCreditLimit: 0,
+        totalAvailableCredit: 0,
+        totalBalance: 0,
+        totalCards: 0,
+        connectedBanks: 0
+      }))
+    );
+  }
+
+  /**
+   * Salva configuração de API bancária
+   */
+  saveBankConfig(config: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/bank-api/configs`, config);
+  }
+
+  /**
+   * Atualiza configuração de API bancária existente
+   */
+  updateBankConfig(configId: number, config: any): Observable<any> {
+    return this.http.put(`${this.apiUrl}/bank-api/configs/${configId}`, config);
+  }
+
+  /**
+   * Obtém configurações bancárias do usuário
+   */
+  getBankConfigs(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/bank-api/configs`);
+  }
+
+  /**
+   * Testa a conectividade com o backend
+   */
+  testBackendConnection(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/bank-api/test`);
+  }
+
+  /**
+   * Testa a conexão de uma configuração bancária
+   */
+  testBankConnection(configId: number): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/bank-config/my-configs/${configId}/test`, {});
+  }
+
+  /**
+   * Obtém cartões de crédito reais de um banco
+   */
+  getRealCreditCards(bankType: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/bank-api/real/credit-cards/${bankType}`);
+  }
+
+  /**
+   * Obtém dados consolidados de todos os bancos
+   */
+  getConsolidatedBankData(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/bank-api/real/consolidated`);
+  }
+
+  /**
+   * Sincroniza dados reais do Mercado Pago
+   */
+  syncMercadoPagoData(): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/mercadopago/sync-data`, {});
+  }
+
+  /**
+   * Testa a API do Mercado Pago com dados completos
+   */
+  testarMercadoPago(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/teste/mercadopago/dados-brutos`);
+  }
+
+  /**
+   * Obtém status da sincronização do Mercado Pago
+   */
+  getMercadoPagoSyncStatus(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/mercadopago/sync-status`);
+  }
+
+  /**
+   * Obtém status da configuração do Mercado Pago
+   */
+  getMercadoPagoConfigStatus(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/mercadopago/config/status`);
+  }
+
+  /**
+   * Configura credenciais do Mercado Pago (versão segura individual)
+   */
+  configureMercadoPagoCredentials(credentials: {
+    clientId: string;
+    clientSecret: string;
+    userId: string;
+  }): Observable<any> {
+    return this.http.post(`${this.apiUrl}/mercadopago/configure`, credentials);
+  }
+
+  /**
+   * Configura credenciais do Mercado Pago (versão legada)
+   */
+  configureMercadoPago(config: {
+    accessToken: string;
+    publicKey: string;
+    clientId: string;
+    clientSecret: string;
+    userId?: string;
+  }): Observable<any> {
+    // Usar o endpoint padrão de configurações bancárias
+    return this.http.post(`${this.apiUrl}/bank-api/configs`, config);
+  }
+
+  /**
+   * Configura automaticamente as credenciais do Mercado Pago
+   */
+  configurarMercadoPagoAutomatico(): Observable<any> {
+    return this.http.post(`${this.apiUrl}/mercadopago/auto-config/configure`, {});
+  }
+
+  /**
+   * Verifica o status da configuração do Mercado Pago
+   */
+  verificarStatusMercadoPago(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/mercadopago/auto-config/status`);
+  }
+
+  /**
+   * Sincroniza dados reais do Mercado Pago
+   */
+  syncMercadoPagoRealData(userId: number): Observable<any> {
+    return this.http.post(`${this.apiUrl}/real-sync/mercadopago?userId=${userId}`, {});
+  }
+
+  /**
+   * Limpa categorias mock e sincroniza dados reais
+   */
+  limparESincronizarDadosReais(userId: number): Observable<any> {
+    return this.http.post(`${this.apiUrl}/real-sync/limpar-e-sincronizar?userId=${userId}`, {});
+  }
+
+  /**
+   * Testa conexão com Mercado Pago
+   */
+  testarConexaoMercadoPago(userId: number): Observable<any> {
+    return this.http.get(`${this.apiUrl}/real-sync/test-connection?userId=${userId}`);
+  }
+
+  /**
+   * Verifica e sincroniza automaticamente se necessário
+   */
+  verificarESincronizar(userId: number): Observable<any> {
+    return this.http.post(`${this.apiUrl}/real-sync/verificar-e-sincronizar?userId=${userId}`, {});
+  }
+
+  // Configuração do Mercado Pago
+  configurarMercadoPago(credentials: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/mercadopago/config/credentials`, credentials);
+  }
+
+  obterStatusMercadoPago(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/mercadopago/config/status`);
   }
 }

@@ -21,7 +21,7 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
 
     Optional<Fatura> findByCartaoCreditoIdAndNumeroFatura(Long cartaoCreditoId, String numeroFatura);
 
-    @Query("SELECT f FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.statusFatura = :status")
+    @Query("SELECT f FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.status = :status")
     List<Fatura> findByUsuarioIdAndStatus(@Param("usuarioId") Long usuarioId, @Param("status") Fatura.StatusFatura status);
 
     @Query("SELECT f FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.dataVencimento BETWEEN :dataInicio AND :dataFim")
@@ -29,9 +29,11 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
                                                         @Param("dataInicio") LocalDateTime dataInicio, 
                                                         @Param("dataFim") LocalDateTime dataFim);
 
-    @Query("SELECT SUM(f.valorFatura) FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.statusFatura = :status")
+    @Query("SELECT SUM(f.valorTotal) FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.status = :status")
     Double getTotalFaturaByUsuarioIdAndStatus(@Param("usuarioId") Long usuarioId, @Param("status") Fatura.StatusFatura status);
 
-    @Query("SELECT f FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.dataVencimento <= :dataLimite AND f.statusFatura = 'VENCIDA'")
+    @Query("SELECT f FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.dataVencimento <= :dataLimite AND f.status = 'VENCIDA'")
     List<Fatura> findVencidasByUsuarioId(@Param("usuarioId") Long usuarioId, @Param("dataLimite") LocalDateTime dataLimite);
+    
+    int deleteByCartaoCreditoUsuarioId(Long usuarioId);
 }

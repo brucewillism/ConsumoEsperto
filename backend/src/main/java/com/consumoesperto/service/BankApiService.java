@@ -132,8 +132,8 @@ public class BankApiService {
      */
     public enum BankType {
         NUBANK,        // Nubank - banco digital
-        MERCADO_PAGO,  // Mercado Pago - fintech
         ITAU,          // Itaú - banco tradicional
+        MERCADO_PAGO,  // Mercado Pago - fintech
         INTER          // Inter - banco digital
     }
 
@@ -622,7 +622,7 @@ public class BankApiService {
             List<AutorizacaoBancaria> autorizacoes = autorizacaoBancariaService.buscarAutorizacoesAtivas(userId);
             
             for (AutorizacaoBancaria autorizacao : autorizacoes) {
-                BankType bankType = mapTipoBanco(autorizacao.getTipoBanco());
+                BankType bankType = mapTipoBanco(autorizacao.getBanco());
                 
                 try {
                     // Busca dados do banco
@@ -663,40 +663,121 @@ public class BankApiService {
      */
     private boolean renovarTokenExpirado(AutorizacaoBancaria autorizacao) {
         try {
-            // Tenta renovar o token
-            if (refreshTokenIfNeeded(mapTipoBanco(autorizacao.getTipoBanco()), autorizacao.getRefreshToken())) {
-                // Se renovação for bem-sucedida, atualiza a autorização
-                // Nota: Em uma implementação real, você precisaria obter o novo token da resposta
-                log.info("Token renovado com sucesso para autorização {}", autorizacao.getId());
-                return true;
+            BankType bankType = mapTipoBanco(autorizacao.getBanco());
+            
+            // Obtém configurações do banco
+            String tokenUrl = "";
+            String clientId = "";
+            String clientSecret = "";
+
+            switch (bankType) {
+                case NUBANK:
+                    tokenUrl = nubankTokenUrl;
+                    clientId = nubankClientId;
+                    clientSecret = nubankClientSecret;
+                    break;
+                case MERCADO_PAGO:
+                    tokenUrl = mercadoPagoTokenUrl;
+                    clientId = mercadoPagoClientId;
+                    clientSecret = mercadoPagoClientSecret;
+                    break;
+                case ITAU:
+                    tokenUrl = itauTokenUrl;
+                    clientId = itauClientId;
+                    clientSecret = itauClientSecret;
+                    break;
+                case INTER:
+                    tokenUrl = interTokenUrl;
+                    clientId = interClientId;
+                    clientSecret = interClientSecret;
+                    break;
+            }
+
+            // Configura headers de autenticação
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBasicAuth(clientId, clientSecret);
+            headers.set("Content-Type", "application/x-www-form-urlencoded");
+
+            // Monta corpo da requisição para renovação
+            String body = String.format("grant_type=refresh_token&refresh_token=%s", autorizacao.getRefreshToken());
+
+            // Cria entidade HTTP
+            HttpEntity<String> request = new HttpEntity<>(body, headers);
+
+            // Envia requisição para renovar token
+            ResponseEntity<Map> response = restTemplate.exchange(tokenUrl, HttpMethod.POST, request, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> responseBody = response.getBody();
+                
+                // Extrai novos tokens da resposta
+                String newAccessToken = (String) responseBody.get("access_token");
+                String newRefreshToken = (String) responseBody.get("refresh_token");
+                Integer expiresIn = (Integer) responseBody.get("expires_in");
+                
+                if (newAccessToken != null) {
+                    // Atualiza a autorização com os novos tokens
+                    autorizacao.setAccessToken(newAccessToken);
+                    
+                    if (newRefreshToken != null) {
+                        autorizacao.setRefreshToken(newRefreshToken);
+                    }
+                    
+                    // Calcula nova data de expiração
+                    if (expiresIn != null) {
+                        LocalDateTime novaDataExpiracao = LocalDateTime.now().plusSeconds(expiresIn);
+                        autorizacao.setDataExpiracao(novaDataExpiracao);
+                    } else {
+                        // Fallback: expira em 1 hora se não informado
+                        autorizacao.setDataExpiracao(LocalDateTime.now().plusHours(1));
+                    }
+                    
+                    // Salva a autorização atualizada
+                    Map<String, Object> tokenResponse = new HashMap<>();
+                    tokenResponse.put("access_token", newAccessToken);
+                    tokenResponse.put("refresh_token", newRefreshToken);
+                    tokenResponse.put("expires_in", expiresIn);
+                    autorizacaoBancariaService.renovarToken(autorizacao, tokenResponse);
+                    
+                    log.info("✅ Token renovado com sucesso para autorização {} - banco {}", 
+                            autorizacao.getId(), bankType);
+                    return true;
+                } else {
+                    log.error("❌ Resposta de renovação não contém access_token para autorização {}", 
+                            autorizacao.getId());
+                    return false;
+                }
             } else {
-                log.error("Falha ao renovar token para autorização {}", autorizacao.getId());
+                log.error("❌ Falha na renovação de token - Status: {} para autorização {}", 
+                        response.getStatusCode(), autorizacao.getId());
                 return false;
             }
+            
         } catch (Exception e) {
-            log.error("Erro ao renovar token para autorização {}", autorizacao.getId(), e);
+            log.error("❌ Erro ao renovar token para autorização {}: {}", 
+                    autorizacao.getId(), e.getMessage(), e);
             return false;
         }
     }
 
     /**
-     * Mapeia o tipo de banco do modelo para o enum do serviço
+     * Mapeia o nome do banco do modelo para o enum do serviço
      * 
-     * @param tipoBanco Tipo do banco do modelo
+     * @param nomeBanco Nome do banco do modelo
      * @return Tipo do banco do serviço
      */
-    private BankType mapTipoBanco(AutorizacaoBancaria.TipoBanco tipoBanco) {
-        switch (tipoBanco) {
-            case NUBANK:
+    private BankType mapTipoBanco(String nomeBanco) {
+        switch (nomeBanco.toUpperCase()) {
+            case "NUBANK":
                 return BankType.NUBANK;
-            case ITAU:
+            case "ITAU":
                 return BankType.ITAU;
-            case INTER:
+            case "INTER":
                 return BankType.INTER;
-            case MERCADO_PAGO:
+            case "MERCADO_PAGO":
                 return BankType.MERCADO_PAGO;
             default:
-                throw new IllegalArgumentException("Tipo de banco não suportado: " + tipoBanco);
+                throw new IllegalArgumentException("Banco não suportado: " + nomeBanco);
         }
     }
 }

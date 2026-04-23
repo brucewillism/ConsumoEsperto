@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, map, of } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { Fatura, FaturaDTO, StatusFatura } from '../models/fatura.model';
 import { AuthService } from './auth.service';
 import { environment } from '../../environments/environment';
@@ -202,31 +202,4 @@ export class FaturaService {
     }
   }
 
-  // Métodos para fallback quando backend não estiver disponível
-  getFaturasFallback(): Observable<CreditCardInvoice[]> {
-    // Retorna dados mock quando backend não estiver disponível
-    const faturasMock: CreditCardInvoice[] = [
-      {
-        id: '1',
-        cardId: 'itau-card',
-        bankName: 'itau',
-        amount: 1250.50,
-        dueDate: new Date(2024, 1, 15),
-        closingDate: new Date(2024, 1, 5),
-        status: 'PENDING',
-        transactions: []
-      },
-      {
-        id: '2',
-        cardId: 'nubank-card',
-        bankName: 'nubank',
-        amount: 890.75,
-        dueDate: new Date(2024, 1, 20),
-        closingDate: new Date(2024, 1, 10),
-        status: 'PAID',
-        transactions: []
-      }
-    ];
-    return of(faturasMock);
-  }
 }

@@ -2,13 +2,15 @@ package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.LoginDTO;
 import com.consumoesperto.dto.UsuarioDTO;
-import com.consumoesperto.dto.GoogleLoginDTO;
+import com.consumoesperto.model.Usuario;
 import com.consumoesperto.security.JwtTokenProvider;
 import com.consumoesperto.service.UsuarioService;
 import com.consumoesperto.service.GoogleOAuth2Service;
+import com.consumoesperto.service.TokenValidationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.validation.Valid;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Controller responsável por gerenciar operações de autenticação
@@ -33,8 +36,9 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth") // Base path para todos os endpoints de autenticação
 @RequiredArgsConstructor // Lombok: gera construtor com campos final
+@Slf4j // Lombok: gera logger
 @Tag(name = "Autenticação", description = "Endpoints para autenticação e registro de usuários")
-@CrossOrigin(origins = "*") // Permite CORS de qualquer origem
+@CrossOrigin(origins = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"}) // Permite CORS do frontend e Ngrok
 public class AuthController {
 
     // Gerenciador de autenticação do Spring Security
@@ -48,6 +52,9 @@ public class AuthController {
     
     // Serviço para autenticação via Google OAuth2
     private final GoogleOAuth2Service googleOAuth2Service;
+    
+    // Serviço para validação de tokens bancários
+    private final TokenValidationService tokenValidationService;
 
     /**
      * Endpoint para realizar login de usuário
@@ -75,6 +82,20 @@ public class AuthController {
         // Gera o token JWT para o usuário autenticado
         String jwt = tokenProvider.generateToken(authentication);
 
+        // Buscar ID do usuário para validação de tokens
+        try {
+            String username = authentication.getName();
+            UsuarioDTO usuarioDTO = usuarioService.buscarPorUsername(username);
+            Long usuarioId = usuarioDTO.getId();
+            log.info("🔐 Validando tokens bancários no login para usuário: {}", usuarioId);
+            
+            // Validar e renovar tokens automaticamente
+            tokenValidationService.validarTokenNoLogin(usuarioId);
+        } catch (Exception e) {
+            log.warn("⚠️ Erro ao validar tokens no login: {}", e.getMessage());
+            // Não falhar o login por causa disso
+        }
+
         // Prepara a resposta com o token
         Map<String, String> response = new HashMap<>();
         response.put("token", jwt);
@@ -100,31 +121,6 @@ public class AuthController {
         return ResponseEntity.ok(novoUsuario);
     }
 
-    /**
-     * Endpoint para autenticação via Google OAuth2
-     * 
-     * Permite que usuários se autentiquem usando suas contas Google.
-     * Se o usuário não existir, uma nova conta é criada automaticamente.
-     * 
-     * @param googleLoginDTO DTO contendo o token do Google
-     * @return ResponseEntity com token JWT e dados do usuário
-     */
-    @PostMapping("/google")
-    @Operation(summary = "Login com Google", description = "Autentica usuário via Google OAuth2")
-    public ResponseEntity<?> googleLogin(@Valid @RequestBody GoogleLoginDTO googleLoginDTO) {
-        try {
-            // Para OAuth2 com Spring Security, a autenticação é feita automaticamente
-            // Este endpoint pode ser usado para obter informações do usuário após autenticação
-            // ou para criar/atualizar usuários no sistema local
-            
-            // Por enquanto, retorna uma mensagem informativa
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Autenticação OAuth2 configurada. Use o endpoint de login padrão após autenticação OAuth2.");
-            response.put("status", "success");
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Erro na autenticação via Google: " + e.getMessage());
-        }
-    }
+    // Nota: O endpoint /google foi movido para OAuth2Controller para evitar conflitos
+    // e centralizar toda a lógica OAuth2 em um único controller
 }

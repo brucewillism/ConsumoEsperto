@@ -1,222 +1,388 @@
+/* TEMA ESCURO PARA COMPONENTE BANK-CONFIG */
+/* Aplicando cores da segunda imagem */
+
 .bank-config-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+  max-width: 1200px !important;
+  margin: 0 auto !important;
+  padding: 20px !important;
+  background: #1a1a2e !important; /* Dark navy blue como na segunda imagem */
+  color: #ffffff !important; /* Texto branco */
+  min-height: 100vh !important;
 }
 
 .header {
-  text-align: center;
-  margin-bottom: 40px;
+  text-align: center !important;
+  margin-bottom: 40px !important;
   
   h1 {
-    color: #333;
-    margin-bottom: 10px;
-    font-size: 2.5rem;
-    font-weight: 300;
+    color: #ffffff !important; /* Título branco */
+    margin-bottom: 10px !important;
+    font-size: 2.5rem !important;
+    font-weight: 300 !important;
   }
   
   p {
-    color: #666;
-    font-size: 1.1rem;
-    margin: 0;
+    color: #e0e0e0 !important; /* Subtitle cinza claro */
+    font-size: 1.1rem !important;
+    margin: 0 !important;
   }
 }
 
 .loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 60px 20px !important;
   
   p {
-    margin-top: 20px;
-    color: #666;
-    font-size: 1.1rem;
+    margin-top: 20px !important;
+    color: #e0e0e0 !important; /* Texto cinza claro */
+    font-size: 1.1rem !important;
   }
 }
 
 .banks-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 20px;
-  margin-bottom: 40px;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)) !important;
+  gap: 20px !important;
+  margin-bottom: 40px !important;
 }
 
 .bank-card {
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+  background: #d4a574 !important; /* Dark yellow/orange como na segunda imagem */
+  border: 2px solid #c19a6b !important;
   
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+    background: #e6b17e !important; /* Ligeiramente mais claro no hover */
+  }
+
+  // Banco já configurado
+  &.configured {
+    border-left: 4px solid #4ecdc4 !important; /* Verde azulado */
+    
+    .bank-icon {
+      background-color: #4ecdc4 !important;
+    }
+  }
+
+  // Banco disponível para configuração
+  &.available {
+    border-left: 4px solid #f4a261 !important; /* Laranja claro */
+    background-color: #d4a574 !important; /* Dark yellow/orange */
+    
+    .bank-icon {
+      background-color: #f4a261 !important;
+    }
+    
+    &:hover {
+      background-color: #e6b17e !important;
+    }
   }
 }
 
 .bank-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  margin-bottom: 20px !important;
+}
+
+mat-card-header {
+  padding: 24px 24px 0 24px !important;
+  
+  h2 {
+    margin: 0 !important;
+    color: #ffffff !important; /* Título branco */
+    font-size: 1.5rem !important;
+    font-weight: 500 !important;
+  }
 }
 
 .bank-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  
-  mat-icon {
-    font-size: 28px;
-    width: 28px;
-    height: 28px;
-  }
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #ffffff !important; /* Ícone branco */
+  font-size: 24px !important;
 }
 
 .bank-info {
-  flex: 1;
+  flex: 1 !important;
   
   h3 {
-    margin: 0 0 4px 0;
-    color: #333;
-    font-size: 1.3rem;
-    font-weight: 500;
+    margin: 0 0 8px 0 !important;
+    color: #ffffff !important; /* Nome do banco branco */
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
   }
   
   p {
-    margin: 0;
-    color: #666;
-    font-size: 0.9rem;
+    margin: 0 !important;
+    color: #e0e0e0 !important; /* Descrição cinza claro */
+    font-size: 0.9rem !important;
+    line-height: 1.4 !important;
+  }
+}
+
+.bank-status {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 8px !important;
+}
+
+.status-badge {
+  padding: 6px 12px !important;
+  border-radius: 20px !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  
+  &.configured {
+    background: #2d5a2d !important; /* Verde escuro */
+    color: #a8e6a8 !important; /* Verde claro */
+    border: 1px solid #4a7c4a !important;
+  }
+  
+  &.available {
+    background: #8b4513 !important; /* Marrom escuro */
+    color: #f4a261 !important; /* Laranja claro */
+    border: 1px solid #a0522d !important;
+  }
+}
+
+.bank-actions {
+  margin-top: 20px !important;
+  display: flex !important;
+  gap: 12px !important;
+  justify-content: flex-end !important;
+}
+
+.action-btn {
+  padding: 8px 16px !important;
+  border: none !important;
+  border-radius: 6px !important;
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  
+  &.primary {
+    background: linear-gradient(135deg, #f4a261, #e76f51) !important; /* Gradiente laranja */
+    color: #ffffff !important;
+    
+    &:hover {
+      background: linear-gradient(135deg, #e76f51, #d65a45) !important;
+      transform: translateY(-1px) !important;
+      box-shadow: 0 4px 12px rgba(244, 162, 97, 0.3) !important;
+    }
+  }
+  
+  &.secondary {
+    background: linear-gradient(135deg, #6c757d, #495057) !important; /* Gradiente cinza */
+    color: #ffffff !important;
+    border: 1px solid #2a2a3e !important;
+    
+    &:hover {
+      background: linear-gradient(135deg, #495057, #343a40) !important;
+      transform: translateY(-1px) !important;
+      box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3) !important;
+    }
+  }
+  
+  &:disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
   }
 }
 
 .bank-details {
-  margin: 16px 0;
-}
-
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 0 24px 24px 24px !important;
   
-  &:last-child {
-    border-bottom: none;
-  }
-  
-  .label {
-    font-weight: 500;
-    color: #555;
-    font-size: 0.9rem;
-  }
-  
-  .value {
-    color: #333;
-    font-family: 'Courier New', monospace;
-    font-size: 0.85rem;
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .detail-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 8px 0 !important;
+    border-bottom: 1px solid #2a2a3e !important; /* Borda escura */
+    
+    &:last-child {
+      border-bottom: none !important;
+    }
+    
+    .detail-label {
+      color: #b0b0b0 !important; /* Label cinza */
+      font-size: 0.9rem !important;
+      font-weight: 500 !important;
+    }
+    
+    .detail-value {
+      color: #ffffff !important; /* Valor branco */
+      font-size: 0.9rem !important;
+      font-weight: 600 !important;
+    }
   }
 }
 
-mat-card-actions {
-  display: flex;
-  gap: 8px;
-  padding: 16px;
-  
-  button {
-    flex: 1;
-  }
-}
-
+/* Estilos para o formulário */
 .form-container {
-  max-width: 800px;
-  margin: 0 auto;
+  max-width: 900px !important;
+  margin: 0 auto !important;
+  padding: 0 20px !important;
 }
 
 .bank-form {
-  margin-top: 20px;
+  margin-top: 24px !important;
 }
 
 .form-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-mat-form-field {
-  width: 100%;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+  gap: 16px !important;
+  margin-bottom: 16px !important;
 }
 
 .actions {
-  text-align: center;
-  margin-top: 40px;
+  text-align: center !important;
+  margin-top: 40px !important;
+}
+
+/* Estilos para Material Form Fields */
+::ng-deep .mat-mdc-form-field {
+  width: 100% !important;
   
-  button {
-    padding: 12px 24px;
-    font-size: 1.1rem;
+  .mat-mdc-form-field-flex {
+    background: #1a1a2e !important; /* Fundo escuro */
+    border: 1px solid #2a2a3e !important;
+    border-radius: 8px !important;
+  }
+  
+  .mat-mdc-text-field-wrapper {
+    background: #1a1a2e !important; /* Fundo escuro */
+  }
+  
+  .mat-mdc-form-field-label {
+    color: #ffffff !important; /* Label branco */
+  }
+  
+  .mat-mdc-input-element {
+    color: #ffffff !important; /* Input branco */
+  }
+  
+  .mat-mdc-form-field-outline {
+    color: #2a2a3e !important; /* Outline escuro */
+  }
+  
+  .mat-mdc-form-field-outline-thick {
+    color: #f4a261 !important; /* Outline laranja no foco */
+  }
+  
+  .mat-mdc-form-field-subscript-wrapper {
+    color: #b0b0b0 !important; /* Texto de ajuda cinza */
+  }
+}
+
+/* Estilos para Material Select */
+::ng-deep .mat-mdc-select {
+  color: #ffffff !important; /* Texto branco */
+}
+
+::ng-deep .mat-mdc-select-arrow {
+  color: #f4a261 !important; /* Seta laranja */
+}
+
+/* Estilos para Material Options */
+::ng-deep .mat-mdc-option {
+  background: #16213e !important; /* Fundo escuro */
+  color: #ffffff !important; /* Texto branco */
+  
+  &:hover {
+    background: #2a2a3e !important; /* Fundo mais claro no hover */
+  }
+  
+  &.mat-mdc-option-active {
+    background: #f4a261 !important; /* Fundo laranja quando ativo */
+    color: #ffffff !important;
+  }
+}
+
+/* Estilos para Material Card */
+::ng-deep .mat-mdc-card {
+  background: #16213e !important; /* Dark navy blue mais claro */
+  border: 1px solid #2a2a3e !important;
+  color: #ffffff !important;
+}
+
+::ng-deep .mat-mdc-card-header {
+  background: #1a1a2e !important; /* Fundo escuro */
+  border-bottom: 1px solid #2a2a3e !important;
+}
+
+::ng-deep .mat-mdc-card-content {
+  background: #16213e !important; /* Dark navy blue mais claro */
+}
+
+::ng-deep .mat-mdc-card-actions {
+  background: #1a1a2e !important; /* Fundo escuro */
+  border-top: 1px solid #2a2a3e !important;
+}
+
+/* Estilos para Material Spinner */
+::ng-deep .mat-mdc-progress-spinner {
+  circle {
+    stroke: #f4a261 !important; /* Círculo laranja */
   }
 }
 
 // Responsividade
 @media (max-width: 768px) {
-  .bank-config-container {
-    padding: 16px;
-  }
-  
-  .header h1 {
-    font-size: 2rem;
-  }
-  
   .banks-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
   }
   
-  .form-row {
-    grid-template-columns: 1fr;
+  .bank-card {
+    margin-bottom: 16px !important;
   }
   
   .bank-header {
-    flex-direction: column;
-    text-align: center;
-    gap: 12px;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
   }
   
-  .bank-icon {
-    width: 50px;
-    height: 50px;
+  .bank-status {
+    align-items: flex-start !important;
+    margin-top: 12px !important;
+  }
+  
+  .bank-actions {
+    justify-content: stretch !important;
     
-    mat-icon {
-      font-size: 24px;
-      width: 24px;
-      height: 24px;
+    .action-btn {
+      flex: 1 !important;
+      justify-content: center !important;
     }
   }
-}
-
-// Cores específicas dos bancos
-.bank-card.mercadopago .bank-icon {
-  background-color: #009ee3 !important;
-}
-
-.bank-card.itau .bank-icon {
-  background-color: #ec7000 !important;
-}
-
-.bank-card.inter .bank-icon {
-  background-color: #ff7a00 !important;
-}
-
-.bank-card.nubank .bank-icon {
-  background-color: #8a05be !important;
+  
+  .form-row {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 // Animações
@@ -231,23 +397,47 @@ mat-form-field {
   }
 }
 
+.bank-config-container {
+  animation: fadeIn 0.5s ease-out !important;
+}
+
 .bank-card {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.6s ease-out 0.1s both !important;
 }
 
-// Estados dos botões
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+/* GARANTIR QUE O TEMA ESCURO SEJA APLICADO */
+/* Sobrescrever qualquer estilo global */
+.bank-config-container * {
+  box-sizing: border-box !important;
 }
 
-// Snackbar customizado
-::ng-deep .success-snackbar {
-  background-color: #4caf50;
-  color: white;
+/* Forçar cores específicas */
+.bank-config-container h1,
+.bank-config-container h2,
+.bank-config-container h3,
+.bank-config-container h4,
+.bank-config-container h5,
+.bank-config-container h6 {
+  color: #ffffff !important;
 }
 
-::ng-deep .error-snackbar {
-  background-color: #f44336;
-  color: white;
+.bank-config-container p {
+  color: #e0e0e0 !important;
+}
+
+.bank-config-container mat-card {
+  background: #16213e !important; /* Dark navy blue mais claro */
+  border-color: #2a2a3e !important;
+  color: #ffffff !important;
+}
+
+.bank-config-container .form-control,
+.bank-config-container .form-select {
+  background: #1a1a2e !important;
+  border-color: #2a2a3e !important;
+  color: #ffffff !important;
+}
+
+.bank-config-container .btn {
+  color: #ffffff !important;
 }
