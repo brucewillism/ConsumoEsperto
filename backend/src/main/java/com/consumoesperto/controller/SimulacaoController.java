@@ -112,4 +112,22 @@ public class SimulacaoController {
         Map<String, Object> resultado = simulacaoService.calcularEconomiaNecessaria(currentUser.getId(), valorCompra, mesesDesejados);
         return ResponseEntity.ok(resultado);
     }
+
+    @PostMapping("/investimento")
+    public ResponseEntity<Map<String, Object>> simularInvestimento(@RequestBody Map<String, Object> payload) {
+        BigDecimal valorInicial = new BigDecimal(payload.getOrDefault("valorInicial", 0).toString());
+        BigDecimal aporteMensal = new BigDecimal(payload.getOrDefault("aporteMensal", 0).toString());
+        BigDecimal taxaRetorno = new BigDecimal(payload.getOrDefault("taxaRetorno", 0).toString());
+        int periodo = Integer.parseInt(payload.getOrDefault("periodo", 1).toString());
+        return ResponseEntity.ok(simulacaoService.simularInvestimento(valorInicial, aporteMensal, taxaRetorno, periodo));
+    }
+
+    @PostMapping("/financiamento")
+    public ResponseEntity<Map<String, Object>> simularFinanciamento(@RequestBody Map<String, Object> payload) {
+        BigDecimal valorBem = new BigDecimal(payload.getOrDefault("valorBem", 0).toString());
+        BigDecimal entrada = new BigDecimal(payload.getOrDefault("entrada", 0).toString());
+        BigDecimal taxaJuros = new BigDecimal(payload.getOrDefault("taxaJuros", 0).toString());
+        int prazo = Integer.parseInt(payload.getOrDefault("prazo", 1).toString());
+        return ResponseEntity.ok(simulacaoService.simularFinanciamento(valorBem, entrada, taxaJuros, prazo));
+    }
 }

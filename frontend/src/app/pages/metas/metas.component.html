@@ -1,0 +1,146 @@
+<div class="metas-page">
+  <mat-card class="header-card">
+    <mat-card-title>Metas financeiras</mat-card-title>
+    <mat-card-subtitle>
+      Quanto tempo para comprar algo guardando até X% da sua renda média (últimos 3 meses de receitas confirmadas).
+    </mat-card-subtitle>
+    <div class="renda-banner" *ngIf="rendaInfo">
+      <span *ngIf="rendaInfo.calculadaDeLancamentos">
+        Renda mensal média estimada: <strong>{{ formatMoney(rendaInfo.rendaMensalMedia) }}</strong>
+        <span *ngIf="metas.length" class="total-pct">
+          — Metas: <strong>{{ totalPercentualComprometido }}%</strong> da renda em poupança planejada
+        </span>
+      </span>
+      <span *ngIf="!rendaInfo.calculadaDeLancamentos" class="warn">
+        Sem receitas nos últimos 3 meses — lance receitas ou use o WhatsApp para informar sua renda na simulação.
+      </span>
+    </div>
+    <div class="alerta-banner" *ngIf="alertaListagem">
+      {{ alertaListagem }}
+    </div>
+  </mat-card>
+
+  <mat-card class="sim-card">
+    <mat-card-title>Simulador</mat-card-title>
+    <mat-card-content>
+      <div class="sim-row">
+        <mat-form-field appearance="outline" class="grow">
+          <mat-label>Valor do bem (R$)</mat-label>
+          <input matInput type="number" min="1" step="0.01" [(ngModel)]="valorSimulado" (ngModelChange)="onValorSimuladoChange()" />
+        </mat-form-field>
+      </div>
+      <div class="slider-row">
+        <label>Percentual da renda: <strong>{{ percentualSimulador }}%</strong></label>
+        <mat-slider min="1" max="50" step="1" discrete [displayWith]="formatPct" showTickMarks>
+          <input matSliderThumb [(ngModel)]="percentualSimulador" (ngModelChange)="onSliderChange()" />
+        </mat-slider>
+      </div>
+      <div class="preview">
+        <p>Poupança mensal estimada: <strong>{{ formatMoney(valorPoupadoPreview) }}</strong></p>
+        <p>Prazo estimado: <strong>{{ prazoMesesPreview || '—' }}</strong> meses</p>
+        <p>Data prevista (aprox.): <strong>{{ formatDate(dataPrevista) }}</strong></p>
+        <p *ngIf="metas.length" class="hint-projecao">
+          Total com esta meta: <strong>{{ totalComprometidoProjetado }}%</strong> da renda
+        </p>
+        <div class="alerta-banner inline" *ngIf="alertaPreviewSimulador">{{ alertaPreviewSimulador }}</div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="form-card">
+    <mat-card-title>Nova meta</mat-card-title>
+    <mat-card-content>
+      <div class="form-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Descrição (ex: Geladeira)</mat-label>
+          <input matInput [(ngModel)]="novaDescricao" [disabled]="salvando" />
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Valor total (R$)</mat-label>
+          <input matInput type="number" min="0.01" step="0.01" [(ngModel)]="novaValor" [disabled]="salvando" />
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Prioridade</mat-label>
+          <mat-select [(ngModel)]="novaPrioridade" [disabled]="salvando">
+            <mat-option [value]="1">1 — Baixa</mat-option>
+            <mat-option [value]="2">2 — Moderada</mat-option>
+            <mat-option [value]="3">3 — Média</mat-option>
+            <mat-option [value]="4">4 — Alta</mat-option>
+            <mat-option [value]="5">5 — Máxima</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+      <p class="hint">O percentual usado será o do simulador acima ({{ percentualSimulador }}%).</p>
+      <button mat-raised-button color="primary" (click)="salvarMeta()" [disabled]="salvando || carregando">
+        Salvar meta
+      </button>
+    </mat-card-content>
+  </mat-card>
+
+  <h2 class="section-title">Suas metas</h2>
+  <div class="metas-grid" *ngIf="metas.length; else vazio">
+    <mat-card *ngFor="let m of metas" class="meta-card">
+      <mat-card-header>
+        <mat-card-title>{{ m.descricao }}</mat-card-title>
+        <mat-card-subtitle>
+          Prioridade {{ m.prioridade }} ({{ prioridadeLabel(m.prioridade) }}) · Criada em {{ m.dataCriacao | date:'shortDate' }}
+        </mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <p>Objetivo: <strong>{{ formatMoney(m.valorTotal) }}</strong></p>
+        <p>{{ m.percentualComprometimento }}% da renda → poupar <strong>{{ formatMoney(m.valorPoupadoMensal) }}</strong>/mês</p>
+        <p>Prazo: <strong>{{ m.prazoMeses }}</strong> meses</p>
+        <div class="bar-wrap">
+          <span>Progresso (tempo)</span>
+          <mat-progress-bar mode="determinate" [value]="m.progressPercent"></mat-progress-bar>
+          <span class="pct">{{ m.progressPercent }}%</span>
+        </div>
+      </mat-card-content>
+      <mat-card-actions align="end" class="meta-acoes">
+        <button mat-icon-button color="primary" type="button" (click)="abrirEdicao(m)" title="Editar" [disabled]="salvando || carregando">
+          <mat-icon>edit</mat-icon>
+        </button>
+        <button mat-icon-button color="warn" type="button" (click)="excluir(m.id)" title="Apagar" [disabled]="salvando || carregando">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </mat-card-actions>
+    </mat-card>
+  </div>
+  <ng-template #vazio>
+    <p class="empty" *ngIf="!carregando">Nenhuma meta cadastrada ainda.</p>
+  </ng-template>
+</div>
+
+<ng-template #editMetaTpl>
+  <h2 mat-dialog-title>Editar meta</h2>
+  <mat-dialog-content class="edit-meta-content">
+    <mat-form-field appearance="outline" class="fullw">
+      <mat-label>Descrição</mat-label>
+      <input matInput [(ngModel)]="editDescricao" [disabled]="salvando" />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="fullw">
+      <mat-label>Valor total (R$)</mat-label>
+      <input matInput type="number" min="0.01" step="0.01" [(ngModel)]="editValor" [disabled]="salvando" />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="fullw">
+      <mat-label>% da renda</mat-label>
+      <input matInput type="number" min="1" max="100" step="0.5" [(ngModel)]="editPercentual" [disabled]="salvando" />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="fullw">
+      <mat-label>Prioridade</mat-label>
+      <mat-select [(ngModel)]="editPrioridade" [disabled]="salvando">
+        <mat-option [value]="1">1 — Baixa</mat-option>
+        <mat-option [value]="2">2 — Moderada</mat-option>
+        <mat-option [value]="3">3 — Média</mat-option>
+        <mat-option [value]="4">4 — Alta</mat-option>
+        <mat-option [value]="5">5 — Máxima</mat-option>
+      </mat-select>
+    </mat-form-field>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
+    <button mat-raised-button color="primary" (click)="confirmarEdicaoMeta()" [disabled]="salvando">
+      Guardar
+    </button>
+  </mat-dialog-actions>
+</ng-template>

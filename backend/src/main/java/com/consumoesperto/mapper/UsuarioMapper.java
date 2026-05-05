@@ -32,7 +32,6 @@ public interface UsuarioMapper {
     @Mapping(target = "transacoes", ignore = true) // Relacionamentos são gerenciados separadamente
     @Mapping(target = "categorias", ignore = true)
     @Mapping(target = "cartoesCredito", ignore = true)
-    @Mapping(target = "bankApiConfigs", ignore = true)
     @Mapping(target = "comprasParceladas", ignore = true)
     Usuario toEntity(UsuarioDTO usuarioDTO);
 
@@ -46,7 +45,6 @@ public interface UsuarioMapper {
     @Mapping(target = "transacoes", ignore = true)
     @Mapping(target = "categorias", ignore = true)
     @Mapping(target = "cartoesCredito", ignore = true)
-    @Mapping(target = "bankApiConfigs", ignore = true)
     @Mapping(target = "comprasParceladas", ignore = true)
     void updateEntity(@MappingTarget Usuario usuario, UsuarioDTO usuarioDTO);
 

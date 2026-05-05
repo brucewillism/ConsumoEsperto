@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { catchError } from 'rxjs/operators';
 import { throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
+import { ToastService } from '../services/toast.service';
 
 /**
  * Interceptor HTTP para autenticação JWT (Angular 17+)
@@ -19,21 +20,10 @@ import { AuthService } from '../services/auth.service';
 export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
   const authService = inject(AuthService);
   const router = inject(Router);
+  const toastService = inject(ToastService);
 
   // Obtém o token JWT atual
   const token = authService.getToken();
-  
-  // Debug: log da requisição e token
-  console.log(`[AuthInterceptor] Interceptando requisição para: ${request.url}`);
-  console.log(`[AuthInterceptor] Método HTTP: ${request.method}`);
-  console.log(`[AuthInterceptor] Token disponível: ${token ? 'SIM' : 'NÃO'}`);
-  
-  // Log detalhado apenas para requisições de login
-  if (request.url.includes('/auth/google') || request.url.includes('/oauth2/google')) {
-    console.log(`[AuthInterceptor] 🔐 Requisição de login Google detectada`);
-    console.log(`[AuthInterceptor] URL completa: ${request.url}`);
-    console.log(`[AuthInterceptor] Headers da requisição:`, request.headers.keys());
-  }
   
   // Se há um token válido, adiciona ao header Authorization
   if (token) {
@@ -43,8 +33,6 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
         'ngrok-skip-browser-warning': 'true'
       }
     });
-    console.log(`[AuthInterceptor] Token adicionado ao header: Bearer ${token.substring(0, 20)}...`);
-    console.log(`[AuthInterceptor] Headers após modificação:`, request.headers);
   } else {
     // Adiciona header do ngrok mesmo sem token
     request = request.clone({
@@ -54,7 +42,6 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
         'Accept': 'application/json'
       }
     });
-    console.warn(`[AuthInterceptor] Nenhum token encontrado para requisição: ${request.url}`);
   }
   
   // SEMPRE adiciona header do ngrok para todas as requisições
@@ -69,13 +56,9 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
   // Processa a requisição e trata erros de autenticação
   return next(request).pipe(
     catchError((error: HttpErrorResponse) => {
-      console.error(`[AuthInterceptor] Erro na requisição ${request.url}:`, error);
-      console.error(`[AuthInterceptor] Status do erro: ${error.status}`);
-      console.error(`[AuthInterceptor] Mensagem do erro: ${error.message}`);
-      
       // Se receber 401 (Unauthorized), o token pode ter expirado
       if (error.status === 401) {
-        console.warn('[AuthInterceptor] Token JWT expirado ou inválido. Redirecionando para login...');
+        toastService.warning('Sua sessão expirou. Faça login novamente.');
         
         // Limpa dados de autenticação
         authService.logout();
@@ -84,6 +67,17 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
         router.navigate(['/login']);
       }
       
+      const isHandledByComponent =
+        request.url.includes('/usuarios/perfil') ||
+        request.url.includes('/usuarios/whatsapp/vincular') ||
+        request.url.includes('/usuarios/whatsapp/desvincular') ||
+        request.url.includes('/auth/google') ||
+        request.url.includes('/notificacoes');
+
+      if (error.status !== 401 && !isHandledByComponent) {
+        toastService.error('Erro na operação. Tente novamente.');
+      }
+
       // Propaga o erro para ser tratado pelos componentes
       return throwError(() => error);
     })

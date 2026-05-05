@@ -12,6 +12,8 @@ import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.model.Usuario;
 
 import javax.crypto.SecretKey;
+import javax.annotation.PostConstruct;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
@@ -33,7 +35,10 @@ public class JwtTokenProvider {
      * Chave secreta para assinar e verificar tokens JWT
      * Gerada automaticamente para garantir força criptográfica adequada
      */
-    private final SecretKey jwtSecret;
+    private SecretKey jwtSecret;
+
+    @Value("${jwt.secret}")
+    private String jwtSecretConfig;
 
     /**
      * Tempo de expiração do token JWT em milissegundos
@@ -48,13 +53,10 @@ public class JwtTokenProvider {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
-    /**
-     * Construtor que gera automaticamente uma chave forte para HS512
-     */
-    public JwtTokenProvider() {
-        // Gera uma chave secreta forte automaticamente para o algoritmo HS512
-        // Isso garante que a chave tenha pelo menos 512 bits conforme RFC 7518
-        this.jwtSecret = Keys.secretKeyFor(SignatureAlgorithm.HS512);
+    @PostConstruct
+    public void init() {
+        // Usa chave fixa vinda da configuracao para manter tokens validos entre reinicios
+        this.jwtSecret = Keys.hmacShaKeyFor(jwtSecretConfig.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

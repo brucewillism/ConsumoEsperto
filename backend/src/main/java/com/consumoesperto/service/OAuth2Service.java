@@ -13,6 +13,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
@@ -36,7 +38,6 @@ public class OAuth2Service {
     private final UsuarioRepository usuarioRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final RestTemplate restTemplate;
-    private final AutoTokenSyncService autoTokenSyncService;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
@@ -44,10 +45,14 @@ public class OAuth2Service {
     @Value("${spring.security.oauth2.client.registration.google.client-secret}")
     private String googleClientSecret;
 
+    @Value("${oauth2.google.redirect-uri:http://localhost:4200/login}")
+    private String googleRedirectUri;
+
     /**
      * URL da API do Google para obter informações do usuário
      */
     private static final String GOOGLE_USER_INFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
+    private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
     /**
      * Processa autenticação OAuth2 com Google
@@ -71,22 +76,18 @@ public class OAuth2Service {
             String jwtToken = jwtTokenProvider.generateToken(usuario.getUsername());
             log.info("🎫 Token JWT gerado com sucesso");
 
-            // 4. Verificar e sincronizar tokens bancários automaticamente
-            try {
-                log.info("🔄 Verificando tokens bancários automaticamente...");
-                autoTokenSyncService.verificarESincronizarTokens(usuario.getId());
-            } catch (Exception e) {
-                log.warn("⚠️ Erro ao verificar tokens bancários: {}", e.getMessage());
-                // Não falhar o login por causa disso
-            }
-
-            // 5. Construir resposta
+            // 4. Construir resposta
             return buildAuthResponse(jwtToken, usuario);
 
         } catch (Exception e) {
             log.error("❌ Erro ao processar OAuth2: {}", e.getMessage(), e);
             throw new RuntimeException("Falha na autenticação OAuth2", e);
         }
+    }
+
+    public AuthResponse processGoogleOAuth2ByAuthorizationCode(String authorizationCode) {
+        String accessToken = exchangeAuthorizationCodeForAccessToken(authorizationCode);
+        return processGoogleOAuth2(accessToken);
     }
 
     /**
@@ -107,7 +108,7 @@ public class OAuth2Service {
             );
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                GoogleUserInfo userInfo = response.getBody();
+                GoogleUserInfo userInfo = java.util.Objects.requireNonNull(response.getBody());
                 userInfo.setAccess_token(accessToken);
                 return userInfo;
             } else {
@@ -117,6 +118,41 @@ public class OAuth2Service {
         } catch (Exception e) {
             log.error("❌ Erro ao obter informações do Google: {}", e.getMessage());
             throw new RuntimeException("Não foi possível obter informações do usuário do Google", e);
+        }
+    }
+
+    private String exchangeAuthorizationCodeForAccessToken(String authorizationCode) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/x-www-form-urlencoded");
+
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add("code", authorizationCode);
+            form.add("client_id", googleClientId);
+            form.add("client_secret", googleClientSecret);
+            form.add("redirect_uri", googleRedirectUri);
+            form.add("grant_type", "authorization_code");
+
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(form, headers);
+            ResponseEntity<String> response = restTemplate.exchange(
+                GOOGLE_TOKEN_URL,
+                HttpMethod.POST,
+                request,
+                String.class
+            );
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new RuntimeException("Falha ao trocar código por access token");
+            }
+
+            com.fasterxml.jackson.databind.JsonNode json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.getBody());
+            String accessToken = json.path("access_token").asText("");
+            if (accessToken.isBlank()) {
+                throw new RuntimeException("Access token não retornado pelo Google");
+            }
+            return accessToken;
+        } catch (Exception e) {
+            throw new RuntimeException("Não foi possível trocar o código OAuth2 por token", e);
         }
     }
 

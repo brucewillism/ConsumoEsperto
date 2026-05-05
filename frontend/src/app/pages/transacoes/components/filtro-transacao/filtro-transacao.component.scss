@@ -1,0 +1,22 @@
+.filtros-card {
+  margin-bottom: 16px;
+}
+
+.filtros-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: center;
+}
+
+@media (max-width: 1024px) {
+  .filtros-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .filtros-row {
+    grid-template-columns: 1fr;
+  }
+}

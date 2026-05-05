@@ -4,7 +4,7 @@ import { Observable, map } from 'rxjs';
 import { Fatura, FaturaDTO, StatusFatura } from '../models/fatura.model';
 import { AuthService } from './auth.service';
 import { environment } from '../../environments/environment';
-import { CreditCardInvoice } from './bank-api.service';
+import { CreditCardInvoice } from '../models/credit-card-invoice.model';
 
 @Injectable({
   providedIn: 'root'
@@ -63,7 +63,7 @@ export class FaturaService {
   }
 
   getFaturasPorPeriodo(dataInicio: string, dataFim: string): Observable<Fatura[]> {
-    return this.http.get<FaturaDTO[]>(`${this.API_URL}/periodo?inicio=${dataInicio}&fim=${dataFim}`, { headers: this.getHeaders() })
+    return this.http.get<FaturaDTO[]>(`${this.API_URL}/periodo?dataInicio=${dataInicio}&dataFim=${dataFim}`, { headers: this.getHeaders() })
       .pipe(map(dtos => dtos.map(dto => this.converterParaModelo(dto))));
   }
 
@@ -118,6 +118,8 @@ export class FaturaService {
       statusFatura: fatura.statusFatura || this.converterStatus(fatura.status),
       numeroFatura: fatura.numeroFatura,
       cartaoCreditoId: fatura.cartaoCreditoId,
+      nomeCartao: fatura.bankName,
+      banco: fatura.bankName,
       dataCriacao: fatura.dataCriacao,
       dataAtualizacao: fatura.dataAtualizacao
     };
@@ -136,6 +138,7 @@ export class FaturaService {
       cartaoCreditoId: dto.cartaoCreditoId,
       dataCriacao: dto.dataCriacao,
       dataAtualizacao: dto.dataAtualizacao,
+      bankName: dto.banco || dto.nomeCartao || 'Banco',
       
       // Propriedades de compatibilidade
       valor: dto.valorFatura,
@@ -150,7 +153,7 @@ export class FaturaService {
     return {
       id: fatura.id?.toString() || '',
       cardId: fatura.cartaoCreditoId?.toString() || '',
-      bankName: fatura.bankName || 'Banco',
+      bankName: fatura.bankName || fatura.nomeCartao || fatura.banco || 'Banco',
       amount: fatura.valorFatura || fatura.valor || 0,
       dueDate: fatura.dataVencimento || fatura.dueDate || new Date(),
       closingDate: fatura.dataFechamento || fatura.closingDate || new Date(),
@@ -166,6 +169,7 @@ export class FaturaService {
       dataVencimento: fatura.dueDate,
       dataFechamento: fatura.closingDate,
       statusFatura: this.converterStatusDeCreditCard(fatura.status),
+      cartaoCreditoId: fatura.cardId ? Number(fatura.cardId) : undefined,
       bankName: fatura.bankName,
       amount: fatura.amount,
       dueDate: fatura.dueDate,
@@ -180,24 +184,27 @@ export class FaturaService {
         case 'PENDING': return StatusFatura.ABERTA;
         case 'PAID': return StatusFatura.PAGA;
         case 'OVERDUE': return StatusFatura.VENCIDA;
+        case 'PREVISTA': return StatusFatura.PREVISTA;
         default: return StatusFatura.ABERTA;
       }
     }
     return StatusFatura.ABERTA;
   }
 
-  private converterStatusParaCreditCard(status: StatusFatura): 'PENDING' | 'PAID' | 'OVERDUE' {
+  private converterStatusParaCreditCard(status: StatusFatura): 'PENDING' | 'PAID' | 'OVERDUE' | 'PREVISTA' {
     switch (status) {
       case StatusFatura.PAGA: return 'PAID';
       case StatusFatura.VENCIDA: return 'OVERDUE';
+      case StatusFatura.PREVISTA: return 'PREVISTA';
       default: return 'PENDING';
     }
   }
 
-  private converterStatusDeCreditCard(status: 'PENDING' | 'PAID' | 'OVERDUE'): StatusFatura {
+  private converterStatusDeCreditCard(status: 'PENDING' | 'PAID' | 'OVERDUE' | 'PREVISTA'): StatusFatura {
     switch (status) {
       case 'PAID': return StatusFatura.PAGA;
       case 'OVERDUE': return StatusFatura.VENCIDA;
+      case 'PREVISTA': return StatusFatura.PREVISTA;
       default: return StatusFatura.ABERTA;
     }
   }

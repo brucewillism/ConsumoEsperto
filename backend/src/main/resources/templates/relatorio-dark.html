@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="'Relatório ' + ${mesAnoLabel}">Relatório</title>
+    <style type="text/css">
+        @page {
+            margin: 0;
+            size: A4;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 28px 32px 48px 32px;
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+            font-size: 11px;
+            line-height: 1.45;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .brand {
+            font-size: 13px;
+            font-weight: 700;
+            color: #10b981;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        h1 {
+            margin: 0 0 4px 0;
+            font-size: 22px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+        .sub {
+            color: #94a3b8;
+            font-size: 11px;
+            margin-bottom: 20px;
+        }
+        .mono {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            letter-spacing: -0.02em;
+        }
+        .cards {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 10px 0;
+            margin-bottom: 22px;
+        }
+        .card {
+            background-color: #1e293b;
+            border-radius: 8px;
+            padding: 14px 16px;
+            vertical-align: top;
+            width: 33%;
+            border: 1px solid #334155;
+        }
+        .card-label {
+            color: #94a3b8;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+        }
+        .card-value {
+            color: #f8fafc;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .card-value.positive { color: #10b981; }
+        .card-value.negative { color: #f59e0b; }
+        h2 {
+            margin: 22px 0 10px 0;
+            font-size: 12px;
+            font-weight: 700;
+            color: #e2e8f0;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 6px;
+        }
+        .insight-box {
+            background-color: #1e293b;
+            border-left: 4px solid #10b981;
+            padding: 12px 14px;
+            margin: 14px 0 18px 0;
+            border-radius: 0 8px 8px 0;
+            color: #cbd5e1;
+            font-size: 10px;
+        }
+        .insight-label {
+            color: #10b981;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 6px;
+        }
+        table.data {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+        }
+        table.data th {
+            text-align: left;
+            padding: 8px 6px;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #94a3b8;
+            border-bottom: 1px solid #334155;
+        }
+        table.data td {
+            padding: 10px 6px;
+            vertical-align: middle;
+            border-bottom: 1px solid #1e293b;
+        }
+        .bar-track {
+            height: 8px;
+            background-color: #334155;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 6px;
+            max-width: 180px;
+        }
+        .bar-fill {
+            height: 8px;
+            border-radius: 4px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 8px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .badge-ok { background-color: #064e3b; color: #10b981; }
+        .badge-warn { background-color: #7c2d12; color: #f59e0b; }
+        .footer-cmd {
+            margin-top: 32px;
+            padding-top: 14px;
+            border-top: 1px dashed #334155;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 9px;
+            color: #10b981;
+        }
+        .footer-cmd .prompt { color: #94a3b8; }
+        .footer-note {
+            margin-top: 6px;
+            font-size: 8px;
+            color: #64748b;
+            font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+<div class="brand">ConsumoEsperto</div>
+<h1>Relatório mensal</h1>
+<div class="sub"><span th:text="${mesAnoLabel}">Mês</span> · <span th:text="${usuarioNome}">Nome</span></div>
+
+<table class="cards" role="presentation">
+    <tr>
+        <td class="card">
+            <div class="card-label">Total gasto</div>
+            <div class="card-value mono" th:text="${totalGasto}">R$ 0</div>
+        </td>
+        <td class="card">
+            <div class="card-label">Fluxo total</div>
+            <div class="card-value mono" th:classappend="${fluxoNegativo} ? ' negative' : ' positive'" th:text="${fluxoTotal}">R$ 0</div>
+        </td>
+        <td class="card">
+            <div class="card-label">Economia realizada</div>
+            <div class="card-value mono positive" th:text="${economiaRealizada}">R$ 0</div>
+        </td>
+    </tr>
+</table>
+
+<h2 th:if="${temRenda}">Renda líquida configurada</h2>
+<table class="data" th:if="${temRenda}">
+    <thead>
+    <tr>
+        <th>Salário bruto</th>
+        <th>Total descontos</th>
+        <th>Líquido (referência)</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td class="mono" th:text="${rendaBruto}">—</td>
+        <td class="mono" th:text="${rendaDescontos}">—</td>
+        <td class="mono" style="color:#10b981" th:text="${rendaLiquido}">—</td>
+    </tr>
+    </tbody>
+</table>
+
+<table class="cards" role="presentation" style="margin-top:14px">
+    <tr>
+        <td class="card" colspan="3">
+            <div class="card-label">Saldo real (receitas confirmadas − despesas confirmadas)</div>
+            <div class="card-value mono" th:classappend="${saldoRealNegativo} ? ' negative' : ' positive'" th:text="${saldoReal}">R$ 0</div>
+        </td>
+    </tr>
+</table>
+
+<table class="cards" role="presentation" style="margin-top:10px">
+    <tr>
+        <td class="card" colspan="3">
+            <div class="card-label">Comprometimento de renda futura</div>
+            <div class="card-value mono" style="color:#fbbf24" th:text="${comprometimentoRendaFutura}">R$ 0</div>
+            <div class="sub" style="margin-top:6px;margin-bottom:0">Soma das parcelas de cartão confirmadas em faturas com vencimento após este mês (ainda não pagas).</div>
+        </td>
+    </tr>
+</table>
+
+<div class="insight-box">
+    <div class="insight-label">IA Insight</div>
+    <div th:text="${iaInsight}">—</div>
+</div>
+
+<h2>Categorias · progresso vs. meta de referência</h2>
+<table class="data">
+    <thead>
+    <tr>
+        <th>Categoria</th>
+        <th>Gasto</th>
+        <th>Meta ref.</th>
+        <th>Progresso</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="c : ${categorias}">
+        <td th:text="${c.nome}">—</td>
+        <td class="mono" th:text="${c.gastoFmt}">R$ 0</td>
+        <td class="mono" th:text="${c.metaFmt}">R$ 0</td>
+        <td>
+            <div class="bar-track">
+                <div class="bar-fill" th:style="|width: ${c.barPct}%; background-color: ${c.excedeuMeta ? '#f59e0b' : '#10b981'};|"></div>
+            </div>
+        </td>
+    </tr>
+    </tbody>
+</table>
+
+<h2>Metas configuradas</h2>
+<table class="data">
+    <thead>
+    <tr>
+        <th>Meta</th>
+        <th>Valor objetivo</th>
+        <th>Poupança / mês</th>
+        <th>Estado</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="m : ${metas}">
+        <td th:text="${m.descricao}">—</td>
+        <td class="mono" th:text="${m.valorObjetivoFmt}">R$ 0</td>
+        <td class="mono" th:text="${m.poupancaFmt}">R$ 0</td>
+        <td>
+            <span class="badge" th:classappend="${m.alerta} ? ' badge-warn' : ' badge-ok'" th:text="${m.indicador}">—</span>
+        </td>
+    </tr>
+    </tbody>
+</table>
+
+<div class="footer-cmd">
+    <span class="prompt">ia_insight@consumo_esperto:~$</span> relatorio_export --mes=<span th:text="${mesNum}">1</span> --ano=<span th:text="${anoNum}">2026</span> --status=ok · <span th:text="${geradoEm}">data</span>
+    <div class="footer-note">Documento gerado em memória. Dados exclusivos do titular — multitenancy ativo.</div>
+</div>
+</body>
+</html>

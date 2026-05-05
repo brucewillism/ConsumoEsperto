@@ -1,0 +1,39 @@
+<div class="whatsapp-config-container">
+  <div class="card">
+    <h1>WhatsApp</h1>
+    <p class="subtitle">Vincule o número com o qual envia mensagens ao bot. A IA (Groq) é configurada no servidor pelo administrador.</p>
+
+    <div class="status-box" [class.linked]="!!numeroAtual">
+      <strong>Status:</strong>
+      <span *ngIf="numeroAtual; else semVinculo">Vinculado: {{ numeroAtual }}</span>
+      <ng-template #semVinculo>Sem número vinculado.</ng-template>
+    </div>
+
+    <label for="whatsappNumero">Número WhatsApp (formato internacional)</label>
+    <input
+      id="whatsappNumero"
+      type="text"
+      [(ngModel)]="numeroWhatsapp"
+      placeholder="+5511999999999"
+      [disabled]="carregando"
+    />
+
+    <div class="actions">
+      <button class="btn primary" (click)="vincular()" [disabled]="carregando">
+        {{ numeroAtual ? 'Atualizar vínculo' : 'Vincular número' }}
+      </button>
+      <button class="btn danger" (click)="desvincular()" [disabled]="carregando || !numeroAtual">
+        Desvincular
+      </button>
+    </div>
+
+    <div class="tips">
+      <h3>Dicas</h3>
+      <ul>
+        <li>Use o mesmo número que envia mensagens para o bot (texto ou voz).</li>
+        <li>Formato recomendado: +55 DDD número.</li>
+        <li>Vários utilizadores podem partilhar a mesma instância Evolution: o sistema identifica cada um pelo número vinculado.</li>
+      </ul>
+    </div>
+  </div>
+</div>

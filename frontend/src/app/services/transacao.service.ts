@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Transacao } from '../models/transacao.model';
+import { ModoParcelamentoDelete, Transacao } from '../models/transacao.model';
 import { AuthService } from './auth.service';
 import { environment } from '../../environments/environment';
 
@@ -20,6 +20,148 @@ import { environment } from '../../environments/environment';
   providedIn: 'root' // Singleton disponível em toda a aplicação
 })
 export class TransacaoService {
+
+  public static readonly TIPOS_TRANSACAO = ['RECEITA', 'DESPESA'] as const;
+
+  /** yyyy-MM-dd no calendário local (alinha com o backend /periodo). */
+  static toYmdLocal(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  private ymdLocal(d: Date): { y: number; m: number; d: number } {
+    return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+  }
+
+  /** Comparação só por dia civil (ignora hora), evita cortes por fuso em filtros de mês. */
+  private cmpYmd(
+    a: { y: number; m: number; d: number },
+    b: { y: number; m: number; d: number }
+  ): number {
+    if (a.y !== b.y) {
+      return a.y - b.y;
+    }
+    if (a.m !== b.m) {
+      return a.m - b.m;
+    }
+    return a.d - b.d;
+  }
+
+  public filtrarTransacoes(
+    transacoes: Transacao[],
+    filtros: TransacaoFiltros
+  ): Transacao[] {
+    return transacoes.filter((transacao) => {
+      if (filtros.tipo && transacao.tipoTransacao !== filtros.tipo) {
+        return false;
+      }
+
+      const dataTransacao = this.normalizarData(
+        transacao.dataTransacao ?? transacao.data ?? transacao.dataCriacao
+      );
+      if (!dataTransacao) {
+        return false;
+      }
+
+      const tymd = this.ymdLocal(dataTransacao);
+
+      if (filtros.dataInicio) {
+        const iymd = this.ymdLocal(new Date(filtros.dataInicio));
+        if (this.cmpYmd(tymd, iymd) < 0) {
+          return false;
+        }
+      }
+
+      if (filtros.dataFim) {
+        const fymd = this.ymdLocal(new Date(filtros.dataFim));
+        if (this.cmpYmd(tymd, fymd) > 0) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }
+
+  public ordenarTransacoes(
+    transacoes: Transacao[],
+    ordenacao: OrdenacaoTransacao
+  ): Transacao[] {
+    if (!ordenacao.active || !ordenacao.direction) {
+      return [...transacoes];
+    }
+
+    const isAsc = ordenacao.direction === 'asc';
+    return [...transacoes].sort((a, b) => {
+      switch (ordenacao.active) {
+        case 'descricao':
+          return this.comparar((a.descricao || '').toLowerCase(), (b.descricao || '').toLowerCase(), isAsc);
+        case 'valor':
+          return this.comparar(Number(a.valor || 0), Number(b.valor || 0), isAsc);
+        case 'data':
+          return this.comparar(
+            this.normalizarData(a.dataTransacao ?? a.data)?.getTime() || 0,
+            this.normalizarData(b.dataTransacao ?? b.data)?.getTime() || 0,
+            isAsc
+          );
+        default:
+          return 0;
+      }
+    });
+  }
+
+  public paginarTransacoes(
+    transacoes: Transacao[],
+    paginaAtual: number,
+    tamanhoPagina: number
+  ): Transacao[] {
+    const inicio = paginaAtual * tamanhoPagina;
+    return transacoes.slice(inicio, inicio + tamanhoPagina);
+  }
+
+  private normalizarData(
+    data: Date | string | number[] | undefined | null
+  ): Date | null {
+    if (data == null) {
+      return null;
+    }
+    if (data instanceof Date) {
+      return Number.isNaN(data.getTime()) ? null : data;
+    }
+    if (Array.isArray(data) && data.length >= 3) {
+      const y = Number(data[0]);
+      const mo = Number(data[1]);
+      const da = Number(data[2]);
+      const h = data[3] != null ? Number(data[3]) : 0;
+      const mi = data[4] != null ? Number(data[4]) : 0;
+      const s = data[5] != null ? Number(data[5]) : 0;
+      if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(da)) {
+        return null;
+      }
+      const t = new Date(y, mo - 1, da, h, mi, s);
+      return Number.isNaN(t.getTime()) ? null : t;
+    }
+    if (typeof data === 'string') {
+      const s = data.trim();
+      if (!s) {
+        return null;
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [y, m, d] = s.split('-').map(Number);
+        const t = new Date(y, m - 1, d, 12, 0, 0, 0);
+        return Number.isNaN(t.getTime()) ? null : t;
+      }
+      const t = new Date(s);
+      return Number.isNaN(t.getTime()) ? null : t;
+    }
+    return null;
+  }
+
+  private comparar(a: string | number, b: string | number, isAsc: boolean): number {
+    return (a < b ? -1 : a > b ? 1 : 0) * (isAsc ? 1 : -1);
+  }
   
   // URL base da API de transações no backend
   private readonly API_URL = `${environment.apiUrl}/transacoes`;
@@ -104,6 +246,17 @@ export class TransacaoService {
   }
 
   /**
+   * Confirma rapidamente uma transação pendente de conferência (PATCH).
+   */
+  confirmarTransacao(id: number): Observable<Transacao> {
+    return this.http.patch<Transacao>(
+      `${this.API_URL}/${id}/status-conferencia`,
+      { statusConferencia: 'CONFIRMADA' },
+      { headers: this.getHeaders() }
+    );
+  }
+
+  /**
    * Remove uma transação do sistema
    * 
    * Exclui permanentemente uma transação através de uma
@@ -112,8 +265,11 @@ export class TransacaoService {
    * @param id ID da transação a ser excluída
    * @returns Observable vazio indicando sucesso
    */
-  deletarTransacao(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.API_URL}/${id}`, { headers: this.getHeaders() });
+  deletarTransacao(id: number, modoParcelamento?: ModoParcelamentoDelete): Observable<void> {
+    const url = modoParcelamento
+      ? `${this.API_URL}/${id}?modoParcelamento=${encodeURIComponent(modoParcelamento)}`
+      : `${this.API_URL}/${id}`;
+    return this.http.delete<void>(url, { headers: this.getHeaders() });
   }
 
   /**
@@ -127,14 +283,12 @@ export class TransacaoService {
    * @returns Observable com lista de transações no período
    */
   buscarPorPeriodo(dataInicio: Date, dataFim: Date): Observable<Transacao[]> {
-    // Converte as datas para formato ISO string para envio ao backend
-    const params = {
-      dataInicio: dataInicio.toISOString(),
-      dataFim: dataFim.toISOString()
-    };
-    return this.http.get<Transacao[]>(`${this.API_URL}/periodo`, { 
+    const params = new HttpParams()
+      .set('dataInicio', TransacaoService.toYmdLocal(dataInicio))
+      .set('dataFim', TransacaoService.toYmdLocal(dataFim));
+    return this.http.get<Transacao[]>(`${this.API_URL}/periodo`, {
       headers: this.getHeaders(),
-      params: params // Parâmetros de query string
+      params
     });
   }
 
@@ -152,18 +306,14 @@ export class TransacaoService {
   }
 
   /**
-   * Busca transações por período usando strings de data
-   * 
-   * Versão alternativa do método buscarPorPeriodo que aceita
-   * strings de data diretamente. Útil para integração com
-   * componentes de calendário.
-   * 
-   * @param dataInicio String da data de início (formato ISO)
-   * @param dataFim String da data de fim (formato ISO)
-   * @returns Observable com lista de transações no período
+   * Busca transações por período (datas inclusive, calendário local).
+   *
+   * @param dataInicio yyyy-MM-dd (início do intervalo)
+   * @param dataFim yyyy-MM-dd (fim do intervalo)
    */
   getTransacoesPorPeriodo(dataInicio: string, dataFim: string): Observable<Transacao[]> {
-    return this.http.get<Transacao[]>(`${this.API_URL}/periodo?inicio=${dataInicio}&fim=${dataFim}`, { headers: this.getHeaders() });
+    const params = new HttpParams().set('dataInicio', dataInicio).set('dataFim', dataFim);
+    return this.http.get<Transacao[]>(`${this.API_URL}/periodo`, { headers: this.getHeaders(), params });
   }
 
   /**
@@ -189,4 +339,15 @@ export class TransacaoService {
   obterResumoDoMesAtual(): Observable<any> {
     return this.http.get<any>(`${this.API_URL}/resumo-mes-atual`, { headers: this.getHeaders() });
   }
+}
+
+export interface TransacaoFiltros {
+  tipo?: 'RECEITA' | 'DESPESA' | '';
+  dataInicio?: Date | null;
+  dataFim?: Date | null;
+}
+
+export interface OrdenacaoTransacao {
+  active: string;
+  direction: 'asc' | 'desc' | '';
 }

@@ -1,14 +1,24 @@
 package com.consumoesperto.controller;
 
 import com.consumoesperto.security.UserPrincipal;
+import com.consumoesperto.service.ReportService;
 import com.consumoesperto.service.RelatorioFinanceiroService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.Map;
 
 /**
@@ -38,6 +48,7 @@ public class RelatorioController {
 
     // Serviço responsável pela geração de relatórios financeiros
     private final RelatorioFinanceiroService relatorioService;
+    private final ReportService reportService;
 
     /**
      * Gera relatório financeiro mensal do usuário
@@ -61,6 +72,26 @@ public class RelatorioController {
         // Gera relatório mensal através do serviço
         Map<String, Object> relatorio = relatorioService.gerarRelatorioMensal(currentUser.getId(), ano, mes);
         return ResponseEntity.ok(relatorio);
+    }
+
+    /**
+     * Descarrega o relatório mensal em PDF (gerado em memória; não é guardado em disco no servidor).
+     */
+    @GetMapping(value = "/mensal.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @Operation(summary = "Relatório mensal em PDF", description = "Gera PDF com resumo do mês (transações confirmadas e metas)")
+    public ResponseEntity<byte[]> relatorioMensalPdf(
+            @RequestParam int ano,
+            @RequestParam int mes,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        return reportService.gerarRelatorioMensal(currentUser.getId(), mes, ano)
+            .map(g -> {
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentDisposition(
+                    ContentDisposition.attachment().filename(g.nomeArquivo()).build()
+                );
+                return ResponseEntity.ok().headers(headers).body(g.bytes());
+            })
+            .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }
 
     /**
@@ -127,5 +158,44 @@ public class RelatorioController {
         // Gera relatório por categoria através do serviço
         Map<String, Object> relatorio = relatorioService.gerarRelatorioPorCategoria(currentUser.getId(), ano, mes);
         return ResponseEntity.ok(relatorio);
+    }
+
+    @GetMapping("/categoria/mes-atual")
+    @Operation(summary = "Despesas por categoria do mês atual", description = "Retorna o somatório de despesas agrupado por categoria no mês atual")
+    public ResponseEntity<Map<String, Object>> despesasPorCategoriaMesAtual(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        Map<String, Object> relatorio = relatorioService.gerarDespesasPorCategoriaMesAtual(currentUser.getId());
+        return ResponseEntity.ok(relatorio);
+    }
+
+    @GetMapping(value = "/exportar-ir", produces = "text/csv;charset=UTF-8")
+    @Operation(summary = "Exportar CSV para IR", description = "Despesas confirmadas do ano-calendário (padrão: ano anterior), agrupadas por categoria e CNPJ")
+    public void exportarIr(
+            @RequestParam(required = false) Integer ano,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletResponse response) throws IOException {
+        int anoIr = ano != null ? ano : LocalDate.now().getYear() - 1;
+        String filename = "consumo-esperto-ir-" + anoIr + ".csv";
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("text/csv;charset=UTF-8");
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
+
+        try (PrintWriter writer = response.getWriter()) {
+            relatorioService.escreverCsvIr(currentUser.getId(), anoIr, writer);
+        }
+    }
+
+    @GetMapping(value = "/exportar-ir.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @Operation(summary = "Exportar PDF para IR", description = "Despesas confirmadas do ano-calendário (padrão: ano anterior), por categoria e CNPJ — mesmo critério do CSV")
+    public ResponseEntity<byte[]> exportarIrPdf(
+            @RequestParam(required = false) Integer ano,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        int anoIr = ano != null ? ano : LocalDate.now().getYear() - 1;
+        ReportService.RelatorioPdf pdf = reportService.gerarRelatorioIrPdf(currentUser.getId(), anoIr);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentDisposition(
+            ContentDisposition.attachment().filename(pdf.nomeArquivo()).build()
+        );
+        return ResponseEntity.ok().headers(headers).body(pdf.bytes());
     }
 }

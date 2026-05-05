@@ -29,25 +29,12 @@
         <resilience4j.version>1.7.0</resilience4j.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <flyway.version>9.22.3</flyway.version>
-        <spring-cloud.version>2021.0.8</spring-cloud.version>
 
         <!-- plugins -->
         <maven.enforcer.version>1.4.1</maven.enforcer.version>
         <owasp.depcheck.version>8.4.2</owasp.depcheck.version>
         <maven.surefire.version>2.22.2</maven.surefire.version>
     </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-dependencies</artifactId>
-                <version>${spring-cloud.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <!-- Core Spring -->
@@ -70,6 +57,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
 
         <!-- OAuth2 / JWT -->
@@ -105,12 +96,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
-        </dependency>
-
-        <!-- OpenFeign para integrações bancárias declarativas -->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
 
         <!-- Banco de dados -->
@@ -190,6 +175,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
             <optional>true</optional>
+        </dependency>
+
+        <!-- HTML → PDF (Flying Saucer + OpenPDF) -->
+        <dependency>
+            <groupId>org.xhtmlrenderer</groupId>
+            <artifactId>flying-saucer-pdf-openpdf</artifactId>
+            <version>9.3.0</version>
         </dependency>
 
         <!-- Apache HttpClient para configuração SSL personalizada -->
@@ -313,7 +305,6 @@
                 </configuration>
             </plugin>
 
-            <!-- Plugin Docker removido por solicitação do usuário -->
         </plugins>
     </build>
 

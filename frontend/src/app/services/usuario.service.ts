@@ -31,13 +31,19 @@ export class UsuarioService {
     return this.http.delete(`${this.apiUrl}/conta`);
   }
 
-  // Método para buscar usuário por ID (para administradores)
   getUsuarioPorId(id: number): Observable<Usuario> {
     return this.http.get<Usuario>(`${this.apiUrl}/${id}`);
   }
 
-  // Método para listar todos os usuários (para administradores)
   getUsuarios(): Observable<Usuario[]> {
     return this.http.get<Usuario[]>(this.apiUrl);
+  }
+
+  vincularWhatsapp(numero: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/whatsapp/vincular`, { numero });
+  }
+
+  desvincularWhatsapp(): Observable<any> {
+    return this.http.post(`${this.apiUrl}/whatsapp/desvincular`, {});
   }
 }

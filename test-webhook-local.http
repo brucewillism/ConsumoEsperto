@@ -1,0 +1,51 @@
+@baseUrl = http://localhost:8080
+
+### Smoke test 1 - Texto (messages.upsert)
+POST {{baseUrl}}/api/public/evolution/webhook
+Content-Type: application/json
+
+{
+  "event": "messages.upsert",
+  "instance": "ConsumoEsperto",
+  "data": {
+    "key": {
+      "remoteJid": "5511999999999@s.whatsapp.net",
+      "fromMe": false,
+      "id": "MSG-TXT-001"
+    },
+    "message": {
+      "conversation": "Teste de despesa 32,90 mercado"
+    },
+    "messageTimestamp": 1714469100,
+    "pushName": "Teste Local"
+  },
+  "sender": "5511999999999",
+  "date_time": "2026-04-30T12:00:00.000Z"
+}
+
+### Smoke test 2 - Imagem com Base64 ficticio (OCR)
+POST {{baseUrl}}/api/public/evolution/webhook
+Content-Type: application/json
+
+{
+  "event": "messages.upsert",
+  "instance": "ConsumoEsperto",
+  "data": {
+    "key": {
+      "remoteJid": "5511999999999@s.whatsapp.net",
+      "fromMe": false,
+      "id": "MSG-IMG-001"
+    },
+    "message": {
+      "imageMessage": {
+        "mimetype": "image/jpeg",
+        "caption": "cupom fiscal",
+        "base64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBAQEA8PDw8PDw8PDw8QDw8PDw8PFREWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OFxAQFy0dHR0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAgMBIgACEQEDEQH/xAAXAAEBAQEAAAAAAAAAAAAAAAAAAQID/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAER/9oADAMBAAIQAxAAAAG5mAAAAAAAAP/EABYQAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAQABBQKcP//EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAwEBPwGn/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAECAQE/AYn/xAAWEAEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQEABj8Cw//EABkQAQACAwAAAAAAAAAAAAAAAAEAESExQf/aAAgBAQABPyHB6E4m7//aAAwDAQACAAMAAAAQ8//EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAwEBPxC0/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAECAQE/EMr/xAAaEAACAwEBAAAAAAAAAAAAAAABEQAhMUFx/9oACAEBAAE/EF2hCOzYmQm3s2p2S2G4mS9Bqz//2Q=="
+      }
+    },
+    "messageTimestamp": 1714469200,
+    "pushName": "Teste OCR"
+  },
+  "sender": "5511999999999",
+  "date_time": "2026-04-30T12:01:00.000Z"
+}

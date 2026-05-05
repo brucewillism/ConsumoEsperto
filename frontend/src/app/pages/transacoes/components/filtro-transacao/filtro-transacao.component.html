@@ -1,0 +1,46 @@
+<mat-card class="filtros-card">
+  <mat-card-content>
+    <div class="filtros-row">
+      <mat-form-field appearance="outline">
+        <mat-label>Tipo</mat-label>
+        <mat-select
+          [ngModel]="filtroTipo"
+          (ngModelChange)="filtroTipoChange.emit($event)"
+          [disabled]="disabled">
+          <mat-option value="">Todos</mat-option>
+          <mat-option value="RECEITA">Receitas</mat-option>
+          <mat-option value="DESPESA">Despesas</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Data Início</mat-label>
+        <input
+          matInput
+          [matDatepicker]="dataInicioPicker"
+          [ngModel]="filtroDataInicio"
+          (ngModelChange)="filtroDataInicioChange.emit($event)"
+          [disabled]="disabled">
+        <mat-datepicker-toggle matSuffix [for]="dataInicioPicker"></mat-datepicker-toggle>
+        <mat-datepicker #dataInicioPicker></mat-datepicker>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Data Fim</mat-label>
+        <input
+          matInput
+          [matDatepicker]="dataFimPicker"
+          [ngModel]="filtroDataFim"
+          (ngModelChange)="filtroDataFimChange.emit($event)"
+          [disabled]="disabled">
+        <mat-datepicker-toggle matSuffix [for]="dataFimPicker"></mat-datepicker-toggle>
+        <mat-datepicker #dataFimPicker></mat-datepicker>
+      </mat-form-field>
+
+      <button mat-stroked-button type="button" (click)="limparFiltros.emit()" [disabled]="disabled">
+        <mat-icon>clear_all</mat-icon>
+        Limpar
+      </button>
+    </div>
+  </mat-card-content>
+</mat-card>

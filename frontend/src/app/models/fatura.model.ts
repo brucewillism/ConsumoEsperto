@@ -57,6 +57,8 @@ export interface Fatura {
   
   /** Nome do banco emissor (alias para compatibilidade) */
   bankName?: string;
+  nomeCartao?: string;
+  banco?: string;
   
   /** Valor da fatura (alias para compatibilidade) */
   amount?: number;
@@ -94,7 +96,10 @@ export enum StatusFatura {
   PENDENTE = 'PENDENTE',
   
   /** Fatura com pagamento parcial */
-  PARCIALMENTE_PAGA = 'PARCIALMENTE_PAGA'
+  PARCIALMENTE_PAGA = 'PARCIALMENTE_PAGA',
+
+  /** Ciclo futuro (projeção de parcelas) */
+  PREVISTA = 'PREVISTA'
 }
 
 /**
@@ -133,6 +138,8 @@ export interface FaturaDTO {
   
   /** ID do cartão de crédito associado à fatura */
   cartaoCreditoId?: number;
+  nomeCartao?: string;
+  banco?: string;
   
   /** Data de criação do registro no sistema */
   dataCriacao?: Date;

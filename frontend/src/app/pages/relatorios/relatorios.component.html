@@ -1,0 +1,234 @@
+<div class="relatorios-container">
+  <!-- Filtros -->
+  <mat-card class="filtros-card">
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon class="title-icon">filter_list</mat-icon>
+        Filtros do Relatório
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="formFiltros" (ngSubmit)="gerarRelatorio()">
+        <div class="filtros-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Período</mat-label>
+            <mat-select formControlName="periodo">
+              <mat-option value="mesAtual">📅 Mês atual (calendário)</mat-option>
+              <mat-option value="7">📅 Últimos 7 dias</mat-option>
+              <mat-option value="30">📅 Últimos 30 dias</mat-option>
+              <mat-option value="90">📅 Últimos 90 dias</mat-option>
+              <mat-option value="365">📅 Último ano</mat-option>
+              <mat-option value="custom">📅 Personalizado</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" *ngIf="formFiltros.get('periodo')?.value === 'custom'">
+            <mat-label>Data Início</mat-label>
+            <input matInput [matDatepicker]="pickerInicio" formControlName="dataInicio" placeholder="dd/mm/aaaa" />
+            <mat-datepicker-toggle matSuffix [for]="pickerInicio"></mat-datepicker-toggle>
+            <mat-datepicker #pickerInicio></mat-datepicker>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" *ngIf="formFiltros.get('periodo')?.value === 'custom'">
+            <mat-label>Data Fim</mat-label>
+            <input matInput [matDatepicker]="pickerFim" formControlName="dataFim" placeholder="dd/mm/aaaa" />
+            <mat-datepicker-toggle matSuffix [for]="pickerFim"></mat-datepicker-toggle>
+            <mat-datepicker #pickerFim></mat-datepicker>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Tipo de Transação</mat-label>
+            <mat-select formControlName="tipoTransacao">
+              <mat-option value="">💰 Todos</mat-option>
+              <mat-option value="RECEITA">📈 Receitas</mat-option>
+              <mat-option value="DESPESA">📉 Despesas</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Cartão de Crédito</mat-label>
+            <mat-select formControlName="cartaoId">
+              <mat-option value="">💳 Todos</mat-option>
+              <mat-option *ngFor="let cartao of cartoes" [value]="cartao.id">💳 {{ cartao.nome }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <button mat-raised-button color="primary" type="submit" [disabled]="carregando || (isLoading$ | async)">
+            <mat-icon>refresh</mat-icon>
+            {{ carregando ? 'Gerando...' : 'Gerar Relatório' }}
+          </button>
+          <button
+            mat-stroked-button
+            color="accent"
+            type="button"
+            [disabled]="exportandoIr || (isLoading$ | async)"
+            (click)="baixarRelatorioIr()">
+            <mat-icon>picture_as_pdf</mat-icon>
+            {{ exportandoIr ? 'Gerando PDF...' : 'Gerar Relatório para IR (PDF)' }}
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Resumo Geral -->
+  <div class="resumo-grid" *ngIf="!carregando && dadosCarregados">
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="resumo-item">
+          <div class="resumo-icon resumo-icon--receita">📈</div>
+          <span class="label">Total Receitas</span>
+          <span class="valor positivo">R$ {{ resumo.totalReceitas | number:'1.2-2' }}</span>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="resumo-item">
+          <div class="resumo-icon resumo-icon--despesa">📉</div>
+          <span class="label">Total Despesas</span>
+          <span class="valor negativo">R$ {{ resumo.totalDespesas | number:'1.2-2' }}</span>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="resumo-item">
+          <div class="resumo-icon" [class.resumo-icon--positivo]="resumo.saldo >= 0" [class.resumo-icon--negativo]="resumo.saldo < 0">
+            {{ resumo.saldo >= 0 ? '💰' : '⚠️' }}
+          </div>
+          <span class="label">Saldo</span>
+          <span class="valor" [class.positivo]="resumo.saldo >= 0" [class.negativo]="resumo.saldo < 0">
+            R$ {{ resumo.saldo | number:'1.2-2' }}
+          </span>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="resumo-card">
+      <mat-card-content>
+        <div class="resumo-item">
+          <div class="resumo-icon resumo-icon--info">📊</div>
+          <span class="label">Total Transações</span>
+          <span class="valor">{{ resumo.totalTransacoes }}</span>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Tabs de Relatórios -->
+  <mat-card *ngIf="!carregando && dadosCarregados">
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon class="title-icon">analytics</mat-icon>
+        Análises e Gráficos
+      </mat-card-title>
+    </mat-card-header>
+    <mat-tab-group>
+      <mat-tab label="📊 Receitas vs Despesas">
+        <div class="chart-container">
+          <div class="chart-placeholder">
+            <div class="chart-placeholder__icon" aria-hidden="true">📈</div>
+            <p class="chart-placeholder__title">Gráfico de Pizza</p>
+            <p class="chart-placeholder__sub">Comparativo entre receitas e despesas</p>
+          </div>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="📅 Evolução Temporal">
+        <div class="chart-container">
+          <div class="chart-placeholder">
+            <div class="chart-placeholder__icon" aria-hidden="true">📊</div>
+            <p class="chart-placeholder__title">Gráfico de Linha</p>
+            <p class="chart-placeholder__sub">Evolução financeira ao longo do tempo</p>
+          </div>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="🏷️ Por Categoria">
+        <div class="chart-container">
+          <div class="chart-placeholder">
+            <div class="chart-placeholder__icon" aria-hidden="true">📊</div>
+            <p class="chart-placeholder__title">Gráfico de Barras</p>
+            <p class="chart-placeholder__sub">Distribuição por categorias de gastos</p>
+          </div>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="💳 Por Cartão">
+        <div class="chart-container">
+          <div class="chart-placeholder">
+            <div class="chart-placeholder__icon" aria-hidden="true">📊</div>
+            <p class="chart-placeholder__title">Gráfico de Rosca</p>
+            <p class="chart-placeholder__sub">Distribuição por cartões de crédito</p>
+          </div>
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </mat-card>
+
+  <!-- Tabela de Transações -->
+  <mat-card *ngIf="!carregando && dadosCarregados">
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon class="title-icon">receipt</mat-icon>
+        Transações do Período
+      </mat-card-title>
+      <mat-card-subtitle>
+        <mat-icon class="subtitle-icon">info</mat-icon>
+        {{ transacoes.length }} transações encontradas
+      </mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="table-container">
+        <table class="transacoes-table">
+          <thead>
+            <tr>
+              <th>📅 Data</th>
+              <th>📝 Descrição</th>
+              <th>🏷️ Categoria</th>
+              <th>💳 Cartão</th>
+              <th>💰 Tipo</th>
+              <th>💵 Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let transacao of transacoes.slice(0, 20)">
+              <td>{{ (transacao.dataTransacao ?? transacao.data) | date:'dd/MM/yyyy' }}</td>
+              <td class="td-ellipsis" [title]="descricaoRelatorio(transacao)">{{ descricaoRelatorio(transacao) }}</td>
+              <td class="td-categoria" [title]="categoriaRotulo(transacao)">
+                <mat-chip [color]="transacao.tipoTransacao === 'RECEITA' ? 'primary' : 'accent'" selected class="categoria-chip">
+                  {{ categoriaRotulo(transacao) }}
+                </mat-chip>
+              </td>
+              <td class="td-cartao" [title]="getNomeCartao(transacao.cartaoCreditoId)">{{ getNomeCartao(transacao.cartaoCreditoId) }}</td>
+              <td>
+                <mat-chip [color]="transacao.tipoTransacao === 'RECEITA' ? 'primary' : 'warn'" selected>
+                  {{ transacao.tipoTransacao === 'RECEITA' ? 'Receita' : 'Despesa' }}
+                </mat-chip>
+              </td>
+              <td class="td-moeda" [class.positivo]="transacao.tipoTransacao === 'RECEITA'" [class.negativo]="transacao.tipoTransacao === 'DESPESA'">
+                <span class="valor-com-icone-juros">
+                  R$ {{ transacao.valor | number:'1.2-2' }}
+                  <mat-icon
+                    *ngIf="mostrarBadgeJurosRelatorio(transacao)"
+                    class="icone-juros-relatorio"
+                    [matTooltip]="tooltipJurosTransacao"
+                    matTooltipShowDelay="200"
+                    aria-label="Compra com juros">warning</mat-icon>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <div class="loading-container" *ngIf="carregando">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Gerando relatório...</p>
+  </div>
+</div>

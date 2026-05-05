@@ -37,6 +37,9 @@ export interface Usuario {
   
   /** Número de telefone para contato */
   telefone?: string;
+
+  /** Numero de WhatsApp vinculado em formato internacional */
+  whatsappNumero?: string;
   
   /** Endereço residencial completo */
   endereco?: string;

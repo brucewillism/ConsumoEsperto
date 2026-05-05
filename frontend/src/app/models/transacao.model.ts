@@ -48,7 +48,34 @@ export interface Transacao {
   
   /** ID do cartão de crédito associado (opcional) */
   cartaoCreditoId?: number;
+
+  /** Conferência (ex.: lançamentos via OCR/WhatsApp) */
+  statusConferencia?: StatusConferencia;
+
+  /** CNPJ do estabelecimento (14 dígitos), quando disponível */
+  cnpj?: string;
+
+  /** Parcelamento inteligente: mesmo UUID em todas as parcelas do grupo */
+  grupoParcelaId?: string;
+
+  /** Índice da parcela (1..N) */
+  parcelaAtual?: number;
+
+  /** Total de parcelas do grupo */
+  totalParcelas?: number;
+
+  /** Preço à vista / valor de referência (ex.: relatório de juros) */
+  valorReal?: number;
+
+  /** Total de juros do parcelamento (metadado, ex. na 1ª parcela) */
+  valorComJuros?: number;
 }
+
+/**
+ * Query opcional em DELETE /api/transacoes/{id}.
+ * O backend também aceita legado UM | FUTURAS | TUDO.
+ */
+export type ModoParcelamentoDelete = 'UNICA' | 'ESTA_E_PROXIMAS' | 'TODAS';
 
 /**
  * Enum que define os tipos possíveis de transação
@@ -62,4 +89,9 @@ export enum TipoTransacao {
   
   /** Saída de dinheiro */
   DESPESA = 'DESPESA'
+}
+
+export enum StatusConferencia {
+  CONFIRMADA = 'CONFIRMADA',
+  PENDENTE = 'PENDENTE'
 }

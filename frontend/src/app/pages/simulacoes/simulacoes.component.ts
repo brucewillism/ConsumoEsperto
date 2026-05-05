@@ -16,8 +16,6 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatExpansionModule } from '@angular/material/expansion';
 
 import { SimulacaoService } from '../../services/simulacao.service';
-import { CartaoCreditoService } from '../../services/cartao-credito.service';
-import { CartaoCredito } from '../../models/cartao-credito.model';
 
 @Component({
   selector: 'app-simulacoes',
@@ -50,7 +48,7 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
 
       <mat-tab-group>
         <!-- Simulação de Cartão de Crédito -->
-        <mat-tab label="Cartão de Crédito">
+        <mat-tab label="Cartão de Crédito" *ngIf="false">
           <div class="tab-content">
             <mat-card>
               <mat-card-header>
@@ -372,6 +370,9 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
   styles: [`
     .simulacoes-container {
       padding: 20px;
+      max-width: 1100px;
+      margin: 0 auto;
+      color: var(--text-primary);
     }
 
     .tab-content {
@@ -380,7 +381,7 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
 
     .form-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 16px;
       margin-bottom: 16px;
     }
@@ -395,12 +396,12 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
     }
 
     .resultado-simulacao {
-      margin-top: 30px;
+      margin-top: 28px;
     }
 
     .resultado-simulacao h3 {
       margin: 20px 0;
-      color: #333;
+      color: var(--text-primary);
     }
 
     .resultado-grid {
@@ -411,34 +412,45 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
     }
 
     .resultado-item {
-      background: #f5f5f5;
-      padding: 16px;
-      border-radius: 8px;
+      background: var(--exec-surface, #1e293b);
+      border: 1px solid var(--exec-border, #334155);
+      padding: 14px 16px;
+      border-radius: 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 12px;
+      min-width: 0;
     }
 
     .resultado-item .label {
       font-weight: 500;
-      color: #666;
+      color: var(--text-secondary);
+      flex-shrink: 0;
     }
 
     .resultado-item .valor {
-      font-weight: bold;
-      font-size: 18px;
+      font-weight: 700;
+      font-size: 1rem;
+      font-family: var(--font-mono-amount);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
     }
 
-    .valor.positivo { color: #4caf50; }
-    .valor.negativo { color: #f44336; }
+    .valor.positivo { color: var(--exec-emerald, #10b981); }
+    .valor.negativo { color: #f87171; }
 
     .utilizacao-container {
       margin-top: 20px;
     }
 
     .utilizacao-container h4 {
-      margin-bottom: 16px;
-      color: #333;
+      margin-bottom: 12px;
+      color: var(--text-primary);
     }
 
     .utilizacao-container mat-progress-bar {
@@ -446,8 +458,9 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
     }
 
     .percentual {
-      font-weight: bold;
-      color: #666;
+      font-weight: 700;
+      color: var(--text-secondary);
+      font-family: var(--font-mono-amount);
     }
 
     .projecao-container {
@@ -455,29 +468,44 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
     }
 
     .projecao-container h4 {
-      margin-bottom: 16px;
-      color: #333;
+      margin-bottom: 12px;
+      color: var(--text-primary);
     }
 
     .table-container {
       overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--exec-border, #334155);
     }
 
     .projecao-table {
       width: 100%;
       border-collapse: collapse;
+      background: var(--exec-surface, #1e293b);
+      min-width: 520px;
     }
 
     .projecao-table th,
     .projecao-table td {
       padding: 12px;
       text-align: left;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--exec-border, #334155);
+      color: var(--text-primary);
     }
 
     .projecao-table th {
-      background-color: #f5f5f5;
-      font-weight: 500;
+      background: rgba(15, 23, 42, 0.85);
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .projecao-table td {
+      font-family: var(--font-mono-amount);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.875rem;
     }
 
     mat-card {
@@ -487,6 +515,12 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
     mat-form-field {
       width: 100%;
     }
+
+    @media (max-width: 600px) {
+      .simulacoes-container {
+        padding: 12px;
+      }
+    }
   `]
 })
 export class SimulacoesComponent implements OnInit {
@@ -494,10 +528,8 @@ export class SimulacoesComponent implements OnInit {
   formCartao: FormGroup;
   formInvestimento: FormGroup;
   formFinanciamento: FormGroup;
-  
-  // Dados
-  cartoes: CartaoCredito[] = [];
-  
+
+  cartoes: any[] = [];
   // Resultados
   resultadoCartao: any = null;
   resultadoInvestimento: any = null;
@@ -505,14 +537,13 @@ export class SimulacoesComponent implements OnInit {
 
   constructor(
     private simulacaoService: SimulacaoService,
-    private cartaoService: CartaoCreditoService,
     private fb: FormBuilder
   ) {
     this.formCartao = this.fb.group({
-      cartaoId: ['', Validators.required],
-      valorCompra: ['', [Validators.required, Validators.min(0)]],
-      parcelas: ['1', Validators.required],
-      taxaJuros: [0, [Validators.min(0), Validators.max(100)]]
+      cartaoId: [''],
+      valorCompra: [0],
+      parcelas: ['1'],
+      taxaJuros: [0]
     });
 
     this.formInvestimento = this.fb.group({
@@ -531,132 +562,32 @@ export class SimulacoesComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.carregarCartoes();
-  }
-
-  carregarCartoes(): void {
-    this.cartaoService.getCartoes().subscribe({
-      next: (cartoes) => {
-        this.cartoes = cartoes;
-      },
-      error: (error) => {
-        console.error('Erro ao carregar cartões:', error);
-      }
-    });
+    // sem inicialização adicional
   }
 
   simularCartao(): void {
-    if (this.formCartao.valid) {
-      const dados = this.formCartao.value;
-      const cartao = this.cartoes.find(c => c.id === dados.cartaoId);
-      
-      if (cartao) {
-        const valorCompra = dados.valorCompra;
-        const parcelas = parseInt(dados.parcelas);
-        const taxaJuros = dados.taxaJuros / 100;
-        
-        let valorParcela: number;
-        let totalComJuros: number;
-        let jurosTotais: number;
-        
-        if (parcelas <= 3) {
-          // Sem juros
-          valorParcela = valorCompra / parcelas;
-          totalComJuros = valorCompra;
-          jurosTotais = 0;
-        } else {
-          // Com juros
-          valorParcela = valorCompra * (taxaJuros * Math.pow(1 + taxaJuros, parcelas)) / (Math.pow(1 + taxaJuros, parcelas) - 1);
-          totalComJuros = valorParcela * parcelas;
-          jurosTotais = totalComJuros - valorCompra;
-        }
-        
-        const limiteDisponivel = (cartao.limite || 0) - (cartao.limiteUtilizado || 0);
-        const percentualUtilizacao = ((cartao.limiteUtilizado || 0) + valorCompra) / (cartao.limite || 1) * 100;
-        
-        this.resultadoCartao = {
-          valorCompra,
-          parcelas,
-          valorParcela,
-          totalComJuros,
-          jurosTotais,
-          limiteDisponivel,
-          percentualUtilizacao
-        };
-      }
-    }
+    // fluxo removido por limpeza funcional
   }
 
   simularInvestimento(): void {
     if (this.formInvestimento.valid) {
-      const dados = this.formInvestimento.value;
-      const valorInicial = dados.valorInicial;
-      const aporteMensal = dados.aporteMensal || 0;
-      const taxaRetorno = dados.taxaRetorno / 100;
-      const periodo = dados.periodo;
-      
-      const taxaMensal = Math.pow(1 + taxaRetorno, 1/12) - 1;
-      const totalAportes = valorInicial + (aporteMensal * periodo * 12);
-      
-      // Cálculo do valor final com juros compostos
-      let valorFinal = valorInicial;
-      const projecaoAnual: any[] = [];
-      
-      for (let ano = 1; ano <= periodo; ano++) {
-        const saldoInicial = valorFinal;
-        const aportes = aporteMensal * 12;
-        
-        // Aplicar juros compostos mensalmente
-        for (let mes = 1; mes <= 12; mes++) {
-          valorFinal = (valorFinal + aporteMensal) * (1 + taxaMensal);
-        }
-        
-        const juros = valorFinal - saldoInicial - aportes;
-        
-        projecaoAnual.push({
-          ano,
-          saldoInicial,
-          aportes,
-          juros,
-          saldoFinal: valorFinal
-        });
-      }
-      
-      const jurosCompostos = valorFinal - totalAportes;
-      
-      this.resultadoInvestimento = {
-        valorInicial,
-        totalAportes,
-        jurosCompostos,
-        valorFinal,
-        projecaoAnual
-      };
+      this.simulacaoService.simularInvestimento(this.formInvestimento.value).subscribe({
+        next: (resultado) => this.resultadoInvestimento = resultado,
+        error: () => this.resultadoInvestimento = null
+      });
     }
   }
 
   simularFinanciamento(): void {
     if (this.formFinanciamento.valid) {
-      const dados = this.formFinanciamento.value;
-      const valorBem = dados.valorBem;
-      const entrada = dados.entrada || 0;
-      const taxaJuros = dados.taxaJurosFinanciamento / 100;
-      const prazo = dados.prazo;
-      
-      const valorFinanciado = valorBem - entrada;
-      
-      // Cálculo da parcela usando a fórmula de financiamento
-      const valorParcela = valorFinanciado * (taxaJuros * Math.pow(1 + taxaJuros, prazo)) / (Math.pow(1 + taxaJuros, prazo) - 1);
-      const totalPagar = valorParcela * prazo;
-      const totalJuros = totalPagar - valorFinanciado;
-      
-      this.resultadoFinanciamento = {
-        valorBem,
-        entrada,
-        valorFinanciado,
-        valorParcela,
-        totalPagar,
-        totalJuros
+      const payload = {
+        ...this.formFinanciamento.value,
+        taxaJuros: this.formFinanciamento.value.taxaJurosFinanciamento
       };
+      this.simulacaoService.simularFinanciamento(payload).subscribe({
+        next: (resultado) => this.resultadoFinanciamento = resultado,
+        error: () => this.resultadoFinanciamento = null
+      });
     }
   }
 }

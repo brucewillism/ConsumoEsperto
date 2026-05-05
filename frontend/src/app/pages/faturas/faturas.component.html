@@ -10,14 +10,28 @@
         <mat-icon>refresh</mat-icon>
         {{ loading ? 'Atualizando...' : 'Atualizar' }}
       </button>
-      <button mat-raised-button color="primary" (click)="showForm = !showForm">
+      <button mat-raised-button color="primary" (click)="showForm = !showForm" [disabled]="acaoEmAndamento">
         <mat-icon>add</mat-icon>
         {{ showForm ? 'Cancelar' : 'Nova Fatura' }}
       </button>
     </div>
   </div>
 
-  
+  <!-- Filtro principal: cartão (linha do tempo) -->
+  <mat-card class="top-bar-cartoes" *ngIf="!loading">
+    <mat-card-content class="top-bar-cartoes-inner">
+      <mat-form-field appearance="outline" class="filtro-cartao-field">
+        <mat-label>Filtrar por cartão</mat-label>
+        <mat-select [(ngModel)]="filtroCartaoId" (ngModelChange)="onFiltroCartaoChange()">
+          <mat-option value="">Todos os Cartões</mat-option>
+          <mat-option *ngFor="let c of cartoes; trackBy: trackByCartaoId" [value]="cartaoOpcaoValue(c)">
+            {{ rotuloCartaoSelect(c) }}
+          </mat-option>
+        </mat-select>
+        <mat-hint>Mostra faturas atuais e previstas só do cartão selecionado</mat-hint>
+      </mat-form-field>
+    </mat-card-content>
+  </mat-card>
 
   <!-- Loading -->
   <div *ngIf="loading" class="loading-container">
@@ -94,7 +108,6 @@
               <mat-option value="itau">Itaú</mat-option>
               <mat-option value="nubank">Nubank</mat-option>
               <mat-option value="inter">Banco Inter</mat-option>
-              <mat-option value="mercadopago">Mercado Pago</mat-option>
             </mat-select>
             <mat-error *ngIf="novaFaturaForm.get('banco')?.hasError('required')">
               Banco é obrigatório
@@ -142,6 +155,7 @@
               <mat-option value="PENDING">Pendente</mat-option>
               <mat-option value="PAID">Paga</mat-option>
               <mat-option value="OVERDUE">Vencida</mat-option>
+              <mat-option value="PREVISTA">Prevista (projeção)</mat-option>
             </mat-select>
             <mat-error *ngIf="novaFaturaForm.get('status')?.hasError('required')">
               Status é obrigatório
@@ -150,10 +164,11 @@
         </div>
 
         <div class="form-actions">
-          <button mat-button type="button" (click)="showForm = false">Cancelar</button>
-          <button mat-raised-button color="primary" type="submit" [disabled]="novaFaturaForm.invalid">
-            <mat-icon>save</mat-icon>
-            Adicionar Fatura
+          <button mat-button type="button" (click)="showForm = false" [disabled]="acaoEmAndamento">Cancelar</button>
+          <button mat-raised-button color="primary" type="submit" [disabled]="novaFaturaForm.invalid || acaoEmAndamento">
+            <mat-icon *ngIf="!acaoEmAndamento">save</mat-icon>
+            <mat-spinner *ngIf="acaoEmAndamento" diameter="18"></mat-spinner>
+            {{ acaoEmAndamento ? 'Salvando...' : 'Adicionar Fatura' }}
           </button>
         </div>
       </form>
@@ -169,28 +184,28 @@
       <div class="filtros-grid">
         <mat-form-field appearance="outline">
           <mat-label>Status</mat-label>
-          <mat-select [(ngModel)]="filtroStatus">
+          <mat-select [(ngModel)]="filtroStatus" (ngModelChange)="onFiltrosSecundariosChange()">
             <mat-option value="">Todos</mat-option>
             <mat-option value="PENDING">Pendente</mat-option>
             <mat-option value="PAID">Paga</mat-option>
             <mat-option value="OVERDUE">Vencida</mat-option>
+            <mat-option value="PREVISTA">Prevista (projeção)</mat-option>
           </mat-select>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
           <mat-label>Banco</mat-label>
-          <mat-select [(ngModel)]="filtroBanco">
+          <mat-select [(ngModel)]="filtroBanco" (ngModelChange)="onFiltrosSecundariosChange()">
             <mat-option value="">Todos</mat-option>
             <mat-option value="itau">Itaú</mat-option>
             <mat-option value="nubank">Nubank</mat-option>
             <mat-option value="inter">Banco Inter</mat-option>
-            <mat-option value="mercadopago">Mercado Pago</mat-option>
           </mat-select>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
           <mat-label>Mês/Ano</mat-label>
-          <input matInput type="month" [(ngModel)]="filtroMes">
+          <input matInput type="month" [(ngModel)]="filtroMes" (ngModelChange)="onFiltrosSecundariosChange()">
         </mat-form-field>
 
         <div class="filtros-actions">
@@ -206,11 +221,14 @@
   <!-- Lista de Faturas -->
   <mat-card class="faturas-card" *ngIf="!loading">
     <mat-card-header>
-      <mat-card-title>Suas Faturas</mat-card-title>
-      <mat-card-subtitle>{{ faturasFiltradas.length }} fatura{{ faturasFiltradas.length !== 1 ? 's' : '' }} encontrada{{ faturasFiltradas.length !== 1 ? 's' : '' }}</mat-card-subtitle>
+      <mat-card-title>Linha do tempo de faturas</mat-card-title>
+      <mat-card-subtitle>
+        {{ faturasFiltradas.length }} fatura{{ faturasFiltradas.length !== 1 ? 's' : '' }}
+        em {{ gruposTimeline.length }} período{{ gruposTimeline.length !== 1 ? 's' : '' }} (mês/ano)
+      </mat-card-subtitle>
     </mat-card-header>
     <mat-card-content>
-      <div *ngIf="faturasFiltradas.length === 0" class="empty-state">
+      <div *ngIf="gruposTimeline.length === 0" class="empty-state">
         <mat-icon>receipt_long</mat-icon>
         <h3>Nenhuma fatura encontrada</h3>
         <p>Adicione sua primeira fatura ou ajuste os filtros</p>
@@ -220,9 +238,20 @@
         </button>
       </div>
 
-      <div *ngIf="faturasFiltradas.length > 0" class="faturas-grid">
-        <mat-card *ngFor="let fatura of faturasFiltradas" 
+      <div *ngIf="gruposTimeline.length > 0" class="timeline-faturas">
+        <section *ngFor="let grupo of gruposTimeline; trackBy: trackByGrupo" class="timeline-mes-bloco">
+          <header class="timeline-mes-header">
+            <h2 class="timeline-mes-titulo">{{ grupo.rotuloMes }}</h2>
+            <p *ngIf="totalComprometidoPrevistoNoMes(grupo) > 0" class="timeline-mes-previsto-sum">
+              <mat-icon class="timeline-mes-previsto-ico">event_available</mat-icon>
+              Previsto neste mês: <strong>{{ formatarMoeda(totalComprometidoPrevistoNoMes(grupo)) }}</strong>
+            </p>
+          </header>
+          <div class="fatura-mes-grid">
+        <mat-card *ngFor="let fatura of grupo.faturas; trackBy: trackByFaturaId"
                   class="fatura-item"
+                  [class.fatura-prevista]="fatura.status === 'PREVISTA'"
+                  [class.fatura-aberta]="fatura.status !== 'PREVISTA'"
                   [class.vencendo]="isVencendo(fatura)"
                   [class.vencida]="isVencida(fatura)">
           <mat-card-header>
@@ -237,7 +266,10 @@
                 </div>
               </div>
               <div class="fatura-status">
-                <mat-chip [color]="getStatusColor(fatura.status)" selected>
+                <mat-chip
+                  [color]="getStatusColor(fatura.status)"
+                  [class.chip-fatura-prevista]="fatura.status === 'PREVISTA'"
+                  selected>
                   {{ getStatusText(fatura.status) }}
                 </mat-chip>
                 <div *ngIf="fatura.status === 'PENDING'" class="vencimento-info">
@@ -262,9 +294,9 @@
           
           <mat-card-content>
             <div class="fatura-detalhes">
-              <div class="detalhe-item">
-                <span class="label">Valor:</span>
-                <span class="value">{{ formatarMoeda(fatura.amount) }}</span>
+              <div class="detalhe-item detalhe-valor-total">
+                <span class="label">Valor total</span>
+                <span class="value" [class.valor-previsto-destaque]="fatura.status === 'PREVISTA'">{{ formatarMoeda(fatura.amount) }}</span>
               </div>
               
               <div class="detalhe-item">
@@ -279,7 +311,7 @@
               
               <div class="detalhe-item">
                 <span class="label">Transações:</span>
-                <span class="value">{{ fatura.transactions.length }} transação{{ fatura.transactions.length !== 1 ? 'ões' : '' }}</span>
+                <span class="value">{{ contagemTransacoes(fatura) }} transação{{ contagemTransacoes(fatura) !== 1 ? 'ões' : '' }}</span>
               </div>
             </div>
 
@@ -296,26 +328,29 @@
           </mat-card-content>
           
           <mat-card-actions>
-            <button mat-button color="primary" (click)="visualizarTransacoes(fatura)">
+            <button mat-button color="primary" (click)="visualizarTransacoes(fatura)" [disabled]="acaoEmAndamento">
               <mat-icon>list</mat-icon>
               Transações
             </button>
-            <button *ngIf="fatura.status === 'PENDING'" 
+            <button *ngIf="fatura.status === 'PENDING'"
                     mat-button color="accent" 
-                    (click)="marcarComoPaga(fatura)">
+                    (click)="marcarComoPaga(fatura)"
+                    [disabled]="acaoEmAndamento">
               <mat-icon>check</mat-icon>
-              Marcar Paga
+              {{ faturaEstaProcessando(fatura) ? 'Processando...' : 'Marcar Paga' }}
             </button>
-            <button mat-button color="warn" (click)="editarFatura(fatura)">
+            <button mat-button color="warn" (click)="editarFatura(fatura)" [disabled]="acaoEmAndamento">
               <mat-icon>edit</mat-icon>
               Editar
             </button>
-            <button mat-button color="warn" (click)="excluirFatura(fatura)">
+            <button mat-button color="warn" (click)="excluirFatura(fatura)" [disabled]="acaoEmAndamento">
               <mat-icon>delete</mat-icon>
-              Excluir
+              {{ faturaEstaProcessando(fatura) ? 'Excluindo...' : 'Excluir' }}
             </button>
           </mat-card-actions>
         </mat-card>
+          </div>
+        </section>
       </div>
     </mat-card-content>
   </mat-card>

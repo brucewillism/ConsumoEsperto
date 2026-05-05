@@ -13,6 +13,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -126,6 +128,21 @@ public class TransacaoController {
         return ResponseEntity.ok(transacaoAtualizada);
     }
 
+    @PatchMapping("/{id}/status-conferencia")
+    @Operation(summary = "Atualizar status de conferência", description = "Atualiza rapidamente o status de conferência da transação")
+    public ResponseEntity<TransacaoDTO> atualizarStatusConferencia(
+            @PathVariable Long id,
+            @Valid @RequestBody StatusConferenciaRequest request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+
+        TransacaoDTO transacaoAtualizada = transacaoService.atualizarStatusConferencia(
+            id,
+            request.getStatusConferencia(),
+            currentUser.getId()
+        );
+        return ResponseEntity.ok(transacaoAtualizada);
+    }
+
     /**
      * Remove uma transação do sistema
      * 
@@ -137,13 +154,17 @@ public class TransacaoController {
      * @return Resposta vazia indicando sucesso
      */
     @DeleteMapping("/{id}")
-    @Operation(summary = "Deletar transação", description = "Remove uma transação do sistema")
+    @Operation(summary = "Deletar transação", description = "Remove uma transação. Com parcelamento: modoParcelamento=UNICA|ESTA_E_PROXIMAS|TODAS (ou legado UM|FUTURAS|TUDO)")
     public ResponseEntity<Void> deletarTransacao(
             @PathVariable Long id,
+            @RequestParam(required = false) String modoParcelamento,
             @AuthenticationPrincipal UserPrincipal currentUser) {
-        
-        // Remove a transação verificando propriedade do usuário
-        transacaoService.deletarTransacao(id, currentUser.getId());
+
+        if (modoParcelamento != null && !modoParcelamento.isBlank()) {
+            transacaoService.deletarTransacaoComModoParcelamento(id, currentUser.getId(), modoParcelamento);
+        } else {
+            transacaoService.deletarTransacao(id, currentUser.getId());
+        }
         return ResponseEntity.noContent().build();
     }
 
@@ -159,14 +180,15 @@ public class TransacaoController {
      * @return Lista de transações no período especificado
      */
     @GetMapping("/periodo")
-    @Operation(summary = "Buscar transações por período", description = "Busca transações dentro de um período específico")
+    @Operation(summary = "Buscar transações por período", description = "Busca transações entre duas datas de calendário (inclusive), no fuso interpretado como data civil (início 00:00 e fim 23:59:59.999 do último dia). Use yyyy-MM-dd.")
     public ResponseEntity<List<TransacaoDTO>> buscarPorPeriodo(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataInicio,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dataFim,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim,
             @AuthenticationPrincipal UserPrincipal currentUser) {
-        
-        // Busca transações no período especificado
-        List<TransacaoDTO> transacoes = transacaoService.buscarPorPeriodo(currentUser.getId(), dataInicio, dataFim);
+
+        LocalDateTime inicio = dataInicio.atStartOfDay();
+        LocalDateTime fim = dataFim.atTime(23, 59, 59, 999_000_000);
+        List<TransacaoDTO> transacoes = transacaoService.buscarPorPeriodo(currentUser.getId(), inicio, fim);
         return ResponseEntity.ok(transacoes);
     }
 
@@ -267,5 +289,18 @@ public class TransacaoController {
         // Obtém resumo financeiro do usuário
         Object resumo = transacaoService.obterResumo(currentUser.getId());
         return ResponseEntity.ok(resumo);
+    }
+
+    public static class StatusConferenciaRequest {
+        @NotNull(message = "statusConferencia é obrigatório")
+        private TransacaoDTO.StatusConferencia statusConferencia;
+
+        public TransacaoDTO.StatusConferencia getStatusConferencia() {
+            return statusConferencia;
+        }
+
+        public void setStatusConferencia(TransacaoDTO.StatusConferencia statusConferencia) {
+            this.statusConferencia = statusConferencia;
+        }
     }
 }

@@ -1,22 +1,29 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.TransacaoDTO;
-import com.consumoesperto.model.Transacao;
+import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
+import com.consumoesperto.model.Fatura;
+import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
-import com.consumoesperto.repository.TransacaoRepository;
+import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.CategoriaRepository;
+import com.consumoesperto.repository.FaturaRepository;
+import com.consumoesperto.repository.TransacaoRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -39,6 +46,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor // Lombok: gera construtor com campos final automaticamente
 @Transactional // Todas as operações são transacionais para garantir consistência
+@Slf4j
 public class TransacaoService {
 
     // Repositório para operações de persistência de transações
@@ -46,6 +54,14 @@ public class TransacaoService {
     
     // Repositório para validação e busca de categorias
     private final CategoriaRepository categoriaRepository;
+
+    private final SaldoService saldoService;
+
+    private final FaturaRepository faturaRepository;
+
+    private final CartaoCreditoRepository cartaoCreditoRepository;
+
+    private final FaturaService faturaService;
 
     /**
      * Cria uma nova transação financeira no sistema
@@ -70,7 +86,28 @@ public class TransacaoService {
         // Converte o tipo de transação do DTO para o enum da entidade
         transacao.setTipoTransacao(Transacao.TipoTransacao.valueOf(transacaoDTO.getTipoTransacao().name()));
         transacao.setDataTransacao(transacaoDTO.getDataTransacao());
-        
+        aplicarConfiguracaoRecorrencia(transacao, transacaoDTO);
+        transacao.setExcluido(false);
+        transacao.setStatusConferencia(transacaoDTO.getStatusConferencia() != null
+            ? Transacao.StatusConferencia.valueOf(transacaoDTO.getStatusConferencia().name())
+            : Transacao.StatusConferencia.CONFIRMADA);
+        transacao.setCnpj(normalizarCnpjOpcional(transacaoDTO.getCnpj()));
+        if (transacaoDTO.getGrupoParcelaId() != null && !transacaoDTO.getGrupoParcelaId().isBlank()) {
+            transacao.setGrupoParcelaId(transacaoDTO.getGrupoParcelaId().trim());
+        }
+        if (transacaoDTO.getParcelaAtual() != null) {
+            transacao.setParcelaAtual(transacaoDTO.getParcelaAtual());
+        }
+        if (transacaoDTO.getTotalParcelas() != null) {
+            transacao.setTotalParcelas(transacaoDTO.getTotalParcelas());
+        }
+        if (transacaoDTO.getValorReal() != null) {
+            transacao.setValorReal(transacaoDTO.getValorReal());
+        }
+        if (transacaoDTO.getValorComJuros() != null) {
+            transacao.setValorComJuros(transacaoDTO.getValorComJuros());
+        }
+
         // Validação e associação da categoria (opcional)
         if (transacaoDTO.getCategoriaId() != null) {
             Categoria categoria = categoriaRepository.findById(transacaoDTO.getCategoriaId())
@@ -83,9 +120,15 @@ public class TransacaoService {
         Usuario usuario = new Usuario();
         usuario.setId(usuarioId);
         transacao.setUsuario(usuario);
-        
+
+        aplicarVinculoFatura(transacao, transacaoDTO, usuarioId, true);
+
         // Persiste a transação no banco de dados
         Transacao transacaoSalva = transacaoRepository.save(transacao);
+        if (transacaoSalva.getFatura() != null) {
+            faturaService.sincronizarValorFaturaComTransacoes(transacaoSalva.getFatura().getId());
+        }
+        saldoService.notificarAlteracaoSaldo(usuarioId);
         return converterParaDTO(transacaoSalva);
     }
 
@@ -156,23 +199,59 @@ public class TransacaoService {
         if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
             throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
         }
-        
+
+        Long faturaIdAntes = transacao.getFatura() != null ? transacao.getFatura().getId() : null;
+
         // Atualiza os campos da transação com os novos valores
         transacao.setDescricao(transacaoDTO.getDescricao());
         transacao.setValor(transacaoDTO.getValor());
         transacao.setTipoTransacao(Transacao.TipoTransacao.valueOf(transacaoDTO.getTipoTransacao().name()));
         transacao.setDataTransacao(transacaoDTO.getDataTransacao());
-        
+        aplicarConfiguracaoRecorrencia(transacao, transacaoDTO);
+        if (transacaoDTO.getStatusConferencia() != null) {
+            transacao.setStatusConferencia(Transacao.StatusConferencia.valueOf(transacaoDTO.getStatusConferencia().name()));
+        }
+        if (transacaoDTO.getCnpj() != null) {
+            transacao.setCnpj(normalizarCnpjOpcional(transacaoDTO.getCnpj()));
+        }
+
         // Atualiza a categoria se uma nova foi fornecida
         if (transacaoDTO.getCategoriaId() != null) {
             Categoria categoria = categoriaRepository.findById(transacaoDTO.getCategoriaId())
                 .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
             transacao.setCategoria(categoria);
         }
-        
+
+        aplicarVinculoFatura(transacao, transacaoDTO, usuarioId, false);
+
         // Persiste as alterações no banco de dados
         Transacao transacaoAtualizada = transacaoRepository.save(transacao);
+        Long faturaIdDepois = transacaoAtualizada.getFatura() != null ? transacaoAtualizada.getFatura().getId() : null;
+        if (faturaIdAntes != null && !Objects.equals(faturaIdAntes, faturaIdDepois)) {
+            faturaService.sincronizarValorFaturaComTransacoes(faturaIdAntes);
+        }
+        if (faturaIdDepois != null) {
+            faturaService.sincronizarValorFaturaComTransacoes(faturaIdDepois);
+        }
+        saldoService.notificarAlteracaoSaldo(usuarioId);
         return converterParaDTO(transacaoAtualizada);
+    }
+
+    public TransacaoDTO atualizarStatusConferencia(Long id, TransacaoDTO.StatusConferencia status, Long usuarioId) {
+        Transacao transacao = transacaoRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+
+        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
+            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+        }
+
+        transacao.setStatusConferencia(Transacao.StatusConferencia.valueOf(status.name()));
+        Transacao atualizada = transacaoRepository.save(transacao);
+        if (atualizada.getFatura() != null) {
+            faturaService.sincronizarValorFaturaComTransacoes(atualizada.getFatura().getId());
+        }
+        saldoService.notificarAlteracaoSaldo(usuarioId);
+        return converterParaDTO(atualizada);
     }
 
     /**
@@ -195,8 +274,77 @@ public class TransacaoService {
             throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
         }
         
-        // Remove a transação do banco de dados
-        transacaoRepository.delete(transacao);
+        Long faturaId = transacao.getFatura() != null ? transacao.getFatura().getId() : null;
+
+        // Soft delete para manter histórico e auditoria
+        transacao.setExcluido(true);
+        transacaoRepository.save(transacao);
+        if (faturaId != null) {
+            faturaService.sincronizarValorFaturaComTransacoes(faturaId);
+        }
+        saldoService.notificarAlteracaoSaldo(usuarioId);
+    }
+
+    /**
+     * Exclusão em grupo de parcelas: {@code UM} só esta; {@code FUTURAS} esta e parcelas seguintes; {@code TUDO} o grupo inteiro.
+     */
+    public void deletarTransacaoComModoParcelamento(Long id, Long usuarioId, String modo) {
+        Transacao transacao = transacaoRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
+            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+        }
+        String grupo = transacao.getGrupoParcelaId();
+        String m = normalizarModoParcelamentoExclusao(modo);
+        if (grupo == null || grupo.isBlank() || "UM".equals(m)) {
+            deletarTransacao(id, usuarioId);
+            return;
+        }
+        List<Transacao> todas = transacaoRepository.findByUsuarioIdAndGrupoParcelaIdOrderByParcelaAtualAsc(usuarioId, grupo);
+        List<Transacao> alvo;
+        if ("TUDO".equals(m)) {
+            alvo = todas;
+        } else if ("FUTURAS".equals(m)) {
+            int pa = transacao.getParcelaAtual() != null ? transacao.getParcelaAtual() : 0;
+            alvo = todas.stream()
+                .filter(x -> x.getParcelaAtual() != null && x.getParcelaAtual() >= pa)
+                .collect(Collectors.toList());
+        } else {
+            deletarTransacao(id, usuarioId);
+            return;
+        }
+        Set<Long> faturas = new HashSet<>();
+        for (Transacao t : alvo) {
+            if (t.getFatura() != null) {
+                faturas.add(t.getFatura().getId());
+            }
+            t.setExcluido(true);
+            transacaoRepository.save(t);
+        }
+        for (Long fid : faturas) {
+            faturaService.sincronizarValorFaturaComTransacoes(fid);
+        }
+        saldoService.notificarAlteracaoSaldo(usuarioId);
+    }
+
+    /**
+     * Aceita sinónimos do app (UNICA, ESTA_E_PROXIMAS, TODAS) e valores legados (UM, FUTURAS, TUDO).
+     */
+    private static String normalizarModoParcelamentoExclusao(String modo) {
+        if (modo == null || modo.isBlank()) {
+            return "UM";
+        }
+        String m = modo.trim().toUpperCase();
+        switch (m) {
+            case "UNICA":
+                return "UM";
+            case "ESTA_E_PROXIMAS":
+                return "FUTURAS";
+            case "TODAS":
+                return "TUDO";
+            default:
+                return m;
+        }
     }
 
     /**
@@ -207,7 +355,7 @@ public class TransacaoService {
      * 
      * @param usuarioId ID do usuário cujas transações devem ser filtradas
      * @param dataInicio Data de início do período (inclusive)
-     * @param dataFim Data de fim do período (exclusive)
+     * @param dataFim Data de fim do período (inclusive)
      * @return Lista de TransacaoDTO com transações no período especificado
      */
     public List<TransacaoDTO> buscarPorPeriodo(Long usuarioId, LocalDateTime dataInicio, LocalDateTime dataFim) {
@@ -278,17 +426,16 @@ public class TransacaoService {
         Map<String, Object> resumo = new HashMap<>();
         resumo.put("totalTransacoes", transacoesUsuario.size());
         
-        // Calcula o total de receitas usando consulta otimizada
-        BigDecimal totalReceitas = transacaoRepository.sumValorByUsuarioIdAndTipoTransacao(usuarioId, Transacao.TipoTransacao.RECEITA);
+        // Receitas e despesas confirmadas (saldo dinâmico ao longo do tempo)
+        BigDecimal totalReceitas = transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(
+            usuarioId, Transacao.TipoTransacao.RECEITA);
         resumo.put("totalReceitas", totalReceitas != null ? totalReceitas.doubleValue() : 0.0);
-        
-        // Calcula o total de despesas usando consulta otimizada
-        BigDecimal totalDespesas = transacaoRepository.sumValorByUsuarioIdAndTipoTransacao(usuarioId, Transacao.TipoTransacao.DESPESA);
+
+        BigDecimal totalDespesas = transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(
+            usuarioId, Transacao.TipoTransacao.DESPESA);
         resumo.put("totalDespesas", totalDespesas != null ? totalDespesas.doubleValue() : 0.0);
         
-        // Calcula o saldo (receitas - despesas)
-        double saldo = (totalReceitas != null ? totalReceitas.doubleValue() : 0.0) - 
-                      (totalDespesas != null ? totalDespesas.doubleValue() : 0.0);
+        double saldo = saldoService.saldoContaCorrente(usuarioId).doubleValue();
         resumo.put("saldo", saldo);
         
         return resumo;
@@ -330,36 +477,34 @@ public class TransacaoService {
     }
 
     /**
-     * Calcula resumo financeiro do mês atual
-     * 
-     * @param usuarioId ID do usuário
-     * @return Map com estatísticas do mês atual
+     * Resumo financeiro de um mês civil: totais por soma no repositório (apenas confirmadas),
+     * contagem de linhas no período (todas as transações não excluídas, com ou sem categoria/cartão).
+     * Usado pelo dashboard, relatório JSON e PDF para manter números alinhados.
+     */
+    public Map<String, Object> resumoFinanceiroMes(Long usuarioId, YearMonth yearMonth) {
+        LocalDateTime inicio = yearMonth.atDay(1).atStartOfDay();
+        LocalDateTime fim = yearMonth.atEndOfMonth().atTime(23, 59, 59);
+        BigDecimal totalReceitas = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+            usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fim);
+        BigDecimal totalDespesas = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+            usuarioId, Transacao.TipoTransacao.DESPESA, inicio, fim);
+        totalReceitas = totalReceitas != null ? totalReceitas : BigDecimal.ZERO;
+        totalDespesas = totalDespesas != null ? totalDespesas : BigDecimal.ZERO;
+        BigDecimal saldo = totalReceitas.subtract(totalDespesas);
+        long totalLinhas = transacaoRepository.countTransacoesUsuarioNoPeriodo(usuarioId, inicio, fim);
+        Map<String, Object> resumo = new HashMap<>();
+        resumo.put("totalTransacoes", totalLinhas);
+        resumo.put("totalReceitas", totalReceitas.doubleValue());
+        resumo.put("totalDespesas", totalDespesas.doubleValue());
+        resumo.put("saldo", saldo.doubleValue());
+        return resumo;
+    }
+
+    /**
+     * Calcula resumo financeiro do mês atual (mesma base que relatório mensal / PDF).
      */
     public Map<String, Object> obterResumoDoMesAtual(Long usuarioId) {
-        List<TransacaoDTO> transacoesMes = buscarDoMesAtual(usuarioId);
-        
-        Map<String, Object> resumo = new HashMap<>();
-        resumo.put("totalTransacoes", transacoesMes.size());
-        
-        // Calcular receitas do mês
-        double totalReceitas = transacoesMes.stream()
-            .filter(t -> t.getTipoTransacao() == TransacaoDTO.TipoTransacao.RECEITA)
-            .mapToDouble(t -> t.getValor().doubleValue())
-            .sum();
-        resumo.put("totalReceitas", totalReceitas);
-        
-        // Calcular despesas do mês
-        double totalDespesas = transacoesMes.stream()
-            .filter(t -> t.getTipoTransacao() == TransacaoDTO.TipoTransacao.DESPESA)
-            .mapToDouble(t -> t.getValor().doubleValue())
-            .sum();
-        resumo.put("totalDespesas", totalDespesas);
-        
-        // Calcular saldo do mês
-        double saldo = totalReceitas - totalDespesas;
-        resumo.put("saldo", saldo);
-        
-        return resumo;
+        return resumoFinanceiroMes(usuarioId, YearMonth.now());
     }
 
     /**
@@ -387,13 +532,122 @@ public class TransacaoService {
         }
         dto.setDataTransacao(transacao.getDataTransacao());
         dto.setDataCriacao(transacao.getDataCriacao());
-        
+        dto.setRecorrente(transacao.isRecorrente());
+        if (transacao.getFrequencia() != null) {
+            dto.setFrequencia(TransacaoDTO.FrequenciaRecorrencia.valueOf(transacao.getFrequencia().name()));
+        }
+        dto.setProximaExecucao(transacao.getProximaExecucao());
+        if (transacao.getStatusConferencia() != null) {
+            dto.setStatusConferencia(TransacaoDTO.StatusConferencia.valueOf(transacao.getStatusConferencia().name()));
+        }
+        dto.setCnpj(transacao.getCnpj());
+
         // Inclui informações da categoria se estiver associada
         if (transacao.getCategoria() != null) {
             dto.setCategoriaId(transacao.getCategoria().getId());
             dto.setCategoriaNome(transacao.getCategoria().getNome());
         }
-        
+        if (transacao.getFatura() != null) {
+            dto.setFaturaId(transacao.getFatura().getId());
+            if (transacao.getFatura().getCartaoCredito() != null) {
+                dto.setCartaoCreditoId(transacao.getFatura().getCartaoCredito().getId());
+            }
+        }
+        dto.setGrupoParcelaId(transacao.getGrupoParcelaId());
+        dto.setParcelaAtual(transacao.getParcelaAtual());
+        dto.setTotalParcelas(transacao.getTotalParcelas());
+        dto.setValorReal(transacao.getValorReal());
+        dto.setValorComJuros(transacao.getValorComJuros());
+
         return dto;
+    }
+
+    /**
+     * @param criacaoNova {@code true} na criação: sem cartão/fatura = despesa em caixa. Na edição: sem ids = mantém vínculo atual.
+     */
+    private void aplicarVinculoFatura(Transacao transacao, TransacaoDTO dto, Long usuarioId, boolean criacaoNova) {
+        if (transacao.getTipoTransacao() != Transacao.TipoTransacao.DESPESA) {
+            transacao.setFatura(null);
+            return;
+        }
+        if (dto.getFaturaId() != null) {
+            Fatura f = faturaRepository.findByIdAndCartaoCreditoUsuarioId(dto.getFaturaId(), usuarioId)
+                .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
+            transacao.setFatura(f);
+            return;
+        }
+        if (dto.getCartaoCreditoId() != null) {
+            CartaoCredito cartao = cartaoCreditoRepository.findByIdAndUsuarioId(dto.getCartaoCreditoId(), usuarioId)
+                .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+            Fatura f = faturaService.resolverFaturaAbertaParaCartao(usuarioId, cartao);
+            transacao.setFatura(f);
+            return;
+        }
+        if (!criacaoNova) {
+            return;
+        }
+        transacao.setFatura(null);
+    }
+
+    private String normalizarCnpjOpcional(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String digits = raw.replaceAll("\\D", "");
+        return digits.length() == 14 ? digits : null;
+    }
+
+    private void aplicarConfiguracaoRecorrencia(Transacao transacao, TransacaoDTO dto) {
+        transacao.setRecorrente(dto.isRecorrente());
+        if (!dto.isRecorrente()) {
+            transacao.setFrequencia(null);
+            transacao.setProximaExecucao(null);
+            return;
+        }
+        if (dto.getFrequencia() == null || dto.getProximaExecucao() == null) {
+            throw new RuntimeException("Transação recorrente exige frequência e próxima execução");
+        }
+        transacao.setFrequencia(Transacao.FrequenciaRecorrencia.valueOf(dto.getFrequencia().name()));
+        transacao.setProximaExecucao(dto.getProximaExecucao());
+    }
+
+    public List<Transacao> listarDespesasRecorrentes(Long usuarioId) {
+        return transacaoRepository.findByUsuarioIdAndRecorrenteIsTrueAndTipoTransacao(usuarioId, Transacao.TipoTransacao.DESPESA);
+    }
+
+    /**
+     * Atualiza descrição e/ou valor de uma despesa recorrente (dono obrigatório).
+     */
+    public Transacao aplicarPatchDespesaRecorrente(Long usuarioId, Long transacaoId, String novaDescricao, BigDecimal novoValor) {
+        Transacao t = transacaoRepository.findById(transacaoId)
+            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+        if (t.getUsuario() == null || !t.getUsuario().getId().equals(usuarioId)) {
+            throw new RuntimeException("Transação não pertence ao usuário");
+        }
+        if (!t.isRecorrente()) {
+            throw new RuntimeException("Esta transação não é recorrente (despesa fixa)");
+        }
+        if (t.getTipoTransacao() != Transacao.TipoTransacao.DESPESA) {
+            throw new RuntimeException("Apenas despesas podem ser editadas como despesa fixa");
+        }
+        boolean changed = false;
+        if (novaDescricao != null && !novaDescricao.isBlank()) {
+            t.setDescricao(novaDescricao.trim());
+            changed = true;
+        }
+        if (novoValor != null && novoValor.compareTo(BigDecimal.ZERO) > 0) {
+            t.setValor(novoValor);
+            changed = true;
+        }
+        if (!changed) {
+            throw new RuntimeException("Nenhuma alteração válida na despesa fixa");
+        }
+        Transacao salva = transacaoRepository.save(t);
+        if (salva.getFatura() != null) {
+            faturaService.sincronizarValorFaturaComTransacoes(salva.getFatura().getId());
+        }
+        saldoService.notificarAlteracaoSaldo(usuarioId);
+        log.info("[ENTITY-UPDATE] Despesa fixa id={} usuário={}", transacaoId, usuarioId);
+        return salva;
     }
 }

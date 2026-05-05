@@ -1,6 +1,8 @@
+/** Produção: API via mesmo host/proxy reverso apontando /api para o backend. */
 export const environment = {
   production: true,
-  apiUrl: 'https://79c3d0af5801.ngrok-free.app/api',
-  googleClientId: '593452038228-47k24odoa6f18c78e3ssp9bhu56gugnm.apps.googleusercontent.com',
+  apiUrl: '/api',
+  /** Defina no ambiente/build de produção conforme o provedor usado. */
+  googleClientID: '',
   version: '1.0.0'
 };

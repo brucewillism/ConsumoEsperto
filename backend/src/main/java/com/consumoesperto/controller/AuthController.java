@@ -2,11 +2,8 @@ package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.LoginDTO;
 import com.consumoesperto.dto.UsuarioDTO;
-import com.consumoesperto.model.Usuario;
 import com.consumoesperto.security.JwtTokenProvider;
 import com.consumoesperto.service.UsuarioService;
-import com.consumoesperto.service.GoogleOAuth2Service;
-import com.consumoesperto.service.TokenValidationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 import javax.validation.Valid;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Controller responsável por gerenciar operações de autenticação
@@ -50,12 +46,6 @@ public class AuthController {
     // Serviço para operações com usuários
     private final UsuarioService usuarioService;
     
-    // Serviço para autenticação via Google OAuth2
-    private final GoogleOAuth2Service googleOAuth2Service;
-    
-    // Serviço para validação de tokens bancários
-    private final TokenValidationService tokenValidationService;
-
     /**
      * Endpoint para realizar login de usuário
      * 
@@ -81,20 +71,6 @@ public class AuthController {
         
         // Gera o token JWT para o usuário autenticado
         String jwt = tokenProvider.generateToken(authentication);
-
-        // Buscar ID do usuário para validação de tokens
-        try {
-            String username = authentication.getName();
-            UsuarioDTO usuarioDTO = usuarioService.buscarPorUsername(username);
-            Long usuarioId = usuarioDTO.getId();
-            log.info("🔐 Validando tokens bancários no login para usuário: {}", usuarioId);
-            
-            // Validar e renovar tokens automaticamente
-            tokenValidationService.validarTokenNoLogin(usuarioId);
-        } catch (Exception e) {
-            log.warn("⚠️ Erro ao validar tokens no login: {}", e.getMessage());
-            // Não falhar o login por causa disso
-        }
 
         // Prepara a resposta com o token
         Map<String, String> response = new HashMap<>();

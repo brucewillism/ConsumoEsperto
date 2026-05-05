@@ -1,0 +1,96 @@
+<div class="transacoes-container">
+  <div class="header">
+    <div>
+      <h1>Transações</h1>
+      <p class="periodo">{{ obterNomePeriodoAtual() }}</p>
+    </div>
+    <button
+      mat-raised-button
+      color="primary"
+      (click)="abrirDialogoTransacao()"
+      [disabled]="loadingTransacoes || salvandoTransacao">
+      <mat-icon>add_circle</mat-icon>
+      Nova Transação
+    </button>
+  </div>
+
+  <app-filtro-transacao
+    [filtroTipo]="filtroTipo"
+    [filtroDataInicio]="filtroDataInicio"
+    [filtroDataFim]="filtroDataFim"
+    [disabled]="loadingTransacoes || salvandoTransacao"
+    (filtroTipoChange)="atualizarTipo($event)"
+    (filtroDataInicioChange)="atualizarDataInicio($event)"
+    (filtroDataFimChange)="atualizarDataFim($event)"
+    (limparFiltros)="limparFiltros()">
+  </app-filtro-transacao>
+
+  <app-lista-transacao
+    [transacoes]="transacoesFiltradas"
+    [colunasExibidas]="colunasExibidas"
+    [totalTransacoes]="totalTransacoes"
+    [tamanhoPagina]="tamanhoPagina"
+    [paginaAtual]="paginaAtual"
+    [loading]="loadingTransacoes || carregandoCategorias || salvandoTransacao"
+    [acoesDesabilitadas]="salvandoTransacao"
+    [confirmandoIds]="confirmandoTransacaoIds"
+    (editar)="editarTransacao($event)"
+    (deletar)="deletarTransacao($event)"
+    (confirmar)="confirmarTransacao($event)"
+    (ordenar)="onSortChange($event)"
+    (paginar)="onPageChange($event)">
+  </app-lista-transacao>
+</div>
+
+<ng-template #dialogoTransacao>
+  <h2 mat-dialog-title>{{ transacaoEditando ? 'Editar' : 'Nova' }} Transação</h2>
+  <form [formGroup]="transacaoForm" (ngSubmit)="salvarTransacao()">
+    <mat-dialog-content>
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Descrição</mat-label>
+        <input matInput formControlName="descricao" placeholder="Digite a descrição">
+      </mat-form-field>
+
+      <div class="form-row">
+        <mat-form-field appearance="outline">
+          <mat-label>Valor</mat-label>
+          <input matInput type="number" formControlName="valor" placeholder="0,00" step="0.01">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Tipo</mat-label>
+          <mat-select formControlName="tipoTransacao">
+            <mat-option [value]="tipoTransacao.RECEITA">Receita</mat-option>
+            <mat-option [value]="tipoTransacao.DESPESA">Despesa</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="form-row">
+        <mat-form-field appearance="outline">
+          <mat-label>Data</mat-label>
+          <input matInput [matDatepicker]="dataPicker" formControlName="dataTransacao">
+          <mat-datepicker-toggle matSuffix [for]="dataPicker"></mat-datepicker-toggle>
+          <mat-datepicker #dataPicker></mat-datepicker>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Categoria</mat-label>
+          <mat-select formControlName="categoriaId">
+            <mat-option value="">Sem categoria</mat-option>
+            <mat-option *ngFor="let categoria of categorias" [value]="categoria.id">
+              {{ categoria.nome }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+    </mat-dialog-content>
+
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close [disabled]="salvandoTransacao">Cancelar</button>
+      <button mat-raised-button color="primary" type="submit" [disabled]="transacaoForm.invalid || salvandoTransacao">
+        {{ salvandoTransacao ? 'Salvando...' : (transacaoEditando ? 'Atualizar' : 'Salvar') }}
+      </button>
+    </mat-dialog-actions>
+  </form>
+</ng-template>

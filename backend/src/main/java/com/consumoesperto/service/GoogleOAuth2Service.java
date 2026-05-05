@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class GoogleOAuth2Service {
 
-    @Autowired
+    @Autowired(required = false)
     private OAuth2AuthorizedClientService clientService;
 
     /**
@@ -28,6 +28,9 @@ public class GoogleOAuth2Service {
      * Obtém o cliente OAuth2 autorizado
      */
     public OAuth2AuthorizedClient getAuthorizedClient(OAuth2AuthenticationToken authentication) {
+        if (clientService == null) {
+            return null;
+        }
         return clientService.loadAuthorizedClient(
             authentication.getAuthorizedClientRegistrationId(),
             authentication.getName()

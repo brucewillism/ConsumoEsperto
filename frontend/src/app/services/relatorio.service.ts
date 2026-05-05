@@ -10,6 +10,19 @@ export interface RelatorioGastos {
   percentual: number;
 }
 
+export interface RelatorioCategoriaMesAtualItem {
+  categoria: string;
+  valor: number;
+  percentual: number;
+}
+
+export interface RelatorioCategoriaMesAtual {
+  ano: number;
+  mes: number;
+  totalDespesas: number;
+  itens: RelatorioCategoriaMesAtualItem[];
+}
+
 export interface RelatorioMensal {
   mes: string;
   receitas: number;
@@ -44,29 +57,49 @@ export class RelatorioService {
     });
   }
 
-  getGastosPorCategoria(dataInicio: string, dataFim: string): Observable<RelatorioGastos[]> {
-    return this.http.get<RelatorioGastos[]>(`${this.API_URL}/gastos-por-categoria?inicio=${dataInicio}&fim=${dataFim}`, { headers: this.getHeaders() });
+  private getAuthHeaders(): HttpHeaders {
+    const token = this.authService.getToken();
+    return new HttpHeaders({ Authorization: `Bearer ${token}` });
   }
 
-  getRelatorioMensal(ano: number): Observable<RelatorioMensal[]> {
-    return this.http.get<RelatorioMensal[]>(`${this.API_URL}/mensal/${ano}`, { headers: this.getHeaders() });
+  getRelatorioPorCategoria(ano: number, mes: number): Observable<any> {
+    return this.http.get<any>(`${this.API_URL}/categoria?ano=${ano}&mes=${mes}`, { headers: this.getHeaders() });
   }
 
-  getRelatorioCartoes(): Observable<RelatorioCartao[]> {
-    return this.http.get<RelatorioCartao[]>(`${this.API_URL}/cartoes`, { headers: this.getHeaders() });
+  getDespesasPorCategoriaMesAtual(): Observable<RelatorioCategoriaMesAtual> {
+    return this.http.get<RelatorioCategoriaMesAtual>(`${this.API_URL}/categoria/mes-atual`, { headers: this.getHeaders() });
+  }
+
+  getRelatorioMensal(ano: number, mes: number): Observable<any> {
+    return this.http.get<any>(`${this.API_URL}/mensal?ano=${ano}&mes=${mes}`, { headers: this.getHeaders() });
+  }
+
+  getAlertas(): Observable<any> {
+    return this.http.get<any>(`${this.API_URL}/alertas`, { headers: this.getHeaders() });
   }
 
   getResumoFinanceiro(): Observable<any> {
-    return this.http.get(`${this.API_URL}/resumo`, { headers: this.getHeaders() });
+    return this.http.get(`${environment.apiUrl}/transacoes/resumo`, { headers: this.getHeaders() });
   }
 
-  getFluxoCaixa(dataInicio: string, dataFim: string): Observable<any[]> {
-    return this.http.get<any[]>(`${this.API_URL}/fluxo-caixa?inicio=${dataInicio}&fim=${dataFim}`, { headers: this.getHeaders() });
+  getRelatorioAnual(ano: number): Observable<any> {
+    return this.http.get<any>(`${this.API_URL}/anual?ano=${ano}`, { headers: this.getHeaders() });
   }
 
-  exportarRelatorio(tipo: string, formato: string, dataInicio: string, dataFim: string): Observable<Blob> {
-    return this.http.get(`${this.API_URL}/exportar/${tipo}?formato=${formato}&inicio=${dataInicio}&fim=${dataFim}`, { 
-      headers: this.getHeaders(),
+  /** PDF: despesas confirmadas do ano (apoio IR); mesmo critério do antigo CSV. */
+  exportarIrPdf(ano?: number): Observable<Blob> {
+    const params = ano != null ? `?ano=${ano}` : '';
+    return this.http.get(`${this.API_URL}/exportar-ir.pdf${params}`, {
+      headers: this.getAuthHeaders(),
+      responseType: 'blob'
+    });
+  }
+
+  /** Legado CSV (API); na UI usar exportarIrPdf. */
+  exportarIrCsv(ano?: number): Observable<Blob> {
+    const params = ano != null ? `?ano=${ano}` : '';
+    return this.http.get(`${this.API_URL}/exportar-ir${params}`, {
+      headers: this.getAuthHeaders(),
       responseType: 'blob'
     });
   }

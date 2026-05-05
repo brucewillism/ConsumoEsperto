@@ -12,8 +12,8 @@ export const environment = {
   /** Indica se está em modo de produção (false para desenvolvimento) */
   production: false,
   
-  /** URL base da API backend para desenvolvimento local (via NGROK) */
-  apiUrl: 'https://79c3d0af5801.ngrok-free.app/api',
+  /** URL base da API — alinhar com rodar-backend-evolution.bat (Spring na 8081). Se usar rodar-backend.bat na 8080, mude para 8080. */
+  apiUrl: 'http://localhost:8081/api',
   
   /** ID do cliente Google OAuth2 para autenticação via Google
    * 

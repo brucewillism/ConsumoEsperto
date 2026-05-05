@@ -5,10 +5,11 @@ import com.consumoesperto.dto.GoogleTokenRequest;
 import com.consumoesperto.service.OAuth2Service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.servlet.http.HttpServletRequest;
+import java.util.Map;
 
 /**
  * Controller para autenticação OAuth2
@@ -37,14 +38,14 @@ public class OAuth2Controller {
      * @return Resposta de autenticação com JWT e dados do usuário
      */
     @PostMapping("/google")
-    public ResponseEntity<AuthResponse> googleLogin(@RequestBody GoogleTokenRequest tokenRequest) {
+    public ResponseEntity<?> googleLogin(@RequestBody GoogleTokenRequest tokenRequest) {
         try {
             log.info("🔐 Recebida requisição de login Google OAuth2");
             log.debug("Token recebido: {}", tokenRequest.getAccessToken() != null ? "Presente" : "Ausente");
 
             if (tokenRequest.getAccessToken() == null || tokenRequest.getAccessToken().trim().isEmpty()) {
                 log.error("❌ Token de acesso não fornecido");
-                return ResponseEntity.badRequest().body(null);
+                return ResponseEntity.badRequest().body(Map.of("message", "Token do Google não fornecido."));
             }
 
             AuthResponse response = oAuth2Service.processGoogleOAuth2(tokenRequest.getAccessToken());
@@ -54,7 +55,8 @@ public class OAuth2Controller {
 
         } catch (Exception e) {
             log.error("❌ Erro no login Google OAuth2: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", "Falha na autenticação Google. Gere um novo token e tente novamente."));
         }
     }
 
@@ -65,7 +67,7 @@ public class OAuth2Controller {
      * @return Resposta de autenticação com JWT e dados do usuário
      */
     @PostMapping("/google/token")
-    public ResponseEntity<AuthResponse> googleLoginWithToken(@RequestBody String accessToken) {
+    public ResponseEntity<?> googleLoginWithToken(@RequestBody String accessToken) {
         try {
             log.info("🔐 Recebida requisição de login Google OAuth2 com token");
 
@@ -76,7 +78,8 @@ public class OAuth2Controller {
 
         } catch (Exception e) {
             log.error("❌ Erro no login Google OAuth2: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", "Falha na autenticação Google. Token inválido ou expirado."));
         }
     }
 
@@ -88,21 +91,18 @@ public class OAuth2Controller {
      * @return Resposta de autenticação
      */
     @GetMapping("/google/callback")
-    public ResponseEntity<String> googleCallback(
+    public ResponseEntity<?> googleCallback(
             @RequestParam("code") String code,
             @RequestParam(value = "state", required = false) String state) {
-        
-        log.info("🔄 Callback Google OAuth2 recebido - Code: {}, State: {}", code, state);
-        
-        // TODO: Implementar troca de código por token de acesso
-        // Por enquanto, retorna instruções para o frontend
-        String instructions = "Callback OAuth2 recebido com sucesso!\n\n" +
-            "Para completar a autenticação, o frontend deve:\n" +
-            "1. Trocar o código de autorização por um token de acesso\n" +
-            "2. Enviar o token para /api/auth/google ou /api/auth/google/token\n\n" +
-            "Código recebido: " + code;
-        
-        return ResponseEntity.ok(instructions);
+        try {
+            log.info("🔄 Callback Google OAuth2 recebido - State: {}", state);
+            AuthResponse response = oAuth2Service.processGoogleOAuth2ByAuthorizationCode(code);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("❌ Erro no callback OAuth2 Google: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", "Falha no callback OAuth2 Google"));
+        }
     }
 
     /**

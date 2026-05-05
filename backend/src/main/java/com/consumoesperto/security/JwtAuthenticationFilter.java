@@ -59,7 +59,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/auth/") || 
             path.startsWith("/api/oauth2/") ||
             path.startsWith("/api/public/") ||
-            path.startsWith("/api/mercadopago/oauth/") ||
             path.startsWith("/swagger-ui/") ||
             path.startsWith("/v3/api-docs/") ||
             path.startsWith("/actuator/") ||
@@ -71,7 +70,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             path.equals("/faturas") || 
             path.equals("/relatorios") || 
             path.equals("/simulacoes") || 
-            path.equals("/bank-config") ||
             path.equals("/error") ||
             path.matches(".*\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$")) {
             return true;

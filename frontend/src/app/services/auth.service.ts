@@ -89,18 +89,12 @@ export class AuthService {
    * @returns Observable com a resposta de login (token JWT)
    */
   login(credentials: LoginRequest): Observable<LoginResponse> {
-    console.log('[AuthService] Iniciando login com credenciais:', credentials);
-    
     return this.http.post<LoginResponse>(`${this.API_URL}/login`, credentials)
       .pipe(
         // Executa ações adicionais após o login bem-sucedido
         tap(response => {
-          console.log('[AuthService] Login bem-sucedido, resposta recebida:', response);
           this.handleAuthSuccess(response.token); // Armazena o token
           this.loadUserInfo(response.token); // Carrega informações do usuário
-          
-          // Renovar tokens automaticamente após login bem-sucedido
-          this.renovarTokensNoLogin();
         })
       );
   }
@@ -273,6 +267,10 @@ export class AuthService {
             
             // Atualiza o estado da aplicação com o token JWT real
             this.handleAuthSuccess(response.token);
+            if (response.user) {
+              this.currentUserSubject.next(response.user);
+              localStorage.setItem('user', JSON.stringify(response.user));
+            }
             this.loadUserInfo(response.token);
             
             // Prepara a resposta de sucesso
@@ -343,9 +341,7 @@ export class AuthService {
    * @param token Token JWT recebido do backend
    */
   private handleAuthSuccess(token: string): void {
-    console.log('[AuthService] Processando sucesso da autenticação, token:', token.substring(0, 20) + '...');
     localStorage.setItem('token', token); // Armazena o token no localStorage
-    console.log('[AuthService] Token armazenado no localStorage');
   }
 
   /**
@@ -419,17 +415,7 @@ export class AuthService {
    * @returns true se autenticado, false caso contrário
    */
   isAuthenticated(): boolean {
-    const hasToken = !!localStorage.getItem('token');
-    console.log(`[AuthService] Verificando autenticação: ${hasToken ? 'SIM' : 'NÃO'}`);
-    if (hasToken) {
-      const token = localStorage.getItem('token');
-      console.log(`[AuthService] Token encontrado: ${token?.substring(0, 20)}...`);
-      console.log(`[AuthService] Token completo: ${token}`);
-    } else {
-      console.log(`[AuthService] Nenhum token encontrado no localStorage`);
-      console.log(`[AuthService] Conteúdo do localStorage:`, localStorage);
-    }
-    return hasToken;
+    return !!localStorage.getItem('token');
   }
 
   /**
@@ -438,15 +424,7 @@ export class AuthService {
    * @returns Token JWT ou null se não existir
    */
   getToken(): string | null {
-    const token = localStorage.getItem('token');
-    console.log(`[AuthService] Obtendo token: ${token ? 'SIM' : 'NÃO'}`);
-    if (token) {
-      console.log(`[AuthService] Token encontrado: ${token.substring(0, 20)}...`);
-      console.log(`[AuthService] Token completo: ${token}`);
-    } else {
-      console.log(`[AuthService] Nenhum token encontrado`);
-    }
-    return token;
+    return localStorage.getItem('token');
   }
 
   /**
@@ -457,52 +435,6 @@ export class AuthService {
   getUserId(): number | null {
     const user = this.getCurrentUser();
     return user?.id ?? null;
-  }
-
-  /**
-   * Renova tokens automaticamente após login
-   * 
-   * Este método é chamado automaticamente após um login bem-sucedido
-   * para garantir que os tokens bancários sejam sempre atualizados.
-   */
-  private renovarTokensNoLogin(): void {
-    const userId = this.getUserId();
-    
-    if (!userId) {
-      console.warn('[AuthService] Não é possível renovar tokens: usuário não autenticado');
-      return;
-    }
-    
-    console.log(`[AuthService] Renovando tokens automaticamente para usuário: ${userId}`);
-    
-    // Chamar endpoint de renovação de tokens
-    this.http.post(`${environment.apiUrl}/token-renewal/login/${userId}`, {})
-      .subscribe({
-        next: (response: any) => {
-          console.log('[AuthService] ✅ Tokens renovados automaticamente:', response);
-        },
-        error: (error) => {
-          console.warn('[AuthService] ⚠️ Falha ao renovar tokens automaticamente:', error);
-          // Não falhar o login por causa disso
-        }
-      });
-  }
-
-  /**
-   * Força renovação de token para o usuário atual
-   * 
-   * @returns Observable com o resultado da renovação
-   */
-  forcarRenovacaoToken(): Observable<any> {
-    const userId = this.getUserId();
-    
-    if (!userId) {
-      throw new Error('Usuário não autenticado');
-    }
-    
-    console.log(`[AuthService] Forçando renovação de token para usuário: ${userId}`);
-    
-    return this.http.post(`${environment.apiUrl}/token-renewal/force/${userId}`, {});
   }
 
 }

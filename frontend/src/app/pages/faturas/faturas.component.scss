@@ -126,6 +126,8 @@
             font-weight: 700;
             color: var(--text-primary);
             line-height: 1.2;
+            font-family: var(--font-mono-amount);
+            font-variant-numeric: tabular-nums;
 
             &.positivo {
               color: var(--success-color);
@@ -206,89 +208,320 @@
     }
   }
 
-  .faturas-grid {
+  .filtros-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    margin-bottom: 24px;
+
+    mat-card-header {
+      padding: 16px 24px 0;
+    }
+
+    mat-card-content {
+      padding: 16px 24px 24px;
+    }
+  }
+
+  .filtros-grid {
     display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    align-items: end;
+  }
+
+  .filtros-actions {
+    display: flex;
+    align-items: center;
+    min-height: 56px;
+  }
+
+  .top-bar-cartoes {
+    margin-bottom: 24px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+
+    .top-bar-cartoes-inner {
+      padding: 12px 20px 8px;
+    }
+
+    .filtro-cartao-field {
+      width: 100%;
+      max-width: 520px;
+    }
+  }
+
+  .timeline-faturas {
+    padding: 8px 8px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .timeline-mes-bloco {
+    border-left: 3px solid rgba(16, 185, 129, 0.55);
+    padding-left: 16px;
+    margin-left: 2px;
+  }
+
+  .timeline-mes-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .timeline-mes-titulo {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--text-primary);
+  }
+
+  .timeline-mes-previsto-sum {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+
+    strong {
+      color: #fbbf24;
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
+  }
+
+  .timeline-mes-previsto-ico {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: #f59e0b;
+  }
+
+  .faturas-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+  }
+
+  .faturas-grid,
+  .fatura-mes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
     gap: 16px;
     padding: 24px;
 
     .fatura-item {
-      display: flex;
-      align-items: center;
-      padding: 16px;
       background-color: var(--bg-tertiary);
       border: 1px solid var(--border-color);
-      border-radius: 8px;
-      transition: all 0.2s ease;
+      border-radius: 12px;
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
+      min-width: 0;
 
       &:hover {
-        background-color: var(--bg-quaternary);
-        transform: translateX(4px);
+        border-color: var(--exec-emerald);
+        box-shadow: var(--exec-glow-emerald);
       }
 
-      .fatura-info {
-        flex: 1;
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr 1fr auto;
-        gap: 16px;
+      &.vencendo {
+        border-color: rgba(245, 158, 11, 0.5);
+      }
+
+      &.vencida {
+        border-color: rgba(248, 113, 113, 0.45);
+      }
+
+      &.fatura-prevista {
+        opacity: 0.88;
+        border-style: dashed;
+        border-width: 2px;
+        border-color: rgba(251, 191, 36, 0.55);
+        background-image: repeating-linear-gradient(
+          -11deg,
+          transparent,
+          transparent 8px,
+          rgba(251, 191, 36, 0.06) 8px,
+          rgba(251, 191, 36, 0.06) 16px
+        );
+      }
+
+      &.fatura-aberta:not(.fatura-prevista) {
+        border-left: 3px solid rgba(52, 211, 153, 0.65);
+      }
+    }
+
+    .chip-fatura-prevista {
+      --mdc-chip-label-text-color: #f59e0b;
+      --mdc-chip-elevated-container-color: rgba(245, 158, 11, 0.12);
+    }
+
+    .fatura-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .fatura-banco {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .banco-info {
+      min-width: 0;
+
+      h4 {
+        margin: 0 0 4px;
+        color: var(--text-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    .fatura-status {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .vencimento-info {
+      font-size: 0.8rem;
+      max-width: 100%;
+      text-align: right;
+
+      span {
+        display: inline-flex;
         align-items: center;
-
-        .banco {
-          font-weight: 600;
-          color: var(--text-primary);
-        }
-
-        .valor {
-          font-weight: 600;
-          color: var(--text-primary);
-        }
-
-        .status {
-          .status-chip {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-
-            &.paga {
-              background-color: var(--success-color);
-              color: white;
-            }
-
-            &.pendente {
-              background-color: var(--warning-color);
-              color: white;
-            }
-
-            &.vencida {
-              background-color: var(--danger-color);
-              color: white;
-            }
-          }
-        }
-
-        .vencimento {
-          color: var(--text-secondary);
-          font-size: 0.9rem;
-        }
+        gap: 4px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
       }
 
-      .fatura-actions {
-        display: flex;
-        gap: 8px;
+      .vencendo {
+        color: var(--warning-color);
+      }
 
-        button {
-          min-width: 40px;
-          height: 40px;
-          padding: 0;
+      .pendente {
+        color: var(--text-secondary);
+      }
 
-          mat-icon {
-            font-size: 18px !important;
-            width: 18px !important;
-            height: 18px !important;
-          }
-        }
+      .vencida {
+        color: var(--danger-color);
+      }
+    }
+
+    .fatura-detalhes {
+      margin-top: 8px;
+    }
+
+    .detalhe-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+      min-width: 0;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      .label {
+        color: var(--text-secondary);
+        flex-shrink: 0;
+      }
+
+      .value {
+        color: var(--text-primary);
+        font-weight: 600;
+        text-align: right;
+        font-family: var(--font-mono-amount);
+        font-variant-numeric: tabular-nums;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+      }
+
+      &.detalhe-valor-total .label {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        letter-spacing: 0.05em;
+      }
+
+      &.detalhe-valor-total .value.valor-previsto-destaque {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #fde68a;
+        white-space: normal;
+        line-height: 1.25;
+      }
+
+      &.detalhe-valor-total .value:not(.valor-previsto-destaque) {
+        font-size: 1.12rem;
+        font-weight: 700;
+      }
+    }
+
+    .alerta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+
+      &.vencendo {
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        color: #fcd34d;
+      }
+
+      &.vencida {
+        background: rgba(248, 113, 113, 0.1);
+        border: 1px solid rgba(248, 113, 113, 0.35);
+        color: #fecaca;
+      }
+
+      mat-icon {
+        flex-shrink: 0;
+      }
+    }
+
+    mat-card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 16px 16px !important;
+      justify-content: flex-end;
+
+      button {
+        min-width: 0;
       }
     }
   }
@@ -322,9 +555,7 @@
 
   // Responsividade
   @media (max-width: 768px) {
-    .faturas-container {
-      padding: 16px;
-    }
+    padding: 16px;
 
     .header {
       flex-direction: column;
@@ -349,10 +580,19 @@
       }
     }
 
-    .fatura-item .fatura-info {
-      grid-template-columns: 1fr;
-      gap: 8px;
-      text-align: center;
+    .faturas-grid .fatura-status,
+    .fatura-mes-grid .fatura-status {
+      align-items: flex-start;
+      width: 100%;
+    }
+
+    .faturas-grid .vencimento-info,
+    .fatura-mes-grid .vencimento-info {
+      text-align: left;
+    }
+
+    .fatura-mes-grid {
+      padding: 12px 16px 20px;
     }
   }
 

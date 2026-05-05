@@ -7,6 +7,7 @@ import { provideNativeDateAdapter } from '@angular/material/core';
 
 import { routes } from './app.routes';
 import { AuthInterceptor } from './interceptors/auth.interceptor';
+import { LoadingInterceptor } from './interceptors/loading.interceptor';
 
 /**
  * Configuração principal da aplicação Angular ConsumoEsperto
@@ -32,7 +33,7 @@ export const appConfig: ApplicationConfig = {
     // Configura o cliente HTTP com interceptors personalizados
     // - AuthInterceptor: adiciona automaticamente token JWT nas requisições
     provideHttpClient(
-      withInterceptors([AuthInterceptor])
+      withInterceptors([LoadingInterceptor, AuthInterceptor])
     ),
     
     // Habilita animações básicas do Angular

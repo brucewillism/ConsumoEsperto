@@ -9,8 +9,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -289,5 +290,68 @@ public class SimulacaoCompraService {
             // Meta desafiadora: usuário precisa economizar mais do que atualmente
             return "Meta desafiadora. Você precisaria economizar R$ " + economiaAdicional + " a mais por mês. Considere aumentar o prazo ou reduzir o valor.";
         }
+    }
+
+    public Map<String, Object> simularInvestimento(BigDecimal valorInicial, BigDecimal aporteMensal, BigDecimal taxaRetornoAnual, int periodoAnos) {
+        BigDecimal taxaMensal = BigDecimal.valueOf(Math.pow(
+            BigDecimal.ONE.add(taxaRetornoAnual.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)).doubleValue(),
+            1.0 / 12.0
+        ) - 1.0);
+
+        BigDecimal valorFinal = valorInicial;
+        List<Map<String, Object>> projecaoAnual = new ArrayList<>();
+
+        for (int ano = 1; ano <= periodoAnos; ano++) {
+            BigDecimal saldoInicial = valorFinal;
+            BigDecimal aportesNoAno = aporteMensal.multiply(BigDecimal.valueOf(12));
+            for (int mes = 0; mes < 12; mes++) {
+                valorFinal = valorFinal.add(aporteMensal).multiply(BigDecimal.ONE.add(taxaMensal));
+            }
+            BigDecimal jurosAno = valorFinal.subtract(saldoInicial).subtract(aportesNoAno);
+            Map<String, Object> linha = new HashMap<>();
+            linha.put("ano", ano);
+            linha.put("saldoInicial", saldoInicial.setScale(2, RoundingMode.HALF_UP));
+            linha.put("aportes", aportesNoAno.setScale(2, RoundingMode.HALF_UP));
+            linha.put("juros", jurosAno.setScale(2, RoundingMode.HALF_UP));
+            linha.put("saldoFinal", valorFinal.setScale(2, RoundingMode.HALF_UP));
+            projecaoAnual.add(linha);
+        }
+
+        BigDecimal totalAportes = valorInicial.add(aporteMensal.multiply(BigDecimal.valueOf(periodoAnos * 12L)));
+        BigDecimal jurosCompostos = valorFinal.subtract(totalAportes);
+
+        Map<String, Object> resultado = new HashMap<>();
+        resultado.put("valorInicial", valorInicial.setScale(2, RoundingMode.HALF_UP));
+        resultado.put("totalAportes", totalAportes.setScale(2, RoundingMode.HALF_UP));
+        resultado.put("jurosCompostos", jurosCompostos.setScale(2, RoundingMode.HALF_UP));
+        resultado.put("valorFinal", valorFinal.setScale(2, RoundingMode.HALF_UP));
+        resultado.put("projecaoAnual", projecaoAnual);
+        return resultado;
+    }
+
+    public Map<String, Object> simularFinanciamento(BigDecimal valorBem, BigDecimal entrada, BigDecimal taxaJurosMensal, int prazoMeses) {
+        BigDecimal valorFinanciado = valorBem.subtract(entrada);
+        BigDecimal i = taxaJurosMensal.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP);
+
+        BigDecimal valorParcela;
+        if (i.compareTo(BigDecimal.ZERO) == 0) {
+            valorParcela = valorFinanciado.divide(BigDecimal.valueOf(prazoMeses), 2, RoundingMode.HALF_UP);
+        } else {
+            double fator = Math.pow(BigDecimal.ONE.add(i).doubleValue(), prazoMeses);
+            double parcela = valorFinanciado.doubleValue() * ((i.doubleValue() * fator) / (fator - 1));
+            valorParcela = BigDecimal.valueOf(parcela).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal totalPagar = valorParcela.multiply(BigDecimal.valueOf(prazoMeses)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalJuros = totalPagar.subtract(valorFinanciado).setScale(2, RoundingMode.HALF_UP);
+
+        Map<String, Object> resultado = new HashMap<>();
+        resultado.put("valorBem", valorBem.setScale(2, RoundingMode.HALF_UP));
+        resultado.put("entrada", entrada.setScale(2, RoundingMode.HALF_UP));
+        resultado.put("valorFinanciado", valorFinanciado.setScale(2, RoundingMode.HALF_UP));
+        resultado.put("valorParcela", valorParcela);
+        resultado.put("totalPagar", totalPagar);
+        resultado.put("totalJuros", totalJuros);
+        return resultado;
     }
 }

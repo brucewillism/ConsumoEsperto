@@ -1,0 +1,178 @@
+@baseUrl = http://localhost:8080
+@webhookPath = /api/public/evolution/webhook
+
+###
+# 1) SUCESSO - TEXTO LEGITIMO (fromMe: true)
+# Valida que mensagem de self-chat humana deve ser processada normalmente.
+# Esperado nos logs:
+# - "Recebida mensagem de self-chat..."
+# - "Conteúdo identificado como input do usuário. Seguindo..."
+# Resultado funcional esperado: fluxo de comando financeiro executado.
+POST {{baseUrl}}{{webhookPath}}
+Content-Type: application/json
+
+{
+  "event": "messages.upsert",
+  "instance": "ConsumoEsperto",
+  "data": {
+    "key": {
+      "remoteJid": "5511999999999@s.whatsapp.net",
+      "fromMe": true,
+      "id": "ANTI-LOOP-TXT-001"
+    },
+    "message": {
+      "conversation": "Almoço 35.00"
+    },
+    "messageTimestamp": 1714469100,
+    "pushName": "Self Chat"
+  },
+  "sender": "5511999999999",
+  "date_time": "2026-04-30T12:00:00.000Z"
+}
+
+###
+# 2) BLOQUEIO - AUTO-RESPOSTA DO ROBO (fromMe: true)
+# Valida proteção anti-loop para eco de resposta automática.
+# Esperado nos logs:
+# - "Recebida mensagem de self-chat..."
+# - "Ignorando auto-resposta do sistema"
+# - "Conteúdo identificado como resposta do robô. Abortando loop."
+# Resultado funcional esperado: processamento encerrado sem criar transação.
+POST {{baseUrl}}{{webhookPath}}
+Content-Type: application/json
+
+{
+  "event": "messages.upsert",
+  "instance": "ConsumoEsperto",
+  "data": {
+    "key": {
+      "remoteJid": "5511999999999@s.whatsapp.net",
+      "fromMe": true,
+      "id": "ANTI-LOOP-TXT-002"
+    },
+    "message": {
+      "conversation": "🚀 Lançado com sucesso!"
+    },
+    "messageTimestamp": 1714469200,
+    "pushName": "Self Chat"
+  },
+  "sender": "5511999999999",
+  "date_time": "2026-04-30T12:01:00.000Z"
+}
+
+###
+# 3.1) FALSO NEGATIVO - TEXTO HUMANO COM EMOJI NO FIM
+# Desafio: não bloquear só por conter "🚀" no meio/fim.
+# Esperado nos logs:
+# - "Recebida mensagem de self-chat..."
+# - "Conteúdo identificado como input do usuário. Seguindo..."
+# Resultado funcional esperado: mensagem processada normalmente.
+POST {{baseUrl}}{{webhookPath}}
+Content-Type: application/json
+
+{
+  "event": "messages.upsert",
+  "instance": "ConsumoEsperto",
+  "data": {
+    "key": {
+      "remoteJid": "5511999999999@s.whatsapp.net",
+      "fromMe": true,
+      "id": "ANTI-LOOP-TXT-003A"
+    },
+    "message": {
+      "conversation": "Preciso de um foguete para a festa 🚀"
+    },
+    "messageTimestamp": 1714469300,
+    "pushName": "Self Chat"
+  },
+  "sender": "5511999999999",
+  "date_time": "2026-04-30T12:02:00.000Z"
+}
+
+###
+# 3.2) FALSO NEGATIVO - TEXTO HUMANO COM EMOJI NO INICIO (NAO SISTEMICO)
+# Esse caso garante que o bloqueio não fique "cego" para qualquer frase iniciada com emoji.
+# Esperado nos logs:
+# - "Recebida mensagem de self-chat..."
+# - "Conteúdo identificado como input do usuário. Seguindo..."
+# Resultado funcional esperado: mensagem processada normalmente.
+POST {{baseUrl}}{{webhookPath}}
+Content-Type: application/json
+
+{
+  "event": "messages.upsert",
+  "instance": "ConsumoEsperto",
+  "data": {
+    "key": {
+      "remoteJid": "5511999999999@s.whatsapp.net",
+      "fromMe": true,
+      "id": "ANTI-LOOP-TXT-003B"
+    },
+    "message": {
+      "conversation": "✅ confirmada a reserva do hotel"
+    },
+    "messageTimestamp": 1714469400,
+    "pushName": "Self Chat"
+  },
+  "sender": "5511999999999",
+  "date_time": "2026-04-30T12:03:00.000Z"
+}
+
+###
+# 4) MIDIA EM SELF-CHAT - IMAGEM (fromMe: true)
+# Valida que imagem enviada por self-chat deve sempre passar para OCR (não usar bloqueio textual).
+# Esperado nos logs:
+# - "Recebida mensagem de self-chat..."
+# - "Conteúdo identificado como input do usuário. Seguindo..."
+# Resultado funcional esperado: entra no fluxo de OCR da nota fiscal.
+POST {{baseUrl}}{{webhookPath}}
+Content-Type: application/json
+
+{
+  "event": "messages.upsert",
+  "instance": "ConsumoEsperto",
+  "data": {
+    "key": {
+      "remoteJid": "5511999999999@s.whatsapp.net",
+      "fromMe": true,
+      "id": "ANTI-LOOP-IMG-004"
+    },
+    "message": {
+      "imageMessage": {
+        "mimetype": "image/jpeg",
+        "caption": "cupom fiscal self-chat",
+        "base64": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBAQEA8PDw8PDw8PDw8QDw8PDw8PFREWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OFxAQFy0dHR0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAgMBIgACEQEDEQH/xAAXAAEBAQEAAAAAAAAAAAAAAAAAAQID/8QAFhEBAQEAAAAAAAAAAAAAAAAAAAER/9oADAMBAAIQAxAAAAG5mAAAAAAAAP/EABYQAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAQABBQKcP//EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAwEBPwGn/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAECAQE/AYn/xAAWEAEBAQAAAAAAAAAAAAAAAAABABH/2gAIAQEABj8Cw//EABkQAQACAwAAAAAAAAAAAAAAAAEAESExQf/aAAgBAQABPyHB6E4m7//aAAwDAQACAAMAAAAQ8//EABYRAQEBAAAAAAAAAAAAAAAAAAABEf/aAAgBAwEBPxC0/8QAFhEBAQEAAAAAAAAAAAAAAAAAABEh/9oACAECAQE/EMr/xAAaEAACAwEBAAAAAAAAAAAAAAABEQAhMUFx/9oACAEBAAE/EF2hCOzYmQm3s2p2S2G4mS9Bqz//2Q=="
+      }
+    },
+    "messageTimestamp": 1714469500,
+    "pushName": "Self Chat"
+  },
+  "sender": "5511999999999",
+  "date_time": "2026-04-30T12:04:00.000Z"
+}
+
+###
+# 5) CONTROLE - MENSAGEM EXTERNA (fromMe: false)
+# Garante que mensagens de outros números seguem sem alteração.
+# Esperado: processamento normal (sem branch de self-chat).
+POST {{baseUrl}}{{webhookPath}}
+Content-Type: application/json
+
+{
+  "event": "messages.upsert",
+  "instance": "ConsumoEsperto",
+  "data": {
+    "key": {
+      "remoteJid": "5511888888888@s.whatsapp.net",
+      "fromMe": false,
+      "id": "ANTI-LOOP-EXT-005"
+    },
+    "message": {
+      "conversation": "despesa 18,50 padaria"
+    },
+    "messageTimestamp": 1714469600,
+    "pushName": "Contato Externo"
+  },
+  "sender": "5511888888888",
+  "date_time": "2026-04-30T12:05:00.000Z"
+}

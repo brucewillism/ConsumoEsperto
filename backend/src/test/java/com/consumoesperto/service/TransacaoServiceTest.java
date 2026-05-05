@@ -3,12 +3,14 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
-import com.consumoesperto.repository.TransacaoRepository;
-import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.CategoriaRepository;
+import com.consumoesperto.repository.FaturaRepository;
+import com.consumoesperto.repository.TransacaoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -31,10 +33,19 @@ class TransacaoServiceTest {
     private TransacaoRepository transacaoRepository;
 
     @Mock
-    private UsuarioRepository usuarioRepository;
+    private CategoriaRepository categoriaRepository;
 
     @Mock
-    private CategoriaRepository categoriaRepository;
+    private SaldoService saldoService;
+
+    @Mock
+    private FaturaRepository faturaRepository;
+
+    @Mock
+    private CartaoCreditoRepository cartaoCreditoRepository;
+
+    @Mock
+    private FaturaService faturaService;
 
     @InjectMocks
     private TransacaoService transacaoService;
@@ -57,6 +68,7 @@ class TransacaoServiceTest {
         transacao.setValor(new BigDecimal("100.00"));
         transacao.setDataTransacao(LocalDateTime.now());
         transacao.setTipoTransacao(Transacao.TipoTransacao.DESPESA);
+        transacao.setExcluido(false);
 
         transacaoDTO = new TransacaoDTO();
         transacaoDTO.setId(1L);
@@ -68,28 +80,22 @@ class TransacaoServiceTest {
 
     @Test
     void testCriarTransacao_Sucesso() {
-        // Arrange
-        // O serviço cria um novo Usuario diretamente, não usa o repositório
         when(transacaoRepository.save(any(Transacao.class))).thenReturn(transacao);
 
-        // Act
         TransacaoDTO result = transacaoService.criarTransacao(transacaoDTO, 1L);
 
-        // Assert
         assertNotNull(result);
         assertEquals("Compra teste", result.getDescricao());
         verify(transacaoRepository, times(1)).save(any(Transacao.class));
+        verify(saldoService, times(1)).notificarAlteracaoSaldo(1L);
     }
 
     @Test
     void testBuscarPorId_Encontrado() {
-        // Arrange
         when(transacaoRepository.findById(1L)).thenReturn(Optional.of(transacao));
 
-        // Act
         TransacaoDTO result = transacaoService.buscarPorId(1L, 1L);
 
-        // Assert
         assertNotNull(result);
         assertEquals(1L, result.getId());
         assertEquals("Compra teste", result.getDescricao());
@@ -97,10 +103,8 @@ class TransacaoServiceTest {
 
     @Test
     void testBuscarPorId_NaoEncontrado() {
-        // Arrange
         when(transacaoRepository.findById(1L)).thenReturn(Optional.empty());
 
-        // Act & Assert
         assertThrows(RuntimeException.class, () -> {
             transacaoService.buscarPorId(1L, 1L);
         });
@@ -108,15 +112,14 @@ class TransacaoServiceTest {
 
     @Test
     void testExcluir_Sucesso() {
-        // Arrange
         when(transacaoRepository.findById(1L)).thenReturn(Optional.of(transacao));
-        doNothing().when(transacaoRepository).delete(transacao);
+        when(transacaoRepository.save(any(Transacao.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // Act
         transacaoService.deletarTransacao(1L, 1L);
 
-        // Assert
-        verify(transacaoRepository, times(1)).delete(transacao);
+        ArgumentCaptor<Transacao> captor = ArgumentCaptor.forClass(Transacao.class);
+        verify(transacaoRepository, times(1)).save(captor.capture());
+        assertTrue(captor.getValue().isExcluido());
+        verify(saldoService, times(1)).notificarAlteracaoSaldo(1L);
     }
 }
-

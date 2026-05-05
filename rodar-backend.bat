@@ -1,54 +1,66 @@
 @echo off
+setlocal EnableExtensions
 echo ========================================
 echo   RODANDO BACKEND - CONSUMO ESPERTO
 echo ========================================
 echo.
 
-REM Verificar se Java está configurado
-if "%JAVA_HOME%"=="" (
-    echo [AVISO] JAVA_HOME não está configurado!
-    echo Tentando configurar automaticamente...
-    call configurar-java-home.bat
-    if errorlevel 1 (
-        echo [ERRO] Não foi possível configurar JAVA_HOME automaticamente.
-        echo Por favor, execute configurar-java-home.bat manualmente.
-        pause
-        exit /b 1
-    )
+REM Raiz do repositorio (pasta onde esta este .bat)
+set "ROOT=%~dp0"
+if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
+
+REM Versao oficial: JDK e Maven da pasta tools (so nesta sessao do CMD)
+set "JAVA_HOME=%ROOT%\tools\java\ms-17.0.15"
+if not exist "%JAVA_HOME%\bin\java.exe" (
+  set "JAVA_HOME="
+  for /d %%J in ("%ROOT%\tools\java\*") do (
+    set "JAVA_HOME=%%~fJ"
+    goto :have_java
+  )
+)
+:have_java
+if not defined JAVA_HOME (
+    echo [ERRO] Nenhum JDK em %ROOT%\tools\java
+    echo Instale conforme tools\README.md
+    pause
+    exit /b 1
+)
+set "PATH=%JAVA_HOME%\bin;%ROOT%\tools\maven\bin;%PATH%"
+
+where java >nul 2>&1
+if errorlevel 1 (
+    echo [ERRO] java.exe nao encontrado apos configurar tools.
+    pause
+    exit /b 1
 )
 
-REM Navegar para o diretório backend
-cd backend
+cd /d "%ROOT%\backend"
 if errorlevel 1 (
-    echo [ERRO] Diretório backend não encontrado!
+    echo [ERRO] Diretorio backend nao encontrado!
     pause
     exit /b 1
 )
 
 echo.
-echo [INFO] Diretório atual: %CD%
-echo [INFO] Java: %JAVA_HOME%
-echo [INFO] Porta: 8080
-echo [INFO] Ngrok URL: https://79c3d0af5801.ngrok-free.app
+echo [INFO] Diretorio atual: %CD%
+echo [INFO] JAVA_HOME (tools): %JAVA_HOME%
+echo [INFO] Porta padrao: 8080 (veja application.properties / profiles)
 echo.
-echo [INFO] Iniciando aplicação Spring Boot...
+java -version 2>&1
+echo.
+echo [INFO] Iniciando Spring Boot (mvn spring-boot:run)...
 echo.
 
-REM Rodar o Spring Boot
 call mvn spring-boot:run
 
 if errorlevel 1 (
     echo.
-    echo [ERRO] Falha ao iniciar a aplicação!
+    echo [ERRO] Falha ao iniciar a aplicacao!
     echo.
-    echo Verifique:
-    echo - PostgreSQL está rodando?
-    echo - Banco de dados existe?
-    echo - Variáveis de ambiente configuradas?
+    echo Verifique: PostgreSQL, banco, .env / application-*.properties
     echo.
     pause
     exit /b 1
 )
 
 pause
-

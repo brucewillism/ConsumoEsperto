@@ -234,6 +234,8 @@ public class Fatura {
         VENCIDA,    // Fatura com vencimento ultrapassado
         PAGA,       // Fatura paga integralmente
         PARCIAL,    // Fatura com pagamento parcial
+        /** Ciclo futuro criado para parcelas (limite comprometido antes do fechamento). */
+        PREVISTA,
         CANCELADA;  // Fatura cancelada
         
         // Método de compatibilidade para converter String para StatusFatura

@@ -68,34 +68,19 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/simulacoes/simulacoes.component').then(m => m.SimulacoesComponent),
     canActivate: [AuthGuard]
   },
-  
-  // Configuração de APIs bancárias (protegida)
-  { 
-    path: 'bank-config', 
-    loadComponent: () => import('./pages/bank-config/bank-config.component').then(m => m.BankConfigComponent),
-    canActivate: [AuthGuard]
-  },
-  
-  // Teste da API do Mercado Pago (protegida)
-  { 
-    path: 'test-mercado-pago', 
-    loadComponent: () => import('./pages/test-mercado-pago/test-mercado-pago.component').then(m => m.TestMercadoPagoComponent),
-    canActivate: [AuthGuard]
-  },
-  
-          // Setup seguro do Mercado Pago (protegida)
-          { 
-            path: 'mercadopago-setup', 
-            loadComponent: () => import('./pages/mercadopago-setup/mercadopago-setup.component').then(m => m.MercadoPagoSetupComponent),
-            canActivate: [AuthGuard]
-          },
-  // Configuração automática do Mercado Pago (protegida)
+
+  // Configuração do WhatsApp Command Center (protegida)
   {
-    path: 'mercadopago-auto-config',
-    loadComponent: () => import('./components/mercadopago-auto-config/mercadopago-auto-config.component').then(m => m.MercadoPagoAutoConfigComponent),
+    path: 'whatsapp-config',
+    loadComponent: () => import('./pages/whatsapp-config/whatsapp-config.component').then(m => m.WhatsappConfigComponent),
     canActivate: [AuthGuard]
   },
 
+  {
+    path: 'metas',
+    loadComponent: () => import('./pages/metas/metas.component').then(m => m.MetasComponent),
+    canActivate: [AuthGuard]
+  },
   
   // Rota wildcard: captura todas as rotas inexistentes
   // Redireciona para o dashboard (útil para SPA)

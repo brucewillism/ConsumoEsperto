@@ -1,0 +1,114 @@
+.whatsapp-config-container {
+  padding: 24px;
+}
+
+.card {
+  max-width: 760px;
+  background: var(--exec-surface, #1e293b);
+  border: 1px solid var(--exec-border, #334155);
+  border-radius: 12px;
+  padding: 24px;
+  color: var(--text-primary, #e5e7eb);
+}
+
+h1 {
+  margin: 0 0 8px;
+}
+
+.subtitle {
+  margin: 0 0 20px;
+  color: #9ca3af;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  margin: -4px 0 12px;
+}
+
+.status-box {
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-box.linked {
+  border-color: #16a34a;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  background: #111827;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+}
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--exec-emerald, #10b981);
+  color: #0f172a;
+  font-weight: 600;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.btn.primary:hover:not(:disabled) {
+  box-shadow: var(--exec-glow-emerald, 0 0 10px rgba(16, 185, 129, 0.55));
+}
+
+.btn.primary:focus-visible {
+  outline: none;
+  box-shadow: var(--exec-glow-emerald);
+}
+
+.btn.danger {
+  background: #dc2626;
+  color: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tips {
+  margin-top: 20px;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.tips h3 {
+  margin-top: 0;
+}
+
+code {
+  background: #1f2937;
+  padding: 2px 6px;
+  border-radius: 4px;
+}

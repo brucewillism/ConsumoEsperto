@@ -23,6 +23,9 @@ public class CategoriaDTO {
     private String descricao;
 
     private String cor;
+
+    private String icone;
+
     private Long usuarioId;
     private LocalDateTime dataCriacao;
 }

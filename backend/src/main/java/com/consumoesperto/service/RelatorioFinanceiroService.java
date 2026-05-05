@@ -1,5 +1,7 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dto.relatorio.IrPdfDeclaracaoDados;
+import com.consumoesperto.dto.relatorio.IrPdfLinhaVm;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.FaturaRepository;
@@ -8,12 +10,23 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.io.PrintWriter;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Serviço responsável por gerar relatórios financeiros e alertas
@@ -40,6 +53,8 @@ public class RelatorioFinanceiroService {
 
     // Repositório para operações de consulta de transações
     private final TransacaoRepository transacaoRepository;
+
+    private final TransacaoService transacaoService;
     
     // Repositório para operações de consulta de faturas
     private final FaturaRepository faturaRepository;
@@ -69,14 +84,10 @@ public class RelatorioFinanceiroService {
         LocalDateTime inicio = yearMonth.atDay(1).atStartOfDay();
         LocalDateTime fim = yearMonth.atEndOfMonth().atTime(23, 59, 59);
 
-        // Calcular receitas e despesas do período
-        BigDecimal totalReceitas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fim);
-        BigDecimal totalDespesas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.DESPESA, inicio, fim);
-
-        // Calcular saldo mensal (receitas - despesas)
-        BigDecimal saldo = totalReceitas.subtract(totalDespesas);
+        Map<String, Object> nucleo = transacaoService.resumoFinanceiroMes(usuarioId, yearMonth);
+        BigDecimal totalReceitas = BigDecimal.valueOf((Double) nucleo.get("totalReceitas"));
+        BigDecimal totalDespesas = BigDecimal.valueOf((Double) nucleo.get("totalDespesas"));
+        BigDecimal saldo = BigDecimal.valueOf((Double) nucleo.get("saldo"));
 
         // Buscar faturas vencendo no mês especificado
         List<Fatura> faturasVencendo = faturaRepository.findByUsuarioIdAndDataVencimentoBetween(
@@ -91,6 +102,7 @@ public class RelatorioFinanceiroService {
         Map<String, Object> relatorio = new HashMap<>();
         relatorio.put("ano", ano);
         relatorio.put("mes", mes);
+        relatorio.put("totalTransacoes", nucleo.get("totalTransacoes"));
         relatorio.put("totalReceitas", totalReceitas);
         relatorio.put("totalDespesas", totalDespesas);
         relatorio.put("saldo", saldo);
@@ -123,10 +135,12 @@ public class RelatorioFinanceiroService {
         LocalDateTime fim = LocalDateTime.of(ano, 12, 31, 23, 59, 59);
 
         // Calcular receitas e despesas do ano
-        BigDecimal totalReceitas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal totalReceitas = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fim);
-        BigDecimal totalDespesas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal totalDespesas = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.DESPESA, inicio, fim);
+        totalReceitas = totalReceitas != null ? totalReceitas : BigDecimal.ZERO;
+        totalDespesas = totalDespesas != null ? totalDespesas : BigDecimal.ZERO;
 
         // Calcular saldo anual (receitas - despesas)
         BigDecimal saldo = totalReceitas.subtract(totalDespesas);
@@ -172,10 +186,12 @@ public class RelatorioFinanceiroService {
 
         // Calcular saldo atual do mês
         LocalDateTime inicioMes = agora.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
-        BigDecimal receitasMes = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal receitasMes = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.RECEITA, inicioMes, agora);
-        BigDecimal despesasMes = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal despesasMes = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.DESPESA, inicioMes, agora);
+        receitasMes = receitasMes != null ? receitasMes : BigDecimal.ZERO;
+        despesasMes = despesasMes != null ? despesasMes : BigDecimal.ZERO;
         BigDecimal saldoMes = receitasMes.subtract(despesasMes);
 
         // Monta o sistema de alertas com todas as informações críticas
@@ -214,7 +230,7 @@ public class RelatorioFinanceiroService {
         LocalDateTime fim = yearMonth.atEndOfMonth().atTime(23, 59, 59);
 
         // Buscar transações agrupadas por categoria no período
-        List<Object[]> transacoesPorCategoria = transacaoRepository.findByUsuarioIdAndPeriodoGroupByCategoria(
+        List<Object[]> transacoesPorCategoria = transacaoRepository.findConfirmadasByUsuarioIdAndPeriodoGroupByCategoria(
                 usuarioId, inicio, fim);
 
         // Monta o relatório por categoria
@@ -224,6 +240,41 @@ public class RelatorioFinanceiroService {
         relatorio.put("transacoesPorCategoria", transacoesPorCategoria);
 
         return relatorio;
+    }
+
+    public Map<String, Object> gerarDespesasPorCategoriaMesAtual(Long usuarioId) {
+        YearMonth mesAtual = YearMonth.now();
+        LocalDateTime inicio = mesAtual.atDay(1).atStartOfDay();
+        LocalDateTime fim = mesAtual.atEndOfMonth().atTime(23, 59, 59);
+
+        List<Object[]> resultados = transacaoRepository.findDespesasByUsuarioIdAndPeriodoGroupByCategoria(usuarioId, inicio, fim);
+        List<Map<String, Object>> itens = new ArrayList<>();
+        BigDecimal total = BigDecimal.ZERO;
+
+        for (Object[] linha : resultados) {
+            String categoria = linha[0] != null ? linha[0].toString() : "Sem categoria";
+            BigDecimal valor = linha[1] instanceof BigDecimal ? (BigDecimal) linha[1] : BigDecimal.ZERO;
+            total = total.add(valor);
+            Map<String, Object> item = new HashMap<>();
+            item.put("categoria", categoria);
+            item.put("valor", valor);
+            itens.add(item);
+        }
+
+        for (Map<String, Object> item : itens) {
+            BigDecimal valor = (BigDecimal) item.get("valor");
+            BigDecimal percentual = total.compareTo(BigDecimal.ZERO) == 0
+                ? BigDecimal.ZERO
+                : valor.multiply(BigDecimal.valueOf(100)).divide(total, 2, RoundingMode.HALF_UP);
+            item.put("percentual", percentual);
+        }
+
+        Map<String, Object> resposta = new HashMap<>();
+        resposta.put("ano", mesAtual.getYear());
+        resposta.put("mes", mesAtual.getMonthValue());
+        resposta.put("totalDespesas", total);
+        resposta.put("itens", itens);
+        return resposta;
     }
 
     /**
@@ -245,7 +296,7 @@ public class RelatorioFinanceiroService {
         }
         
         // Calcula: ((receitas - despesas) / receitas) * 100
-        return receitas.subtract(despesas).divide(receitas, 4, BigDecimal.ROUND_HALF_UP)
+        return receitas.subtract(despesas).divide(receitas, 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100));
     }
 
@@ -263,5 +314,112 @@ public class RelatorioFinanceiroService {
         return faturas.stream()
                 .map(Fatura::getValorFatura)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Dados agregados para PDF (e mesma lógica do CSV): despesas confirmadas do ano-calendário por categoria e CNPJ.
+     */
+    @Transactional(readOnly = true)
+    public IrPdfDeclaracaoDados prepararDeclaracaoIrPdf(Long usuarioId, int anoCalendario) {
+        LinkedHashMap<String, IrGrupoCsv> acumulado = acumularIrGrupos(usuarioId, anoCalendario);
+        NumberFormat brl = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+        BigDecimal total = BigDecimal.ZERO;
+        List<IrPdfLinhaVm> linhas = new ArrayList<>();
+        for (IrGrupoCsv g : acumulado.values()) {
+            total = total.add(g.total != null ? g.total : BigDecimal.ZERO);
+            linhas.add(new IrPdfLinhaVm(
+                g.categoria,
+                formatarCnpjExibicao(g.cnpj),
+                brl.format(g.total != null ? g.total : BigDecimal.ZERO),
+                g.quantidade
+            ));
+        }
+        return new IrPdfDeclaracaoDados(linhas, total);
+    }
+
+    /**
+     * Exportação IR: despesas CONFIRMADAS do ano-calendário, agregadas por categoria e CNPJ.
+     * Pagina leitura no banco e escreve CSV no {@link PrintWriter} (adequado para streaming).
+     */
+    @Transactional(readOnly = true)
+    public void escreverCsvIr(Long usuarioId, int anoCalendario, PrintWriter writer) {
+        writer.write('\uFEFF');
+        writer.println("categoria;cnpj;soma_valor;quantidade_transacoes");
+        LinkedHashMap<String, IrGrupoCsv> acumulado = acumularIrGrupos(usuarioId, anoCalendario);
+        for (IrGrupoCsv g : acumulado.values()) {
+            writer.print(escaparCampoCsv(g.categoria));
+            writer.print(";");
+            writer.print(escaparCampoCsv(g.cnpj));
+            writer.print(";");
+            writer.print(g.total.setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ','));
+            writer.print(";");
+            writer.println(g.quantidade);
+        }
+        writer.flush();
+    }
+
+    private LinkedHashMap<String, IrGrupoCsv> acumularIrGrupos(Long usuarioId, int anoCalendario) {
+        LocalDateTime inicio = LocalDate.of(anoCalendario, 1, 1).atStartOfDay();
+        LocalDateTime fim = LocalDate.of(anoCalendario, 12, 31).atTime(23, 59, 59);
+        LinkedHashMap<String, IrGrupoCsv> acumulado = new LinkedHashMap<>();
+        int pageIdx = 0;
+        Page<Transacao> page;
+        do {
+            page = transacaoRepository.findPagedForIrExport(
+                usuarioId,
+                Transacao.TipoTransacao.DESPESA,
+                inicio,
+                fim,
+                PageRequest.of(pageIdx++, 500)
+            );
+            for (Transacao t : page.getContent()) {
+                String categoria = t.getCategoria() != null ? t.getCategoria().getNome() : "Sem categoria";
+                String cnpj = t.getCnpj() != null ? t.getCnpj() : "";
+                String key = categoria + "\0" + cnpj;
+                acumulado.merge(key, new IrGrupoCsv(categoria, cnpj, t.getValor(), 1L), (ex, inc) -> {
+                    ex.total = ex.total.add(inc.total != null ? inc.total : BigDecimal.ZERO);
+                    ex.quantidade += inc.quantidade;
+                    return ex;
+                });
+            }
+        } while (page.hasNext());
+        return acumulado;
+    }
+
+    private static String formatarCnpjExibicao(String cnpj) {
+        if (cnpj == null || cnpj.isBlank()) {
+            return "—";
+        }
+        String d = cnpj.replaceAll("\\D", "");
+        if (d.length() != 14) {
+            return cnpj.trim();
+        }
+        return d.replaceFirst("(\\d{2})(\\d{3})(\\d{3})(\\d{4})(\\d{2})", "$1.$2.$3/$4-$5");
+    }
+
+    private static String escaparCampoCsv(String valor) {
+        if (valor == null) {
+            return "";
+        }
+        String v = valor.replace("\"", "\"\"");
+        if (v.contains(";") || v.contains("\n") || v.contains("\"")) {
+            return "\"" + v + "\"";
+        }
+        return v;
+    }
+
+    private static final class IrGrupoCsv {
+        private final String categoria;
+        private final String cnpj;
+        private BigDecimal total;
+        private long quantidade;
+
+        private IrGrupoCsv(String categoria, String cnpj, BigDecimal total, long quantidade) {
+            this.categoria = categoria;
+            this.cnpj = cnpj;
+            this.total = total != null ? total : BigDecimal.ZERO;
+            this.quantidade = quantidade;
+        }
+
     }
 }

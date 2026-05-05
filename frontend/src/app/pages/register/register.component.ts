@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -22,7 +22,8 @@ import { Usuario } from '../../models/usuario.model';
     MatInputModule,
     MatButtonModule,
     MatIconModule,
-    MatDividerModule
+    MatDividerModule,
+    RouterLink
   ],
   template: `
     <div class="register-container">
@@ -91,13 +92,16 @@ import { Usuario } from '../../models/usuario.model';
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 16px;
+      background: radial-gradient(ellipse at 20% 0%, rgba(16, 185, 129, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 100%, rgba(245, 158, 11, 0.08) 0%, transparent 45%),
+        var(--exec-bg, #0f172a);
     }
 
     .register-card {
-      max-width: 400px;
+      max-width: 420px;
       width: 100%;
-      margin: 20px;
+      margin: 0 auto;
     }
 
     .full-width {
@@ -108,16 +112,20 @@ import { Usuario } from '../../models/usuario.model';
     .login-link {
       text-align: center;
       margin-top: 20px;
+      color: var(--text-secondary, #94a3b8);
+      font-size: 0.875rem;
     }
 
     .login-link a {
-      color: #1976d2;
+      color: var(--exec-emerald, #10b981);
       text-decoration: none;
-      margin-left: 5px;
+      margin-left: 6px;
+      font-weight: 600;
     }
 
     .login-link a:hover {
       text-decoration: underline;
+      color: #34d399;
     }
   `]
 })

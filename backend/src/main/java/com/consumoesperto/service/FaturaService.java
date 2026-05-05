@@ -1,17 +1,29 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.FaturaDTO;
+import com.consumoesperto.dto.MelhorDiaCompraCalculado;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.FaturaRepository;
+import com.consumoesperto.repository.TransacaoRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -35,13 +47,26 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor // Lombok: gera construtor com campos final automaticamente
 @Transactional // Todas as operações são transacionais para garantir consistência
+@Slf4j
 public class FaturaService {
+
+    private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+    private static final DateTimeFormatter DDMMAAAA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     // Repositório para operações de persistência de faturas
     private final FaturaRepository faturaRepository;
     
     // Repositório para validação e busca de cartões de crédito
     private final CartaoCreditoRepository cartaoCreditoRepository;
+
+    private final TransacaoRepository transacaoRepository;
+
+    /**
+     * Dias corridos entre o fechamento estimado e o vencimento (ex.: 10 = fechamento 10 dias antes do vencimento).
+     * Override: {@code consumoesperto.fatura.dias-entre-fechamento-e-vencimento}.
+     */
+    @Value("${consumoesperto.fatura.dias-entre-fechamento-e-vencimento:10}")
+    private int diasEntreFechamentoEVencimento;
 
     /**
      * Cria uma nova fatura de cartão de crédito no sistema
@@ -288,6 +313,132 @@ public class FaturaService {
     }
 
     /**
+     * Localiza ou cria a fatura em aberto/parcial do cartão (ciclo atual). Não altera valores;
+     * o total da fatura deve refletir a soma das {@link com.consumoesperto.model.Transacao} vinculadas.
+     */
+    public Fatura resolverFaturaAbertaParaCartao(Long usuarioId, CartaoCredito cartao) {
+        if (cartao == null) {
+            throw new RuntimeException("Cartão inválido");
+        }
+        if (!Objects.equals(cartao.getUsuario().getId(), usuarioId)) {
+            throw new RuntimeException("Cartão não pertence ao usuário");
+        }
+        List<Fatura> abertas = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
+            cartao.getId(),
+            List.of(Fatura.StatusFatura.ABERTA, Fatura.StatusFatura.PARCIAL)
+        );
+        Fatura faturaAlvo = abertas.stream()
+            .filter(f -> f.getDataVencimento() != null && f.getDataVencimento().isAfter(LocalDateTime.now().minusDays(5)))
+            .min(Comparator.comparing(Fatura::getDataVencimento))
+            .orElseGet(() -> criarFaturaBase(cartao));
+        if (faturaAlvo.getStatusFatura() == null || faturaAlvo.getStatusFatura() == Fatura.StatusFatura.CANCELADA) {
+            faturaAlvo.setStatusFatura(Fatura.StatusFatura.ABERTA);
+        }
+        return faturaRepository.save(faturaAlvo);
+    }
+
+    /**
+     * Localiza fatura do cartão no mês de vencimento (não paga/cancelada) ou cria {@link Fatura.StatusFatura#PREVISTA}.
+     */
+    public Fatura obterOuCriarFaturaParaVencimentoAlvo(Long usuarioId, CartaoCredito cartao, LocalDate vencimentoDia) {
+        if (cartao == null || cartao.getId() == null) {
+            throw new RuntimeException("Cartão inválido");
+        }
+        if (!Objects.equals(cartao.getUsuario().getId(), usuarioId)) {
+            throw new RuntimeException("Cartão não pertence ao usuário");
+        }
+        YearMonth targetYm = YearMonth.from(vencimentoDia);
+        List<Fatura> list = faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartao.getId());
+        for (Fatura f : list) {
+            if (f.getDataVencimento() == null) {
+                continue;
+            }
+            YearMonth ym = YearMonth.from(f.getDataVencimento());
+            if (ym.equals(targetYm)) {
+                Fatura.StatusFatura st = f.getStatusFatura();
+                if (st != Fatura.StatusFatura.PAGA && st != Fatura.StatusFatura.CANCELADA) {
+                    return f;
+                }
+            }
+        }
+        LocalDateTime vencLdt = vencimentoDia.atTime(12, 0);
+        LocalDateTime fechLdt = vencLdt.minusDays(Math.max(1, diasEntreFechamentoEVencimento));
+        Fatura nova = new Fatura();
+        nova.setCartaoCredito(cartao);
+        nova.setUsuario(cartao.getUsuario());
+        nova.setStatusFatura(Fatura.StatusFatura.PREVISTA);
+        nova.setDataVencimento(vencLdt);
+        nova.setDataFechamento(fechLdt);
+        nova.setValorFatura(BigDecimal.ZERO);
+        nova.setValorTotal(BigDecimal.ZERO);
+        nova.setValorMinimo(BigDecimal.ZERO);
+        nova.setValorPago(BigDecimal.ZERO);
+        nova.setPaga(false);
+        nova.setNumeroFatura("PREV-" + cartao.getId() + "-" + targetYm + "-" + System.nanoTime());
+        return faturaRepository.save(nova);
+    }
+
+    /**
+     * Compatibilidade: antes somava manualmente na fatura. Agora o total vem das transações;
+     * {@code valor} é ignorado para evitar dupla contagem com lançamentos vinculados.
+     */
+    public Fatura registrarDespesaNoCartao(Long usuarioId, CartaoCredito cartao, BigDecimal valor) {
+        if (cartao == null) {
+            throw new RuntimeException("Dados inválidos para registrar despesa na fatura");
+        }
+        if (!Objects.equals(cartao.getUsuario().getId(), usuarioId)) {
+            throw new RuntimeException("Cartão não pertence ao usuário");
+        }
+        Fatura f = resolverFaturaAbertaParaCartao(usuarioId, cartao);
+        sincronizarValorFaturaComTransacoes(f.getId());
+        return faturaRepository.findById(f.getId()).orElse(f);
+    }
+
+    /**
+     * Atualiza valorFatura/valorTotal da fatura com a soma das despesas confirmadas vinculadas.
+     */
+    public void sincronizarValorFaturaComTransacoes(Long faturaId) {
+        if (faturaId == null) {
+            return;
+        }
+        BigDecimal sum = transacaoRepository.sumDespesaConfirmadaPorFaturaId(faturaId);
+        if (sum == null) {
+            sum = BigDecimal.ZERO;
+        }
+        Fatura f = faturaRepository.findById(faturaId).orElse(null);
+        if (f == null) {
+            return;
+        }
+        f.setValorFatura(sum);
+        f.setValorTotal(sum);
+        f.setValorMinimo(sum);
+        faturaRepository.save(f);
+    }
+
+    private Fatura criarFaturaBase(CartaoCredito cartao) {
+        LocalDateTime agora = LocalDateTime.now();
+        LocalDate proximoVencimentoBase = LocalDate.now();
+        int dia = Math.max(1, Math.min(28, cartao.getDiaVencimento() == null ? 10 : cartao.getDiaVencimento()));
+        LocalDate venc = LocalDate.of(proximoVencimentoBase.getYear(), proximoVencimentoBase.getMonth(), dia);
+        if (!venc.isAfter(LocalDate.now())) {
+            venc = venc.plusMonths(1);
+        }
+
+        Fatura nova = new Fatura();
+        nova.setCartaoCredito(cartao);
+        nova.setUsuario(cartao.getUsuario());
+        nova.setStatusFatura(Fatura.StatusFatura.ABERTA);
+        nova.setDataFechamento(agora);
+        nova.setDataVencimento(venc.atTime(12, 0));
+        nova.setValorFatura(BigDecimal.ZERO);
+        nova.setValorTotal(BigDecimal.ZERO);
+        nova.setValorMinimo(BigDecimal.ZERO);
+        nova.setValorPago(BigDecimal.ZERO);
+        nova.setNumeroFatura(String.format("%d-%02d-%d", venc.getYear(), venc.getMonthValue(), cartao.getId()));
+        return faturaRepository.save(nova);
+    }
+
+    /**
      * Converte um FaturaDTO para entidade Fatura
      * 
      * Este método é responsável por:
@@ -331,11 +482,172 @@ public class FaturaService {
         dto.setDataPagamento(fatura.getDataPagamento());
         dto.setStatusFatura(fatura.getStatusFatura());
         dto.setNumeroFatura(fatura.getNumeroFatura());
+        dto.setNomeCartao(fatura.getCartaoCredito().getNome());
+        dto.setBanco(fatura.getCartaoCredito().getBanco());
+        dto.setValorTotal(fatura.getValorFatura());
+        dto.setValorMinimo(fatura.getValorFatura());
+        dto.setStatus(fatura.getStatusFatura() != null ? fatura.getStatusFatura().name() : null);
+        dto.setPaga(Fatura.StatusFatura.PAGA.equals(fatura.getStatusFatura()));
         
         // Inclui informações do cartão de crédito associado
         dto.setCartaoCreditoId(fatura.getCartaoCredito().getId());
         dto.setDataCriacao(fatura.getDataCriacao());
         dto.setDataAtualizacao(fatura.getDataAtualizacao());
         return dto;
+    }
+
+    /**
+     * Estratégia de fechamento: vencimento do ciclo corrente menos N dias (configurável), com avanço de ciclo em meses 28–31 dias.
+     * Multitenant: cartão sempre carregado com {@code findByIdAndUsuarioId}.
+     */
+    public MelhorDiaCompraCalculado calcularMelhorDiaCompra(Long cartaoId, Long userId) {
+        CartaoCredito cartao = cartaoCreditoRepository.findByIdAndUsuarioId(cartaoId, userId)
+            .orElseThrow(() -> new RuntimeException("Cartão não encontrado"));
+        if (!Objects.equals(cartao.getUsuario().getId(), userId)) {
+            throw new RuntimeException("Cartão não pertence ao usuário");
+        }
+        LocalDate hoje = LocalDate.now();
+        int diaPreferido = clampDiaVencimento(cartao.getDiaVencimento());
+        int delta = Math.max(1, diasEntreFechamentoEVencimento);
+
+        List<Fatura> abertas = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
+            cartaoId,
+            List.of(Fatura.StatusFatura.ABERTA, Fatura.StatusFatura.PARCIAL)
+        );
+        LocalDate venc = abertas.stream()
+            .map(Fatura::getDataVencimento)
+            .filter(Objects::nonNull)
+            .min(Comparator.naturalOrder())
+            .map(LocalDateTime::toLocalDate)
+            .orElse(null);
+
+        if (venc == null || venc.isBefore(hoje)) {
+            venc = proximoVencimentoEmCalendario(hoje, diaPreferido);
+        }
+
+        LocalDate fech = venc.minusDays(delta);
+        int guard = 0;
+        while (fech.isBefore(hoje) && guard++ < 36) {
+            venc = avancarUmMesRespeitandoDia(venc, diaPreferido);
+            fech = venc.minusDays(delta);
+        }
+
+        LocalDate vencPagamentoComprasNoFechamento = avancarUmMesRespeitandoDia(venc, diaPreferido);
+        long diasAteFech = ChronoUnit.DAYS.between(hoje, fech);
+        long diasAteVenc = ChronoUnit.DAYS.between(hoje, venc);
+        boolean hojeFechamento = hoje.equals(fech);
+
+        log.info(
+            "[BILLING-STRATEGY-LOG] cartaoId={} userId={} diaVencCartao={} deltaDias={} vencCiclo={} fechEstimada={} diasAteFech={} hojeEhFechamento={}",
+            cartaoId, userId, diaPreferido, delta, venc, fech, diasAteFech, hojeFechamento
+        );
+
+        return new MelhorDiaCompraCalculado(
+            venc,
+            fech,
+            vencPagamentoComprasNoFechamento,
+            diasAteFech,
+            diasAteVenc,
+            hojeFechamento,
+            delta
+        );
+    }
+
+    /**
+     * Resumo Markdown (WhatsApp) do cartão: soma das faturas ABERTA/PARCIAL e limite estimado a partir do limite total.
+     * O gasto reflete o que o app acumulou na fatura aberta deste cartão (inclui lançamentos via WhatsApp vinculados à fatura).
+     */
+    public String montarResumoCartaoWhatsapp(Long usuarioId, CartaoCredito cartao) {
+        log.info("[BILLING-LOG] Resumo cartão userId={} cartaoId={} nome={}", usuarioId, cartao.getId(), cartao.getNome());
+        if (cartao.getUsuario() == null || !Objects.equals(cartao.getUsuario().getId(), usuarioId)) {
+            throw new RuntimeException("Cartão não pertence ao usuário");
+        }
+        List<Fatura> abertas = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
+            cartao.getId(),
+            List.of(Fatura.StatusFatura.ABERTA, Fatura.StatusFatura.PARCIAL)
+        );
+        BigDecimal gastoTrans = transacaoRepository.sumDespesaConfirmadaFaturaAbertaPorCartaoId(cartao.getId());
+        if (gastoTrans == null) {
+            gastoTrans = BigDecimal.ZERO;
+        }
+        BigDecimal gastoFatura = BigDecimal.ZERO;
+        if (gastoTrans.compareTo(BigDecimal.ZERO) > 0) {
+            gastoFatura = gastoTrans;
+        } else {
+            for (Fatura f : abertas) {
+                if (f.getValorFatura() != null) {
+                    gastoFatura = gastoFatura.add(f.getValorFatura());
+                }
+            }
+        }
+        BigDecimal limiteTotal = cartao.getLimiteCredito() != null ? cartao.getLimiteCredito() : BigDecimal.ZERO;
+        BigDecimal disponivel = limiteTotal.subtract(gastoFatura);
+        if (disponivel.compareTo(BigDecimal.ZERO) < 0) {
+            disponivel = BigDecimal.ZERO;
+        }
+
+        MelhorDiaCompraCalculado estrategia = calcularMelhorDiaCompra(cartao.getId(), usuarioId);
+        String consultoria = montarBlocoConsultoriaEstrategica(estrategia, cartao.getNome());
+
+        return "💳 *Resumo* *" + cartao.getNome() + "* (" + cartao.getBanco() + ")\n"
+            + "- *Gasto atual (fatura aberta):* " + BRL.format(gastoFatura) + "\n"
+            + "- *Limite total:* " + BRL.format(limiteTotal) + "\n"
+            + "- *Limite disponível (estimado):* " + BRL.format(disponivel) + "\n"
+            + "- *Próximo vencimento (ciclo):* " + estrategia.proximoVencimentoCiclo().format(DDMMAAAA) + "\n"
+            + "\n*Consultoria de prazo*\n"
+            + consultoria + "\n"
+            + "\n_O total da fatura aberta é o acumulado deste cartão no ConsumoEsperto; fechamento usa *"
+            + estrategia.diasEntreFechamentoEVencimentoUsados()
+            + " dias* antes do vencimento (regra estimada — confirme no banco)._";
+    }
+
+    private String montarBlocoConsultoriaEstrategica(MelhorDiaCompraCalculado s, String apelidoCartao) {
+        LocalDate hoje = LocalDate.now();
+        if (s.hojeEhDiaDeFechamento()) {
+            long prazoPagamento = ChronoUnit.DAYS.between(hoje, s.vencimentoPagamentoComprasNoDiaFechamento());
+            String prazoHuman = prazoPagamento > 0
+                ? " — é comum ter *cerca de " + prazoPagamento + " dias* até esse vencimento no calendário (~40 dias de alavancagem vs. comprar no fim do ciclo)."
+                : "";
+            return "🚀 *HOJE É O MELHOR DIA!* Compras feitas hoje no cartão *" + apelidoCartao
+                + "* entram na *próxima fatura*; o próximo vencimento dessa leva tende a ser *"
+                + s.vencimentoPagamentoComprasNoDiaFechamento().format(DDMMAAAA) + "*" + prazoHuman;
+        }
+        if (s.fechamentoEmUmATresDias()) {
+            return "⚠️ Sua fatura *fecha em " + s.diasCorridosAteFechamento() + " dias* (*"
+                + s.dataFechamentoEstimada().format(DDMMAAAA) + "*). Se puder, *espere até o dia "
+                + s.dataFechamentoEstimada().format(DDMMAAAA) + "* para compras grandes e ganhe mais prazo até o vencimento (*"
+                + s.proximoVencimentoCiclo().format(DDMMAAAA) + "*).";
+        }
+        return "📅 Sua fatura atual *fecha dia* *" + s.dataFechamentoEstimada().format(DDMMAAAA)
+            + "* (" + s.diasEntreFechamentoEVencimentoUsados() + " dias antes do vencimento de *"
+            + s.proximoVencimentoCiclo().format(DDMMAAAA) + "*). Planeje compras maiores perto dessa data para alavancar o caixa sem misturar ciclos.";
+    }
+
+    private static int clampDiaVencimento(Integer dia) {
+        if (dia == null) {
+            return 10;
+        }
+        return Math.max(1, Math.min(31, dia));
+    }
+
+    /**
+     * Próxima data de vencimento em calendário (dia do mês respeitando 28–31) a partir de {@code hoje}, inclusive.
+     */
+    private static LocalDate proximoVencimentoEmCalendario(LocalDate hoje, int diaPreferido) {
+        YearMonth ym = YearMonth.from(hoje);
+        int d = Math.min(diaPreferido, ym.lengthOfMonth());
+        LocalDate candidato = ym.atDay(d);
+        if (!candidato.isBefore(hoje)) {
+            return candidato;
+        }
+        ym = ym.plusMonths(1);
+        d = Math.min(diaPreferido, ym.lengthOfMonth());
+        return ym.atDay(d);
+    }
+
+    private static LocalDate avancarUmMesRespeitandoDia(LocalDate vencimentoReferencia, int diaPreferido) {
+        YearMonth prox = YearMonth.from(vencimentoReferencia).plusMonths(1);
+        int d = Math.min(diaPreferido, prox.lengthOfMonth());
+        return prox.atDay(d);
     }
 }

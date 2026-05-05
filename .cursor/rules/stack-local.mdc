@@ -1,0 +1,20 @@
+---
+description: Como subir o ConsumoEsperto em desenvolvimento local
+---
+
+# Stack local ConsumoEsperto
+
+Ao subir para desenvolvimento/testes, usar **toda** a stack:
+
+1. **Evolution API** — **Node.js**: clone em `tools/evolution-api` (ou `EVOLUTION_DIR`), configurar `.env`, `npm run build` / `start:prod` conforme repo oficial; **`rodar-evolution.bat`** na raiz. Porta típica **8080**.
+   - Webhook → Spring (backend **8081**): `http://localhost:8081/api/public/evolution/webhook`.
+
+2. **Backend** — Java **sempre** de `tools/java/*` e Maven de `tools/maven`; perfil **`dev-evolution`**, porta **8081** (`rodar-backend-evolution.bat` ou `subir-servicos.bat`).
+
+3. **Frontend** — `rodar-frontend.bat` ou `npm start` em `frontend` (porta **4200**; `apiUrl` → **8081**).
+
+**`scripts/subir-stack.ps1`** **sempre** inicia a Evolution em Node (clone Git em `tools/evolution-api` se preciso, `npm install`/`build`, `rodar-evolution.bat`). Sem Git+Node, o script **aborta** — back e front não sobem sozinhos.
+
+Encerrar: **`parar-servicos.bat`** (portas do projeto + Node Evolution).
+
+Não alterar variáveis de ambiente globais do Windows para JDK; usar os `.bat` que fixam `JAVA_HOME` só na sessão.

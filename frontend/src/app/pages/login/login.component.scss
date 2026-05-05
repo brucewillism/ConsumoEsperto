@@ -118,8 +118,8 @@
         outline: none;
 
         &:focus {
-          border-color: var(--primary-color);
-          box-shadow: 0 0 0 3px rgba(54, 153, 255, 0.1);
+          border-color: var(--exec-emerald);
+          box-shadow: var(--exec-glow-emerald);
         }
 
         &::placeholder {
@@ -220,14 +220,19 @@
     }
 
     .forgot-password {
-      color: var(--primary-color);
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font: inherit;
+      color: var(--exec-emerald);
       text-decoration: none;
       font-size: var(--font-size-sm);
       font-weight: var(--font-weight-medium);
       transition: color var(--transition-fast);
 
       &:hover {
-        color: var(--primary-dark);
+        color: #34d399;
         text-decoration: underline;
       }
     }
@@ -516,24 +521,3 @@
   }
 }
 
-// Dark mode adjustments
-@media (prefers-color-scheme: dark) {
-  .login-container {
-    background: linear-gradient(135deg, var(--bg-secondary-dark) 0%, var(--bg-tertiary-dark) 100%);
-  }
-
-  .login-card {
-    background: var(--bg-primary-dark);
-    border-color: var(--border-color-dark);
-  }
-
-  .btn-google {
-    background: var(--bg-primary-dark);
-    color: var(--text-primary-dark);
-    border-color: var(--border-color-dark);
-
-    &:hover:not(:disabled) {
-      background: var(--bg-secondary-dark);
-    }
-  }
-}

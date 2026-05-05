@@ -97,6 +97,12 @@ public class UsuarioDTO {
     private String fotoUrl;
 
     /**
+     * Numero de WhatsApp vinculado em formato internacional (E.164)
+     */
+    @Size(max = 20, message = "Numero de WhatsApp deve ter no máximo 20 caracteres")
+    private String whatsappNumero;
+
+    /**
      * Data e hora de criação do usuário no sistema
      * Preenchida automaticamente pelo sistema
      */

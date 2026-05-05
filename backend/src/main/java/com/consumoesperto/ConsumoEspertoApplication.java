@@ -4,8 +4,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration;
-import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Classe principal da aplicação ConsumoEsperto
@@ -24,7 +24,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication(exclude = OAuth2ClientAutoConfiguration.class)
 @EntityScan("com.consumoesperto.model") // Define onde estão as entidades JPA
 @EnableJpaRepositories("com.consumoesperto.repository") // Habilita os repositórios Spring Data
-@EnableFeignClients("com.consumoesperto.client") // Habilita os clientes Feign para integrações bancárias
+@EnableScheduling
 
 public class ConsumoEspertoApplication {
 

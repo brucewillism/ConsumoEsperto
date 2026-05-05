@@ -82,6 +82,9 @@ jre*/
 *.jdk
 *.jre
 
+# Credenciais locais (Evolution + sincronizar-evolution-env.ps1)
+config/db-local.properties
+
 # Database files
 *.db
 *.sqlite
@@ -204,8 +207,6 @@ temp/
 !**/src/main/resources/application.yml
 !**/src/main/resources/application.yaml
 !**/src/main/resources/application-h2.properties
-!**/src/main/resources/bank-apis-config.properties
-!**/src/main/resources/mercadopago-config.properties
 
 # Exclude large files and directories
 tools/

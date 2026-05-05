@@ -174,6 +174,12 @@ export class LoginComponent implements OnInit {
     this.showPassword = !this.showPassword;
   }
 
+  /** Evita navegação quebrada com href="#" e informa o utilizador. */
+  onForgotPassword(event: Event): void {
+    event.preventDefault();
+    this.showAlert('Recuperação de palavra-passe não está disponível nesta versão. Utilize o suporte ou o login com Google.', 'info');
+  }
+
   /**
    * Verifica se um campo específico do formulário é inválido
    * 

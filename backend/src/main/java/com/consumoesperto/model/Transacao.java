@@ -7,10 +7,12 @@ import javax.persistence.*;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
-import javax.validation.constraints.DecimalMin;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.hibernate.annotations.Where;
 
 /**
  * Entidade que representa uma transação financeira
@@ -26,6 +28,7 @@ import com.fasterxml.jackson.annotation.JsonBackReference;
 @Table(name = "transacoes") // Nome da tabela no banco de dados
 @NoArgsConstructor // Lombok: gera construtor sem argumentos
 @AllArgsConstructor // Lombok: gera construtor com todos os argumentos
+@Where(clause = "excluido = false")
 public class Transacao {
 
     /**
@@ -80,6 +83,12 @@ public class Transacao {
     @JsonBackReference("usuario-transacoes")
     private Usuario usuario;
 
+    /** Despesa no cartão: fatura em ciclo aberto/parcial. Nulo = débito/dinheiro (afeta saldo em conta). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fatura_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "cartaoCredito", "usuario"})
+    private Fatura fatura;
+
     /**
      * Data e hora em que a transação ocorreu
      * Pode ser diferente da data de criação (ex: transação de ontem registrada hoje)
@@ -93,6 +102,45 @@ public class Transacao {
      */
     @Column(name = "data_criacao")
     private LocalDateTime dataCriacao;
+
+    @Column(name = "recorrente", nullable = false)
+    private boolean recorrente;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "frequencia")
+    private FrequenciaRecorrencia frequencia;
+
+    @Column(name = "proxima_execucao")
+    private LocalDate proximaExecucao;
+
+    @Column(name = "excluido", nullable = false)
+    private boolean excluido;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_conferencia", nullable = false)
+    private StatusConferencia statusConferencia;
+
+    /** CNPJ do estabelecimento (OCR / enriquecimento), até 18 caracteres */
+    @Column(name = "cnpj", length = 18)
+    private String cnpj;
+
+    /** Agrupa parcelas da mesma compra (UUID). */
+    @Column(name = "grupo_parcela_id", length = 36)
+    private String grupoParcelaId;
+
+    @Column(name = "parcela_atual")
+    private Integer parcelaAtual;
+
+    @Column(name = "total_parcelas")
+    private Integer totalParcelas;
+
+    /** Preço à vista / referência (ex.: produto sem juros); opcional. */
+    @Column(name = "valor_real", precision = 19, scale = 2)
+    private BigDecimal valorReal;
+
+    /** Total financiado com juros (parcela × N), para análise de custo do crédito. */
+    @Column(name = "valor_com_juros", precision = 19, scale = 2)
+    private BigDecimal valorComJuros;
 
     // Getters e Setters
     public Long getId() { return id; }
@@ -119,6 +167,42 @@ public class Transacao {
     public LocalDateTime getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
 
+    public boolean isRecorrente() { return recorrente; }
+    public void setRecorrente(boolean recorrente) { this.recorrente = recorrente; }
+
+    public FrequenciaRecorrencia getFrequencia() { return frequencia; }
+    public void setFrequencia(FrequenciaRecorrencia frequencia) { this.frequencia = frequencia; }
+
+    public LocalDate getProximaExecucao() { return proximaExecucao; }
+    public void setProximaExecucao(LocalDate proximaExecucao) { this.proximaExecucao = proximaExecucao; }
+
+    public boolean isExcluido() { return excluido; }
+    public void setExcluido(boolean excluido) { this.excluido = excluido; }
+
+    public StatusConferencia getStatusConferencia() { return statusConferencia; }
+    public void setStatusConferencia(StatusConferencia statusConferencia) { this.statusConferencia = statusConferencia; }
+
+    public String getCnpj() { return cnpj; }
+    public void setCnpj(String cnpj) { this.cnpj = cnpj; }
+
+    public Fatura getFatura() { return fatura; }
+    public void setFatura(Fatura fatura) { this.fatura = fatura; }
+
+    public String getGrupoParcelaId() { return grupoParcelaId; }
+    public void setGrupoParcelaId(String grupoParcelaId) { this.grupoParcelaId = grupoParcelaId; }
+
+    public Integer getParcelaAtual() { return parcelaAtual; }
+    public void setParcelaAtual(Integer parcelaAtual) { this.parcelaAtual = parcelaAtual; }
+
+    public Integer getTotalParcelas() { return totalParcelas; }
+    public void setTotalParcelas(Integer totalParcelas) { this.totalParcelas = totalParcelas; }
+
+    public BigDecimal getValorReal() { return valorReal; }
+    public void setValorReal(BigDecimal valorReal) { this.valorReal = valorReal; }
+
+    public BigDecimal getValorComJuros() { return valorComJuros; }
+    public void setValorComJuros(BigDecimal valorComJuros) { this.valorComJuros = valorComJuros; }
+
     /**
      * Método executado automaticamente antes de persistir a entidade
      * Define a data de criação e, se não informada, a data da transação
@@ -126,6 +210,10 @@ public class Transacao {
     @PrePersist
     protected void onCreate() {
         dataCriacao = LocalDateTime.now();
+        excluido = false;
+        if (statusConferencia == null) {
+            statusConferencia = StatusConferencia.CONFIRMADA;
+        }
         // Se a data da transação não foi informada, usa a data atual
         if (dataTransacao == null) {
             dataTransacao = LocalDateTime.now();
@@ -140,5 +228,15 @@ public class Transacao {
     public enum TipoTransacao {
         RECEITA, // Entrada de dinheiro
         DESPESA  // Saída de dinheiro
+    }
+
+    public enum FrequenciaRecorrencia {
+        SEMANAL,
+        MENSAL
+    }
+
+    public enum StatusConferencia {
+        CONFIRMADA,
+        PENDENTE
     }
 }

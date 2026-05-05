@@ -1,8 +1,6 @@
 package com.consumoesperto.security;
 
-import com.consumoesperto.model.BankApiConfig;
 import com.consumoesperto.model.Usuario;
-import com.consumoesperto.repository.BankApiConfigRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,68 +26,6 @@ import java.util.Optional;
 public class SecurityService {
 
     private final UsuarioRepository usuarioRepository;
-    private final BankApiConfigRepository bankApiConfigRepository;
-
-    /**
-     * Verifica se o usuário pode acessar configurações bancárias
-     */
-    public boolean canAccessBankConfig(Long usuarioId) {
-        try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null || !auth.isAuthenticated()) {
-                return false;
-            }
-
-            UserPrincipal userPrincipal = (UserPrincipal) auth.getPrincipal();
-            return userPrincipal.getId().equals(usuarioId);
-        } catch (Exception e) {
-            log.warn("Erro ao verificar acesso a configuração bancária: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Verifica se o usuário pode criar configurações bancárias
-     */
-    public boolean canCreateBankConfig(Long usuarioId) {
-        return canAccessBankConfig(usuarioId);
-    }
-
-    /**
-     * Verifica se o usuário pode atualizar configurações bancárias
-     */
-    public boolean canUpdateBankConfig(Long configId) {
-        try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null || !auth.isAuthenticated()) {
-                return false;
-            }
-
-            UserPrincipal userPrincipal = (UserPrincipal) auth.getPrincipal();
-            Optional<BankApiConfig> config = bankApiConfigRepository.findById(configId);
-            
-            return config.map(bankApiConfig -> 
-                bankApiConfig.getUsuario().getId().equals(userPrincipal.getId())
-            ).orElse(false);
-        } catch (Exception e) {
-            log.warn("Erro ao verificar permissão de atualização: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Verifica se o usuário pode excluir configurações bancárias
-     */
-    public boolean canDeleteBankConfig(Long configId) {
-        return canUpdateBankConfig(configId);
-    }
-
-    /**
-     * Verifica se o usuário pode sincronizar dados bancários
-     */
-    public boolean canSyncBankData(Long usuarioId) {
-        return canAccessBankConfig(usuarioId);
-    }
 
     /**
      * Verifica se o usuário pode acessar dados de outro usuário

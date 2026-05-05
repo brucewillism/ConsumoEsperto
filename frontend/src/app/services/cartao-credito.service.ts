@@ -10,7 +10,6 @@ import { environment } from '../../environments/environment';
 })
 export class CartaoCreditoService {
   private readonly API_URL = `${environment.apiUrl}/cartoes-credito`;
-  private readonly BANK_API_URL = `${environment.apiUrl}/bank`;
 
   constructor(
     private http: HttpClient,
@@ -57,13 +56,7 @@ export class CartaoCreditoService {
     return this.http.get<number>(`${this.API_URL}/limite-disponivel`, { headers: this.getHeaders() });
   }
 
-  // Métodos para cartões do Mercado Pago
-  buscarCartoesMercadoPago(): Observable<any[]> {
-    return this.http.get<any[]>(`${this.BANK_API_URL}/credit-cards`, { headers: this.getHeaders() });
-  }
-
-  // Método principal que busca cartões de todos os bancos (incluindo Mercado Pago)
-  buscarTodosCartoes(): Observable<any[]> {
-    return this.buscarCartoesMercadoPago();
+  buscarTodosCartoes(): Observable<CartaoCredito[]> {
+    return this.buscarPorUsuario();
   }
 }

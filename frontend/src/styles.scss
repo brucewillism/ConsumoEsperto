@@ -1,48 +1,50 @@
-/* Global Styles - Black Dashboard Theme */
+/* Global Styles — Dark Mode Executivo (terminal / command center) */
 
-/* CSS Variables for Black Dashboard Theme */
 :root {
-  // Primary Colors
-  --primary-color: #1e1e2d;
-  --primary-dark: #1b5bb3;
-  --primary-light: #6bb6ff;
-  
-  // Success Colors
-  --success-color: #1c3238;
-  --success-dark: #0f1f23;
-  --success-light: #2a4a52;
-  
-  // Warning Colors
-  --warning-color: #ffa800;
-  --warning-dark: #cc8600;
-  --warning-light: #ffb84d;
-  
-  // Danger Colors
-  --danger-color: #f64e60;
-  --danger-dark: #c33d4a;
-  --danger-light: #f87a87;
-  
-  // Info Colors
-  --info-color: #2b3252;
-  --info-dark: #2a1c0d;
-  --info-light: #5a3d1c;
-  
-  // Background Colors - Padronizados para tema escuro
-  --bg-primary: #1e1e2d;
-  --bg-secondary: #2b2b40;
-  --bg-tertiary: #3f3f5f;
-  --bg-quaternary: #4a4a6a;
-  
-  // Text Colors - Padronizados para tema escuro
-  --text-primary: #ffffff;
-  --text-secondary: #b5b5c3;
-  --text-muted: #6c7293;
-  
-  // Border Colors
-  --border-color: #3f3f5f;
-  --border-color-dark: #404040;
-  --border-light: #f1f3f4;
-  --border-light-dark: #333333;
+  /* Paleta pedida */
+  --exec-bg: #0f172a;
+  --exec-surface: #1e293b;
+  --exec-border: #334155;
+  --exec-emerald: #2dd4bf;
+  --exec-amber: #f59e0b;
+  --exec-glow-emerald: 0 0 12px rgba(45, 212, 191, 0.35);
+
+  /* Compatibilidade com variáveis já usadas nos componentes */
+  --primary-color: var(--exec-emerald);
+  --primary-dark: #059669;
+  --primary-light: #34d399;
+  --success-color: var(--exec-emerald);
+  --success-dark: #047857;
+  --success-light: #6ee7b7;
+  --warning-color: var(--exec-amber);
+  --warning-dark: #d97706;
+  --warning-light: #fbbf24;
+  --danger-color: #f87171;
+  --danger-dark: #ef4444;
+  --danger-light: #fca5a5;
+  --info-color: #38bdf8;
+  --info-dark: #0ea5e9;
+  --info-light: #7dd3fc;
+
+  --bg-primary: var(--exec-bg);
+  --bg-secondary: var(--exec-surface);
+  --bg-tertiary: #273549;
+  --bg-quaternary: #334155;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border-color: var(--exec-border);
+  --border-color-dark: #1e293b;
+  --border-light: #475569;
+  --border-light-dark: #334155;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono-amount: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
+
+  /* Segundo tom para gradientes (ícones/cards) — esmeralda mais fechada */
+  --secondary-color: #047857;
   
   // Shadow Colors
   --shadow-color: rgba(0, 0, 0, 0.3);
@@ -110,7 +112,7 @@ html {
 }
 
 body {
-  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-sans);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-normal);
   line-height: 1.6;
@@ -203,13 +205,20 @@ p {
 }
 
 a {
-  color: var(--primary-color);
+  color: var(--exec-emerald);
   text-decoration: none;
   transition: color var(--transition-fast);
   
   &:hover {
-    color: var(--primary-dark);
+    color: #34d399;
   }
+}
+
+/* Valores monetários — sempre monoespaçados */
+.amount-mono,
+.font-mono-amount {
+  font-family: var(--font-mono-amount);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Buttons */
@@ -234,12 +243,13 @@ a {
   }
   
   &.btn-primary {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: var(--exec-emerald);
+    color: #0f172a;
     
     &:hover:not(:disabled) {
       background-color: var(--primary-dark);
       transform: translateY(-1px);
+      box-shadow: var(--exec-glow-emerald);
     }
   }
   
@@ -313,14 +323,14 @@ a {
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md);
   font-size: var(--font-size-md);
-  background-color: var(--bg-primary);
+  background-color: var(--exec-surface);
   color: var(--text-primary);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   
   &:focus {
     outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(54, 153, 255, 0.1);
+    border-color: var(--exec-emerald);
+    box-shadow: var(--exec-glow-emerald);
   }
   
   &:disabled {
@@ -352,7 +362,7 @@ a {
 
 /* Cards */
 .card {
-  background-color: var(--bg-primary);
+  background-color: var(--exec-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-lg);
   box-shadow: 0 2px 10px var(--shadow-color);
@@ -540,10 +550,38 @@ a {
   }
 }
 
-/* Focus styles for accessibility */
-*:focus {
-  outline: 2px solid var(--primary-color);
+/* Foco visível — glow esmeralda (botões e links) */
+*:focus-visible {
+  outline: 2px solid var(--exec-emerald);
   outline-offset: 2px;
+  box-shadow: var(--exec-glow-emerald);
+}
+
+.mat-mdc-raised-button.mat-primary,
+.mat-mdc-unelevated-button.mat-primary {
+  --mdc-filled-button-container-color: #059669;
+  --mdc-filled-button-label-text-color: #0f172a;
+}
+
+.mat-mdc-card {
+  --mdc-elevated-card-container-color: var(--exec-surface);
+  --mdc-elevated-card-container-elevation: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.mat-mdc-card,
+.mat-mdc-dialog-surface {
+  border: 1px solid var(--exec-border) !important;
+}
+
+.mat-mdc-table .mat-mdc-header-cell,
+.mat-mdc-table .mat-mdc-cell {
+  color: var(--text-primary);
+}
+
+.mat-mdc-form-field {
+  --mdc-outlined-text-field-outline-color: var(--exec-border);
+  --mdc-outlined-text-field-hover-outline-color: var(--exec-emerald);
+  --mdc-outlined-text-field-label-text-color: var(--text-secondary);
 }
 
 /* Print styles */
@@ -558,36 +596,79 @@ a {
   }
 }
 
-/* Estilos para Snackbars/Toasts */
-.success-snackbar {
-  background: #4caf50 !important;
-  color: white !important;
-  
-  .mat-simple-snackbar-action {
-    color: white !important;
-  }
-}
-
-.error-snackbar {
-  background: #f44336 !important;
-  color: white !important;
-  
-  .mat-simple-snackbar-action {
-    color: white !important;
-  }
-}
-
-/* Estilos para Material Snackbar */
+/* Snackbars — Command Center (tipografia Inter, contraste legível) */
 .mat-mdc-snack-bar-container {
+  font-family: var(--font-sans) !important;
+
+  .mat-mdc-snack-bar-label,
+  .mdc-snackbar__label {
+    font-family: var(--font-sans) !important;
+    font-size: 0.9375rem !important;
+    line-height: 1.45 !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.01em !important;
+  }
+
+  .mat-mdc-button.mat-mdc-snack-bar-action:not(:disabled),
+  .mat-mdc-snack-bar-action {
+    font-family: var(--font-sans) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em !important;
+  }
+
   &.success-snackbar {
-    --mdc-snackbar-container-color: #4caf50;
-    --mdc-snackbar-supporting-text-color: white;
-    --mat-mdc-snack-bar-button-color: white;
+    --mdc-snackbar-container-color: #1e293b;
+    --mdc-snackbar-supporting-text-color: #f1f5f9;
+    --mat-mdc-snack-bar-button-color: #6ee7b7;
+    border: 1px solid #10b981;
+    border-radius: 10px !important;
+    box-shadow:
+      0 0 0 1px rgba(16, 185, 129, 0.25),
+      0 0 18px rgba(16, 185, 129, 0.45),
+      0 12px 28px rgba(0, 0, 0, 0.45) !important;
   }
-  
+
+  &.warning-snackbar {
+    --mdc-snackbar-container-color: #1e293b;
+    --mdc-snackbar-supporting-text-color: #f1f5f9;
+    --mat-mdc-snack-bar-button-color: #fcd34d;
+    border: 1px solid #f59e0b;
+    border-radius: 10px !important;
+    box-shadow:
+      0 0 0 1px rgba(245, 158, 11, 0.25),
+      0 0 18px rgba(245, 158, 11, 0.42),
+      0 12px 28px rgba(0, 0, 0, 0.45) !important;
+  }
+
   &.error-snackbar {
-    --mdc-snackbar-container-color: #f44336;
-    --mdc-snackbar-supporting-text-color: white;
-    --mat-mdc-snack-bar-button-color: white;
+    --mdc-snackbar-container-color: #1e293b;
+    --mdc-snackbar-supporting-text-color: #fecdd3;
+    --mat-mdc-snack-bar-button-color: #fda4af;
+    border: 1px solid #fb7185;
+    border-radius: 10px !important;
+    box-shadow:
+      0 0 0 1px rgba(251, 113, 133, 0.28),
+      0 0 18px rgba(251, 113, 133, 0.35),
+      0 12px 28px rgba(0, 0, 0, 0.45) !important;
   }
+
+  &.info-snackbar {
+    --mdc-snackbar-container-color: #1e293b;
+    --mdc-snackbar-supporting-text-color: #f1f5f9;
+    --mat-mdc-snack-bar-button-color: #7dd3fc;
+    border: 1px solid #38bdf8;
+    border-radius: 10px !important;
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.2),
+      0 0 14px rgba(56, 189, 248, 0.28),
+      0 12px 28px rgba(0, 0, 0, 0.45) !important;
+  }
+}
+
+/* Legado MatSnackBar (caso algum painel ainda use classes antigas no DOM) */
+.success-snackbar,
+.error-snackbar,
+.warning-snackbar,
+.info-snackbar {
+  font-family: var(--font-sans) !important;
 }

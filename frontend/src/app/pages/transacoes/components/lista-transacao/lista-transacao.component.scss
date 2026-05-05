@@ -1,0 +1,144 @@
+.loading-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0;
+  color: var(--text-secondary);
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  min-width: 560px;
+  table-layout: fixed;
+}
+
+.mat-column-descricao {
+  width: 32%;
+}
+
+.mat-column-valor {
+  width: 14%;
+}
+
+.mat-column-categoria {
+  width: 18%;
+}
+
+.mat-column-data {
+  width: 14%;
+}
+
+.mat-column-acoes {
+  width: 22%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.descricao-texto {
+  display: block;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  transition: opacity 0.25s ease;
+}
+
+.mat-column-categoria .mat-mdc-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.categoria-texto {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.mat-column-valor {
+  font-family: var(--font-mono-amount, 'JetBrains Mono', monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+.positive {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+.negative {
+  color: var(--danger-color);
+  font-weight: 600;
+}
+
+.descricao-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.badge-conferencia {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.badge-pendente {
+  background: rgba(245, 158, 11, 0.22);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+}
+
+.btn-confirmar {
+  margin-right: 4px;
+  transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  width: 40px;
+  height: 40px;
+
+  &:not(:disabled):active {
+    transform: scale(0.94);
+  }
+
+  &:disabled:not(.mat-mdc-button-disabled) {
+    opacity: 0.9;
+  }
+}
+
+.spinner-inline {
+  display: inline-block;
+
+  ::ng-deep circle {
+    stroke: currentColor;
+  }
+}
+
+.valor-parcela-linha {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.icone-juros-parcela {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: #f59e0b;
+}

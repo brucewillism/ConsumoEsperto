@@ -118,6 +118,12 @@ public class Usuario {
     private ProvedorAuth provedorAuth = ProvedorAuth.LOCAL;
 
     /**
+     * Numero de WhatsApp vinculado ao usuario em formato E.164 (ex: +5511999999999)
+     */
+    @Column(name = "whatsapp_number", unique = true, length = 20)
+    private String whatsappNumero;
+
+    /**
      * Lista de transações financeiras do usuário
      * Relacionamento um-para-muitos: um usuário pode ter várias transações
      * Carregamento lazy para melhor performance
@@ -143,15 +149,6 @@ public class Usuario {
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonManagedReference("usuario-cartoes")
     private Set<CartaoCredito> cartoesCredito = new HashSet<>();
-
-    /**
-     * Lista de configurações de APIs bancárias do usuário
-     * Relacionamento um-para-muitos: um usuário pode ter várias configurações bancárias
-     * Carregamento lazy para melhor performance
-     */
-    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonManagedReference("usuario-bank-configs")
-    private Set<BankApiConfig> bankApiConfigs = new HashSet<>();
 
     /**
      * Lista de compras parceladas do usuário
@@ -199,6 +196,9 @@ public class Usuario {
     public ProvedorAuth getProvedorAuth() { return provedorAuth; }
     public void setProvedorAuth(ProvedorAuth provedorAuth) { this.provedorAuth = provedorAuth; }
 
+    public String getWhatsappNumero() { return whatsappNumero; }
+    public void setWhatsappNumero(String whatsappNumero) { this.whatsappNumero = whatsappNumero; }
+
     public Set<Transacao> getTransacoes() { return transacoes; }
     public void setTransacoes(Set<Transacao> transacoes) { this.transacoes = transacoes; }
 
@@ -207,9 +207,6 @@ public class Usuario {
 
     public Set<CartaoCredito> getCartoesCredito() { return cartoesCredito; }
     public void setCartoesCredito(Set<CartaoCredito> cartoesCredito) { this.cartoesCredito = cartoesCredito; }
-
-    public Set<BankApiConfig> getBankApiConfigs() { return bankApiConfigs; }
-    public void setBankApiConfigs(Set<BankApiConfig> bankApiConfigs) { this.bankApiConfigs = bankApiConfigs; }
 
     public Set<CompraParcelada> getComprasParceladas() { return comprasParceladas; }
     public void setComprasParceladas(Set<CompraParcelada> comprasParceladas) { this.comprasParceladas = comprasParceladas; }

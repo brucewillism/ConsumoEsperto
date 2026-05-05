@@ -1,0 +1,112 @@
+<mat-card>
+  <mat-card-content>
+    <div class="loading-overlay" *ngIf="loading">
+      <mat-spinner diameter="38"></mat-spinner>
+      <p>Carregando transações...</p>
+    </div>
+
+    <div class="table-responsive">
+    <table
+      mat-table
+      [dataSource]="transacoes"
+      matSort
+      (matSortChange)="ordenar.emit($event)"
+      [style.opacity]="loading ? 0.45 : 1">
+      <ng-container matColumnDef="descricao">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Descrição</th>
+        <td mat-cell *matCellDef="let transacao">
+          <div class="descricao-cell">
+            <span
+              class="badge-conferencia badge-pendente"
+              *ngIf="isPendente(transacao)"
+              [matTooltip]="tooltipPendente(transacao)"
+              matTooltipShowDelay="200">
+              Pendente
+            </span>
+            <span class="descricao-texto" [attr.title]="descricaoLinha(transacao)">{{ descricaoLinha(transacao) }}</span>
+          </div>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="valor">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Valor</th>
+        <td mat-cell *matCellDef="let transacao" [class]="transacao.tipoTransacao === 'RECEITA' ? 'positive' : 'negative'">
+          <span class="valor-parcela-linha">
+            {{ transacao.tipoTransacao === 'RECEITA' ? '+' : '-' }}R$ {{ transacao.valor | number:'1.2-2' }}
+            <mat-icon
+              *ngIf="mostrarBadgeJuros(transacao)"
+              class="icone-juros-parcela"
+              [matTooltip]="tooltipJuros"
+              matTooltipShowDelay="200"
+              aria-label="Compra com juros no parcelamento">warning</mat-icon>
+          </span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="tipo">
+        <th mat-header-cell *matHeaderCellDef>Tipo</th>
+        <td mat-cell *matCellDef="let transacao">
+          <mat-chip [color]="transacao.tipoTransacao === 'RECEITA' ? 'accent' : 'warn'" selected>
+            {{ transacao.tipoTransacao === 'RECEITA' ? 'Receita' : 'Despesa' }}
+          </mat-chip>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="categoria">
+        <th mat-header-cell *matHeaderCellDef>Categoria</th>
+        <td
+          mat-cell
+          *matCellDef="let transacao"
+          class="mat-column-categoria"
+          [attr.title]="transacao.categoriaNome?.trim() ? transacao.categoriaNome : 'Sem categoria'">
+          <span class="categoria-texto">{{ transacao.categoriaNome || 'Sem categoria' }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="data">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Data</th>
+        <td mat-cell *matCellDef="let transacao">{{ transacao.dataTransacao | date:'dd/MM/yyyy' }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="acoes">
+        <th mat-header-cell *matHeaderCellDef>Ações</th>
+        <td mat-cell *matCellDef="let transacao">
+          <button
+            *ngIf="isPendente(transacao)"
+            type="button"
+            mat-mini-fab
+            color="accent"
+            class="btn-confirmar"
+            [disabled]="acoesDesabilitadas || loading || isConfirmando(transacao.id)"
+            (click)="confirmar.emit(transacao.id!)"
+            title="Confirmar lançamento">
+            <mat-spinner *ngIf="isConfirmando(transacao.id)" diameter="22" class="spinner-inline"></mat-spinner>
+            <mat-icon *ngIf="!isConfirmando(transacao.id)">done</mat-icon>
+          </button>
+          <button mat-icon-button color="primary" (click)="editar.emit(transacao)" [disabled]="acoesDesabilitadas || loading">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            color="warn"
+            (click)="deletar.emit(transacao)"
+            [disabled]="acoesDesabilitadas || loading || !transacao.id">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="colunasExibidas"></tr>
+      <tr mat-row *matRowDef="let row; columns: colunasExibidas;"></tr>
+    </table>
+    </div>
+
+    <mat-paginator
+      [length]="totalTransacoes"
+      [pageSize]="tamanhoPagina"
+      [pageIndex]="paginaAtual"
+      [pageSizeOptions]="[5, 10, 25, 50]"
+      (page)="paginar.emit($event)">
+    </mat-paginator>
+  </mat-card-content>
+</mat-card>

@@ -61,10 +61,26 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     Optional<Usuario> findByGoogleId(String googleId);
 
     /**
+     * Busca usuario pelo numero de WhatsApp vinculado
+     *
+     * @param whatsappNumero Numero em formato E.164 (ex: +5511999999999)
+     * @return Optional contendo o usuario encontrado ou vazio
+     */
+    Optional<Usuario> findByWhatsappNumero(String whatsappNumero);
+
+    /**
      * Verifica se existe um usuário com o Google ID informado
      * 
      * @param googleId ID único do usuário no Google
      * @return true se o Google ID já existe, false caso contrário
      */
     boolean existsByGoogleId(String googleId);
+
+    /**
+     * Verifica se numero de WhatsApp ja esta vinculado a algum usuario
+     *
+     * @param whatsappNumero Numero em formato E.164
+     * @return true se ja existe vinculo
+     */
+    boolean existsByWhatsappNumero(String whatsappNumero);
 }

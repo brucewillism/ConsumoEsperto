@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="'Despesas IR — ' + ${anoIr}">IR</title>
+    <style type="text/css">
+        @page { margin: 0; size: A4; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 28px 32px 40px 32px;
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+            font-size: 11px;
+            line-height: 1.45;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .brand {
+            font-size: 12px;
+            font-weight: 700;
+            color: #10b981;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        h1 {
+            margin: 0 0 6px 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+        .sub { color: #94a3b8; font-size: 10px; margin-bottom: 18px; }
+        .nota {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 18px;
+            color: #cbd5e1;
+            font-size: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        th {
+            text-align: left;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #94a3b8;
+            padding: 10px 8px;
+            border-bottom: 1px solid #334155;
+        }
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #1e293b;
+            vertical-align: top;
+        }
+        tr:nth-child(even) td { background: rgba(30, 41, 59, 0.45); }
+        .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .total-row td {
+            font-weight: 700;
+            border-top: 2px solid #334155;
+            border-bottom: none;
+            padding-top: 14px;
+            color: #f87171;
+        }
+        .vazio {
+            text-align: center;
+            color: #94a3b8;
+            padding: 28px 12px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+<div class="brand">ConsumoEsperto</div>
+<h1>Despesas para declaração de IR</h1>
+<p class="sub">
+    Ano-calendário <strong th:text="${anoIr}">2025</strong>
+    · Gerado em <span th:text="${geradoEm}">—</span>
+    · <span th:text="${usuarioNome}">—</span>
+</p>
+<div class="nota">
+    Resumo das <strong>despesas confirmadas</strong> no período, agrupadas por categoria e CNPJ do estabelecimento (quando informado).
+    Documento informativo; conferir sempre com o seu contabilista e com a legislação vigente.
+</div>
+
+<table th:if="${!semDados}">
+    <thead>
+    <tr>
+        <th style="width:32%">Categoria</th>
+        <th style="width:28%">CNPJ</th>
+        <th class="num" style="width:22%">Valor</th>
+        <th class="num" style="width:18%">Qtd. lançamentos</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="linha : ${linhas}">
+        <td th:text="${linha.categoria}">—</td>
+        <td class="mono" th:text="${linha.cnpj}" style="font-family: 'Courier New', monospace; font-size: 10px;">—</td>
+        <td class="num" th:text="${linha.valorFormatado}">—</td>
+        <td class="num" th:text="${linha.quantidade}">0</td>
+    </tr>
+    <tr class="total-row">
+        <td colspan="2">Total despesas (confirmadas)</td>
+        <td class="num" th:text="${totalDespesas}">—</td>
+        <td></td>
+    </tr>
+    </tbody>
+</table>
+
+<p class="vazio" th:if="${semDados}">
+    Não há despesas confirmadas registadas neste ano-calendário.
+</p>
+</body>
+</html>

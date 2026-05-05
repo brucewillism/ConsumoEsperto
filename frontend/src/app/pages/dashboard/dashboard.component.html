@@ -7,15 +7,15 @@
       <p>Visão geral das suas finanças</p>
     </div>
     <div class="header-actions">
-      <button class="btn btn-success" (click)="sincronizarDadosReais()" [disabled]="isLoading">
+      <button class="btn btn-success" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading || (isLoading$ | async)">
         <i class="fas fa-sync-alt" [class.fa-spin]="isLoading"></i>
-        Sincronizar Dados Reais
+        Atualizar Dados
       </button>
-      <button class="btn btn-primary" routerLink="/transacoes">
+      <button class="btn btn-primary" routerLink="/transacoes" [disabled]="isLoading$ | async">
         <i class="fas fa-plus"></i>
         Nova Transação
       </button>
-      <button class="btn btn-secondary" routerLink="/relatorios">
+      <button class="btn btn-secondary" routerLink="/relatorios" [disabled]="isLoading$ | async">
         <i class="fas fa-chart-bar"></i>
         Ver Relatórios
       </button>
@@ -30,6 +30,49 @@
     <p>Carregando dados...</p>
   </div>
 
+  <!-- Lançamento rápido (cartão vs débito/dinheiro) -->
+  <section class="quick-lancamento" *ngIf="!errorMessage && !isLoading">
+    <div class="quick-lancamento-card">
+      <h3 class="quick-lancamento-title">Novo lançamento</h3>
+      <p class="quick-lancamento-hint">Despesas no cartão usam a fatura aberta; débito/dinheiro impactam o saldo em conta.</p>
+      <form [formGroup]="quickTransacaoForm" (ngSubmit)="salvarLancamentoRapido()" class="quick-lancamento-form">
+        <mat-form-field appearance="outline" class="exec-field exec-field-grow">
+          <mat-label>Descrição</mat-label>
+          <input matInput formControlName="descricao" placeholder="Ex.: Supermercado" autocomplete="off" />
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="exec-field">
+          <mat-label>Valor (R$)</mat-label>
+          <input matInput type="text" inputmode="decimal" formControlName="valor" placeholder="0,00" />
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="exec-field">
+          <mat-label>Tipo</mat-label>
+          <mat-select formControlName="tipoTransacao">
+            <mat-option [value]="tipoTransacaoEnum.DESPESA">Despesa</mat-option>
+            <mat-option [value]="tipoTransacaoEnum.RECEITA">Receita</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="exec-field exec-field-grow">
+          <mat-label>Categoria</mat-label>
+          <mat-select formControlName="categoriaId">
+            <mat-option value="">Sem categoria</mat-option>
+            <mat-option *ngFor="let cat of categorias" [value]="cat.id">{{ cat.nome }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="exec-field exec-field-grow" *ngIf="quickTransacaoForm.get('tipoTransacao')?.value === tipoTransacaoEnum.DESPESA">
+          <mat-label>Cartão de crédito</mat-label>
+          <mat-select formControlName="cartaoCreditoId">
+            <mat-option value="">Nenhum (Débito/Dinheiro)</mat-option>
+            <mat-option *ngFor="let c of cartoesFormulario" [value]="c.id">{{ c.banco }} · {{ c.nome }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <button mat-flat-button color="primary" type="submit" class="exec-submit" [disabled]="quickTransacaoForm.invalid || salvandoQuickTransacao">
+          <mat-spinner *ngIf="salvandoQuickTransacao" diameter="18" class="btn-inline-spinner"></mat-spinner>
+          <span *ngIf="!salvandoQuickTransacao">Salvar</span>
+        </button>
+      </form>
+    </div>
+  </section>
+
   <!-- Conteúdo do Dashboard -->
   <div class="dashboard-content" *ngIf="!isLoading">
     <!-- Mensagem de Erro -->
@@ -37,12 +80,43 @@
       <div class="error-content">
         <i class="fas fa-exclamation-triangle"></i>
         <p>{{ errorMessage }}</p>
-        <button class="btn btn-primary" (click)="loadDashboardData()">
+        <button class="btn btn-primary" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading$ | async">
           <i class="fas fa-refresh"></i>
           Tentar Novamente
         </button>
       </div>
     </div>
+
+    <!-- Configuração de Renda (dark) -->
+    <section class="renda-config-wrap" *ngIf="!errorMessage && rendaConfig">
+      <div class="renda-config-card">
+        <div class="renda-config-head">
+          <h3><i class="fas fa-money-bill-wave"></i> Configuração de Renda</h3>
+          <p class="renda-meta" *ngIf="rendaConfig.diaPagamento">
+            Dia de pagamento: <strong>{{ rendaConfig.diaPagamento }}</strong>
+            <span *ngIf="rendaConfig.receitaAutomaticaAtiva" class="renda-badge">Receita automática</span>
+          </p>
+        </div>
+        <div class="renda-config-body">
+          <div class="renda-chart-box">
+            <canvas
+              baseChart
+              type="doughnut"
+              [data]="rendaDoughnutChartData"
+              [options]="rendaDoughnutChartOptions"
+              aria-label="Salário líquido versus descontos">
+            </canvas>
+          </div>
+          <ul class="renda-legend-list">
+            <li><span class="swatch emerald"></span> Líquido {{ formatCurrency(rendaConfig.salarioLiquido || 0) }}</li>
+            <li><span class="swatch amber"></span> Descontos {{ formatCurrency(rendaConfig.totalDescontos || 0) }}</li>
+            <li *ngIf="rendaConfig.percentualDescontosSobreBruto != null && rendaConfig.salarioBruto">
+              Descontos ≈ {{ (rendaConfig.percentualDescontosSobreBruto | number:'1.0-1') }}% do bruto
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
 
     <!-- Cards Informativos -->
     <div class="dashboard-cards" *ngIf="!errorMessage">
@@ -67,22 +141,26 @@
       <div class="chart-card">
         <div class="chart-header">
           <h3>Gastos Mensais</h3>
-          <div class="chart-legend" *ngIf="spendingChartData">
+          <div class="chart-legend" *ngIf="spendingLineChartData.labels?.length">
             <span class="legend-item">
-              <span class="legend-color" style="background-color: #3699ff"></span>
+              <span class="legend-color" style="background-color: #10b981"></span>
               Gastos
             </span>
           </div>
         </div>
         <div class="chart-container">
-          <div class="chart-placeholder" *ngIf="!spendingChartData">
+          <div class="chart-placeholder" *ngIf="!spendingLineChartData.labels?.length">
             <i class="fas fa-chart-line"></i>
             <p>Nenhum gasto registrado</p>
             <small>Adicione transações para ver o gráfico</small>
           </div>
-          <div class="chart-content" *ngIf="spendingChartData">
-            <!-- Aqui seria implementado o Chart.js real -->
-            <p>Gráfico de gastos mensais (Chart.js)</p>
+          <div class="chart-content" *ngIf="spendingLineChartData.labels?.length">
+            <canvas
+              baseChart
+              [type]="'line'"
+              [data]="spendingLineChartData"
+              [options]="spendingLineChartOptions">
+            </canvas>
           </div>
         </div>
       </div>
@@ -91,22 +169,26 @@
       <div class="chart-card">
         <div class="chart-header">
           <h3>Gastos por Categoria</h3>
-          <div class="chart-legend" *ngIf="categoryChartData">
-            <span class="legend-item" *ngFor="let label of categoryChartData.labels; let i = index">
-              <span class="legend-color" [style.background-color]="categoryChartData.datasets[0].backgroundColor[i]"></span>
+          <div class="chart-legend" *ngIf="doughnutChartData.labels?.length">
+            <span class="legend-item" *ngFor="let label of doughnutChartData.labels; let i = index">
+              <span class="legend-color" [style.background-color]="getDoughnutColor(i)"></span>
               {{ label }}
             </span>
           </div>
         </div>
         <div class="chart-container">
-          <div class="chart-placeholder" *ngIf="!categoryChartData">
+          <div class="chart-placeholder" *ngIf="!doughnutChartData.labels?.length">
             <i class="fas fa-chart-pie"></i>
             <p>Nenhum gasto por categoria</p>
             <small>Adicione transações categorizadas para ver o gráfico</small>
           </div>
-          <div class="chart-content" *ngIf="categoryChartData">
-            <!-- Aqui seria implementado o Chart.js real -->
-            <p>Gráfico de gastos por categoria (Chart.js)</p>
+          <div class="chart-content" *ngIf="doughnutChartData.labels?.length">
+            <canvas
+              baseChart
+              [type]="'doughnut'"
+              [data]="doughnutChartData"
+              [options]="doughnutChartOptions">
+            </canvas>
           </div>
         </div>
       </div>
@@ -145,7 +227,11 @@
           </div>
           <div class="status-item">
             <div class="status-label">Utilizado</div>
-            <div class="status-value">{{ formatCurrency(creditCardUsed) }}</div>
+            <div
+              class="status-value"
+              [class.limite-utilizado-consumo]="creditCardUsed > 0">
+              {{ formatCurrency(creditCardUsed) }}
+            </div>
           </div>
           <div class="status-item">
             <div class="status-label">Disponível</div>
@@ -159,6 +245,26 @@
           </div>
           <div class="usage-text">
             {{ getCreditCardUsagePercentage().toFixed(1) }}% utilizado
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-card">
+        <h3>Resumo de Fluxo de Caixa</h3>
+        <div class="credit-card-status">
+          <div class="status-item">
+            <div class="status-label">Receitas</div>
+            <div class="status-value positive">{{ getFluxoPercentualReceitas().toFixed(1) }}%</div>
+          </div>
+          <div class="status-item">
+            <div class="status-label">Despesas</div>
+            <div class="status-value negative">{{ getFluxoPercentualDespesas().toFixed(1) }}%</div>
+          </div>
+          <div class="usage-bar">
+            <div class="usage-fill"
+                 [style.width.%]="getFluxoPercentualReceitas()"
+                 [style.background-color]="'#1c3238'">
+            </div>
           </div>
         </div>
       </div>
@@ -184,7 +290,15 @@
             </div>
           </div>
           <div class="transaction-amount" [class]="transaction.type">
-            {{ transaction.type === 'credit' ? '+' : '' }}{{ formatCurrency(transaction.amount) }}
+            <span class="transaction-amount-inner">
+              {{ transaction.type === 'credit' ? '+' : '' }}{{ formatCurrency(transaction.amount) }}
+              <mat-icon
+                *ngIf="transaction.showJurosWarning"
+                class="transaction-juros-icon"
+                [matTooltip]="tooltipJurosTransacao"
+                matTooltipShowDelay="200"
+                aria-label="Compra com juros">warning</mat-icon>
+            </span>
           </div>
         </div>
       </div>
@@ -249,4 +363,9 @@
       </div>
     </div>
   </div>
+
+  <footer class="dashboard-live-footer" *ngIf="ultimaAtualizacao">
+    <mat-spinner *ngIf="isSilentRefreshing" diameter="14" class="live-footer-spinner"></mat-spinner>
+    <span class="live-footer-text">Atualizado em: {{ ultimaAtualizacao | date:'HH:mm' }}</span>
+  </footer>
 </div>

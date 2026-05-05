@@ -23,8 +23,11 @@ export interface CartaoCredito {
   /** Limite total de crédito disponível no cartão */
   limiteCredito: number;
   
-  /** Limite de crédito ainda disponível para uso */
+  /** Limite de crédito ainda disponível para uso (API: total − utilizado na fatura aberta) */
   limiteDisponivel: number;
+
+  /** Gasto na fatura aberta / utilizado (API); alias legado em componentes */
+  limiteUtilizado?: number;
   
   /** Data de vencimento do cartão (opcional) */
   dataVencimento?: Date;
@@ -47,9 +50,6 @@ export interface CartaoCredito {
   // Propriedades adicionais necessárias pelos componentes
   /** Limite total do cartão (alias para compatibilidade) */
   limite?: number;
-  
-  /** Limite já utilizado do cartão (alias para compatibilidade) */
-  limiteUtilizado?: number;
   
   /** Bandeira do cartão (Visa, Mastercard, etc.) */
   bandeira?: string;

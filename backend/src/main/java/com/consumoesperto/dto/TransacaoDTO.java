@@ -11,6 +11,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
 import javax.validation.constraints.Pattern;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -35,11 +36,37 @@ public class TransacaoDTO {
 
     private Long categoriaId;
     private String categoriaNome;
+    /** Despesa no cartão: id da fatura em aberto (opcional). */
+    private Long faturaId;
+    /** Despesa no cartão: resolve a fatura aberta do cartão (opcional; ignorado se faturaId preenchido). */
+    private Long cartaoCreditoId;
     private Long usuarioId;
     private LocalDateTime dataTransacao;
     private LocalDateTime dataCriacao;
+    private boolean recorrente;
+    private FrequenciaRecorrencia frequencia;
+    private LocalDate proximaExecucao;
+    private StatusConferencia statusConferencia;
+
+    @Size(max = 18, message = "CNPJ deve ter no máximo 18 caracteres")
+    private String cnpj;
+
+    /** UUID do grupo de parcelas (opcional). */
+    private String grupoParcelaId;
+    private Integer parcelaAtual;
+    private Integer totalParcelas;
+    private BigDecimal valorReal;
+    private BigDecimal valorComJuros;
 
     public enum TipoTransacao {
         RECEITA, DESPESA
+    }
+
+    public enum FrequenciaRecorrencia {
+        SEMANAL, MENSAL
+    }
+
+    public enum StatusConferencia {
+        CONFIRMADA, PENDENTE
     }
 }

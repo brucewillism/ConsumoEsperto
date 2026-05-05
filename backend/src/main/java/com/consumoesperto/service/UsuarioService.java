@@ -8,6 +8,7 @@ import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -228,6 +229,25 @@ public class UsuarioService {
     public Usuario findById(Long id) {
         return usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
+    }
+
+    @Transactional
+    public void alterarSenha(Long usuarioId, String senhaAtual, String novaSenha) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
+
+        if (senhaAtual == null || senhaAtual.isBlank()) {
+            throw new DataConflictException("Senha atual é obrigatória");
+        }
+        if (novaSenha == null || novaSenha.isBlank() || novaSenha.length() < 6) {
+            throw new DataConflictException("Nova senha inválida. Use pelo menos 6 caracteres");
+        }
+        if (!passwordEncoder.matches(senhaAtual, usuario.getPassword())) {
+            throw new DataConflictException("Senha atual incorreta");
+        }
+
+        usuario.setPassword(passwordEncoder.encode(novaSenha));
+        usuarioRepository.save(usuario);
     }
 
     /**

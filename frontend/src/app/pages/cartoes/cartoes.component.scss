@@ -189,6 +189,14 @@
           &.negativo {
             color: var(--danger-color);
           }
+
+          &.limite-utilizado-consumo {
+            color: #f59e0b;
+          }
+
+          &.valor-neutro-baixo {
+            color: var(--text-secondary);
+          }
         }
 
         small {
@@ -478,6 +486,14 @@
 
               &.negativo {
                 color: var(--danger-color);
+              }
+
+              &.limite-utilizado-consumo {
+                color: #f59e0b;
+              }
+
+              &.valor-neutro-baixo {
+                color: var(--text-secondary);
               }
             }
           }

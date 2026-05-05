@@ -1,68 +1,60 @@
 @echo off
+setlocal EnableExtensions
 echo ========================================
 echo   RODANDO FRONTEND - CONSUMO ESPERTO
 echo ========================================
 echo.
 
-REM Navegar para o diretório frontend
-cd frontend
+set "ROOT=%~dp0"
+if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
+
+cd /d "%ROOT%\frontend"
 if errorlevel 1 (
-    echo [ERRO] Diretório frontend não encontrado!
+    echo [ERRO] Diretorio frontend nao encontrado!
     pause
     exit /b 1
 )
 
-echo.
-echo [INFO] Diretório atual: %CD%
-echo [INFO] Porta padrão: 4200
-echo [INFO] Backend esperado em: http://localhost:8080
-echo.
-echo [INFO] Verificando Node.js...
+REM Node oficial do repo, se existir (so nesta sessao)
+if exist "%ROOT%\tools\node\node.exe" (
+    set "PATH=%ROOT%\tools\node;%PATH%"
+    echo [INFO] Usando Node de: %ROOT%\tools\node
+) else (
+    echo [INFO] tools\node vazio — usando Node do PATH do sistema.
+)
+
 where node >nul 2>&1
 if errorlevel 1 (
-    echo [ERRO] Node.js não encontrado no PATH!
-    echo Por favor, instale o Node.js ou adicione ao PATH.
+    echo [ERRO] Node.js nao encontrado!
+    echo Instale Node ou preencha tools\node (veja tools\README.md)
     pause
     exit /b 1
 )
 
-echo [INFO] Node.js encontrado!
 echo.
-echo [INFO] Verificando dependências...
+echo [INFO] Diretorio atual: %CD%
+echo [INFO] Porta: 4200  |  Backend esperado: http://localhost:8081
+echo.
+
 if not exist "node_modules" (
-    echo [AVISO] node_modules não encontrado!
-    echo [INFO] Instalando dependências...
+    echo [INFO] Instalando dependencias...
     call npm install
     if errorlevel 1 (
-        echo [ERRO] Falha ao instalar dependências!
+        echo [ERRO] Falha no npm install
         pause
         exit /b 1
     )
 )
 
-echo.
-echo [INFO] Iniciando servidor de desenvolvimento Angular...
-echo.
+echo [INFO] Iniciando ng serve...
 echo Acesse: http://localhost:4200
 echo.
-echo Pressione Ctrl+C para parar o servidor.
-echo.
-
-REM Rodar o Angular
 call npm start
 
 if errorlevel 1 (
-    echo.
     echo [ERRO] Falha ao iniciar o servidor!
-    echo.
-    echo Verifique:
-    echo - Node.js está instalado?
-    echo - Dependências instaladas? (npm install)
-    echo - Porta 4200 está livre?
-    echo.
     pause
     exit /b 1
 )
 
 pause
-

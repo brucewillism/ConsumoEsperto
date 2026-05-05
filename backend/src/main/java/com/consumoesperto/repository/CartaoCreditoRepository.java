@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.jpa.repository.EntityGraph;
+
 @Repository
 public interface CartaoCreditoRepository extends JpaRepository<CartaoCredito, Long> {
 
@@ -18,7 +20,7 @@ public interface CartaoCreditoRepository extends JpaRepository<CartaoCredito, Lo
 
     Optional<CartaoCredito> findByIdAndUsuarioId(Long id, Long usuarioId);
 
-    boolean existsByNumeroCartaoAndUsuarioId(String numeroCartao, Long usuarioId);
+    Optional<CartaoCredito> findByNumeroCartaoAndUsuarioId(String numeroCartao, Long usuarioId);
 
     @Query("SELECT c FROM CartaoCredito c WHERE c.usuario.id = :usuarioId AND c.banco = :banco AND c.numeroCartao = :numeroCartao")
     Optional<CartaoCredito> findByUsuarioAndBancoAndNumeroCartao(@Param("usuarioId") Long usuarioId, @Param("banco") String banco, @Param("numeroCartao") String numeroCartao);
@@ -50,8 +52,17 @@ public interface CartaoCreditoRepository extends JpaRepository<CartaoCredito, Lo
      * @return Lista de cartões encontrados
      */
     List<CartaoCredito> findByUsuarioIdAndNomeAndBanco(Long usuarioId, String nome, String banco);
+
+    @Query("SELECT c FROM CartaoCredito c " +
+           "WHERE c.usuario.id = :usuarioId AND c.ativo = true " +
+           "AND (LOWER(c.nome) LIKE LOWER(CONCAT('%', :termo, '%')) OR LOWER(c.banco) LIKE LOWER(CONCAT('%', :termo, '%')))")
+    List<CartaoCredito> findAtivosByUsuarioIdAndNomeOrBancoLike(@Param("usuarioId") Long usuarioId, @Param("termo") String termo);
     
     int deleteByUsuarioIdAndAtivoFalse(Long usuarioId);
     
     int deleteByAtivoFalse();
+
+    @EntityGraph(attributePaths = "usuario")
+    @Query("SELECT c FROM CartaoCredito c WHERE c.ativo = true")
+    List<CartaoCredito> findAllAtivosComUsuario();
 }
