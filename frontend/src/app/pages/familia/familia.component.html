@@ -1,0 +1,75 @@
+<div class="familia-page">
+  <section class="hero">
+    <div>
+      <p>Modo Família/Casal</p>
+      <h1>Orçamentos Compartilhados</h1>
+      <span>Veja apenas agregados combinados. Transações, cartões e contracheques seguem privados.</span>
+    </div>
+    <button mat-raised-button color="primary" (click)="carregar()">Atualizar</button>
+  </section>
+
+  <mat-card class="panel" *ngIf="!grupo">
+    <h2>Criar grupo familiar</h2>
+    <div class="form-row">
+      <mat-form-field appearance="outline">
+        <mat-label>Nome do grupo</mat-label>
+        <input matInput [(ngModel)]="nomeGrupo">
+      </mat-form-field>
+      <button mat-raised-button color="primary" (click)="criarGrupo()">Criar</button>
+    </div>
+  </mat-card>
+
+  <mat-card class="panel" *ngIf="grupo">
+    <h2>{{ grupo.nome }}</h2>
+    <div class="members">
+      <span *ngFor="let m of grupo.membros" [class.pending]="m.status === 'PENDENTE'">
+        {{ m.nome }} · {{ m.status }} <strong *ngIf="m.eu">(você)</strong>
+      </span>
+    </div>
+
+    <h3>Convidar parceiro(a)</h3>
+    <div class="form-row">
+      <mat-form-field appearance="outline">
+        <mat-label>E-mail</mat-label>
+        <input matInput [(ngModel)]="conviteEmail">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>WhatsApp</mat-label>
+        <input matInput [(ngModel)]="conviteWhatsapp" placeholder="+5511999999999">
+      </mat-form-field>
+      <button mat-raised-button color="primary" (click)="convidar()">Enviar convite</button>
+    </div>
+    <div class="invite-link" *ngIf="conviteVisual">
+      <img [src]="qrUrl()" alt="QR Code do convite">
+      <div>
+        <strong>Convite visual gerado</strong>
+        <code>{{ conviteVisual }}</code>
+        <small>O aceite formal ainda precisa ser feito pelo usuário convidado no app.</small>
+      </div>
+    </div>
+  </mat-card>
+
+  <mat-card class="panel" *ngIf="convites.length">
+    <h2>Convites recebidos</h2>
+    <div class="invite" *ngFor="let c of convites">
+      <span>Convite pendente para grupo familiar</span>
+      <div>
+        <button mat-button color="primary" (click)="responder(c, true)">Aceitar</button>
+        <button mat-button color="warn" (click)="responder(c, false)">Recusar</button>
+      </div>
+    </div>
+  </mat-card>
+
+  <mat-card class="panel">
+    <h2>Barras compartilhadas</h2>
+    <div class="empty" *ngIf="!orcamentos.length">Nenhum orçamento compartilhado ativo.</div>
+    <div class="budget" *ngFor="let o of orcamentos">
+      <div class="budget-head">
+        <strong>{{ o.categoriaNome }}</strong>
+        <span>{{ brl(o.valorGasto) }} / {{ brl(o.valorLimite) }} · {{ o.membrosContabilizados || 1 }} membro(s)</span>
+      </div>
+      <mat-progress-bar mode="determinate" [value]="progress(o)"></mat-progress-bar>
+      <small>{{ o.percentualUso | number:'1.0-1' }}% usado pelo grupo</small>
+    </div>
+  </mat-card>
+</div>

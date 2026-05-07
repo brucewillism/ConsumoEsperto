@@ -70,7 +70,7 @@ public class WhatsappAccountProvisioner {
             Usuario saved = usuarioRepository.save(u);
             UsuarioAiConfig cfg = new UsuarioAiConfig();
             cfg.setUsuario(saved);
-            cfg.setProviderOrderJson("[\"GROQ\",\"OPENAI\",\"OLLAMA\"]");
+            cfg.setProviderOrderJson("[\"GROQ\",\"GEMINI\",\"OPENAI\",\"OLLAMA\"]");
             usuarioAiConfigRepository.save(cfg);
             log.info("Auto-provision WhatsApp: novo usuario id={} numero={}", saved.getId(), e164);
             return Optional.of(saved.getId());

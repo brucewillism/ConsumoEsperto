@@ -38,6 +38,8 @@ public class OAuth2Service {
     private final UsuarioRepository usuarioRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final RestTemplate restTemplate;
+    private final NomeGeneroInferenciaService nomeGeneroInferenciaService;
+    private final JarvisProtocolService jarvisProtocolService;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
@@ -118,6 +120,35 @@ public class OAuth2Service {
         } catch (Exception e) {
             log.error("❌ Erro ao obter informações do Google: {}", e.getMessage());
             throw new RuntimeException("Não foi possível obter informações do usuário do Google", e);
+        }
+    }
+
+    private static String primeiroNomeGoogle(GoogleUserInfo info) {
+        if (info.getGiven_name() != null && !info.getGiven_name().isBlank()) {
+            return info.getGiven_name().trim().split("\\s+")[0];
+        }
+        if (info.getName() != null && !info.getName().isBlank()) {
+            return info.getName().trim().split("\\s+")[0];
+        }
+        return "";
+    }
+
+    /**
+     * Inferência inicial pelo primeiro nome ({@link NomeGeneroInferenciaService}); confirmação final no frontend.
+     */
+    private void aplicarPerfilGenero(Usuario usuario, GoogleUserInfo googleUserInfo) {
+        if (Boolean.TRUE.equals(usuario.getGeneroConfirmado())) {
+            return;
+        }
+
+        String primeiro = primeiroNomeGoogle(googleUserInfo);
+        Optional<Usuario.GeneroUsuario> inferido = nomeGeneroInferenciaService.inferirPrimeiroNome(primeiro);
+        if (inferido.isPresent()) {
+            usuario.setGenero(inferido.get());
+            usuario.setGeneroConfirmado(false);
+        } else {
+            usuario.setGenero(Usuario.GeneroUsuario.UNKNOWN);
+            usuario.setGeneroConfirmado(false);
         }
     }
 
@@ -210,6 +241,8 @@ public class OAuth2Service {
         // Para usuários OAuth2, definir uma senha padrão (será ignorada no login)
         usuario.setPassword("OAUTH2_USER_" + System.currentTimeMillis());
 
+        aplicarPerfilGenero(usuario, googleUserInfo);
+
         return usuario;
     }
 
@@ -232,6 +265,8 @@ public class OAuth2Service {
         if (usuario.getPassword() == null || usuario.getPassword().trim().isEmpty()) {
             usuario.setPassword("OAUTH2_USER_" + System.currentTimeMillis());
         }
+
+        aplicarPerfilGenero(usuario, googleUserInfo);
     }
 
     /**
@@ -264,6 +299,15 @@ public class OAuth2Service {
             .provedorAuth(usuario.getProvedorAuth().name())
             .dataCriacao(usuario.getDataCriacao())
             .ultimoAcesso(usuario.getUltimoAcesso())
+            .jarvisConfigurado(Boolean.TRUE.equals(usuario.getJarvisConfigurado()))
+            .tratamento(usuario.getTratamento())
+            .jarvisTratamentoResumo(jarvisProtocolService.montarVocativoCompleto(usuario))
+            .genero(usuario.getGenero() != null ? usuario.getGenero().name() : Usuario.GeneroUsuario.UNKNOWN.name())
+            .generoConfirmado(usuario.getGeneroConfirmado())
+            .preferenciaTratamentoJarvis(
+                usuario.getPreferenciaTratamentoJarvis() != null
+                    ? usuario.getPreferenciaTratamentoJarvis().name()
+                    : Usuario.PreferenciaTratamentoJarvis.AUTOMATICO.name())
             .build();
 
         return AuthResponse.builder()

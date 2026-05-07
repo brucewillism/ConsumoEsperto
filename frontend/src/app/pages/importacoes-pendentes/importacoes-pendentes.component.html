@@ -1,0 +1,65 @@
+<div class="importacoes-page">
+  <section class="hero">
+    <div>
+      <p>Conferência de PDF</p>
+      <h1>Importações Pendentes</h1>
+      <span>Revise os lançamentos extraídos das faturas antes de gravar no banco.</span>
+    </div>
+    <button mat-raised-button color="primary" (click)="carregar()">
+      <mat-icon>refresh</mat-icon>
+      Atualizar
+    </button>
+  </section>
+
+  <mat-card
+    class="drop-zone"
+    [class.drag-over]="dragOver"
+    (dragover)="onDragOver($event)"
+    (dragleave)="onDragLeave($event)"
+    (drop)="onDrop($event)">
+    <mat-icon>cloud_upload</mat-icon>
+    <h2>Arraste a fatura PDF aqui</h2>
+    <p>A IA faz a leitura e mostra a conciliação em tempo real antes de confirmar.</p>
+    <input #invoiceFile type="file" accept="application/pdf,.pdf" hidden (change)="onFileSelected($event)">
+    <button mat-raised-button color="primary" (click)="invoiceFile.click()" [disabled]="enviandoPdf">
+      {{ enviandoPdf ? 'Processando...' : 'Selecionar PDF' }}
+    </button>
+  </mat-card>
+
+  <div class="empty" *ngIf="!carregando && importacoes.length === 0">
+    Nenhuma importação pendente.
+  </div>
+
+  <mat-card class="import-card" *ngFor="let imp of importacoes">
+    <div class="import-head">
+      <div>
+        <h2>{{ imp.bancoCartao }}</h2>
+        <span>Vencimento: {{ imp.dataVencimento | date:'dd/MM/yyyy' }} · Total {{ brl(imp.valorTotal) }}</span>
+      </div>
+      <strong>{{ imp.novosDetectados }} novos</strong>
+    </div>
+
+    <div class="audit" *ngIf="imp.auditorias?.length">
+      <p *ngFor="let a of imp.auditorias">• {{ a }}</p>
+    </div>
+
+    <div class="items">
+      <label class="item-row" *ngFor="let item of imp.itens">
+        <mat-checkbox [(ngModel)]="item.selecionado" [disabled]="!item.novo"></mat-checkbox>
+        <span class="date">{{ item.data | date:'dd/MM' }}</span>
+        <span class="desc">
+          {{ item.descricao }}
+          <small *ngIf="item.totalParcelas">Parcela {{ item.parcelaAtual }}/{{ item.totalParcelas }}</small>
+        </span>
+        <strong>{{ brl(item.valor) }}</strong>
+        <em [class.old]="!item.novo">{{ item.novo ? 'novo' : 'já lançado' }}</em>
+      </label>
+    </div>
+
+    <div class="actions">
+      <button mat-raised-button color="primary" (click)="confirmar(imp)" [disabled]="confirmandoId === imp.id">
+        Confirmar selecionados
+      </button>
+    </div>
+  </mat-card>
+</div>

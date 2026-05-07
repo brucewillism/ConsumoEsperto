@@ -1,0 +1,37 @@
+<div class="score-page">
+  <section class="hero">
+    <div>
+      <p>Saúde financeira</p>
+      <h1>Score Gamificado</h1>
+      <span>Veja a evolução dos pontos e os motivos de cada mudança.</span>
+    </div>
+    <div class="level" *ngIf="score">
+      <strong>{{ score.score }}</strong>
+      <span>{{ score.nivel }}</span>
+    </div>
+  </section>
+
+  <mat-card class="chart-card">
+    <h2>Evolução do Score</h2>
+    <div class="chart-box" *ngIf="chartData.labels?.length; else empty">
+      <canvas baseChart [type]="'line'" [data]="chartData" [options]="chartOptions"></canvas>
+    </div>
+    <ng-template #empty>
+      <div class="empty">O histórico aparece quando o sistema registrar eventos de score.</div>
+    </ng-template>
+  </mat-card>
+
+  <mat-card class="history-card">
+    <h2>Motivos recentes</h2>
+    <div class="history-row" *ngFor="let h of historico">
+      <strong [class.positive]="h.delta > 0" [class.negative]="h.delta < 0">
+        {{ h.delta > 0 ? '+' : '' }}{{ h.delta }} pontos
+      </strong>
+      <div>
+        <span>{{ h.motivo }}</span>
+        <small>{{ h.detalhe || 'Evento financeiro registrado' }} · {{ h.dataEvento | date:'dd/MM/yyyy HH:mm' }}</small>
+      </div>
+      <em>{{ h.scoreResultante }}</em>
+    </div>
+  </mat-card>
+</div>

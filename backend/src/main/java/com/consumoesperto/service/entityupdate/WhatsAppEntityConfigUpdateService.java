@@ -251,6 +251,7 @@ public class WhatsAppEntityConfigUpdateService {
         String banco = null;
         String cor = null;
         String icone = null;
+        Integer diaVencimento = null;
         List<String> ignorados = new ArrayList<>();
         Iterator<Map.Entry<String, JsonNode>> it = updates.fields();
         while (it.hasNext()) {
@@ -258,26 +259,32 @@ public class WhatsAppEntityConfigUpdateService {
             String key = ApelidoNormalizador.normalizar(e.getKey()).replace(' ', '_');
             JsonNode v = e.getValue();
             switch (key) {
-                case "apelido", "nome" -> {
+                case "apelido", "nome", "nickname", "card_name", "cardname", "new_card_name", "newcardname", "new_card_nickname", "newcardnickname" -> {
                     if (v != null && !v.isNull() && !v.asText().isBlank()) {
                         nome = v.asText().trim();
                     }
                 }
-                case "banco" -> {
+                case "banco", "bank" -> {
                     if (v != null && !v.isNull() && !v.asText().isBlank()) {
                         banco = v.asText().trim();
                     }
                 }
-                case "limite", "limite_credito", "limitecredito", "newlimit" -> {
+                case "limite", "limit", "valor", "valor_limite", "valorlimite", "limite_credito", "limitecredito", "credit_limit", "creditlimit", "newlimit", "new_limit", "new_credit_limit", "newcreditlimit" -> {
                     BigDecimal nv = readBd(v);
                     if (nv != null && nv.compareTo(BigDecimal.ZERO) > 0) {
                         limite = nv;
                     }
                 }
-                case "limite_disponivel", "limitedisponivel", "newavailablelimit" -> {
+                case "limite_disponivel", "limitedisponivel", "available_limit", "availablelimit", "newavailablelimit", "new_available_limit", "newavailablecreditlimit" -> {
                     BigDecimal nv = readBd(v);
                     if (nv != null && nv.compareTo(BigDecimal.ZERO) >= 0) {
                         disp = nv;
+                    }
+                }
+                case "dia_vencimento", "diavencimento", "vencimento", "due_day", "dueday", "new_due_day", "newdueday", "billing_day", "billingday" -> {
+                    Integer dia = readInt(v);
+                    if (dia != null && dia >= 1 && dia <= 31) {
+                        diaVencimento = dia;
                     }
                 }
                 case "cor" -> {
@@ -294,10 +301,10 @@ public class WhatsAppEntityConfigUpdateService {
                 default -> ignorados.add(e.getKey());
             }
         }
-        if (limite == null && disp == null && nome == null && banco == null && cor == null && icone == null) {
-            throw new RuntimeException("Nenhum campo válido para cartão. Use apelido, banco, limite, limiteDisponivel, cor ou icone.");
+        if (limite == null && disp == null && nome == null && banco == null && cor == null && icone == null && diaVencimento == null) {
+            throw new RuntimeException("Nenhum campo válido para cartão. Use apelido, banco, limite, limiteDisponivel, diaVencimento, cor ou icone.");
         }
-        CartaoCreditoDTO u = cartaoCreditoService.atualizarConfigPorCartaoId(usuarioId, match.id(), limite, disp, nome, banco, cor, icone);
+        CartaoCreditoDTO u = cartaoCreditoService.atualizarConfigPorCartaoId(usuarioId, match.id(), limite, disp, nome, banco, cor, icone, diaVencimento);
         List<String> partes = new ArrayList<>();
         if (limite != null && u.getLimiteCredito() != null) {
             partes.add("limite total " + BRL.format(u.getLimiteCredito().doubleValue()));
@@ -317,6 +324,9 @@ public class WhatsAppEntityConfigUpdateService {
         if (icone != null) {
             partes.add("ícone atualizado");
         }
+        if (diaVencimento != null) {
+            partes.add("vencimento dia " + u.getDiaVencimento());
+        }
         String base = "✅ Feito! Cartão " + u.getNome() + ": " + String.join("; ", partes) + ".";
         if (!ignorados.isEmpty()) {
             base += " Ignorados: " + String.join(", ", ignorados) + ".";
@@ -332,7 +342,38 @@ public class WhatsAppEntityConfigUpdateService {
             return BigDecimal.valueOf(v.asDouble());
         }
         try {
-            return new BigDecimal(v.asText().replace(',', '.').trim());
+            String raw = v.asText();
+            if (raw == null || raw.isBlank()) {
+                return null;
+            }
+            String cleaned = raw.replaceAll("[^0-9,.-]", "").trim();
+            if (cleaned.isBlank()) {
+                return null;
+            }
+            if (cleaned.contains(",") && cleaned.contains(".")) {
+                cleaned = cleaned.replace(".", "").replace(',', '.');
+            } else {
+                cleaned = cleaned.replace(',', '.');
+            }
+            return new BigDecimal(cleaned);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Integer readInt(JsonNode v) {
+        if (v == null || v.isNull()) {
+            return null;
+        }
+        if (v.isInt() || v.isLong()) {
+            return v.asInt();
+        }
+        String digits = v.asText("").replaceAll("[^0-9]", "");
+        if (digits.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(digits);
         } catch (Exception e) {
             return null;
         }

@@ -170,6 +170,8 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     List<Transacao> findByUsuarioIdAndGrupoParcelaIdOrderByParcelaAtualAsc(Long usuarioId, String grupoParcelaId);
 
+    List<Transacao> findByFaturaIdOrderByDataTransacaoAscIdAsc(Long faturaId);
+
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
@@ -184,11 +186,55 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         + "AND t.fatura IS NULL")
     BigDecimal sumDespesaConfirmadaCaixaPorUsuarioId(@Param("usuarioId") Long usuarioId);
 
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.categoria.id = :categoriaId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim")
+    BigDecimal sumDespesaConfirmadaPorCategoriaNoPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("categoriaId") Long categoriaId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id IN :usuarioIds "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.categoria IS NOT NULL "
+        + "AND LOWER(t.categoria.nome) = LOWER(:categoriaNome) "
+        + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim")
+    BigDecimal sumDespesaConfirmadaPorUsuariosENomeCategoriaNoPeriodo(
+        @Param("usuarioIds") List<Long> usuarioIds,
+        @Param("categoriaNome") String categoriaNome,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    @Query("SELECT t FROM Transacao t JOIN FETCH t.usuario u JOIN FETCH t.categoria c WHERE t.usuario.id IN :usuarioIds "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim")
+    List<Transacao> findDespesasConfirmadasPorUsuariosNoPeriodoComCategoria(
+        @Param("usuarioIds") List<Long> usuarioIds,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
     @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipo "
         + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim ORDER BY t.dataTransacao DESC, t.id DESC")
     List<Transacao> findByUsuarioIdAndTipoAndPeriodo(
         @Param("usuarioId") Long usuarioId,
         @Param("tipo") TipoTransacao tipo,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    @Query("SELECT t FROM Transacao t JOIN FETCH t.usuario u LEFT JOIN FETCH t.categoria c WHERE "
+        + "t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim ORDER BY t.usuario.id, t.dataTransacao ASC")
+    List<Transacao> findDespesasConfirmadasNoPeriodoComUsuarioCategoria(
         @Param("inicio") LocalDateTime inicio,
         @Param("fim") LocalDateTime fim
     );

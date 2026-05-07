@@ -59,7 +59,7 @@ public class TransacaoDTO {
     private BigDecimal valorComJuros;
 
     public enum TipoTransacao {
-        RECEITA, DESPESA
+        RECEITA, DESPESA, INVESTIMENTO
     }
 
     public enum FrequenciaRecorrencia {

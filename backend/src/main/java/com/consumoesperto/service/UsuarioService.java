@@ -6,12 +6,15 @@ import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
@@ -32,13 +35,20 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor // Lombok: gera construtor com campos final automaticamente
+@Slf4j
 public class UsuarioService {
 
     // Repositório para operações de persistência de usuários no banco de dados
     private final UsuarioRepository usuarioRepository;
+
+    /** Gravação explícita no PostgreSQL quando o flush JPA deixa passar inconsistências de meta-modelo/colunas herdadas. */
+    private final JdbcTemplate jdbcTemplate;
     
     // Codificador de senhas para criptografia usando BCrypt ou similar
     private final PasswordEncoder passwordEncoder;
+
+    private final JarvisProtocolService jarvisProtocolService;
+    private final WhatsAppNotificationService whatsAppNotificationService;
 
     /**
      * Cria um novo usuário no sistema
@@ -248,6 +258,156 @@ public class UsuarioService {
 
         usuario.setPassword(passwordEncoder.encode(novaSenha));
         usuarioRepository.save(usuario);
+    }
+
+    /**
+     * Atualiza tratamento J.A.R.V.I.S., persiste labels e marca calibragem concluída.
+     *
+     * @param tratamentoRaw enum (SENHOR) ou rótulo (Senhora, Senhor …) ou código NENHUM
+     */
+    @Transactional
+    public Usuario atualizarPerfilJarvis(Long usuarioId, String tratamentoRaw) {
+        Usuario u = usuarioRepository.findById(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
+        Usuario.PreferenciaTratamentoJarvis escolha = parseTratamentoTexto(tratamentoRaw);
+        boolean eraIncompleto = !Boolean.TRUE.equals(u.getJarvisConfigurado());
+        aplicarSincPreferenciaJarvis(u, escolha);
+        usuarioRepository.saveAndFlush(u);
+        persistirPreferenciaJarvisJdbc(usuarioId, u);
+        Usuario salvo = u;
+        if (eraIncompleto && Boolean.TRUE.equals(salvo.getJarvisConfigurado())) {
+            String voc = jarvisProtocolService.montarVocativoCompleto(salvo);
+            whatsAppNotificationService.enviarParaUsuario(usuarioId,
+                jarvisProtocolService.mensagemProtocolosTratamentoEstabilizados(voc));
+        }
+        return salvo;
+    }
+
+    /** Aceita valores do enum, nomes PT ou apenas NENHUM. */
+    public Usuario.PreferenciaTratamentoJarvis parseTratamentoTexto(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("tratamento inválido");
+        }
+        String s = raw.trim();
+        try {
+            return Usuario.PreferenciaTratamentoJarvis.valueOf(s.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            // continua por rótulos em português
+        }
+        String lc = s.toLowerCase(Locale.ROOT);
+        switch (lc) {
+            case "senhor":
+                return Usuario.PreferenciaTratamentoJarvis.SENHOR;
+            case "senhora":
+                return Usuario.PreferenciaTratamentoJarvis.SENHORA;
+            case "doutor":
+                return Usuario.PreferenciaTratamentoJarvis.DOUTOR;
+            case "doutora":
+                return Usuario.PreferenciaTratamentoJarvis.DOUTORA;
+            case "nenhum":
+            case "apenas meu nome":
+            case "apenas nome":
+                return Usuario.PreferenciaTratamentoJarvis.NENHUM;
+            default:
+                throw new IllegalArgumentException("Tratamento não reconhecido: " + raw);
+        }
+    }
+
+    private static String tituloCurtoDePreferencia(Usuario.PreferenciaTratamentoJarvis p) {
+        if (p == null) {
+            return "";
+        }
+        switch (p) {
+            case SENHOR:
+                return "Senhor";
+            case SENHORA:
+                return "Senhora";
+            case DOUTOR:
+                return "Doutor";
+            case DOUTORA:
+                return "Doutora";
+            case NENHUM:
+            case AUTOMATICO:
+            default:
+                return "";
+        }
+    }
+
+    private void aplicarSincPreferenciaJarvis(Usuario u, Usuario.PreferenciaTratamentoJarvis escolha) {
+        Usuario.PreferenciaTratamentoJarvis e = escolha != null
+            ? escolha
+            : Usuario.PreferenciaTratamentoJarvis.AUTOMATICO;
+        u.setPreferenciaTratamentoJarvis(e);
+        if (e == Usuario.PreferenciaTratamentoJarvis.AUTOMATICO) {
+            u.setGeneroConfirmado(false);
+            u.setJarvisConfigurado(false);
+            u.setTratamento(null);
+        } else {
+            u.setGeneroConfirmado(true);
+            u.setJarvisConfigurado(true);
+            u.setTratamento(tituloCurtoDePreferencia(e));
+        }
+    }
+
+    /**
+     * Atualiza apenas as colunas do protocolo J.A.R.V.I.S.; falha alto se não houver linha para o {@code id}
+     * (ajuda a detectar uso de outra base/schema ou erro de segurança).
+     */
+    private void persistirPreferenciaJarvisJdbc(Long usuarioId, Usuario estado) {
+        Usuario.PreferenciaTratamentoJarvis pref = estado.getPreferenciaTratamentoJarvis() != null
+            ? estado.getPreferenciaTratamentoJarvis()
+            : Usuario.PreferenciaTratamentoJarvis.AUTOMATICO;
+        int rows = jdbcTemplate.update(
+            "UPDATE usuarios SET preferencia_tratamento_jarvis = ?, tratamento = ?, jarvis_configurado = ?, genero_confirmado = ? WHERE id = ?",
+            pref.name(),
+            estado.getTratamento(),
+            Boolean.TRUE.equals(estado.getJarvisConfigurado()),
+            Boolean.TRUE.equals(estado.getGeneroConfirmado()),
+            usuarioId);
+        if (rows != 1) {
+            log.error(
+                "Persistência J.A.R.V.I.S.: UPDATE em usuarios afetou {} linha(s) (esperado 1) para id={}. Confira DATABASE_URL/schema e se a tabela se chama 'usuarios'.",
+                rows,
+                usuarioId);
+            throw new IllegalStateException(
+                "Não foi possível gravar o tratamento na tabela usuarios: "
+                    + rows + " linha(s) afetadas (id " + usuarioId + "). Confira DATABASE_URL/schema.");
+        }
+    }
+
+    /**
+     * Preferência manual de tratamento J.A.R.V.I.S.; bloqueia sobrescrita OAuth quando não {@link Usuario.PreferenciaTratamentoJarvis#AUTOMATICO}.
+     */
+    @Transactional
+    public Usuario atualizarPreferenciaTratamentoJarvis(Long usuarioId, Usuario.PreferenciaTratamentoJarvis pref) {
+        Usuario u = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
+        boolean eraIncompleto = !Boolean.TRUE.equals(u.getJarvisConfigurado());
+        Usuario.PreferenciaTratamentoJarvis escolha = pref != null ? pref : Usuario.PreferenciaTratamentoJarvis.AUTOMATICO;
+        aplicarSincPreferenciaJarvis(u, escolha);
+        usuarioRepository.saveAndFlush(u);
+        persistirPreferenciaJarvisJdbc(usuarioId, u);
+        Usuario salvo = u;
+        boolean agoraConfigurado = Boolean.TRUE.equals(salvo.getJarvisConfigurado());
+        if (eraIncompleto && agoraConfigurado && escolha != Usuario.PreferenciaTratamentoJarvis.AUTOMATICO) {
+            String voc = jarvisProtocolService.montarVocativoCompleto(salvo);
+            whatsAppNotificationService.enviarParaUsuario(usuarioId,
+                jarvisProtocolService.mensagemProtocolosTratamentoEstabilizados(voc));
+        }
+        return salvo;
+    }
+
+    /**
+     * Atualiza apenas o nome no perfil.
+     */
+    @Transactional
+    public Usuario atualizarNomePerfil(Long usuarioId, String novoNome) {
+        Usuario u = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
+        if (novoNome != null && !novoNome.isBlank()) {
+            u.setNome(novoNome.trim());
+        }
+        return usuarioRepository.save(u);
     }
 
     /**

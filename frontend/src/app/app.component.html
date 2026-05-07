@@ -57,6 +57,42 @@
           </a>
         </li>
         <li class="nav-item">
+          <a routerLink="/orcamentos" routerLinkActive="active" class="nav-link" title="Orçamentos">
+            <i class="fas fa-thermometer-half"></i>
+            <span class="nav-label">Orçamentos</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a routerLink="/renda" routerLinkActive="active" class="nav-link" title="Renda">
+            <i class="fas fa-money-bill-wave"></i>
+            <span class="nav-label">Renda</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a routerLink="/familia" routerLinkActive="active" class="nav-link" title="Família">
+            <i class="fas fa-users"></i>
+            <span class="nav-label">Família</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a routerLink="/investimentos" routerLinkActive="active" class="nav-link" title="Investimentos">
+            <i class="fas fa-seedling"></i>
+            <span class="nav-label">Investimentos</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a routerLink="/score" routerLinkActive="active" class="nav-link" title="Score">
+            <i class="fas fa-trophy"></i>
+            <span class="nav-label">Score</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a routerLink="/importacoes-pendentes" routerLinkActive="active" class="nav-link" title="Importações Pendentes">
+            <i class="fas fa-file-invoice-dollar"></i>
+            <span class="nav-label">Importações</span>
+          </a>
+        </li>
+        <li class="nav-item">
           <a routerLink="/whatsapp-config" routerLinkActive="active" class="nav-link" title="WhatsApp">
             <i class="fab fa-whatsapp"></i>
             <span class="nav-label">WhatsApp</span>
@@ -73,6 +109,11 @@
         </div>
         <div class="user-details">
           <span class="user-name">{{ userName || 'Usuário' }}</span>
+          <span class="auth-level-label" *ngIf="usuarioScore">Nível de autorização</span>
+          <span class="level-badge" *ngIf="usuarioScore" [class]="usuarioScore.nivel.toLowerCase()">
+            <i class="fas fa-trophy"></i>
+            {{ usuarioScore.nivel }}
+          </span>
           <span class="user-email">{{ userEmail || 'usuario@email.com' }}</span>
         </div>
       </div>
@@ -149,7 +190,7 @@
             <i class="fas fa-chevron-down"></i>
           </button>
           <div class="user-dropdown" [class.show]="showUserMenu">
-            <button type="button" class="dropdown-item" (click)="closeDropdowns()">
+            <button type="button" class="dropdown-item" routerLink="/perfil" (click)="closeDropdowns()">
               <i class="fas fa-user"></i>
               Perfil
             </button>

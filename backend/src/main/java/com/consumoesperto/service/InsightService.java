@@ -35,6 +35,7 @@ public class InsightService {
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
     private final TransacaoRepository transacaoRepository;
+    private final ScoreService scoreService;
 
     /**
      * Mensagem Markdown para WhatsApp com até 3 recorrências prováveis (últimos 90 dias).
@@ -101,14 +102,32 @@ public class InsightService {
         int lim = Math.min(3, candidatos.size());
         for (int i = 0; i < lim; i++) {
             InsightLinha x = candidatos.get(i);
-            sb.append("• Notei que você gasta em média *")
-                .append(BRL.format(x.media))
-                .append("* com *")
-                .append(x.nomeExibicao)
-                .append("* (")
-                .append(x.mesesDistintos)
-                .append(" meses com valores parecidos). Quer que eu transforme isso em uma *Despesa fixa*? ")
-                .append("Responda no app ou diga o que deseja alterar.\n");
+            FinanceInsightProfileClassifier.Perfil perfil =
+                FinanceInsightProfileClassifier.perfilPorDescricao(x.nomeExibicao);
+            int impactoScore = scoreService.estimarPerdaSimulacao(
+                x.media.multiply(new BigDecimal("0.08")).setScale(2, RoundingMode.HALF_UP));
+            if (perfil == FinanceInsightProfileClassifier.Perfil.ASSINATURA_SERVICO) {
+                sb.append("• ⚠️ Senhor, perfil de *assinatura/serviço* em *")
+                    .append(x.nomeExibicao)
+                    .append("* — valor típico mensal *")
+                    .append(BRL.format(x.media))
+                    .append("* ")
+                    .append("(")
+                    .append(x.mesesDistintos)
+                    .append(" meses com estabilidade ±22%). Deseja registrar como *despesa fixa* neste aplicativo?");
+                sb.append("\n_Se o valor disparar contra o combinado do fornecedor, trate-o como alerta para *renegociar ou cancelar* o protocolo (nunca como “hábito de combustível”)._\n");
+            } else {
+                sb.append("• ⛽ Senhor, padrão de *hábito de consumo variável* em *")
+                    .append(x.nomeExibicao)
+                    .append("* — média *")
+                    .append(BRL.format(x.media))
+                    .append("* em ")
+                    .append(x.ocorrencias)
+                    .append(" ocorrências. _Nunca classifique mercado/restaurante/posto como “assinatura”._ ")
+                    .append("Impacto projetado marginal no seu Score caso o ritmo se estenda: até *")
+                    .append(impactoScore)
+                    .append("* pontos.\n");
+            }
         }
         sb.append("\n_Dica: insights só aparecem quando você pergunta — não envio alertas automáticos._");
         log.info("[INSIGHT-LOG] Retornando {} sugestões userId={}", lim, userId);

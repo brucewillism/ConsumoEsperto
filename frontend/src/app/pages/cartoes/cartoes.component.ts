@@ -74,7 +74,7 @@ export class CartoesComponent implements OnInit {
   private initForm(): void {
     this.novoCartaoForm = this.fb.group({
       banco: ['', Validators.required],
-      numero: ['', [Validators.required, Validators.minLength(13)]],
+      numero: ['', [Validators.required, Validators.minLength(4), Validators.maxLength(19)]],
       titular: ['', Validators.required],
       limite: [0, [Validators.required, Validators.min(0.01)]],
       vencimento: ['', Validators.required]
@@ -99,20 +99,32 @@ export class CartoesComponent implements OnInit {
   }
 
   adicionarCartao(): void {
+    if (this.novoCartaoForm.invalid) {
+      this.novoCartaoForm.markAllAsTouched();
+      this.snackBar.open('Revise os campos destacados antes de adicionar o cartão.', 'Fechar', {
+        duration: 3500,
+        panelClass: ['warning-snackbar']
+      });
+      return;
+    }
+
     if (this.novoCartaoForm.valid) {
       this.acaoEmAndamento = true;
       const cartaoForm = this.novoCartaoForm.value;
       const limite = Number(cartaoForm.limite || 0);
       const dueDate = new Date(cartaoForm.vencimento);
+      const numeroCartao = String(cartaoForm.numero).replace(/\D/g, '');
+      const diaVencimento = Number.isNaN(dueDate.getTime()) ? undefined : dueDate.getDate();
 
       const payload: CartaoCredito = {
         nome: cartaoForm.titular,
         banco: cartaoForm.banco,
-        numeroCartao: String(cartaoForm.numero).replace(/\D/g, ''),
+        numeroCartao,
         limiteCredito: limite,
         limiteDisponivel: limite,
         tipoCartao: TipoCartao.CREDITO,
         ativo: true,
+        diaVencimento,
         dataVencimento: dueDate,
         limite: limite,
         limiteUtilizado: 0
@@ -129,15 +141,38 @@ export class CartoesComponent implements OnInit {
           this.acaoEmAndamento = false;
           this.loadData();
         },
-        error: () => {
+        error: (err) => {
           this.acaoEmAndamento = false;
-          this.snackBar.open('Erro ao cadastrar cartão.', 'Fechar', {
+          this.snackBar.open(this.mensagemErroCadastroCartao(err), 'Fechar', {
           duration: 3000,
           panelClass: ['error-snackbar']
         });
         }
       });
     }
+  }
+
+  private mensagemErroCadastroCartao(err: any): string {
+    const body = err?.error;
+    if (typeof body === 'string' && body.trim()) {
+      return body;
+    }
+    if (body?.message) {
+      return body.message;
+    }
+    if (body?.errors && typeof body.errors === 'object') {
+      const primeira = Object.values(body.errors)[0];
+      if (typeof primeira === 'string') {
+        return primeira;
+      }
+      if (Array.isArray(primeira) && primeira.length > 0) {
+        return String(primeira[0]);
+      }
+    }
+    if (err?.status === 400) {
+      return 'Dados inválidos. Confira número, limite e vencimento.';
+    }
+    return 'Erro ao cadastrar cartão.';
   }
 
   atualizarDados(): void {

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, forkJoin, of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
@@ -43,19 +43,12 @@ function iconForTipo(tipo?: string): string {
 @Injectable({ providedIn: 'root' })
 export class NotificacaoInboxService {
   private readonly apiBase = `${environment.apiUrl}/notificacoes`;
-  private readonly alertasUrl = `${environment.apiUrl}/relatorios/alertas`;
-
   constructor(private http: HttpClient) {}
 
   loadInbox(): Observable<InboxNotification[]> {
-    const notif$ = this.http.get<NotificacaoApi[]>(`${this.apiBase}/todas`).pipe(
-      catchError(() => of([] as NotificacaoApi[]))
-    );
-    const alertas$ = this.http.get<Record<string, unknown>>(this.alertasUrl).pipe(
-      catchError(() => of({} as Record<string, unknown>))
-    );
-    return forkJoin({ notif: notif$, alertas: alertas$ }).pipe(
-      map(({ notif, alertas }) => this.merge(notif || [], alertas || {}))
+    return this.http.get<NotificacaoApi[]>(`${this.apiBase}/todas`).pipe(
+      catchError(() => of([] as NotificacaoApi[])),
+      map((notif) => this.merge(notif || []))
     );
   }
 
@@ -91,8 +84,7 @@ export class NotificacaoInboxService {
     }
   }
 
-  private merge(rows: NotificacaoApi[], alertas: Record<string, unknown>): InboxNotification[] {
-    const synthRead = this.readSyntheticKeys();
+  private merge(rows: NotificacaoApi[]): InboxNotification[] {
     const fromDb: InboxNotification[] = rows.map((n) => ({
       key: `db-${n.id}`,
       serverId: n.id,
@@ -102,54 +94,10 @@ export class NotificacaoInboxService {
       read: !!n.lida,
     }));
 
-    const fromAlertas = this.alertasToInbox(alertas, synthRead);
-    return [...fromAlertas, ...fromDb].sort((a, b) => {
+    return fromDb.sort((a, b) => {
       if (a.read !== b.read) return a.read ? 1 : -1;
       return 0;
     });
-  }
-
-  private alertasToInbox(
-    alertas: Record<string, unknown>,
-    synthRead: Set<string>
-  ): InboxNotification[] {
-    const out: InboxNotification[] = [];
-    const n7 = Number(alertas['faturasVencendo7Dias'] ?? 0);
-    const n30 = Number(alertas['faturasVencendo30Dias'] ?? 0);
-    const saldoBaixo = alertas['saldoBaixo'] === true;
-
-    if (n7 > 0) {
-      const key = `${SYNTH_PREFIX}fat7`;
-      out.push({
-        key,
-        message: `${n7} fatura(s) com vencimento nos próximos 7 dias.`,
-        icon: 'fas fa-file-invoice-dollar',
-        time: 'Alerta financeiro',
-        read: synthRead.has(key),
-      });
-    } else if (n30 > 0) {
-      const key = `${SYNTH_PREFIX}fat30`;
-      out.push({
-        key,
-        message: `${n30} fatura(s) com vencimento nos próximos 30 dias.`,
-        icon: 'fas fa-calendar-alt',
-        time: 'Alerta financeiro',
-        read: synthRead.has(key),
-      });
-    }
-
-    if (saldoBaixo) {
-      const key = `${SYNTH_PREFIX}saldo`;
-      out.push({
-        key,
-        message: 'Saldo do mês abaixo de R$ 1.000,00 — revise seus gastos.',
-        icon: 'fas fa-wallet',
-        time: 'Alerta financeiro',
-        read: synthRead.has(key),
-      });
-    }
-
-    return out;
   }
 
   private formatRelative(iso?: string): string {

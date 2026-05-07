@@ -28,12 +28,18 @@ export const routes: Routes = [
   { path: 'register', loadComponent: () => import('./pages/register/register.component').then(m => m.RegisterComponent) },
   
   // Dashboard principal (protegida - requer autenticação)
-  { 
-    path: 'dashboard', 
+  {
+    path: 'dashboard',
     loadComponent: () => import('./pages/dashboard/dashboard.component').then(m => m.DashboardComponent),
     canActivate: [AuthGuard] // Verifica se usuário está logado
   },
-  
+
+  {
+    path: 'perfil',
+    loadComponent: () => import('./pages/perfil/perfil.component').then(m => m.PerfilComponent),
+    canActivate: [AuthGuard]
+  },
+
   // Gestão de transações financeiras (protegida)
   { 
     path: 'transacoes', 
@@ -79,6 +85,42 @@ export const routes: Routes = [
   {
     path: 'metas',
     loadComponent: () => import('./pages/metas/metas.component').then(m => m.MetasComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
+    path: 'orcamentos',
+    loadComponent: () => import('./pages/orcamentos/orcamentos.component').then(m => m.OrcamentosComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
+    path: 'renda',
+    loadComponent: () => import('./pages/renda/renda.component').then(m => m.RendaComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
+    path: 'familia',
+    loadComponent: () => import('./pages/familia/familia.component').then(m => m.FamiliaComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
+    path: 'investimentos',
+    loadComponent: () => import('./pages/investimentos/investimentos.component').then(m => m.InvestimentosComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
+    path: 'score',
+    loadComponent: () => import('./pages/score/score.component').then(m => m.ScoreComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
+    path: 'importacoes-pendentes',
+    loadComponent: () => import('./pages/importacoes-pendentes/importacoes-pendentes.component').then(m => m.ImportacoesPendentesComponent),
     canActivate: [AuthGuard]
   },
   

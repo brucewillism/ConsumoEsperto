@@ -13,6 +13,7 @@ export interface Fatura {
   
   /** Valor total da fatura (soma de todas as transações do período) */
   valorFatura: number;
+  valorTotal?: number;
   
   /** Valor já pago da fatura (pode ser parcial ou total) */
   valorPago: number;
@@ -117,6 +118,7 @@ export interface FaturaDTO {
   
   /** Valor total da fatura (soma de todas as transações do período) */
   valorFatura: number;
+  valorTotal?: number;
   
   /** Valor já pago da fatura (pode ser parcial ou total) */
   valorPago: number;
@@ -140,6 +142,7 @@ export interface FaturaDTO {
   cartaoCreditoId?: number;
   nomeCartao?: string;
   banco?: string;
+  transacoes?: any[];
   
   /** Data de criação do registro no sistema */
   dataCriacao?: Date;

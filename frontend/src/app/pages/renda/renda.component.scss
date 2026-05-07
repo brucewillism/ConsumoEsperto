@@ -1,0 +1,88 @@
+.renda-page {
+  display: grid;
+  gap: 18px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #111827, #1f2937);
+  color: #fff;
+}
+
+.hero p {
+  margin: 0 0 4px;
+  color: #93c5fd;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 12px;
+}
+
+.hero h1 {
+  margin: 0 0 6px;
+}
+
+.chart-card,
+.paycheck-card,
+.upload-card {
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, .08);
+}
+
+.chart-box {
+  height: 320px;
+}
+
+.paycheck-head,
+.values {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.paycheck-head h2 {
+  margin: 0 0 4px;
+}
+
+.paycheck-head span {
+  color: #9ca3af;
+}
+
+.values {
+  margin: 16px 0;
+}
+
+.insights {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, .12);
+  color: #bbf7d0;
+}
+
+.insights p {
+  margin: 4px 0;
+}
+
+.discounts {
+  margin-top: 14px;
+}
+
+.discount-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.empty {
+  color: #9ca3af;
+  text-align: center;
+  padding: 48px 0;
+}

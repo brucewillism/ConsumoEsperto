@@ -7,6 +7,7 @@ import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.NotificacaoFechamentoCartaoRepository;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
+import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +38,9 @@ public class FaturaFechamentoWatcherService {
     private final FaturaService faturaService;
     private final CartaoCreditoService cartaoCreditoService;
     private final SaldoService saldoService;
-    private final EvolutionApiService evolutionApiService;
+    private final JarvisProtocolService jarvisProtocolService;
+    private final UsuarioRepository usuarioRepository;
+    private final WhatsAppNotificationService whatsAppNotificationService;
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
     private final NotificacaoFechamentoCartaoRepository notificacaoFechamentoCartaoRepository;
 
@@ -96,27 +99,23 @@ public class FaturaFechamentoWatcherService {
         }
         String nomeCartao = cartao.getNome() != null ? cartao.getNome() : "Cartão";
         String vencStr = s.proximoVencimentoCiclo() != null ? s.proximoVencimentoCiclo().format(DATA_PT) : "—";
+        String vocativo = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+        String valorFat = BRL.format(valorFatura);
+        String saldoFmt = BRL.format(saldo);
         String msg;
         String tipo;
         if (saldo.compareTo(valorFatura) >= 0) {
             tipo = "OK";
-            msg = "🚀 Boa notícia! Sua fatura do *" + nomeCartao + "* fechou em *" + BRL.format(valorFatura)
-                + "*. Seu saldo atual de *" + BRL.format(saldo) + "* cobre o pagamento. Tudo sob controle!";
+            msg = jarvisProtocolService.proativoFaturaFechamentoSaldoCobre(vocativo, nomeCartao, valorFat, saldoFmt);
         } else {
             tipo = "DEFICIT";
             BigDecimal falta = valorFatura.subtract(saldo).max(BigDecimal.ZERO);
-            msg = "⚠️ Alerta de Fluxo! Sua fatura do *" + nomeCartao + "* fechou em *" + BRL.format(valorFatura)
-                + "*, mas seu saldo atual é de *" + BRL.format(saldo)
-                + "*. Você precisará de mais *" + BRL.format(falta) + "* até o dia *" + vencStr + "*. ";
+            msg = jarvisProtocolService.proativoFaturaFechamentoDeficitFluxo(
+                vocativo, nomeCartao, valorFat, saldoFmt, BRL.format(falta), vencStr);
         }
-        String instance = usuarioAiConfigRepository.findByUsuarioId(userId)
-            .map(cfg -> cfg.getEvolutionInstanceName())
-            .filter(x -> x != null && !x.isBlank())
-            .orElse(null);
-        try {
-            evolutionApiService.enviarMensagem(evolutionApiService.normalizeToNumber(destino), msg, instance);
-        } catch (Exception e) {
-            log.warn("[WATCHER-FECHAMENTO] Falha Evolution userId={}: {}", userId, e.getMessage());
+        boolean enviado = whatsAppNotificationService.enviarParaUsuario(userId, msg);
+        if (!enviado) {
+            log.warn("[WATCHER-FECHAMENTO] WhatsApp não enviado userId={} cartaoId={} [J.A.R.V.I.S. Offline]", userId, cartao.getId());
             return;
         }
         NotificacaoFechamentoCartao n = new NotificacaoFechamentoCartao();

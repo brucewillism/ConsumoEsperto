@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, tap } from 'rxjs';
+import { BehaviorSubject, Observable, tap, map } from 'rxjs';
 import { Usuario, LoginRequest, LoginResponse, GoogleLoginRequest, GoogleLoginResponse } from '../models/usuario.model';
 import { environment } from '../../environments/environment';
 import { Router } from '@angular/router';
@@ -110,7 +110,7 @@ export class AuthService {
       .pipe(
         tap(response => {
           this.handleAuthSuccess(response.token); // Armazena o token
-          this.currentUserSubject.next(response.user); // Atualiza usuário atual
+          this.loadUserInfo(response.token); // Perfil completo (jarvis_configurado, tratamento…) do servidor
         })
       );
   }
@@ -171,7 +171,7 @@ export class AuthService {
         // Inicializa o cliente OAuth2 do Google
         const client = google.accounts.oauth2.initTokenClient({
           client_id: this.GOOGLE_CLIENT_ID,
-          scope: 'openid profile email', // Escopos solicitados
+          scope: 'openid profile email',
           
           // Callback de sucesso
           callback: (response: any) => {
@@ -267,10 +267,6 @@ export class AuthService {
             
             // Atualiza o estado da aplicação com o token JWT real
             this.handleAuthSuccess(response.token);
-            if (response.user) {
-              this.currentUserSubject.next(response.user);
-              localStorage.setItem('user', JSON.stringify(response.user));
-            }
             this.loadUserInfo(response.token);
             
             // Prepara a resposta de sucesso
@@ -353,33 +349,54 @@ export class AuthService {
    * @param token Token JWT para autenticação
    */
   private loadUserInfo(token: string): void {
-    // Busca dados reais do usuário no backend
     this.http.get<any>(`${environment.apiUrl}/usuarios/perfil`).subscribe({
       next: (response) => {
         console.log('[AuthService] Dados do usuário carregados:', response);
-        
-        // Mapeia fotoUrl do backend para foto do frontend
-        const user: Usuario = {
-          id: response.id,
-          username: response.username,
-          email: response.email,
-          nome: response.nome,
-          fotoUrl: response.fotoUrl, // Usa fotoUrl diretamente
-          dataCriacao: response.dataCriacao ? new Date(response.dataCriacao) : undefined,
-          ultimoAcesso: response.ultimoAcesso ? new Date(response.ultimoAcesso) : undefined,
-          ativo: true
-        };
-        
-        // Atualiza o usuário atual e armazena no localStorage
-        this.currentUserSubject.next(user);
-        localStorage.setItem('user', JSON.stringify(user));
+        this.applyPerfilResponse(response);
       },
       error: (error) => {
         console.error('[AuthService] Erro ao carregar dados do usuário:', error);
-        // Em caso de erro, mantém o usuário logado mas sem dados completos
-        // O usuário pode tentar recarregar a página
       }
     });
+  }
+
+  /** Recarrega perfil no servidor e atualiza o estado local (ex.: após PATCH tratamento). */
+  reloadCurrentUserProfile(): Observable<Usuario> {
+    return this.http.get<any>(`${environment.apiUrl}/usuarios/perfil`).pipe(
+      tap((response) => console.log('[AuthService] Perfil recarregado:', response)),
+      map((response) => this.mapPerfilToUsuario(response)),
+      tap((user) => {
+        this.currentUserSubject.next(user);
+        localStorage.setItem('user', JSON.stringify(user));
+      })
+    );
+  }
+
+  public applyPerfilResponse(response: any): void {
+    const user = this.mapPerfilToUsuario(response);
+    this.currentUserSubject.next(user);
+    localStorage.setItem('user', JSON.stringify(user));
+  }
+
+  private mapPerfilToUsuario(response: any): Usuario {
+    return {
+      id: response.id,
+      username: response.username,
+      email: response.email,
+      nome: response.nome,
+      fotoUrl: response.fotoUrl,
+      whatsappNumero: response.whatsappNumero,
+      dataCriacao: response.dataCriacao ? new Date(response.dataCriacao) : undefined,
+      ultimoAcesso: response.ultimoAcesso ? new Date(response.ultimoAcesso) : undefined,
+      preferenciaTratamentoJarvis: response.preferenciaTratamentoJarvis,
+      jarvisTratamentoResumo: response.jarvisTratamentoResumo,
+      genero: response.genero,
+      generoConfirmado: response.generoConfirmado,
+      tratamento: response.tratamento,
+      jarvisConfigurado:
+        response.jarvisConfigurado === true || response.jarvis_configurado === true,
+      ativo: true
+    };
   }
 
   /**

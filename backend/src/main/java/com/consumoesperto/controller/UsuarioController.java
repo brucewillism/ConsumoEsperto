@@ -1,6 +1,9 @@
 package com.consumoesperto.controller;
 
+import com.consumoesperto.dto.PerfilJarvisRequest;
+import com.consumoesperto.dto.PreferenciaTratamentoRequest;
 import com.consumoesperto.dto.UsuarioDTO;
+import com.consumoesperto.service.JarvisProtocolService;
 import com.consumoesperto.service.UsuarioService;
 import com.consumoesperto.service.WhatsAppUserMappingService;
 import com.consumoesperto.security.SecurityService;
@@ -9,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.Valid;
 import java.util.Map;
 import java.util.Optional;
 
@@ -33,6 +37,7 @@ public class UsuarioController {
     private final UsuarioService usuarioService;
     private final SecurityService securityService;
     private final WhatsAppUserMappingService whatsAppUserMappingService;
+    private final JarvisProtocolService jarvisProtocolService;
 
     /**
      * Busca o perfil do usuário autenticado
@@ -52,18 +57,8 @@ public class UsuarioController {
 
             com.consumoesperto.model.Usuario usuario = usuarioOpt.get();
             log.info("✅ Perfil encontrado para usuário: {}", usuario.getEmail());
-            
-            // Converte para DTO
-            UsuarioDTO usuarioDTO = new UsuarioDTO();
-            usuarioDTO.setId(usuario.getId());
-            usuarioDTO.setUsername(usuario.getUsername());
-            usuarioDTO.setEmail(usuario.getEmail());
-            usuarioDTO.setNome(usuario.getNome());
-            usuarioDTO.setFotoUrl(usuario.getFotoUrl()); // Adiciona foto
-            usuarioDTO.setWhatsappNumero(usuario.getWhatsappNumero());
-            usuarioDTO.setDataCriacao(usuario.getDataCriacao());
-            
-            return ResponseEntity.ok(usuarioDTO);
+
+            return ResponseEntity.ok(mapPerfilDto(usuario));
             
         } catch (Exception e) {
             log.error("❌ Erro ao buscar perfil: {}", e.getMessage(), e);
@@ -90,31 +85,87 @@ public class UsuarioController {
 
             // Atualiza apenas campos permitidos
             com.consumoesperto.model.Usuario usuario = usuarioOpt.get();
-            if (usuarioDTO.getNome() != null) {
-                usuario.setNome(usuarioDTO.getNome());
-            }
-            
-            // Salva no banco
-            com.consumoesperto.model.Usuario usuarioAtualizado = usuarioService.findById(usuario.getId());
-            usuarioAtualizado.setNome(usuario.getNome());
-            
+
+            com.consumoesperto.model.Usuario usuarioAtualizado = usuarioService.atualizarNomePerfil(usuario.getId(), usuarioDTO.getNome());
+
             log.info("✅ Perfil atualizado para usuário: {}", usuario.getEmail());
-            
-            // Converte para DTO
-            UsuarioDTO responseDTO = new UsuarioDTO();
-            responseDTO.setId(usuarioAtualizado.getId());
-            responseDTO.setUsername(usuarioAtualizado.getUsername());
-            responseDTO.setEmail(usuarioAtualizado.getEmail());
-            responseDTO.setNome(usuarioAtualizado.getNome());
-            responseDTO.setWhatsappNumero(usuarioAtualizado.getWhatsappNumero());
-            responseDTO.setDataCriacao(usuarioAtualizado.getDataCriacao());
-            
-            return ResponseEntity.ok(responseDTO);
+
+            return ResponseEntity.ok(mapPerfilDto(usuarioAtualizado));
             
         } catch (Exception e) {
             log.error("❌ Erro ao atualizar perfil: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    @PatchMapping("/preferencia-tratamento")
+    public ResponseEntity<UsuarioDTO> atualizarPreferenciaTratamento(@Valid @RequestBody PreferenciaTratamentoRequest body) {
+        try {
+            Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
+            if (!usuarioOpt.isPresent()) {
+                return ResponseEntity.status(401).build();
+            }
+            com.consumoesperto.model.Usuario atualizado = usuarioService.atualizarPreferenciaTratamentoJarvis(
+                usuarioOpt.get().getId(),
+                body.getPreferenciaTratamento()
+            );
+            log.info("Preferência de tratamento J.A.R.V.I.S. atualizada para usuário {}", atualizado.getId());
+            return ResponseEntity.ok(mapPerfilDto(atualizado));
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Erro ao atualizar preferência de tratamento: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * Calibragem J.A.R.V.I.S.: persiste título (Senhor, Doutora, NENHUM, etc.) e marca {@code jarvis_configurado = true}.
+     */
+    @PatchMapping("/perfil-jarvis")
+    public ResponseEntity<UsuarioDTO> atualizarPerfilJarvis(@Valid @RequestBody PerfilJarvisRequest body) {
+        try {
+            Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
+            if (!usuarioOpt.isPresent()) {
+                return ResponseEntity.status(401).build();
+            }
+            com.consumoesperto.model.Usuario atualizado = usuarioService.atualizarPerfilJarvis(
+                usuarioOpt.get().getId(),
+                body.getTratamento());
+            log.info("Perfil J.A.R.V.I.S. atualizado para usuário {}", atualizado.getId());
+            return ResponseEntity.ok(mapPerfilDto(atualizado));
+        } catch (IllegalArgumentException e) {
+            log.warn("PATCH perfil-jarvis inválido: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Erro ao atualizar perfil J.A.R.V.I.S.: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    private UsuarioDTO mapPerfilDto(com.consumoesperto.model.Usuario usuario) {
+        UsuarioDTO usuarioDTO = new UsuarioDTO();
+        usuarioDTO.setId(usuario.getId());
+        usuarioDTO.setUsername(usuario.getUsername());
+        usuarioDTO.setEmail(usuario.getEmail());
+        usuarioDTO.setNome(usuario.getNome());
+        usuarioDTO.setFotoUrl(usuario.getFotoUrl());
+        usuarioDTO.setWhatsappNumero(usuario.getWhatsappNumero());
+        usuarioDTO.setDataCriacao(usuario.getDataCriacao());
+        usuarioDTO.setUltimoAcesso(usuario.getUltimoAcesso());
+        com.consumoesperto.model.Usuario.PreferenciaTratamentoJarvis p = usuario.getPreferenciaTratamentoJarvis() != null
+            ? usuario.getPreferenciaTratamentoJarvis()
+            : com.consumoesperto.model.Usuario.PreferenciaTratamentoJarvis.AUTOMATICO;
+        usuarioDTO.setPreferenciaTratamentoJarvis(p.name());
+        usuarioDTO.setJarvisTratamentoResumo(jarvisProtocolService.montarVocativoCompleto(usuario));
+        usuarioDTO.setGenero(usuario.getGenero() != null ? usuario.getGenero().name() : com.consumoesperto.model.Usuario.GeneroUsuario.UNKNOWN.name());
+        usuarioDTO.setGeneroConfirmado(usuario.getGeneroConfirmado());
+        usuarioDTO.setTratamento(usuario.getTratamento());
+        // Evita null no JSON (coluna legada nullable / JDBC) — o front trata só === true como calibrado.
+        usuarioDTO.setJarvisConfigurado(Boolean.TRUE.equals(usuario.getJarvisConfigurado()));
+        return usuarioDTO;
     }
 
     @PostMapping("/whatsapp/vincular")

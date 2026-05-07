@@ -193,6 +193,7 @@ public class RelatorioFinanceiroService {
         receitasMes = receitasMes != null ? receitasMes : BigDecimal.ZERO;
         despesasMes = despesasMes != null ? despesasMes : BigDecimal.ZERO;
         BigDecimal saldoMes = receitasMes.subtract(despesasMes);
+        boolean temMovimentoNoMes = receitasMes.compareTo(BigDecimal.ZERO) > 0 || despesasMes.compareTo(BigDecimal.ZERO) > 0;
 
         // Monta o sistema de alertas com todas as informações críticas
         Map<String, Object> alertas = new HashMap<>();
@@ -201,7 +202,7 @@ public class RelatorioFinanceiroService {
         alertas.put("totalFaturasVencendo7Dias", calcularTotalFaturas(faturasVencendo7Dias));
         alertas.put("totalFaturasVencendo30Dias", calcularTotalFaturas(faturasVencendo30Dias));
         alertas.put("saldoMes", saldoMes);
-        alertas.put("saldoBaixo", saldoMes.compareTo(BigDecimal.valueOf(1000)) < 0);
+        alertas.put("saldoBaixo", temMovimentoNoMes && saldoMes.compareTo(BigDecimal.valueOf(1000)) < 0);
         alertas.put("temFaturasVencendo", !faturasVencendo7Dias.isEmpty());
 
         return alertas;

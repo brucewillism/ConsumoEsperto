@@ -1,5 +1,7 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.model.Usuario;
+import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.service.AiProvidersConfigService.AiProvidersConfig;
 import com.consumoesperto.service.AiProvidersConfigService.GroqSection;
 import com.consumoesperto.service.AiProvidersConfigService.OllamaSection;
@@ -8,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 @Service
@@ -31,7 +35,18 @@ public class OpenAiService {
 
     private final ObjectMapper objectMapper;
     private final AiProvidersConfigService aiProvidersConfigService;
+    private final UsuarioRepository usuarioRepository;
+    private final JarvisProtocolService jarvisProtocolService;
     private final RestTemplate restTemplate = new RestTemplate();
+
+    @Value("${consumoesperto.ai.platform-gemini-api-key:}")
+    private String platformGeminiApiKey;
+
+    @Value("${consumoesperto.ai.gemini-base-url:https://generativelanguage.googleapis.com/v1beta}")
+    private String geminiBaseUrl;
+
+    @Value("${consumoesperto.ai.gemini-model:gemini-2.5-flash}")
+    private String geminiModel;
 
     public String transcribeAudio(byte[] audioBytes, String filename, String contentType, Long userId) {
         AiProvidersConfig cfg = cfgForAi(userId);
@@ -45,9 +60,13 @@ public class OpenAiService {
 
     public JsonNode parseCommand(String inputText, Long userId) {
         AiProvidersConfig cfg = cfgForAi(userId);
-        String systemPrompt = "Você converte comandos financeiros em JSON estrito. " +
+        Optional<Usuario> ou = userId == null ? Optional.empty() : usuarioRepository.findById(userId);
+        String vocativoCompleto = ou.map(jarvisProtocolService::montarVocativoCompleto).orElse("Senhor");
+        String instrucaoInterlocutor = ou.map(jarvisProtocolService::instrucaoInterlocutorJarvis).orElse("");
+        String persona = instrucaoInterlocutor + jarvisProtocolService.jarvisPersonaSystemLayer(vocativoCompleto);
+        String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
             "description, amount, bank, cardName, cardNumber, dueDay, creditLimit (limite total do cartão, opcional), " +
             "installmentCount (N parcelas, inteiro ≥2), installmentAmount (valor de cada parcela quando citado), " +
@@ -92,6 +111,8 @@ public class OpenAiService {
             "- Se perguntar sobre recorrência, assinaturas repetidas, gastos fixos mensais (ex: 'tenho recorrência?', 'o que repete?'): action GET_INSIGHTS.\n" +
             "- Se perguntar quanto gastou no cartão, resumo de fatura, limite disponível (ex: 'quanto gastei no Nubank?', 'resumo da fatura do Inter'): " +
             "action CHECK_CARD_STATUS e preencher cardName e/ou bank com o cartão citado.\n" +
+            "- Se perguntar como vai fechar o mês, se vai ficar no vermelho, previsão/projeção do mês ou saldo no fim do mês: action FORECAST_MONTH.\n" +
+            "- Se perguntar onde investir o saldo, saldo parado rendendo, poupança vs CDB vs Tesouro Selic: action SUGERIR_INVESTIMENTO.\n" +
             "- Se perguntar se vale a pena comprar agora no cartão, quando a fatura fecha/vira, melhor dia para comprar, " +
             "prazo de pagamento ou alavancagem de caixa (ex: 'vale a pena comprar agora no Nubank?', 'quando meu cartão vira?', " +
             "'é bom comprar notebook hoje no Inter?'): action CHECK_CARD_STATUS com cardName/bank; o sistema responderá com " +
@@ -117,9 +138,9 @@ public class OpenAiService {
             p -> canChatJson(cfg, p),
             (p, c) -> {
                 String model = chatModelFor(p, c);
-                return parseCommandOpenAiCompatible(p.name(), apiKeyFor(p, c), baseUrlFor(p, c), model, systemPrompt, userPrompt);
+                return parseChatJsonForProvider(p, c, model, systemPrompt, userPrompt);
             },
-            "Nao foi possivel processar IA (Groq/OpenAI/Ollama). Detalhes: "
+            "Nao foi possivel processar IA (Groq/Gemini/OpenAI/Ollama). Detalhes: "
         );
     }
 
@@ -149,8 +170,7 @@ public class OpenAiService {
                 p -> canChatJson(cfg, p),
                 (p, c) -> {
                     String model = chatModelFor(p, c);
-                    JsonNode j = parseCommandOpenAiCompatible(
-                        p.name(), apiKeyFor(p, c), baseUrlFor(p, c), model, systemPrompt, userPrompt);
+                    JsonNode j = parseChatJsonForProvider(p, c, model, systemPrompt, userPrompt);
                     return j.path("insight").asText("").trim();
                 },
                 "Insight relatório: "
@@ -220,6 +240,32 @@ public class OpenAiService {
         return out;
     }
 
+    public JsonNode gerarJson(Long userId, String systemPrompt, String userPrompt) {
+        AiProvidersConfig cfg = cfgForAi(userId);
+        return executeAIRequestWithFallback(
+            cfg,
+            p -> canChatJson(cfg, p),
+            (p, c) -> {
+                String model = chatModelFor(p, c);
+                return parseChatJsonForProvider(p, c, model, systemPrompt, userPrompt);
+            },
+            "Nao foi possivel gerar JSON via IA. Detalhes: "
+        );
+    }
+
+    public String gerarTexto(Long userId, String systemPrompt, String userPrompt, String fallback) {
+        try {
+            JsonNode json = gerarJson(userId,
+                systemPrompt + " Retorne estritamente JSON sem markdown no formato {\"texto\":\"...\"}.",
+                userPrompt);
+            String texto = json.path("texto").asText("").trim();
+            return texto.isBlank() ? fallback : texto;
+        } catch (Exception e) {
+            log.warn("Geração de texto IA indisponível: {}", e.getMessage());
+            return fallback;
+        }
+    }
+
     /**
      * Percorre {@link AiProvidersConfig#getProviderOrder()} (completando provedores faltantes) até o primeiro sucesso.
      */
@@ -274,18 +320,20 @@ public class OpenAiService {
     private boolean canChatJson(AiProvidersConfig cfg, AiProviderType p) {
         return switch (p) {
             case GROQ -> hasKey(groq(cfg)) && hasUrl(groq(cfg).getBaseUrl());
+            case GEMINI -> platformGeminiApiKey != null && !platformGeminiApiKey.isBlank() && hasUrl(geminiBaseUrl);
             case OPENAI -> hasKey(openai(cfg)) && hasUrl(openai(cfg).getBaseUrl());
             case OLLAMA -> hasUrl(ollama(cfg).getBaseUrl());
         };
     }
 
     private boolean canVision(AiProvidersConfig cfg, AiProviderType p) {
-        return canChatJson(cfg, p);
+        return p != AiProviderType.GEMINI && canChatJson(cfg, p);
     }
 
     private boolean canTranscribe(AiProvidersConfig cfg, AiProviderType p) {
         return switch (p) {
             case GROQ -> hasKey(groq(cfg)) && hasUrl(groq(cfg).getBaseUrl());
+            case GEMINI -> false;
             case OPENAI -> hasKey(openai(cfg)) && hasUrl(openai(cfg).getBaseUrl());
             case OLLAMA -> hasUrl(ollama(cfg).getBaseUrl());
         };
@@ -294,6 +342,7 @@ public class OpenAiService {
     private String chatModelFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getModelText();
+            case GEMINI -> geminiModel;
             case OPENAI -> openai(cfg).getModel();
             case OLLAMA -> ollama(cfg).getModel();
         };
@@ -302,6 +351,7 @@ public class OpenAiService {
     private String visionModelFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getModelVision();
+            case GEMINI -> geminiModel;
             case OPENAI -> {
                 String m = openai(cfg).getModel();
                 if (m != null && !m.isBlank()
@@ -317,6 +367,7 @@ public class OpenAiService {
     private String whisperModelFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getWhisperModel();
+            case GEMINI -> geminiModel;
             case OPENAI -> openai(cfg).getWhisperModel();
             case OLLAMA -> ollama(cfg).getModel();
         };
@@ -325,6 +376,7 @@ public class OpenAiService {
     private String apiKeyFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getApiKey();
+            case GEMINI -> platformGeminiApiKey;
             case OPENAI -> openai(cfg).getApiKey();
             case OLLAMA -> null;
         };
@@ -333,6 +385,7 @@ public class OpenAiService {
     private String baseUrlFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getBaseUrl();
+            case GEMINI -> geminiBaseUrl;
             case OPENAI -> openai(cfg).getBaseUrl();
             case OLLAMA -> ollama(cfg).getBaseUrl();
         };
@@ -404,6 +457,45 @@ public class OpenAiService {
         return raw.trim();
     }
 
+    private JsonNode parseChatJsonForProvider(AiProviderType provider, AiProvidersConfig cfg, String model,
+                                               String systemPrompt, String userPrompt) {
+        if (provider == AiProviderType.GEMINI) {
+            return parseGeminiJson(model, systemPrompt, userPrompt);
+        }
+        return parseCommandOpenAiCompatible(provider.name(), apiKeyFor(provider, cfg), baseUrlFor(provider, cfg),
+            model, systemPrompt, userPrompt);
+    }
+
+    private JsonNode parseGeminiJson(String model, String systemPrompt, String userPrompt) {
+        if (platformGeminiApiKey == null || platformGeminiApiKey.isBlank()) {
+            throw new RuntimeException("GEMINI_API_KEY não configurada");
+        }
+        ensureBaseUrl("GEMINI", geminiBaseUrl);
+
+        Map<String, Object> payload = Map.of(
+            "systemInstruction", Map.of(
+                "parts", List.of(Map.of("text", systemPrompt))
+            ),
+            "contents", List.of(
+                Map.of(
+                    "role", "user",
+                    "parts", List.of(Map.of("text", userPrompt))
+                )
+            ),
+            "generationConfig", Map.of(
+                "temperature", 0.1,
+                "responseMimeType", "application/json"
+            )
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+        String url = trimTrailingSlash(geminiBaseUrl) + "/models/" + model + ":generateContent?key=" + platformGeminiApiKey.trim();
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        return extractJsonFromGeminiResponse(response.getBody());
+    }
+
     private JsonNode parseCommandOpenAiCompatible(String providerName, String key, String providerBaseUrl, String model,
                                                     String systemPrompt, String userPrompt) {
         ensureOpenAiCompatibleConfigured(providerName, key, providerBaseUrl);
@@ -467,6 +559,29 @@ public class OpenAiService {
         }
     }
 
+    private JsonNode extractJsonFromGeminiResponse(String body) {
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            String content = root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText("");
+            if (content.isBlank()) {
+                throw new RuntimeException("GEMINI retornou JSON vazio");
+            }
+            log.info("IA processada via GEMINI (json)");
+            return objectMapper.readTree(stripJsonFence(content).getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            throw new RuntimeException("Falha ao interpretar resposta JSON de GEMINI", e);
+        }
+    }
+
+    private static String stripJsonFence(String content) {
+        String s = content == null ? "" : content.trim();
+        if (s.startsWith("```")) {
+            s = s.replaceFirst("^```(?:json)?\\s*", "");
+            s = s.replaceFirst("\\s*```$", "");
+        }
+        return s.trim();
+    }
+
     private void ensureOpenAiCompatibleConfigured(String providerName, String key, String providerBaseUrl) {
         if (!"OLLAMA".equals(providerName) && (key == null || key.isBlank())) {
             throw new RuntimeException(providerName + "_API_KEY não configurada");
@@ -497,6 +612,7 @@ public class OpenAiService {
     private AiProvidersConfig cfgForAi(Long userId) {
         AiProvidersConfig cfg = aiProvidersConfigService.load(userId);
         aiProvidersConfigService.applyGroqMasterFallback(cfg);
+        aiProvidersConfigService.applyOpenaiMasterFallback(cfg);
         return cfg;
     }
 }

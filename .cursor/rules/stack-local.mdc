@@ -15,6 +15,12 @@ Ao subir para desenvolvimento/testes, usar **toda** a stack:
 
 **`scripts/subir-stack.ps1`** **sempre** inicia a Evolution em Node (clone Git em `tools/evolution-api` se preciso, `npm install`/`build`, `rodar-evolution.bat`). Sem Git+Node, o script **aborta** — back e front não sobem sozinhos.
 
-Encerrar: **`parar-servicos.bat`** (portas do projeto + Node Evolution).
+Encerrar: **`scripts/parar-servicos.ps1`** na raiz do repositório (portas **4200**, **8080**, **8081**, **4040** + processos Node da Evolution + Spring/ng ligados ao repo).
 
-Não alterar variáveis de ambiente globais do Windows para JDK; usar os `.bat` que fixam `JAVA_HOME` só na sessão.
+Subir de novo: **`scripts/subir-stack.ps1`** (Evolution em Node + backend + frontend). Sem Git/Node para Evolution, o script aborta.
+
+Não alterar variáveis de ambiente globais do Windows para JDK; usar os `.bat` que fixam `JAVA_HOME` só na sessão (quando existirem na sua cópia do projeto).
+
+## Persona J.A.R.V.I.S. no WhatsApp
+
+As respostas do bot no WhatsApp (incluindo OCR de cupom, PDF de fatura/contracheque, erros e previsões) são formatadas via **`JarvisProtocolService`** e assinadas com **`J.A.R.V.I.S. | ConsumoEsperto 🚀`** no envio (`WhatsAppCommandService` / `WhatsAppNotificationService`). Mensagens de “leitura em andamento” e falhas de API seguem o mesmo tom institucional.

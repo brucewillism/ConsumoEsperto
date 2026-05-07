@@ -54,12 +54,17 @@ body {
   transition: width 0.3s ease;
   position: fixed !important;
   height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   z-index: 999;
   overflow: hidden;
   left: 0 !important;
   top: 0 !important;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-  
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
   &.collapsed {
     width: var(--sidebar-collapsed-width) !important;
 
@@ -81,6 +86,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .logo {
@@ -115,12 +121,14 @@ body {
   }
 }
 
-// Navegação da sidebar
+// Navegação da sidebar (scroll); header e footer mantêm altura — Sair sempre visível
 .sidebar-nav {
   padding: 1rem 0;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .nav-list {
@@ -181,11 +189,13 @@ body {
   }
 }
 
-// Footer da sidebar
+// Footer da sidebar — ancorado ao fundo da coluna flex
 .sidebar-footer {
   padding: 1.5rem;
   border-top: 1px solid var(--border-color);
   transition: opacity 0.3s ease;
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 .user-info {
@@ -239,6 +249,33 @@ body {
     white-space: nowrap;
     max-width: 160px;
   }
+
+  .auth-level-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+
+  .level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: fit-content;
+    margin: 2px 0;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #e2e8f0;
+    background: rgba(148, 163, 184, .22);
+  }
+
+  .level-badge.prata { color: #e5e7eb; background: rgba(203, 213, 225, .22); }
+  .level-badge.ouro { color: #fde68a; background: rgba(245, 158, 11, .22); }
+  .level-badge.diamante { color: #bae6fd; background: rgba(125, 211, 252, .22); }
 }
 
 .logout-btn {

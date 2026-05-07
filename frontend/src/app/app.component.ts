@@ -6,6 +6,7 @@ import { Usuario } from './models/usuario.model';
 import { filter } from 'rxjs/operators';
 import { LoadingService } from './services/loading.service';
 import { InboxNotification, NotificacaoInboxService } from './services/notificacao-inbox.service';
+import { ScoreService, UsuarioScore } from './services/score.service';
 
 @Component({
   selector: 'app-root',
@@ -33,12 +34,14 @@ export class AppComponent implements OnInit {
   currentPage = 'Dashboard';
 
   notifications: InboxNotification[] = [];
+  usuarioScore: UsuarioScore | null = null;
 
   constructor(
     private authService: AuthService,
     private router: Router,
     private loadingService: LoadingService,
-    private notificacaoInbox: NotificacaoInboxService
+    private notificacaoInbox: NotificacaoInboxService,
+    private scoreService: ScoreService
   ) {}
 
   get isLoading$() {
@@ -55,9 +58,14 @@ export class AppComponent implements OnInit {
         this.userEmail = user.email || '';
         this.userPhoto = user.fotoUrl || '';
         this.refreshNotifications();
+        this.scoreService.obter().subscribe({
+          next: (score) => this.usuarioScore = score,
+          error: () => this.usuarioScore = null
+        });
       } else {
         this.notifications = [];
         this.notificationCount = 0;
+        this.usuarioScore = null;
       }
     });
 
@@ -82,7 +90,14 @@ export class AppComponent implements OnInit {
     if (path.startsWith('/relatorios')) return 'Relatórios';
     if (path.startsWith('/simulacoes')) return 'Simulações';
     if (path.startsWith('/metas')) return 'Metas';
+    if (path.startsWith('/orcamentos')) return 'Orçamentos';
+    if (path.startsWith('/renda')) return 'Renda';
+    if (path.startsWith('/familia')) return 'Família';
+    if (path.startsWith('/investimentos')) return 'Investimentos';
+    if (path.startsWith('/score')) return 'Score';
+    if (path.startsWith('/importacoes-pendentes')) return 'Importações Pendentes';
     if (path.startsWith('/whatsapp-config')) return 'WhatsApp';
+    if (path.startsWith('/perfil')) return 'Perfil';
     if (path.startsWith('/dashboard')) return 'Dashboard';
     if (path.startsWith('/register')) return 'Registo';
     if (path.startsWith('/login')) return 'Login';

@@ -64,5 +64,11 @@ public class AuthResponse {
         private String provedorAuth;
         private LocalDateTime dataCriacao;
         private LocalDateTime ultimoAcesso;
+        private Boolean jarvisConfigurado;
+        private String tratamento;
+        private String jarvisTratamentoResumo;
+        private String genero;
+        private Boolean generoConfirmado;
+        private String preferenciaTratamentoJarvis;
     }
 }

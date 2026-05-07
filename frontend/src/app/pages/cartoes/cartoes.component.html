@@ -92,12 +92,15 @@
 
           <mat-form-field appearance="outline">
             <mat-label>Número do Cartão</mat-label>
-            <input matInput formControlName="numero" placeholder="1234 5678 9012 3456" required>
+            <input matInput formControlName="numero" placeholder="Últimos 4 dígitos ou número completo" required>
             <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('required')">
               Número é obrigatório
             </mat-error>
             <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('minlength')">
-              Número deve ter pelo menos 13 dígitos
+              Informe pelo menos os 4 últimos dígitos
+            </mat-error>
+            <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('maxlength')">
+              Número deve ter no máximo 19 dígitos
             </mat-error>
           </mat-form-field>
         </div>
@@ -137,7 +140,7 @@
 
         <div class="form-actions">
           <button mat-button type="button" (click)="showForm = false" [disabled]="acaoEmAndamento">Cancelar</button>
-          <button mat-raised-button color="primary" type="submit" [disabled]="novoCartaoForm.invalid || acaoEmAndamento">
+          <button mat-raised-button color="primary" type="submit" [disabled]="acaoEmAndamento">
             <mat-icon *ngIf="!acaoEmAndamento">save</mat-icon>
             <mat-spinner *ngIf="acaoEmAndamento" diameter="18"></mat-spinner>
             {{ acaoEmAndamento ? 'Salvando...' : 'Adicionar Cartão' }}

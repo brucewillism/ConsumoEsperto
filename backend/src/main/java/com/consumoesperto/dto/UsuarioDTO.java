@@ -113,4 +113,28 @@ public class UsuarioDTO {
      * Atualizada automaticamente a cada login
      */
     private LocalDateTime ultimoAcesso;
+
+    /**
+     * Preferência de tratamento J.A.R.V.I.S. ({@code AUTOMATICO}, {@code SENHOR}, etc.).
+     */
+    private String preferenciaTratamentoJarvis;
+
+    /**
+     * Texto resumido para exibição (ex.: {@code Senhor João}), calculado no servidor.
+     */
+    private String jarvisTratamentoResumo;
+
+    /** Valor de {@link com.consumoesperto.model.Usuario.GeneroUsuario} (ex.: MALE, FEMALE, UNKNOWN). */
+    private String genero;
+
+    /** Se o tratamento foi confirmado pela app ou ainda apenas inferência. */
+    private Boolean generoConfirmado;
+
+    /**
+     * Título persistido (Senhor, Senhora, etc.) — vazio quando só o primeiro nome.
+     */
+    private String tratamento;
+
+    /** Calibragem inicial concluída na aplicação. */
+    private Boolean jarvisConfigurado;
 }

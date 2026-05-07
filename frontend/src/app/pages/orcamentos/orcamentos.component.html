@@ -1,0 +1,87 @@
+<div class="orcamentos-page">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Inteligência proativa</p>
+      <h1>Orçamentos</h1>
+      <p>Controle limites por categoria e acompanhe a previsão de fechamento do mês.</p>
+    </div>
+    <div class="forecast-card" *ngIf="forecast">
+      <span>Risco de fechar no vermelho</span>
+      <strong>{{ forecast.probabilidadeVermelho }}%</strong>
+      <small>{{ forecast.nivelRisco }} · saldo projetado {{ brl(forecast.saldoProjetado) }}</small>
+    </div>
+  </section>
+
+  <mat-card class="form-card">
+    <div class="form-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Categoria</mat-label>
+        <mat-select [(ngModel)]="categoriaId">
+          <mat-option *ngFor="let c of categorias" [value]="c.id">{{ c.nome }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Limite mensal</mat-label>
+        <input matInput type="number" min="0" [(ngModel)]="valorLimite">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Mês</mat-label>
+        <input matInput type="number" min="1" max="12" [(ngModel)]="mes">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Ano</mat-label>
+        <input matInput type="number" min="2000" max="2100" [(ngModel)]="ano">
+      </mat-form-field>
+
+      <mat-checkbox [(ngModel)]="compartilhado">
+        <i class="fas" [class.fa-users]="compartilhado" [class.fa-lock]="!compartilhado"></i>
+        {{ compartilhado ? 'Compartilhado com família/casal' : 'Privado' }}
+      </mat-checkbox>
+
+      <button mat-raised-button color="primary" (click)="salvar()" [disabled]="salvando">
+        <mat-icon>save</mat-icon>
+        Salvar
+      </button>
+    </div>
+  </mat-card>
+
+  <mat-card class="forecast-detail" *ngIf="forecast">
+    <h2>Previsão do mês</h2>
+    <div class="forecast-grid">
+      <div><span>Gasto atual</span><strong>{{ brl(forecast.gastoAtual) }}</strong></div>
+      <div><span>Média diária</span><strong>{{ brl(forecast.mediaDiaria) }}</strong></div>
+      <div><span>Gasto projetado</span><strong>{{ brl(forecast.gastoProjetado) }}</strong></div>
+      <div><span>Renda considerada</span><strong>{{ brl(forecast.rendaLiquida) }}</strong></div>
+    </div>
+    <p>{{ forecast.mensagemIa }}</p>
+  </mat-card>
+
+  <div class="empty" *ngIf="!carregando && orcamentos.length === 0">
+    Nenhum orçamento cadastrado para este mês.
+  </div>
+
+  <div class="budget-list">
+    <mat-card class="budget-card" *ngFor="let o of orcamentos" [class]="cor(o)">
+      <div class="budget-head">
+        <div>
+          <h3>{{ o.categoriaNome }}</h3>
+          <span>{{ brl(o.valorGasto) }} de {{ brl(o.valorLimite) }}</span>
+          <small>
+            <i class="fas" [class.fa-users]="o.compartilhado" [class.fa-lock]="!o.compartilhado"></i>
+            {{ o.compartilhado ? 'Compartilhado' : 'Privado' }}
+            <ng-container *ngIf="o.compartilhado"> · {{ o.membrosContabilizados || 1 }} membro(s)</ng-container>
+          </small>
+        </div>
+        <strong>{{ o.percentualUso }}%</strong>
+      </div>
+      <mat-progress-bar mode="determinate" [value]="progress(o)"></mat-progress-bar>
+      <div class="budget-actions">
+        <span>{{ o.status }}</span>
+        <button mat-button color="warn" (click)="excluir(o)">Remover</button>
+      </div>
+    </mat-card>
+  </div>
+</div>

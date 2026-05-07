@@ -21,8 +21,10 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -188,14 +190,43 @@ public class FaturaService {
         Fatura faturaExistente = faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
                 .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
 
-        // Atualiza todos os campos da fatura com os novos valores
-        faturaExistente.setValorFatura(faturaDTO.getValorFatura());
-        faturaExistente.setValorPago(faturaDTO.getValorPago());
-        faturaExistente.setDataVencimento(faturaDTO.getDataVencimento());
-        faturaExistente.setDataFechamento(faturaDTO.getDataFechamento());
-        faturaExistente.setDataPagamento(faturaDTO.getDataPagamento());
-        faturaExistente.setStatusFatura(faturaDTO.getStatusFatura());
-        faturaExistente.setNumeroFatura(faturaDTO.getNumeroFatura());
+        // Atualiza campos enviados (não sobrescrever número obrigatório com null quando o front omite o campo)
+        if (faturaDTO.getValorFatura() != null) {
+            faturaExistente.setValorFatura(faturaDTO.getValorFatura());
+            faturaExistente.setValorTotal(faturaDTO.getValorFatura());
+        }
+        if (faturaDTO.getValorPago() != null) {
+            faturaExistente.setValorPago(faturaDTO.getValorPago());
+        }
+        if (faturaDTO.getDataVencimento() != null) {
+            faturaExistente.setDataVencimento(faturaDTO.getDataVencimento());
+        }
+        if (faturaDTO.getDataFechamento() != null) {
+            faturaExistente.setDataFechamento(faturaDTO.getDataFechamento());
+        }
+        if (faturaDTO.getDataPagamento() != null) {
+            faturaExistente.setDataPagamento(faturaDTO.getDataPagamento());
+        }
+        if (faturaDTO.getStatusFatura() != null) {
+            faturaExistente.setStatusFatura(faturaDTO.getStatusFatura());
+            boolean paga = Fatura.StatusFatura.PAGA.equals(faturaDTO.getStatusFatura());
+            faturaExistente.setPaga(paga);
+            if (paga) {
+                if (faturaExistente.getDataPagamento() == null) {
+                    faturaExistente.setDataPagamento(LocalDateTime.now());
+                }
+                BigDecimal base = faturaExistente.getValorFatura() != null
+                    ? faturaExistente.getValorFatura()
+                    : BigDecimal.ZERO;
+                if (faturaExistente.getValorPago() == null
+                    || faturaExistente.getValorPago().compareTo(BigDecimal.ZERO) == 0) {
+                    faturaExistente.setValorPago(base);
+                }
+            }
+        }
+        if (faturaDTO.getNumeroFatura() != null && !faturaDTO.getNumeroFatura().isBlank()) {
+            faturaExistente.setNumeroFatura(faturaDTO.getNumeroFatura());
+        }
 
         // Persiste as alterações no banco de dados
         Fatura faturaAtualizada = faturaRepository.save(faturaExistente);
@@ -493,6 +524,22 @@ public class FaturaService {
         dto.setCartaoCreditoId(fatura.getCartaoCredito().getId());
         dto.setDataCriacao(fatura.getDataCriacao());
         dto.setDataAtualizacao(fatura.getDataAtualizacao());
+        dto.setTransacoes(transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(fatura.getId()).stream()
+            .map(t -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", t.getId());
+                row.put("descricao", t.getDescricao());
+                row.put("valor", t.getValor());
+                row.put("dataTransacao", t.getDataTransacao());
+                row.put("parcelaAtual", t.getParcelaAtual());
+                row.put("totalParcelas", t.getTotalParcelas());
+                row.put("parcelasRestantes", t.getParcelaAtual() != null && t.getTotalParcelas() != null
+                    ? Math.max(0, t.getTotalParcelas() - t.getParcelaAtual())
+                    : null);
+                row.put("grupoParcelaId", t.getGrupoParcelaId());
+                return row;
+            })
+            .collect(Collectors.toList()));
         return dto;
     }
 

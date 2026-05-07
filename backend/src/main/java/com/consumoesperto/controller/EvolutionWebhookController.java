@@ -3,10 +3,14 @@ package com.consumoesperto.controller;
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.service.AiProvidersConfigService;
+import com.consumoesperto.service.EvolutionWebhookAsyncProcessor;
+import com.consumoesperto.service.EvolutionWebhookDedupService;
+import com.consumoesperto.service.JarvisProtocolService;
 import com.consumoesperto.service.WhatsappAccountProvisioner;
 import com.consumoesperto.service.WhatsAppBotAllowlist;
 import com.consumoesperto.service.WhatsAppCommandService;
 import com.consumoesperto.service.WhatsAppUserMappingService;
+import com.consumoesperto.service.WhatsAppWebhookPolicyService;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,11 +27,15 @@ import java.util.Optional;
 @Slf4j
 public class EvolutionWebhookController {
 
-    private final WhatsAppCommandService whatsAppCommandService;
     private final WhatsAppBotAllowlist whatsAppBotAllowlist;
     private final AiProvidersConfigService aiProvidersConfigService;
     private final WhatsAppUserMappingService whatsAppUserMappingService;
     private final WhatsappAccountProvisioner whatsappAccountProvisioner;
+    private final EvolutionWebhookDedupService evolutionWebhookDedupService;
+    private final WhatsAppWebhookPolicyService whatsAppWebhookPolicyService;
+    private final EvolutionWebhookAsyncProcessor evolutionWebhookAsyncProcessor;
+    private final WhatsAppCommandService whatsAppCommandService;
+    private final JarvisProtocolService jarvisProtocolService;
 
     @PostMapping("/webhook")
     public ResponseEntity<Map<String, String>> receiveEvolutionWebhook(@RequestBody JsonNode payload) {
@@ -43,13 +51,32 @@ public class EvolutionWebhookController {
         }
 
         JsonNode data = normalizeWebhookData(payload);
+        if (data == null || data.isMissingNode() || data.isNull() || !data.isObject() || !data.has("key")) {
+            log.warn("[WhatsAppFilter] Payload Evolution sem bloco key válido — ignorado.");
+            return ResponseEntity.ok(Map.of("status", "ignored", "reason", "empty-payload"));
+        }
+
+        JsonNode key = data.path("key");
+        String effectiveRemote = extractEffectiveRemoteJid(key, payload);
+        String messageKeyId = key.path("id").asText("");
         String instance = firstNonBlank(
             payload.path("instance").asText(""),
             payload.path("instanceName").asText(""),
             payload.path("body").path("instance").asText(""),
             data.path("instanceName").asText("")
         );
-        log.info("Evolution webhook messages.upsert: instance='{}' (Evolution :8080 envia POST para Spring :8081)", instance);
+
+        if (effectiveRemote.endsWith("@g.us") || effectiveRemote.contains("@g.us")
+            || effectiveRemote.endsWith("@broadcast") || "status@broadcast".equalsIgnoreCase(effectiveRemote)) {
+            log.info("[WhatsAppFilter] Mensagem ignorada: grupo ou broadcast remoteJid={}", effectiveRemote);
+            return ResponseEntity.ok(Map.of("status", "ignored", "reason", "group-or-broadcast"));
+        }
+
+        if (!evolutionWebhookDedupService.claimDelivery(instance, messageKeyId)) {
+            return ResponseEntity.ok(Map.of("status", "ignored", "reason", "duplicate-message-key"));
+        }
+
+        log.info("Evolution webhook messages.upsert: instance='{}' remoteJid='{}'", instance, effectiveRemote);
         EvolutionIncomingMessageDTO incoming = mapIncoming(data, payload);
         if (incoming.getFromJid() == null || incoming.getFromJid().isBlank()) {
             log.warn("Evolution webhook ignorado: payload sem remoteJid util (instance={}). data.hasKey={} data.hasMessage={}",
@@ -57,60 +84,86 @@ public class EvolutionWebhookController {
             return ResponseEntity.ok(Map.of("status", "ignored", "reason", "empty-payload"));
         }
 
+        // Ordem: instância Evolution primeiro (dono da conta no app). Antes, findByIncomingNumber + auto-provision
+        // faziam um contacto (outro MSISDN) mapear para outro Usuario e o bot respondia nessa conversa.
+        WhatsAppWebhookPolicyService.TenantResolution resolution = WhatsAppWebhookPolicyService.TenantResolution.UNKNOWN;
         Long userId = null;
         try {
-            userId = whatsAppUserMappingService.findByIncomingNumber(incoming.getFromJid())
-                .map(Usuario::getId)
-                .orElse(null);
+            if (instance != null && !instance.isBlank()) {
+                Optional<Long> tenantOpt = aiProvidersConfigService.resolveUsuarioIdByEvolutionInstance(instance);
+                if (tenantOpt.isPresent()) {
+                    userId = tenantOpt.get();
+                    resolution = WhatsAppWebhookPolicyService.TenantResolution.BY_EVOLUTION_INSTANCE;
+                }
+            }
+            if (userId == null) {
+                Optional<Usuario> ou = whatsAppUserMappingService.findByIncomingNumber(incoming.getFromJid());
+                if (ou.isPresent()) {
+                    userId = ou.get().getId();
+                    resolution = WhatsAppWebhookPolicyService.TenantResolution.BY_WHATSAPP_LINK;
+                }
+            }
         } catch (RuntimeException ex) {
-            log.warn("Evolution webhook: lookup por remoteJid falhou (jid={}): {}", incoming.getFromJid(), ex.getMessage());
+            log.warn("Evolution webhook: lookup tenant falhou (jid={}): {}", incoming.getFromJid(), ex.getMessage());
         }
         if (userId == null) {
             Optional<Long> provisioned = whatsappAccountProvisioner.provisionFromWhatsAppJid(incoming.getFromJid());
             if (provisioned.isPresent()) {
                 userId = provisioned.get();
+                resolution = WhatsAppWebhookPolicyService.TenantResolution.BY_AUTO_PROVISION;
             }
         }
         if (userId == null) {
-            Optional<Long> tenantOpt = aiProvidersConfigService.resolveUsuarioIdByEvolutionInstance(instance);
-            if (tenantOpt.isEmpty()) {
-                log.info("Evolution webhook ignorado: remoteJid='{}' sem usuario vinculado e instancia '{}' sem mapeamento na BD",
-                    incoming.getFromJid(), instance);
-                return ResponseEntity.ok(Map.of("status", "ignored", "reason", "unknown-user-or-instance"));
-            }
-            userId = tenantOpt.get();
+            log.info("Evolution webhook ignorado: remoteJid='{}' sem usuario resolvido (instancia '{}')",
+                incoming.getFromJid(), instance);
+            return ResponseEntity.ok(Map.of("status", "ignored", "reason", "unknown-user-or-instance"));
         }
 
-        whatsAppUserMappingService.ensureLinkedIfEmpty(userId, incoming.getFromJid());
+        if (!whatsAppWebhookPolicyService.allowsResolvedTenant(resolution, userId)) {
+            return ResponseEntity.ok(Map.of("status", "ignored", "reason", "only-respond-owner-no-explicit-phone"));
+        }
 
-        String senderJid = payload.path("sender").asText("");
-        String ignoreReason = shouldIgnoreReason(incoming, senderJid, userId);
+        String ignoreReason = shouldIgnoreReason(incoming, userId);
         if (ignoreReason != null) {
             log.info("Evolution webhook ignorado: instance={} remoteJid={} fromMe={} mediaType={} reason={}",
                 instance, incoming.getFromJid(), incoming.isFromMe(), incoming.getMediaType(), ignoreReason);
             return ResponseEntity.ok(Map.of("status", "ignored", "reason", ignoreReason));
         }
-        log.info("Evolution webhook a processar: userId={} remoteJid={} fromMe={}", userId, incoming.getFromJid(), incoming.isFromMe());
-        whatsAppCommandService.processIncomingEvolutionMessage(incoming, userId, instance);
+        whatsAppUserMappingService.ensureLinkedIfEmpty(userId, incoming.getFromJid());
+        whatsAppCommandService.sendJarvisInstantAck(incoming, userId, instance);
+        log.info("Evolution webhook enfileirado (async): userId={} remoteJid={} fromMe={} msgKey={}", userId, incoming.getFromJid(), incoming.isFromMe(), incoming.getMessageKeyId());
+        evolutionWebhookAsyncProcessor.processEvolutionMessageAsync(incoming, userId, instance);
         return ResponseEntity.ok(Map.of("status", "received"));
     }
 
-    private EvolutionIncomingMessageDTO mapIncoming(JsonNode data, JsonNode payloadRoot) {
-        JsonNode message = unwrapInnerMessage(data.path("message"));
-        JsonNode key = data.path("key");
+    /** Resolve remoteJid tal como na mensagem Baileys (inclui escape @lid). */
+    private static String extractEffectiveRemoteJid(JsonNode key, JsonNode payloadRoot) {
         String fromJid = key.path("remoteJid").asText("");
-        // WhatsApp “LID”: o número real costuma vir em remoteJidAlt — senão o allowlist nunca casa.
         if (fromJid.contains("@lid")) {
             String alt = key.path("remoteJidAlt").asText("");
             if (alt != null && !alt.isBlank()) {
                 fromJid = alt;
             } else {
                 String sender = payloadRoot.path("sender").asText("");
-                if (sender != null && !sender.isBlank() && sender.contains("@s.whatsapp.net")) {
-                    fromJid = sender;
+                if (sender.isBlank()) {
+                    sender = payloadRoot.path("body").path("sender").asText("");
+                }
+                if (sender != null && !sender.isBlank()) {
+                    if (sender.contains("@s.whatsapp.net")) {
+                        fromJid = sender;
+                    } else if (sender.replaceAll("\\D", "").length() >= 10) {
+                        fromJid = sender.replaceAll("\\D", "") + "@s.whatsapp.net";
+                    }
                 }
             }
         }
+        return fromJid;
+    }
+
+    private EvolutionIncomingMessageDTO mapIncoming(JsonNode data, JsonNode payloadRoot) {
+        JsonNode message = unwrapInnerMessage(data.path("message"));
+        JsonNode key = data.path("key");
+        String fromJid = extractEffectiveRemoteJid(key, payloadRoot);
         boolean fromMe = key.path("fromMe").asBoolean(false);
         String messageKeyId = key.path("id").asText("");
 
@@ -151,9 +204,19 @@ public class EvolutionWebhookController {
                 data.path("base64").asText("")
             ));
             mediaUrl = firstNonBlank(image.path("mediaUrl").asText(""), image.path("url").asText(""));
+        } else if (message.has("documentMessage")) {
+            JsonNode document = message.path("documentMessage");
+            mediaType = "document";
+            mime = document.path("mimetype").asText("application/pdf");
+            mediaBytes = decodeBase64Safe(firstNonBlank(
+                document.path("base64").asText(""),
+                message.path("base64").asText(""),
+                data.path("base64").asText("")
+            ));
+            mediaUrl = firstNonBlank(document.path("mediaUrl").asText(""), document.path("url").asText(""));
         }
 
-        return new EvolutionIncomingMessageDTO(fromJid, fromMe, text, mediaBytes, mime, mediaType, mediaUrl, messageKeyId);
+        return new EvolutionIncomingMessageDTO(fromJid, fromMe, text, mediaBytes, mime, mediaType, mediaUrl, messageKeyId, false);
     }
 
     /**
@@ -178,29 +241,30 @@ public class EvolutionWebhookController {
     /**
      * @return motivo curto para ignorar, ou {@code null} se deve processar
      */
-    private String shouldIgnoreReason(EvolutionIncomingMessageDTO incoming, String senderJid, Long userId) {
+    private String shouldIgnoreReason(EvolutionIncomingMessageDTO incoming, Long userId) {
         String fromJid = incoming.getFromJid();
 
         if (fromJid.endsWith("@g.us") || fromJid.endsWith("@broadcast") || fromJid.equalsIgnoreCase("status@broadcast")) {
             return "group-or-broadcast";
         }
 
-        // Sem telefone de dono: não processamos mensagens recebidas (fromMe=false) — exige configuração explícita.
-        if (!incoming.isFromMe() && !whatsAppBotAllowlist.isConfigured(userId)) {
-            return "owner-phone-not-configured-incoming-blocked";
+        String texto = incoming.getText();
+        if (texto != null && !texto.isBlank() && jarvisProtocolService.isProceduralAckEcho(texto)) {
+            return "jarvis-procedural-echo";
         }
 
-        if (whatsAppBotAllowlist.isConfigured(userId) && !whatsAppBotAllowlist.matchesMyNumber(fromJid, userId)) {
-            return "jid-not-allowed-for-user";
-        }
-
-        if (incoming.isFromMe() && senderJid != null && !senderJid.isBlank() && !sameWhatsappUser(senderJid, fromJid)) {
-            return "fromMe-without-self-chat-match";
+        if (!whatsAppBotAllowlist.isEvolutionSelfChatThread(fromJid, userId)) {
+            log.warn("[WhatsAppFilter] Mensagem ignorada: só na conversa com o próprio número (remoteJid={}, fromMe={}, userId={}). "
+                    + "Confirma o chat 'mensagens para ti' e +55 no perfil ou dono WhatsApp na IA.",
+                fromJid, incoming.isFromMe(), userId);
+            return "not-self-chat-thread";
         }
 
         boolean hasText = incoming.getText() != null && !incoming.getText().isBlank();
         boolean hasSupportedMedia = incoming.getMediaType() != null
-            && ("audio".equalsIgnoreCase(incoming.getMediaType()) || "image".equalsIgnoreCase(incoming.getMediaType()));
+            && ("audio".equalsIgnoreCase(incoming.getMediaType())
+                || "image".equalsIgnoreCase(incoming.getMediaType())
+                || "document".equalsIgnoreCase(incoming.getMediaType()));
         if (!hasText && !hasSupportedMedia) {
             return "no-text-and-no-audio-image";
         }
@@ -295,25 +359,5 @@ public class EvolutionWebhookController {
             return x;
         }
         return d != null ? d : "";
-    }
-
-    /** Compara dois JIDs / identificadores WhatsApp pelo user part (só dígitos). */
-    private static boolean sameWhatsappUser(String a, String b) {
-        if (a == null || b == null) {
-            return false;
-        }
-        String da = waUserDigits(a);
-        String db = waUserDigits(b);
-        return !da.isEmpty() && da.equals(db);
-    }
-
-    private static String waUserDigits(String jidOrPhone) {
-        String s = jidOrPhone == null ? "" : jidOrPhone.trim();
-        int at = s.indexOf('@');
-        if (at > 0) {
-            s = s.substring(0, at);
-        }
-        s = s.replace("whatsapp:", "").trim();
-        return s.replaceAll("\\D", "");
     }
 }

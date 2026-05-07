@@ -33,16 +33,16 @@ public class CartaoCreditoDTO {
 
     @NotBlank(message = "Nome do cartão é obrigatório")
     @Size(min = 2, max = 100, message = "Nome do cartão deve ter entre 2 e 100 caracteres")
-    @Pattern(regexp = "^[a-zA-Z0-9\\s\\-]+$", message = "Nome do cartão contém caracteres inválidos")
+    @Pattern(regexp = "^[\\p{L}0-9\\s\\-]+$", message = "Nome do cartão contém caracteres inválidos")
     private String nome;
 
     @NotBlank(message = "Banco é obrigatório")
     @Size(min = 2, max = 50, message = "Banco deve ter entre 2 e 50 caracteres")
-    @Pattern(regexp = "^[a-zA-Z0-9\\s\\-]+$", message = "Nome do banco contém caracteres inválidos")
+    @Pattern(regexp = "^[\\p{L}0-9\\s\\-]+$", message = "Nome do banco contém caracteres inválidos")
     private String banco;
 
     @NotBlank(message = "Número do cartão é obrigatório")
-    @Size(min = 13, max = 19, message = "Número do cartão deve ter entre 13 e 19 dígitos")
+    @Size(min = 4, max = 19, message = "Número do cartão deve ter entre 4 e 19 dígitos")
     @Pattern(regexp = "^[0-9]+$", message = "Número do cartão deve conter apenas dígitos")
     private String numeroCartao;
 

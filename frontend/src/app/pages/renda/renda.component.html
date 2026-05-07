@@ -1,0 +1,63 @@
+<div class="renda-page">
+  <section class="hero">
+    <div>
+      <p>Renda e contracheques</p>
+      <h1>Histórico de Contracheques</h1>
+      <span>Compare salário bruto versus líquido e revise auditorias de descontos.</span>
+    </div>
+    <button mat-raised-button color="primary" (click)="carregar()">
+      <mat-icon>refresh</mat-icon>
+      Atualizar
+    </button>
+  </section>
+
+  <mat-card class="upload-card">
+    <h2>Upload manual de contracheque</h2>
+    <p>Envie um PDF para a IA extrair bruto, líquido, descontos e insights. A renda só muda após confirmação.</p>
+    <input #paycheckFile type="file" accept="application/pdf,.pdf" hidden (change)="onFileSelected($event)">
+    <button mat-raised-button color="primary" (click)="paycheckFile.click()" [disabled]="enviandoPdf">
+      <mat-icon>upload_file</mat-icon>
+      {{ enviandoPdf ? 'Processando...' : 'Enviar PDF' }}
+    </button>
+  </mat-card>
+
+  <mat-card class="chart-card">
+    <h2>Bruto vs. Líquido</h2>
+    <div class="chart-box" *ngIf="chartData.labels?.length; else emptyChart">
+      <canvas baseChart [type]="'bar'" [data]="chartData" [options]="chartOptions"></canvas>
+    </div>
+    <ng-template #emptyChart>
+      <div class="empty">Envie um contracheque em PDF pelo WhatsApp para iniciar o histórico.</div>
+    </ng-template>
+  </mat-card>
+
+  <mat-card class="paycheck-card" *ngFor="let c of contracheques">
+    <div class="paycheck-head">
+      <div>
+        <h2>{{ c.empresa }}</h2>
+        <span>{{ c.mes }}/{{ c.ano }} · {{ c.status }}</span>
+      </div>
+      <button mat-raised-button color="primary" *ngIf="c.status === 'PENDENTE'" (click)="confirmar(c)">
+        Confirmar
+      </button>
+    </div>
+
+    <div class="values">
+      <strong>Bruto {{ brl(c.salarioBruto) }}</strong>
+      <strong>Líquido {{ brl(c.salarioLiquido) }}</strong>
+      <strong>Descontos {{ brl(c.totalDescontos) }}</strong>
+    </div>
+
+    <div class="insights" *ngIf="c.insights?.length">
+      <p *ngFor="let i of c.insights">• {{ i }}</p>
+    </div>
+
+    <div class="discounts" *ngIf="c.descontos?.length">
+      <h3>Descontos extraídos pela IA</h3>
+      <div class="discount-row" *ngFor="let d of c.descontos">
+        <span>{{ d.rotulo }}</span>
+        <strong>{{ brl(d.valor) }}</strong>
+      </div>
+    </div>
+  </mat-card>
+</div>

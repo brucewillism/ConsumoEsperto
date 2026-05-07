@@ -227,7 +227,8 @@ public class Transacao {
      */
     public enum TipoTransacao {
         RECEITA, // Entrada de dinheiro
-        DESPESA  // Saída de dinheiro
+        DESPESA, // Saída de dinheiro
+        INVESTIMENTO // Aplicação: reduz caixa, mas não é despesa de consumo
     }
 
     public enum FrequenciaRecorrencia {

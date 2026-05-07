@@ -311,7 +311,14 @@
               
               <div class="detalhe-item">
                 <span class="label">Transações:</span>
-                <span class="value">{{ contagemTransacoes(fatura) }} transação{{ contagemTransacoes(fatura) !== 1 ? 'ões' : '' }}</span>
+                <span class="value">{{ textoContagemTransacoes(fatura) }}</span>
+              </div>
+
+              <div class="detalhe-item" *ngIf="parcelasDaFatura(fatura).length">
+                <span class="label">Parcelas:</span>
+                <span class="value parcelas-lista">
+                  <small *ngFor="let p of parcelasDaFatura(fatura)">{{ textoParcela(p) }}</small>
+                </span>
               </div>
             </div>
 
@@ -321,6 +328,11 @@
               <span>Fatura vence em {{ getDiasVencimento(fatura) }} dia{{ getDiasVencimento(fatura) !== 1 ? 's' : '' }}!</span>
             </div>
 
+            <div *ngIf="isPaga(fatura)" class="alerta paga">
+              <mat-icon>check_circle</mat-icon>
+              <span>Fatura paga</span>
+            </div>
+
             <div *ngIf="isVencida(fatura)" class="alerta vencida">
               <mat-icon>warning</mat-icon>
               <span>Fatura vencida há {{ Math.abs(getDiasVencimento(fatura)) }} dia{{ Math.abs(getDiasVencimento(fatura)) !== 1 ? 's' : '' }}!</span>
@@ -328,7 +340,7 @@
           </mat-card-content>
           
           <mat-card-actions>
-            <button mat-button color="primary" (click)="visualizarTransacoes(fatura)" [disabled]="acaoEmAndamento">
+            <button mat-button color="primary" (click)="visualizarTransacoes(fatura, transacoesModal)" [disabled]="acaoEmAndamento">
               <mat-icon>list</mat-icon>
               Transações
             </button>
@@ -354,4 +366,46 @@
       </div>
     </mat-card-content>
   </mat-card>
+
+  <ng-template #transacoesModal>
+    <div class="transacoes-modal">
+      <header class="transacoes-modal-header">
+        <div>
+          <h2>Transações da fatura</h2>
+          <p *ngIf="faturaTransacoesSelecionada">
+            {{ getBancoNome(faturaTransacoesSelecionada.bankName) }} ·
+            {{ formatarData(faturaTransacoesSelecionada.closingDate) }} ·
+            {{ textoContagemTransacoes(faturaTransacoesSelecionada) }}
+          </p>
+        </div>
+        <button mat-icon-button mat-dialog-close aria-label="Fechar modal de transações">
+          <mat-icon>close</mat-icon>
+        </button>
+      </header>
+
+      <div class="transacoes-modal-lista" *ngIf="transacoesDaFatura(faturaTransacoesSelecionada).length; else semTransacoes">
+        <div class="transacao-linha transacao-linha-cabecalho">
+          <span>Data</span>
+          <span>Descrição</span>
+          <span>Parcela</span>
+          <span>Valor</span>
+        </div>
+        <div class="transacao-linha" *ngFor="let transacao of transacoesDaFatura(faturaTransacoesSelecionada)">
+          <span>{{ formatarData(transacao.dataTransacao || transacao.date) }}</span>
+          <span class="transacao-descricao">{{ transacao.descricao || transacao.description || 'Lançamento' }}</span>
+          <span>
+            {{ transacao.parcelaAtual && transacao.totalParcelas ? transacao.parcelaAtual + '/' + transacao.totalParcelas : '-' }}
+          </span>
+          <span class="transacao-valor">{{ formatarMoeda(transacao.valor || transacao.amount || 0) }}</span>
+        </div>
+      </div>
+
+      <ng-template #semTransacoes>
+        <div class="sem-transacoes-modal">
+          <mat-icon>receipt_long</mat-icon>
+          <p>Nenhum lançamento encontrado para esta fatura.</p>
+        </div>
+      </ng-template>
+    </div>
+  </ng-template>
 </div>

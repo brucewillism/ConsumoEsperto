@@ -88,7 +88,10 @@ export enum TipoTransacao {
   RECEITA = 'RECEITA',
   
   /** Saída de dinheiro */
-  DESPESA = 'DESPESA'
+  DESPESA = 'DESPESA',
+
+  /** Aplicação financeira: reduz caixa, mas não é despesa de consumo */
+  INVESTIMENTO = 'INVESTIMENTO'
 }
 
 export enum StatusConferencia {

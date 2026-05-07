@@ -1,0 +1,73 @@
+.score-page {
+  display: grid;
+  gap: 18px;
+}
+
+.hero,
+.chart-card,
+.history-card {
+  color: #e5e7eb;
+  background: #111827;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 20px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #111827, #1f2937);
+}
+
+.hero p {
+  color: #93c5fd;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.level {
+  display: grid;
+  place-items: center;
+  min-width: 110px;
+  min-height: 110px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, .14);
+}
+
+.level strong {
+  font-size: 32px;
+}
+
+.chart-box {
+  height: 300px;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.history-row span,
+.history-row small {
+  display: block;
+}
+
+.history-row small,
+.empty {
+  color: #9ca3af;
+}
+
+.positive {
+  color: #86efac;
+}
+
+.negative {
+  color: #fca5a5;
+}

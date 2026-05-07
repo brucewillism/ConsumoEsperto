@@ -1,0 +1,52 @@
+<div class="invest-page">
+  <section class="hero">
+    <div>
+      <p>Marketplace visual</p>
+      <h1>Oportunidades de Investimento</h1>
+      <span>Compare simulações educativas de Poupança, Tesouro Selic e CDB.</span>
+    </div>
+  </section>
+
+  <div class="cards">
+    <mat-card class="invest-card">
+      <mat-icon>savings</mat-icon>
+      <h2>Poupança</h2>
+      <strong>{{ brl(oportunidade?.rendimentoPoupanca || 0) }}</strong>
+      <span>estimativa em 1 mês</span>
+    </mat-card>
+    <mat-card class="invest-card featured">
+      <mat-icon>account_balance</mat-icon>
+      <h2>Tesouro Selic</h2>
+      <strong>{{ brl(oportunidade?.rendimentoTesouroSelic || 0) }}</strong>
+      <span>estimativa em 1 mês</span>
+    </mat-card>
+    <mat-card class="invest-card best">
+      <mat-icon>trending_up</mat-icon>
+      <h2>CDB Liquidez Diária</h2>
+      <strong>{{ brl(oportunidade?.rendimentoCdb || 0) }}</strong>
+      <span>estimativa em 1 mês</span>
+    </mat-card>
+  </div>
+
+  <mat-card class="simulator">
+    <h2>Simulador visual</h2>
+    <p>Valor simulado: <strong>{{ brl(valor) }}</strong></p>
+    <input type="range" min="500" max="50000" step="100" [(ngModel)]="valor">
+
+    <div class="projection-grid">
+      <div>
+        <span>1 mês</span>
+        <strong>{{ brl(rendimento(0.0092, 1)) }}</strong>
+      </div>
+      <div>
+        <span>6 meses</span>
+        <strong>{{ brl(rendimento(0.0092, 6)) }}</strong>
+      </div>
+      <div>
+        <span>12 meses</span>
+        <strong>{{ brl(rendimento(0.0092, 12)) }}</strong>
+      </div>
+    </div>
+    <small>{{ oportunidade?.explicacaoIa || 'Simulação educativa, sem promessa de rentabilidade.' }}</small>
+  </mat-card>
+</div>

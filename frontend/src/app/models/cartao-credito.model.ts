@@ -31,6 +31,9 @@ export interface CartaoCredito {
   
   /** Data de vencimento do cartão (opcional) */
   dataVencimento?: Date;
+
+  /** Dia mensal de vencimento da fatura (1-31) */
+  diaVencimento?: number;
   
   /** Tipo do cartão (crédito, débito ou ambos) */
   tipoCartao: TipoCartao;

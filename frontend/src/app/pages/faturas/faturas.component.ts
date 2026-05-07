@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, TemplateRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -56,6 +56,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
   acaoEmAndamento = false;
   faturaProcessandoId: string | null = null;
   showForm = false;
+  faturaTransacoesSelecionada: CreditCardInvoice | null = null;
   
   // Filtros
   filtroStatus = '';
@@ -254,45 +255,39 @@ export class FaturasComponent implements OnInit, OnDestroy {
 
     // Tenta atualizar no backend primeiro
     this.faturaService.atualizarFaturaCartao(faturaAtualizada)
-      .pipe(
-        takeUntil(this.destroy$),
-        catchError(error => {
-          console.warn('Erro ao atualizar no backend, atualizando localmente:', error);
-          // Se falhar, atualiza localmente
-          const index = this.faturas.findIndex(f => f.id === fatura.id);
-          if (index !== -1) {
-            this.faturas[index] = faturaAtualizada;
-          }
-          return of(faturaAtualizada);
-        })
-      )
+      .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (fatura) => {
+        next: (resp) => {
           this.snackBar.open('Fatura marcada como paga!', 'Fechar', {
-          duration: 3000,
-          panelClass: ['success-snackbar']
-        });
+            duration: 3000,
+            panelClass: ['success-snackbar']
+          });
           this.acaoEmAndamento = false;
           this.faturaProcessandoId = null;
-          this.carregarFaturas();
+          const idx = this.faturas.findIndex((item) => String(item.id) === String(resp.id));
+          if (idx !== -1) {
+            this.faturas[idx] = resp;
+          }
+          this.loadData();
         },
         error: (error) => {
           console.error('Erro ao marcar fatura como paga:', error);
           this.acaoEmAndamento = false;
           this.faturaProcessandoId = null;
           this.snackBar.open('Erro ao atualizar fatura. Tente novamente.', 'Fechar', {
-          duration: 3000,
-          panelClass: ['error-snackbar']
-        });
+            duration: 3000,
+            panelClass: ['error-snackbar']
+          });
         }
       });
   }
 
-  visualizarTransacoes(fatura: CreditCardInvoice): void {
-    // Implementar visualização de transações
-    this.snackBar.open('Funcionalidade de transações em desenvolvimento', 'Fechar', {
-      duration: 3000,
-      panelClass: ['warning-snackbar']
+  visualizarTransacoes(fatura: CreditCardInvoice, template: TemplateRef<unknown>): void {
+    this.faturaTransacoesSelecionada = fatura;
+    this.dialog.open(template, {
+      width: 'min(920px, 96vw)',
+      maxHeight: '86vh',
+      panelClass: 'fatura-transacoes-dialog'
     });
   }
 
@@ -419,6 +414,32 @@ export class FaturasComponent implements OnInit, OnDestroy {
     return f.transactions?.length ?? 0;
   }
 
+  textoContagemTransacoes(f: CreditCardInvoice): string {
+    const total = this.contagemTransacoes(f);
+    return `${total} ${total === 1 ? 'transação' : 'transações'}`;
+  }
+
+  transacoesDaFatura(f: CreditCardInvoice | null): any[] {
+    return [...(f?.transactions || [])].sort((a: any, b: any) => {
+      const dataA = new Date(a.dataTransacao || a.date || 0).getTime();
+      const dataB = new Date(b.dataTransacao || b.date || 0).getTime();
+      return dataA - dataB;
+    });
+  }
+
+  parcelasDaFatura(f: CreditCardInvoice): any[] {
+    return (f.transactions || [])
+      .filter((t: any) => Number(t.totalParcelas) > 1 && Number(t.parcelaAtual) > 0)
+      .slice(0, 4);
+  }
+
+  textoParcela(t: any): string {
+    const atual = Number(t.parcelaAtual) || 0;
+    const total = Number(t.totalParcelas) || 0;
+    const restantes = Math.max(0, total - atual);
+    return `${t.descricao || 'Compra'}: ${atual}/${total} (${restantes} restante${restantes !== 1 ? 's' : ''})`;
+  }
+
   calcularResumos(): void {
     this.totalFaturas = this.faturasFiltradas.reduce((total, f) => total + f.amount, 0);
     this.totalFaturasPagas = this.faturasFiltradas
@@ -441,7 +462,14 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   formatarData(data: Date): string {
-    return new Intl.DateTimeFormat('pt-BR').format(data);
+    if (!data) {
+      return '-';
+    }
+    const d = new Date(data);
+    if (Number.isNaN(d.getTime())) {
+      return '-';
+    }
+    return new Intl.DateTimeFormat('pt-BR').format(d);
   }
 
   getDiasVencimento(fatura: CreditCardInvoice): number {
@@ -452,7 +480,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   isVencendo(fatura: CreditCardInvoice): boolean {
-    if (fatura.status === 'PREVISTA') {
+    if (fatura.status !== 'PENDING') {
       return false;
     }
     const dias = this.getDiasVencimento(fatura);
@@ -460,10 +488,14 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   isVencida(fatura: CreditCardInvoice): boolean {
-    if (fatura.status === 'PREVISTA') {
+    if (fatura.status !== 'PENDING') {
       return false;
     }
     return this.getDiasVencimento(fatura) < 0;
+  }
+
+  isPaga(fatura: CreditCardInvoice): boolean {
+    return fatura.status === 'PAID';
   }
 
   getStatusColor(status: string): string {

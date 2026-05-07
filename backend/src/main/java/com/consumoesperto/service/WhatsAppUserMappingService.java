@@ -48,8 +48,9 @@ public class WhatsAppUserMappingService {
     }
 
     /**
-     * Se o utilizador ainda não tem {@code whatsappNumero} no perfil, grava o número deste JID (primeira mensagem).
-     * Evita o webhook ser ignorado com {@code owner-phone-not-configured-incoming-blocked} quando o tenant veio só da instância Evolution.
+     * Se o utilizador ainda não tem {@code whatsappNumero} no perfil, grava o número deste JID após o webhook
+     * já ter validado que o remetente é o autorizado ({@code WhatsAppBotAllowlist}). Chamado só depois do filtro no
+     * {@link com.consumoesperto.controller.EvolutionWebhookController}.
      */
     @Transactional
     public void ensureLinkedIfEmpty(Long usuarioId, String fromJid) {

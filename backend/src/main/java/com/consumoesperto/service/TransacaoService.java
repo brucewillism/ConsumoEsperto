@@ -63,6 +63,10 @@ public class TransacaoService {
 
     private final FaturaService faturaService;
 
+    private final FinancialProactiveService financialProactiveService;
+
+    private final ScoreService scoreService;
+
     /**
      * Cria uma nova transação financeira no sistema
      * 
@@ -78,6 +82,10 @@ public class TransacaoService {
      * @throws RuntimeException se a categoria não for encontrada
      */
     public TransacaoDTO criarTransacao(TransacaoDTO transacaoDTO, Long usuarioId) {
+        return criarTransacao(transacaoDTO, usuarioId, true);
+    }
+
+    public TransacaoDTO criarTransacao(TransacaoDTO transacaoDTO, Long usuarioId, boolean executarProativos) {
         // Cria uma nova instância de transação a partir dos dados do DTO
         Transacao transacao = new Transacao();
         transacao.setDescricao(transacaoDTO.getDescricao());
@@ -108,9 +116,16 @@ public class TransacaoService {
             transacao.setValorComJuros(transacaoDTO.getValorComJuros());
         }
 
+        Long categoriaId = transacaoDTO.getCategoriaId();
+        if (categoriaId == null && transacao.getTipoTransacao() == Transacao.TipoTransacao.DESPESA) {
+            categoriaId = financialProactiveService.sugerirCategoria(usuarioId, transacao.getDescricao())
+                .map(Categoria::getId)
+                .orElse(null);
+        }
+
         // Validação e associação da categoria (opcional)
-        if (transacaoDTO.getCategoriaId() != null) {
-            Categoria categoria = categoriaRepository.findById(transacaoDTO.getCategoriaId())
+        if (categoriaId != null) {
+            Categoria categoria = categoriaRepository.findById(categoriaId)
                 .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
             transacao.setCategoria(categoria);
         }
@@ -129,6 +144,13 @@ public class TransacaoService {
             faturaService.sincronizarValorFaturaComTransacoes(transacaoSalva.getFatura().getId());
         }
         saldoService.notificarAlteracaoSaldo(usuarioId);
+        if (executarProativos && transacaoSalva.getTipoTransacao() == Transacao.TipoTransacao.DESPESA) {
+            financialProactiveService.aposDespesaSalva(transacaoSalva);
+        } else if (executarProativos && transacaoSalva.getTipoTransacao() == Transacao.TipoTransacao.INVESTIMENTO
+            && transacaoSalva.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA) {
+            scoreService.registrarEvento(usuarioId, ScoreService.EventoScore.INVESTIMENTO_REGISTRADO,
+                "Investimento registrado: " + transacaoSalva.getDescricao());
+        }
         return converterParaDTO(transacaoSalva);
     }
 
@@ -234,6 +256,9 @@ public class TransacaoService {
             faturaService.sincronizarValorFaturaComTransacoes(faturaIdDepois);
         }
         saldoService.notificarAlteracaoSaldo(usuarioId);
+        if (transacaoAtualizada.getTipoTransacao() == Transacao.TipoTransacao.DESPESA) {
+            financialProactiveService.aposDespesaSalva(transacaoAtualizada);
+        }
         return converterParaDTO(transacaoAtualizada);
     }
 
@@ -251,6 +276,9 @@ public class TransacaoService {
             faturaService.sincronizarValorFaturaComTransacoes(atualizada.getFatura().getId());
         }
         saldoService.notificarAlteracaoSaldo(usuarioId);
+        if (atualizada.getTipoTransacao() == Transacao.TipoTransacao.DESPESA) {
+            financialProactiveService.aposDespesaSalva(atualizada);
+        }
         return converterParaDTO(atualizada);
     }
 
@@ -488,14 +516,18 @@ public class TransacaoService {
             usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fim);
         BigDecimal totalDespesas = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
             usuarioId, Transacao.TipoTransacao.DESPESA, inicio, fim);
+        BigDecimal totalInvestimentos = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+            usuarioId, Transacao.TipoTransacao.INVESTIMENTO, inicio, fim);
         totalReceitas = totalReceitas != null ? totalReceitas : BigDecimal.ZERO;
         totalDespesas = totalDespesas != null ? totalDespesas : BigDecimal.ZERO;
-        BigDecimal saldo = totalReceitas.subtract(totalDespesas);
+        totalInvestimentos = totalInvestimentos != null ? totalInvestimentos : BigDecimal.ZERO;
+        BigDecimal saldo = totalReceitas.subtract(totalDespesas).subtract(totalInvestimentos);
         long totalLinhas = transacaoRepository.countTransacoesUsuarioNoPeriodo(usuarioId, inicio, fim);
         Map<String, Object> resumo = new HashMap<>();
         resumo.put("totalTransacoes", totalLinhas);
         resumo.put("totalReceitas", totalReceitas.doubleValue());
         resumo.put("totalDespesas", totalDespesas.doubleValue());
+        resumo.put("totalInvestimentos", totalInvestimentos.doubleValue());
         resumo.put("saldo", saldo.doubleValue());
         return resumo;
     }

@@ -47,4 +47,13 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
     @Query("SELECT COALESCE(SUM(f.valorFatura), 0) FROM Fatura f WHERE f.cartaoCredito.id = :cartaoId "
         + "AND f.status IN (com.consumoesperto.model.Fatura$StatusFatura.ABERTA, com.consumoesperto.model.Fatura$StatusFatura.PARCIAL)")
     BigDecimal sumValorFaturasAbertasPorCartaoId(@Param("cartaoId") Long cartaoId);
+
+    @Query("SELECT f FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId "
+        + "AND f.status NOT IN (com.consumoesperto.model.Fatura$StatusFatura.PAGA, com.consumoesperto.model.Fatura$StatusFatura.CANCELADA) "
+        + "AND f.dataVencimento >= :inicio AND f.dataVencimento <= :fim ORDER BY f.dataVencimento ASC")
+    List<Fatura> findProximasNaoPagas(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
 }

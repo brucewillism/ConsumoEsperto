@@ -1,0 +1,70 @@
+.invest-page {
+  display: grid;
+  gap: 18px;
+}
+
+.hero,
+.invest-card,
+.simulator {
+  color: #e5e7eb;
+  background: #111827;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 20px;
+}
+
+.hero {
+  padding: 24px;
+  background: linear-gradient(135deg, #111827, #1f2937);
+}
+
+.hero p {
+  color: #fde68a;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.cards,
+.projection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.invest-card {
+  text-align: center;
+}
+
+.invest-card mat-icon {
+  color: #93c5fd;
+  transform: scale(1.4);
+}
+
+.invest-card strong,
+.projection-grid strong {
+  display: block;
+  font-size: 24px;
+  color: #86efac;
+}
+
+.invest-card.best {
+  border-color: rgba(16, 185, 129, .45);
+  box-shadow: 0 0 24px rgba(16, 185, 129, .12);
+}
+
+.simulator input[type="range"] {
+  width: 100%;
+  margin: 18px 0;
+}
+
+.projection-grid div {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.05);
+}
+
+small,
+.invest-card span {
+  color: #9ca3af;
+}

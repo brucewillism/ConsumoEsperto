@@ -44,6 +44,12 @@ public class SchemaAutoPatchService {
         ensureUsuarioAiConfigEvolutionApiKeyColumn();
         ensureUsuarioRendaConfigTable();
         ensureMetasFinanceirasTable();
+        ensureGrupoFamiliarTables();
+        ensureOrcamentosTable();
+        ensureImportacoesFaturaCartaoTable();
+        ensureContrachequesScoreTables();
+        ensureUsuarioGeneroColumns();
+        ensureUsuarioJarvisPerfilColumns();
         try {
             List<String> schemas = jdbcTemplate.queryForList(
                 "SELECT table_schema " +
@@ -68,6 +74,7 @@ public class SchemaAutoPatchService {
                 executeDdlAutocommit("ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS excluido BOOLEAN NOT NULL DEFAULT FALSE");
                 executeDdlAutocommit("ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS status_conferencia VARCHAR(255) NOT NULL DEFAULT 'CONFIRMADA'");
                 executeDdlAutocommit("ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS cnpj VARCHAR(18)");
+                executeDdlAutocommit("ALTER TABLE " + qualifiedTable + " ALTER COLUMN tipo_transacao TYPE VARCHAR(32)");
                 log.info("Schema patch aplicado em {}: colunas de recorrência/conferência/CNPJ verificadas.", qualifiedTable);
             }
         } catch (Exception e) {
@@ -214,6 +221,219 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: tabela public.metas_financeiras verificada.");
         } catch (Exception e) {
             log.warn("Falha ao complementar metas_financeiras (coluna/index): {}", e.getMessage());
+        }
+    }
+
+    private void ensureOrcamentosTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.orcamentos ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "categoria_id BIGINT NOT NULL REFERENCES public.categorias(id) ON DELETE CASCADE,"
+                    + "valor_limite NUMERIC(19,2) NOT NULL,"
+                    + "mes INTEGER NOT NULL,"
+                    + "ano INTEGER NOT NULL,"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_atualizacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "CONSTRAINT uk_orcamento_usuario_categoria_mes_ano UNIQUE(usuario_id, categoria_id, mes, ano)"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_orcamentos_usuario_mes_ano ON public.orcamentos(usuario_id, mes, ano)"
+            );
+            executeDdlAutocommit("ALTER TABLE public.orcamentos ADD COLUMN IF NOT EXISTS compartilhado BOOLEAN NOT NULL DEFAULT FALSE");
+            executeDdlAutocommit("ALTER TABLE public.orcamentos ADD COLUMN IF NOT EXISTS grupo_familiar_id BIGINT REFERENCES public.grupos_familiares(id) ON DELETE SET NULL");
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_orcamentos_grupo_mes_ano ON public.orcamentos(grupo_familiar_id, mes, ano)"
+            );
+            log.info("Schema patch: tabela public.orcamentos verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE orcamentos: {}", e.getMessage());
+        }
+    }
+
+    private void ensureImportacoesFaturaCartaoTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.importacoes_fatura_cartao ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "cartao_credito_id BIGINT REFERENCES public.cartoes_credito(id) ON DELETE SET NULL,"
+                    + "fatura_id BIGINT REFERENCES public.faturas(id) ON DELETE SET NULL,"
+                    + "banco_cartao VARCHAR(120),"
+                    + "data_vencimento TIMESTAMP,"
+                    + "data_fechamento TIMESTAMP,"
+                    + "valor_total NUMERIC(19,2),"
+                    + "pagamento_minimo NUMERIC(19,2),"
+                    + "itens_json TEXT NOT NULL,"
+                    + "auditoria_json TEXT,"
+                    + "status VARCHAR(32) NOT NULL DEFAULT 'PENDENTE',"
+                    + "novos_detectados INTEGER NOT NULL DEFAULT 0,"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_confirmacao TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_importacoes_fatura_usuario_status "
+                    + "ON public.importacoes_fatura_cartao(usuario_id, status, data_criacao DESC)"
+            );
+            log.info("Schema patch: tabela public.importacoes_fatura_cartao verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE importacoes_fatura_cartao: {}", e.getMessage());
+        }
+    }
+
+    private void ensureContrachequesScoreTables() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.contracheques_importados ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "empresa VARCHAR(160),"
+                    + "mes INTEGER,"
+                    + "ano INTEGER,"
+                    + "salario_bruto NUMERIC(19,2),"
+                    + "salario_liquido NUMERIC(19,2),"
+                    + "total_descontos NUMERIC(19,2),"
+                    + "descontos_json TEXT,"
+                    + "insights_json TEXT,"
+                    + "status VARCHAR(32) NOT NULL DEFAULT 'PENDENTE',"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_confirmacao TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_contracheques_usuario_periodo "
+                    + "ON public.contracheques_importados(usuario_id, ano DESC, mes DESC)"
+            );
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.usuarios_score ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL UNIQUE REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "score INTEGER NOT NULL DEFAULT 500,"
+                    + "nivel VARCHAR(40) NOT NULL DEFAULT 'Bronze',"
+                    + "data_atualizacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.historico_score ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "delta INTEGER NOT NULL,"
+                    + "score_resultante INTEGER NOT NULL,"
+                    + "motivo VARCHAR(120) NOT NULL,"
+                    + "detalhe VARCHAR(500),"
+                    + "data_evento TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_historico_score_usuario_data "
+                    + "ON public.historico_score(usuario_id, data_evento DESC)"
+            );
+            log.info("Schema patch: contracheques e score verificados.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE contracheques/score: {}", e.getMessage());
+        }
+    }
+
+    private void ensureUsuarioGeneroColumns() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                log.warn("Schema patch: tabela 'usuarios' não encontrada; colunas de gênero não aplicadas.");
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedUsuarios = schema + ".usuarios";
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios + " ADD COLUMN IF NOT EXISTS genero VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN'");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios + " ADD COLUMN IF NOT EXISTS genero_confirmado BOOLEAN NOT NULL DEFAULT FALSE");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios + " ADD COLUMN IF NOT EXISTS jarvis_google_genero_notificado BOOLEAN NOT NULL DEFAULT FALSE");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios + " ADD COLUMN IF NOT EXISTS preferencia_tratamento_jarvis VARCHAR(32) NOT NULL DEFAULT 'AUTOMATICO'");
+            }
+            log.info("Schema patch: colunas genero / genero_confirmado / jarvis_google_genero_notificado verificadas em usuarios.");
+        } catch (Exception e) {
+            log.warn("Falha ao aplicar colunas de gênero em usuarios: {}", e.getMessage());
+        }
+    }
+
+    private void ensureUsuarioJarvisPerfilColumns() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                log.warn("Schema patch: tabela 'usuarios' não encontrada; colunas tratamento/jarvis_configurado não aplicadas.");
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedUsuarios = schema + ".usuarios";
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios + " ADD COLUMN IF NOT EXISTS tratamento VARCHAR(32)");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios + " ADD COLUMN IF NOT EXISTS jarvis_configurado BOOLEAN NOT NULL DEFAULT FALSE");
+                executeDdlAutocommit(
+                    "UPDATE " + qualifiedUsuarios + " SET jarvis_configurado = FALSE WHERE jarvis_configurado IS NULL");
+            }
+            log.info("Schema patch: colunas tratamento / jarvis_configurado verificadas em usuarios.");
+        } catch (Exception e) {
+            log.warn("Falha ao aplicar colunas J.A.R.V.I.S. em usuarios: {}", e.getMessage());
+        }
+    }
+
+    private void ensureGrupoFamiliarTables() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.grupos_familiares ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "nome VARCHAR(120) NOT NULL,"
+                    + "criador_usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.grupo_familiar_membros ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "grupo_familiar_id BIGINT NOT NULL REFERENCES public.grupos_familiares(id) ON DELETE CASCADE,"
+                    + "usuario_id BIGINT REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "convidado_por_usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "convite_email VARCHAR(120),"
+                    + "convite_whatsapp VARCHAR(32),"
+                    + "token_convite VARCHAR(64) NOT NULL UNIQUE,"
+                    + "status VARCHAR(32) NOT NULL DEFAULT 'PENDENTE',"
+                    + "data_convite TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_resposta TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uk_grupo_membro_usuario_not_null "
+                    + "ON public.grupo_familiar_membros(grupo_familiar_id, usuario_id) WHERE usuario_id IS NOT NULL"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_grupo_membros_usuario_status "
+                    + "ON public.grupo_familiar_membros(usuario_id, status)"
+            );
+            log.info("Schema patch: grupos familiares verificados.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE grupos familiares: {}", e.getMessage());
         }
     }
 }

@@ -262,12 +262,19 @@ public class CartaoCreditoService {
     public CartaoCreditoDTO atualizarConfigPorCartaoId(Long usuarioId, Long cartaoId,
             BigDecimal novoLimiteCredito, BigDecimal novoLimiteDisponivel, String novoApelido) {
         return atualizarConfigPorCartaoId(usuarioId, cartaoId, novoLimiteCredito, novoLimiteDisponivel, novoApelido,
-            null, null, null);
+            null, null, null, null);
     }
 
     public CartaoCreditoDTO atualizarConfigPorCartaoId(Long usuarioId, Long cartaoId,
             BigDecimal novoLimiteCredito, BigDecimal novoLimiteDisponivel, String novoApelido,
             String novoBanco, String novaCor, String novoIcone) {
+        return atualizarConfigPorCartaoId(usuarioId, cartaoId, novoLimiteCredito, novoLimiteDisponivel, novoApelido,
+            novoBanco, novaCor, novoIcone, null);
+    }
+
+    public CartaoCreditoDTO atualizarConfigPorCartaoId(Long usuarioId, Long cartaoId,
+            BigDecimal novoLimiteCredito, BigDecimal novoLimiteDisponivel, String novoApelido,
+            String novoBanco, String novaCor, String novoIcone, Integer novoDiaVencimento) {
         CartaoCredito c = cartaoCreditoRepository.findByIdAndUsuarioId(cartaoId, usuarioId)
             .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
 
@@ -311,6 +318,10 @@ public class CartaoCreditoService {
             c.setLimiteDisponivel(novoLimiteDisponivel.min(teto));
             changed = true;
         }
+        if (novoDiaVencimento != null) {
+            c.setDiaVencimento(Math.max(1, Math.min(31, novoDiaVencimento)));
+            changed = true;
+        }
         if (!changed) {
             throw new RuntimeException("Nenhuma alteração válida para o cartão");
         }
@@ -343,17 +354,38 @@ public class CartaoCreditoService {
         CartaoCredito cartaoExistente = cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId)
                 .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
 
-        // Atualiza todos os campos do cartão com os novos valores
-        cartaoExistente.setNome(cartaoCreditoDTO.getNome());
-        cartaoExistente.setBanco(cartaoCreditoDTO.getBanco());
-        cartaoExistente.setLimiteCredito(cartaoCreditoDTO.getLimiteCredito());
-        cartaoExistente.setLimiteDisponivel(cartaoCreditoDTO.getLimiteDisponivel());
-        cartaoExistente.setDiaVencimento(cartaoCreditoDTO.getDiaVencimento());
-        cartaoExistente.setDataVencimento(cartaoCreditoDTO.getDataVencimento());
-        cartaoExistente.setTipoCartao(cartaoCreditoDTO.getTipoCartao());
-        cartaoExistente.setAtivo(cartaoCreditoDTO.getAtivo());
-        cartaoExistente.setCor(cartaoCreditoDTO.getCor());
-        cartaoExistente.setIcone(cartaoCreditoDTO.getIcone());
+        // Trata PUT como atualização parcial para não apagar campos omitidos pelo frontend.
+        if (cartaoCreditoDTO.getNome() != null && !cartaoCreditoDTO.getNome().isBlank()) {
+            cartaoExistente.setNome(cartaoCreditoDTO.getNome().trim());
+        }
+        if (cartaoCreditoDTO.getBanco() != null && !cartaoCreditoDTO.getBanco().isBlank()) {
+            cartaoExistente.setBanco(cartaoCreditoDTO.getBanco().trim());
+        }
+        if (cartaoCreditoDTO.getLimiteCredito() != null) {
+            cartaoExistente.setLimiteCredito(cartaoCreditoDTO.getLimiteCredito());
+        }
+        if (cartaoCreditoDTO.getLimiteDisponivel() != null) {
+            BigDecimal teto = cartaoExistente.getLimiteCredito() != null ? cartaoExistente.getLimiteCredito() : cartaoCreditoDTO.getLimiteDisponivel();
+            cartaoExistente.setLimiteDisponivel(cartaoCreditoDTO.getLimiteDisponivel().min(teto));
+        }
+        if (cartaoCreditoDTO.getDiaVencimento() != null) {
+            cartaoExistente.setDiaVencimento(cartaoCreditoDTO.getDiaVencimento());
+        }
+        if (cartaoCreditoDTO.getDataVencimento() != null) {
+            cartaoExistente.setDataVencimento(cartaoCreditoDTO.getDataVencimento());
+        }
+        if (cartaoCreditoDTO.getTipoCartao() != null) {
+            cartaoExistente.setTipoCartao(cartaoCreditoDTO.getTipoCartao());
+        }
+        if (cartaoCreditoDTO.getAtivo() != null) {
+            cartaoExistente.setAtivo(cartaoCreditoDTO.getAtivo());
+        }
+        if (cartaoCreditoDTO.getCor() != null) {
+            cartaoExistente.setCor(cartaoCreditoDTO.getCor());
+        }
+        if (cartaoCreditoDTO.getIcone() != null) {
+            cartaoExistente.setIcone(cartaoCreditoDTO.getIcone());
+        }
 
         // Persiste as alterações no banco de dados
         CartaoCredito cartaoAtualizado = cartaoCreditoRepository.save(cartaoExistente);

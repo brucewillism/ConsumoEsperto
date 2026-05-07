@@ -17,4 +17,6 @@ public class EvolutionIncomingMessageDTO {
     private String mediaUrl;
     /** ID da mensagem (key.id) — necessário para pedir base64 desencriptado à Evolution API. */
     private String messageKeyId;
+    /** ACK J.A.R.V.I.S. já enviado no thread do webhook antes do @Async (evita mensagens duplicadas). */
+    private boolean jarvisInstantAckSent;
 }

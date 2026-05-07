@@ -1,7 +1,9 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.CartaoCreditoDTO;
+import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
+import com.consumoesperto.dto.ImportacaoFaturaDTO;
 import com.consumoesperto.dto.MetaFinanceiraDTO;
 import com.consumoesperto.dto.MetaFinanceiraRequest;
 import com.consumoesperto.dto.RendaConfigDTO;
@@ -12,6 +14,7 @@ import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
+import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.service.entityupdate.WhatsAppEntityConfigUpdateService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -20,7 +23,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import javax.validation.ConstraintViolationException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
@@ -37,6 +39,8 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -65,6 +69,13 @@ public class WhatsAppCommandService {
     private final RendaConfigService rendaConfigService;
     private final WhatsAppGestaoProativaService whatsAppGestaoProativaService;
     private final ParcelamentoService parcelamentoService;
+    private final ForecastFinanceiroService forecastFinanceiroService;
+    private final FaturaPdfImportService faturaPdfImportService;
+    private final ContrachequeImportService contrachequeImportService;
+    private final DocumentoIAContextService documentoIAContextService;
+    private final SaldoService saldoService;
+    private final JarvisProtocolService jarvisProtocolService;
+    private final UsuarioRepository usuarioRepository;
 
     /** Confirmação de parcelamento com juros embutido (N×parcela > total citado). */
     private static final class ParcelaJurosEmbutidosDraft {
@@ -86,6 +97,9 @@ public class WhatsAppCommandService {
     private final Map<Long, PendingCupomDraft> awaitingCupomConfirm = new ConcurrentHashMap<>();
     /** Após SET_SALARY_CONFIG: pergunta se activa lançamento automático no dia de pagamento. */
     private final java.util.Set<Long> awaitingSalaryAutoConfirm = java.util.Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Map<Long, Long> awaitingFaturaImportConfirm = new ConcurrentHashMap<>();
+    private final Map<Long, Long> awaitingContrachequeImportConfirm = new ConcurrentHashMap<>();
+    private final Map<String, LocalDateTime> recentOutgoingTexts = new ConcurrentHashMap<>();
 
     public void processIncomingMessage(String from, String body, String mediaUrl, String mediaContentType) {
         Long userId = null;
@@ -96,7 +110,7 @@ public class WhatsAppCommandService {
                 return;
             }
             userId = ou.get().getId();
-            if (whatsAppBotAllowlist.isConfigured(userId) && !whatsAppBotAllowlist.matchesMyNumber(from, userId)) {
+            if (!whatsAppBotAllowlist.isEvolutionWebhookSenderAllowed(from, userId)) {
                 log.debug("Webhook Twilio: remetente nao autorizado para usuario {}", userId);
                 return;
             }
@@ -116,6 +130,14 @@ public class WhatsAppCommandService {
                 sendOutgoingMessage(from, parcelaJurosReply.get(), userId);
                 return;
             }
+            if (isForecastQuestion(sourceText)) {
+                sendOutgoingMessage(from, forecastFinanceiroService.montarRespostaWhatsapp(userId), userId);
+                return;
+            }
+            if (isInvestmentQuestion(sourceText)) {
+                sendOutgoingMessage(from, respostaInvestimento(userId), userId);
+                return;
+            }
             JsonNode parsed = openAiService.parseCommand(sourceText, userId);
             String response;
             String act = parsed.path("action").asText("");
@@ -128,9 +150,58 @@ public class WhatsAppCommandService {
         } catch (Exception e) {
             log.error("Erro ao processar comando WhatsApp", e);
             if (userId != null) {
-                sendOutgoingMessage(from, "Nao consegui concluir o comando. Detalhes no log do servidor.", userId);
+                String v = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+                sendOutgoingMessage(from, jarvisProtocolService.erroEvolutionUsuario(e, v), userId);
             }
         }
+    }
+
+    public String processWebCommand(Long userId, String sourceText) {
+        try {
+            String text = sourceText == null ? "" : sourceText.trim();
+            if (text.isBlank()) {
+                return msgErro(userId, "J.A.R.V.I.S.", "Digite uma pergunta ou comando financeiro.");
+            }
+            Optional<String> metaReply = tryResolveMetaConversation(userId, text);
+            if (metaReply.isPresent()) {
+                return metaReply.get();
+            }
+            Optional<String> parcelaJurosReply = tryResolveParcelaJurosEmbutidos(userId, text);
+            if (parcelaJurosReply.isPresent()) {
+                return parcelaJurosReply.get();
+            }
+            if (isForecastQuestion(text)) {
+                return forecastFinanceiroService.montarRespostaWhatsapp(userId);
+            }
+            if (isInvestmentQuestion(text)) {
+                return respostaInvestimento(userId);
+            }
+            JsonNode parsed = openAiService.parseCommand(text, userId);
+            String act = parsed.path("action").asText("");
+            if ("GENERATE_REPORT".equals(act) || "GERAR_RELATORIO".equals(act)) {
+                return handleGenerateReport(parsed, userId, null, text, null);
+            }
+            return executeCommand(parsed, userId, text);
+        } catch (Exception e) {
+            log.error("Erro ao processar comando Web IA", e);
+            return msgErro(userId, "J.A.R.V.I.S.", "Não consegui concluir o comando. Tente reformular a pergunta.");
+        }
+    }
+
+    /**
+     * ACK imediato do protocolo J.A.R.V.I.S. no thread do webhook (antes do processamento assíncrono).
+     * Usa {@link EvolutionIncomingMessageDTO#getMessageKeyId()} apenas para correlação em log implícito (ordem de envio FIFO na Evolution).
+     *
+     * @param evolutionInstanceName instância da Evolution que recebeu o webhook — usada no envio quando o utilizador não tem instância na config IA (evita resposta pela instância global incorreta).
+     */
+    public void sendJarvisInstantAck(EvolutionIncomingMessageDTO incoming, Long userId, String evolutionInstanceName) {
+        if (incoming == null || userId == null || incoming.getFromJid() == null || incoming.getFromJid().isBlank()) {
+            return;
+        }
+        String effective = resolveEffectiveMediaType(incoming.getMediaType(), incoming.getText());
+        String ack = jarvisProtocolService.ackForIncoming(effective, incoming.getMediaMimeType());
+        sendOutgoingMessage(incoming.getFromJid(), ack, userId, evolutionInstanceName);
+        incoming.setJarvisInstantAckSent(true);
     }
 
     public void processIncomingEvolutionMessage(EvolutionIncomingMessageDTO incoming, Long userId, String evolutionInstanceName) {
@@ -140,6 +211,14 @@ public class WhatsAppCommandService {
         }
         String from = incoming.getFromJid();
         boolean fromMe = incoming.isFromMe();
+        if (!whatsAppBotAllowlist.isEvolutionSelfChatThread(from, userId)) {
+            log.warn("[WhatsAppFilter] Evolution async: ignorado (nao e conversa consigo mesmo; userId={}, from={}, fromMe={})",
+                userId, from, fromMe);
+            return;
+        }
+        final String webhookEvolutionInstanceHint = evolutionInstanceName == null || evolutionInstanceName.isBlank()
+            ? null
+            : evolutionInstanceName.trim();
         final String evolutionApiKeyOverride = usuarioAiConfigRepository.findByUsuarioId(userId)
             .map(UsuarioAiConfig::getEvolutionApiKey)
             .filter(k -> k != null && !k.isBlank())
@@ -153,8 +232,10 @@ public class WhatsAppCommandService {
             }
             byte[] mediaBytes = incoming.getMediaBytes();
             String mediaType = incoming.getMediaType();
-            boolean audioOrImage = "audio".equalsIgnoreCase(mediaType) || "image".equalsIgnoreCase(mediaType);
-            if (audioOrImage && (mediaBytes == null || mediaBytes.length == 0)
+            boolean supportedMedia = "audio".equalsIgnoreCase(mediaType)
+                || "image".equalsIgnoreCase(mediaType)
+                || "document".equalsIgnoreCase(mediaType);
+            if (supportedMedia && (mediaBytes == null || mediaBytes.length == 0)
                 && evolutionInstanceName != null && !evolutionInstanceName.isBlank()
                 && incoming.getMessageKeyId() != null && !incoming.getMessageKeyId().isBlank()) {
                 byte[] fromEvolution = evolutionMediaService.fetchBase64FromMediaMessage(
@@ -168,16 +249,26 @@ public class WhatsAppCommandService {
             }
 
             String response;
-            if (fromMe && "text".equalsIgnoreCase(resolveEffectiveMediaType(mediaType, incoming.getText()))
+            // Eco do ACK/processo pode vir com fromMe=false no webhook Evolution.
+            if ("text".equalsIgnoreCase(resolveEffectiveMediaType(mediaType, incoming.getText()))
                 && isSystemResponse(incoming.getText())) {
                 log.debug("Ignorando auto-resposta do sistema");
                 log.debug("Conteúdo identificado como resposta do robô. Abortando loop.");
                 return;
             }
+            if (fromMe && isRecentOutgoingEcho(from, incoming.getText())) {
+                log.debug("Ignorando eco recente da mensagem enviada pelo próprio bot.");
+                return;
+            }
             if (fromMe) {
                 log.debug("Conteúdo identificado como input do usuário. Seguindo...");
             }
-            if ("image".equalsIgnoreCase(mediaType) && mediaBytes != null && mediaBytes.length > 0) {
+            if ("document".equalsIgnoreCase(mediaType) && isPdfMime(incoming.getMediaMimeType()) && mediaBytes != null && mediaBytes.length > 0) {
+                if (!incoming.isJarvisInstantAckSent()) {
+                    sendOutgoingMessage(from, jarvisProtocolService.statusLeituraPdfExtracaoFiscal(), userId, webhookEvolutionInstanceHint);
+                }
+                response = handlePdfDocument(userId, mediaBytes);
+            } else if ("image".equalsIgnoreCase(mediaType) && mediaBytes != null && mediaBytes.length > 0) {
                 response = handleImageReceiptBytes(from, userId, mediaBytes, incoming.getMediaMimeType());
             } else {
                 String sourceText = extractTextEvolution(incoming.getText(), mediaType, mediaBytes, incoming.getMediaMimeType(), userId);
@@ -190,6 +281,9 @@ public class WhatsAppCommandService {
                         + "• No servidor: chave Groq da plataforma (`GROQ_API_KEY` / `consumoesperto.ai.platform-groq-api-key`), "
                         + "e `evolution.url` + `evolution.apikey` alinhados à instância.";
                 } else {
+                    if ("text".equalsIgnoreCase(resolveEffectiveMediaType(mediaType, sourceText)) && !incoming.isJarvisInstantAckSent()) {
+                        sendOutgoingMessage(from, jarvisProtocolService.statusLeituraTextoEmAndamento(), userId, webhookEvolutionInstanceHint);
+                    }
                     Optional<String> metaReply = tryResolveMetaConversation(userId, sourceText);
                     if (metaReply.isPresent()) {
                         response = metaReply.get();
@@ -198,6 +292,16 @@ public class WhatsAppCommandService {
                         if (pj.isPresent()) {
                             response = pj.get();
                         } else {
+                        if (isForecastQuestion(sourceText)) {
+                            response = forecastFinanceiroService.montarRespostaWhatsapp(userId);
+                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                            return;
+                        }
+                        if (isInvestmentQuestion(sourceText)) {
+                            response = respostaInvestimento(userId);
+                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                            return;
+                        }
                         JsonNode parsed = openAiService.parseCommand(sourceText, userId);
                         String actEv = parsed.path("action").asText("");
                         if ("GENERATE_REPORT".equals(actEv) || "GERAR_RELATORIO".equals(actEv)) {
@@ -209,53 +313,12 @@ public class WhatsAppCommandService {
                     }
                 }
             }
-            sendOutgoingIfPresent(from, response, userId);
+            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
         } catch (Exception e) {
             log.error("Erro ao processar webhook Evolution", e);
-            sendOutgoingMessage(from, userFacingEvolutionError(e), userId);
+            String v = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+            sendOutgoingMessage(from, jarvisProtocolService.erroEvolutionUsuario(e, v), userId, webhookEvolutionInstanceHint);
         }
-    }
-
-    private static String userFacingEvolutionError(Exception e) {
-        for (Throwable t = e; t != null; t = t.getCause()) {
-            if (t instanceof ConstraintViolationException cv) {
-                return cv.getConstraintViolations().stream()
-                    .findFirst()
-                    .map(v -> "Não consegui salvar: " + v.getMessage() + ". Ajuste os dados ou reenvie o comando completo.")
-                    .orElse("Não consegui salvar os dados. Tente de novo.");
-            }
-        }
-        String m = e.getMessage() != null ? e.getMessage() : "";
-        String lower = m.toLowerCase(Locale.ROOT);
-        if (lower.contains("could not process file") || lower.contains("valid media file")) {
-            return "Não consegui ler o áudio (ficheiro inválido ou corrompido ao chegar ao servidor). "
-                + "Tenta gravar de novo ou envia em texto. Se usas Evolution, confirma que evolution.url e evolution.apikey "
-                + "no backend coincidem com a tua instância.";
-        }
-        if (m.contains("Nenhum provedor de transcrição") || m.contains("nenhum provedor elegível")) {
-            return "Para áudio, configure uma chave Groq ou OpenAI no app (Configurações IA / WhatsApp). "
-                + "Ollama só é usado se definires a URL dele lá.";
-        }
-        if (m.contains("OLLAMA") && (m.contains("Connection refused") || m.contains("Failed to connect"))) {
-            return "Transcrição tentou usar Ollama em localhost, mas não há servidor. "
-                + "Inicia o Ollama ou configura Groq/OpenAI no app.";
-        }
-        if (m.contains("API_KEY não configurada") || m.contains("_API_KEY")) {
-            return "Falta chave de API (Groq ou OpenAI). Configura no app em IA / WhatsApp.";
-        }
-        if (m.contains("Cartão de crédito já existe")) {
-            return "Esse final já está num cartão *ativo*. Para mudar limite ou apelido: *edita o limite do Nubank para 7800*.";
-        }
-        if (m.contains("Valor nao informado") || m.contains("Valor não informado")) {
-            return "Não encontrei o *valor* na mensagem. Ex.: *despesa 45,90 padaria* ou *receita 3500 salário*.";
-        }
-        if (m.contains("Valor da nota")) {
-            return "Na foto da nota não consegui ler o *valor total*. Tenta outra foto mais nítida ou diz o valor por escrito.";
-        }
-        if (m.contains("file must be one of the following types")) {
-            return "O áudio veio com tipo/extensão inválidos para a API. Atualize o app e tente de novo, ou envie texto.";
-        }
-        return "Nao consegui concluir o comando. Detalhes no log do servidor.";
     }
 
     private static String humanizarErroComando(String raw) {
@@ -333,18 +396,20 @@ public class WhatsAppCommandService {
             return handleImageReceiptBytes(from, userId, imageBytes, mediaContentType);
         } catch (Exception ex) {
             log.warn("Falha ao processar imagem de nota no WhatsApp para {}: {}", from, ex.getMessage());
-            return "Desculpe, não consegui ler esta nota. Pode enviar outra foto mais nítida?";
+            String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+            return jarvisProtocolService.erroVisaoArquivo(voc);
         }
     }
 
     private String handleImageReceiptBytes(String from, Long userId, byte[] imageBytes, String mediaContentType) {
         log.info("[VISION-LOG] Imagem recebida userId={} from={}", userId, from);
+        String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
         JsonNode ocr = openAiService.analisarImagemNotaFiscal(imageBytes, mediaContentType, userId);
         double confianca = ocr.path("confianca").asDouble(0.0d);
         String erro = ocr.path("erro").asText("");
         if (!erro.isBlank() || confianca < 0.45d) {
             log.info("[VISION-LOG] OCR rejeitado userId={} confianca={} erro={}", userId, confianca, erro);
-            return "Desculpe, não consegui ler esta nota. Pode enviar outra foto mais nítida?";
+            return jarvisProtocolService.erroVisaoArquivo(voc);
         }
 
         BigDecimal valor = parseValorOCR(ocr.path("valorTotal").asText(""));
@@ -373,20 +438,18 @@ public class WhatsAppCommandService {
         awaitingCupomConfirm.put(userId, draft);
         log.info("[VISION-LOG] Rascunho cupom aguardando confirmação userId={} valor={} desc={}", userId, valor, descricaoFinal);
 
-        return "📸 Vi que você gastou *" + BRL.format(valor) + "* no *" + descricaoFinal + "*. "
-            + "Posso lançar isso na categoria *" + categoriaNome + "*?\n\n"
-            + "Responda *sim* para confirmar ou *não* para cancelar.";
+        return jarvisProtocolService.formatoCupomOcrSucesso(BRL.format(valor), descricaoFinal, categoriaNome);
     }
 
     private String executeCommand(JsonNode cmd, Long userId, String sourceText) {
         String action = cmd.path("action").asText("UNKNOWN");
         double confianca = readConfianca(cmd);
-        if (!"GET_INSIGHTS".equals(action) && !"CHECK_CARD_STATUS".equals(action) && !"GENERATE_REPORT".equals(action)
+        if (!"GET_INSIGHTS".equals(action) && !"CHECK_CARD_STATUS".equals(action) && !"FORECAST_MONTH".equals(action) && !"SUGERIR_INVESTIMENTO".equals(action) && !"GENERATE_REPORT".equals(action)
             && !"GERAR_RELATORIO".equals(action)
             && !"SET_SALARY_CONFIG".equals(action)
             && !"MANAGE_ENTITY".equals(action)
             && confianca < 0.55d) {
-            return msgErro("Confiança da IA",
+            return msgErro(userId, "Confiança da IA",
                 "Não executei nada. Confiança " + String.format(Locale.US, "%.0f%%", confianca * 100)
                     + " — abaixo do mínimo seguro. Reenvia com valor, descrição e (se for despesa) cartão/banco explícitos.");
         }
@@ -394,7 +457,7 @@ public class WhatsAppCommandService {
             case "CREATE_EXPENSE" -> handleExpense(cmd, userId, sourceText);
             case "CREATE_INCOME" -> handleIncome(cmd, userId, sourceText);
             case "CREATE_CARD" -> handleCard(cmd, userId, sourceText);
-            case "UPDATE_ENTITY_CONFIG" -> formatarRespostaEntidade(whatsAppEntityConfigUpdateService.executar(userId, cmd));
+            case "UPDATE_ENTITY_CONFIG" -> formatarRespostaEntidade(whatsAppEntityConfigUpdateService.executar(userId, normalizarUpdateEntityConfig(cmd, sourceText)), userId);
             case "UPDATE_ACCOUNT_CONFIG" -> handleUpdateAccountConfig(cmd, userId, sourceText);
             case "SIMULATE_PURCHASE_GOAL" -> handleSimulatePurchaseGoal(cmd, userId, sourceText);
             case "GET_INSIGHTS" -> {
@@ -404,6 +467,8 @@ public class WhatsAppCommandService {
                 }
                 yield msgOk("Recorrências", body);
             }
+            case "FORECAST_MONTH" -> forecastFinanceiroService.montarRespostaWhatsapp(userId);
+            case "SUGERIR_INVESTIMENTO" -> respostaInvestimento(userId);
             case "CHECK_CARD_STATUS" -> handleCheckCardStatus(cmd, userId, sourceText);
             case "SET_SALARY_CONFIG" -> handleSetSalaryConfig(cmd, userId, sourceText);
             case "MANAGE_ENTITY" -> whatsAppGestaoProativaService.iniciarGestao(cmd, userId, sourceText);
@@ -412,33 +477,238 @@ public class WhatsAppCommandService {
             default -> {
                 String errorMessage = cmd.path("errorMessage").asText("");
                 if (errorMessage.isBlank()) {
-                    yield msgErro("Comando não reconhecido",
+                    yield msgErro(userId, "Comando não reconhecido",
                         "Não percebi o pedido. Exemplos:\n• despesa 45,90 mercado\n• receita 3500 salário\n"
                             + "• cartão Nubank final 1234 vence 10\n• edita limite do Nubank para 5000");
                 }
-                yield msgErro("Dados em falta", errorMessage + "\nReenvia com mais detalhe.");
+                yield msgErro(userId, "Dados em falta", errorMessage + "\nReenvia com mais detalhe.");
             }
         };
     }
 
+    private String handlePdfDocument(Long userId, byte[] mediaBytes) {
+        try {
+            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(userId, mediaBytes);
+            String tipo = extracted.path("tipoDocumento").asText("");
+            if ("CONTRACHEQUE".equalsIgnoreCase(tipo)) {
+                ContrachequeDTO c = contrachequeImportService.processarExtracao(userId, extracted);
+                awaitingContrachequeImportConfirm.put(userId, c.getId());
+                List<String> insights = c.getInsights() != null ? c.getInsights() : List.of();
+                return jarvisProtocolService.formatoContrachequeAnalisado(
+                    c.getEmpresa() != null && !c.getEmpresa().isBlank() ? c.getEmpresa() : "—",
+                    BRL.format(c.getSalarioLiquido()),
+                    insights);
+            }
+            if ("FATURA_CARTAO".equalsIgnoreCase(tipo) || faturaPdfImportService.pareceFaturaCartao(extracted)) {
+                ImportacaoFaturaDTO imp = faturaPdfImportService.processarExtracao(userId, extracted);
+                awaitingFaturaImportConfirm.put(userId, imp.getId());
+                boolean divergencia = temDivergenciaSomaFatura(imp);
+                String bullets = "";
+                if (imp.getAuditorias() != null && !imp.getAuditorias().isEmpty()) {
+                    bullets = imp.getAuditorias().stream().map(a -> "• " + a).collect(Collectors.joining("\n"));
+                }
+                if (divergencia) {
+                    awaitingFaturaImportConfirm.remove(userId);
+                }
+                String banco = imp.getBancoCartao() != null && !imp.getBancoCartao().isBlank() ? imp.getBancoCartao() : "Cartão";
+                return jarvisProtocolService.formatoFaturaVarredura(banco, imp.getNovosDetectados(), bullets, divergencia);
+            }
+            return msgErro(userId, "PDF", "Identifiquei o documento como *" + tipo + "*, mas ainda não tenho fluxo automático para ele.");
+        } catch (Exception e) {
+            log.warn("Falha ao processar PDF financeiro: {}", e.getMessage());
+            return msgErro(userId, "PDF financeiro", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private boolean temDivergenciaSomaFatura(ImportacaoFaturaDTO imp) {
+        if (imp == null || imp.getAuditorias() == null) {
+            return false;
+        }
+        return imp.getAuditorias().stream()
+            .anyMatch(a -> normalize(a).contains("soma dos lancamentos extraidos")
+                && normalize(a).contains("nao bate com o total da fatura"));
+    }
+
+    private JsonNode normalizarUpdateEntityConfig(JsonNode cmd, String sourceText) {
+        JsonNode target = cmd.path("targetEntity");
+        String targetText = target.asText("");
+        String manageTarget = cmd.path("manageTarget").asText("");
+        boolean cartao = "CARTAO".equalsIgnoreCase(targetText)
+            || "CONTA".equalsIgnoreCase(targetText)
+            || "cartao".equalsIgnoreCase(manageTarget);
+        if (!cartao) {
+            return cmd;
+        }
+
+        ObjectNode normalized = cmd.deepCopy();
+        ObjectNode updates = normalized.path("updates").isObject()
+            ? (ObjectNode) normalized.path("updates")
+            : JsonNodeFactory.instance.objectNode();
+
+        copiarCampoNumerico(cmd, updates, "newLimit", "limite");
+        copiarCampoNumerico(cmd, updates, "newCreditLimit", "limite");
+        copiarCampoNumerico(cmd, updates, "creditLimit", "limite");
+        copiarCampoNumerico(cmd, updates, "limit", "limite");
+        copiarCampoNumerico(cmd, updates, "newAvailableLimit", "limiteDisponivel");
+        copiarCampoNumerico(cmd, updates, "availableLimit", "limiteDisponivel");
+        copiarCampoNumerico(cmd, updates, "dueDay", "diaVencimento");
+        copiarCampoNumerico(cmd, updates, "newDueDay", "diaVencimento");
+        copiarCampoNumerico(cmd, updates, "billingDay", "diaVencimento");
+        copiarCampoTexto(cmd, updates, "newCardName", "apelido");
+        copiarCampoTexto(cmd, updates, "newCardNickname", "apelido");
+        copiarCampoTexto(cmd, updates, "newName", "apelido");
+
+        if (!updates.has("limite") && sourceText != null && textoFalaDeLimite(sourceText)) {
+            BigDecimal limite = extrairLimiteDoTexto(sourceText);
+            if (limite != null) {
+                updates.put("limite", limite.doubleValue());
+            }
+        }
+        if (!updates.has("diaVencimento") && sourceText != null) {
+            Integer dia = extrairDiaVencimentoDoTexto(sourceText);
+            if (dia != null) {
+                updates.put("diaVencimento", dia);
+            }
+        }
+        normalized.set("updates", updates);
+        return normalized;
+    }
+
+    private static void copiarCampoNumerico(JsonNode source, ObjectNode target, String sourceField, String targetField) {
+        if (!target.has(targetField)) {
+            BigDecimal value = readOptionalBigDecimal(source, sourceField);
+            if (value != null) {
+                target.put(targetField, value.doubleValue());
+            }
+        }
+    }
+
+    private static void copiarCampoTexto(JsonNode source, ObjectNode target, String sourceField, String targetField) {
+        if (!target.has(targetField) && source.has(sourceField) && !source.get(sourceField).isNull()) {
+            String value = source.get(sourceField).asText("");
+            if (!value.isBlank()) {
+                target.put(targetField, value.trim());
+            }
+        }
+    }
+
+    private static BigDecimal extrairLimiteDoTexto(String sourceText) {
+        String t = sourceText == null ? "" : sourceText;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile("(?i)\\blimite\\b[^0-9]{0,30}([0-9][0-9.,]*)")
+            .matcher(t);
+        boolean found = matcher.find();
+        if (!found) {
+            matcher = java.util.regex.Pattern
+                .compile("(?i)\\bpara\\b[^0-9]{0,10}([0-9][0-9.,]*)")
+                .matcher(t);
+            found = matcher.find();
+        }
+        if (!found) {
+            return null;
+        }
+        String raw = matcher.group(1).replaceAll("[^0-9,.-]", "");
+        if (raw.contains(",") && raw.contains(".")) {
+            raw = raw.replace(".", "").replace(',', '.');
+        } else {
+            raw = raw.replace(',', '.');
+        }
+        try {
+            return new BigDecimal(raw);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean textoFalaDeLimite(String sourceText) {
+        String t = Normalizer.normalize(sourceText == null ? "" : sourceText, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+        return t.contains("limite");
+    }
+
+    private static Integer extrairDiaVencimentoDoTexto(String sourceText) {
+        String t = Normalizer.normalize(sourceText == null ? "" : sourceText, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile("\\b(?:vencimento|vence|vencer|fatura)\\b[^0-9]{0,40}(\\d{1,2})")
+            .matcher(t);
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            int dia = Integer.parseInt(matcher.group(1));
+            return dia >= 1 && dia <= 31 ? dia : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean isPdfMime(String mime) {
+        return mime != null && mime.toLowerCase(Locale.ROOT).contains("pdf");
+    }
+
+    private String respostaInvestimento(Long userId) {
+        String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+        String intro = jarvisProtocolService.introducaoProjecaoRotasCapital();
+        return saldoService.sugerirInvestimentoSaldo(userId)
+            .map(o -> intro + o.mensagemWhatsApp())
+            .orElse(jarvisProtocolService.semSaldoParaInvestimentoJarvis(voc));
+    }
+
+    private static boolean isForecastQuestion(String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return false;
+        }
+        String t = Normalizer.normalize(sourceText, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+        return (t.contains("fechar") && t.contains("mes"))
+            || t.contains("vou ficar no vermelho")
+            || t.contains("ficar no vermelho")
+            || (t.contains("previs") && t.contains("mes"))
+            || (t.contains("projec") && t.contains("mes"))
+            || t.contains("saldo no fim do mes");
+    }
+
+    private static boolean isInvestmentQuestion(String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return false;
+        }
+        String t = Normalizer.normalize(sourceText, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+        return t.contains("onde invisto")
+            || t.contains("investir meu saldo")
+            || t.contains("invisto meu saldo")
+            || (t.contains("saldo") && t.contains("rende"))
+            || (t.contains("poupanca") && t.contains("cdb"))
+            || t.contains("tesouro selic");
+    }
+
     /** Respostas de {@link WhatsAppEntityConfigUpdateService} já trazem texto claro (incl. ✅ em sucesso). */
-    private static String formatarRespostaEntidade(String resposta) {
+    private String formatarRespostaEntidade(String resposta, Long userId) {
         if (resposta == null || resposta.isBlank()) {
-            return msgErro("Alteração no app", "Resposta vazia do servidor.");
+            return msgErro(userId, "Alteração no app", "Resposta vazia do servidor.");
         }
         String t = resposta.trim();
         if (t.startsWith("✅")) {
             return t;
         }
-        return msgErro("Alteração no app", t);
+        return msgErro(userId, "Alteração no app", t);
     }
 
     private static String msgOk(String acao, String detalhe) {
         return "✅ *" + acao + "*\n" + detalhe;
     }
 
-    private static String msgErro(String acao, String detalhe) {
-        return "❌ *" + acao + "*\n" + detalhe;
+    private String msgErro(Long userId, String contexto, String detalhe) {
+        if (userId == null) {
+            return jarvisProtocolService.formatoMsgErro("Senhor", contexto, detalhe);
+        }
+        String v = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+        return jarvisProtocolService.formatoMsgErro(v, contexto, detalhe);
     }
 
     private static String msgInfo(String acao, String detalhe) {
@@ -451,13 +721,13 @@ public class WhatsAppCommandService {
             token = resolveCardToken(cmd, sourceText);
         }
         if (token.isBlank()) {
-            return msgErro("Resumo de cartão / fatura",
+            return msgErro(userId, "Resumo de cartão / fatura",
                 "Indica qual cartão (apelido ou banco). Ex.: *Quanto gastei no Nubank?* ou *resumo da fatura do Inter*.");
         }
         CardMatchResult match = findBestCard(userId, token);
         if (match.card == null) {
             log.info("[BILLING-LOG] Cartão não encontrado userId={} token={}", userId, token);
-            return msgErro("Resumo de cartão / fatura",
+            return msgErro(userId, "Resumo de cartão / fatura",
                 "Não há cartão *ativo* com esse nome. Se apagaste na app, o registo fica oculto — cadastra de novo (mesmo final) ou pede *cartão … final …* por aqui.");
         }
         return msgOk("Resumo do cartão", faturaService.montarResumoCartaoWhatsapp(userId, match.card));
@@ -483,16 +753,13 @@ public class WhatsAppCommandService {
         Optional<ReportService.RelatorioPdf> opt = reportService.gerarRelatorioMensal(
             userId, ym.getMonthValue(), ym.getYear());
         if (opt.isEmpty()) {
-            return msgErro("Relatório PDF",
+            return msgErro(userId, "Relatório PDF",
                 "Não há dados suficientes para gerar o relatório de *" + mesLabel + "*. Lança algumas despesas/receitas e tenta de novo.");
         }
-        try {
-            evolutionApiService.enviarDocumentoPdf(from, opt.get().bytes(), opt.get().nomeArquivo(), instance);
-        } catch (Exception e) {
-            log.warn("[PDF-REPORT] Falha ao enviar documento Evolution: {}", e.getMessage());
-            return msgErro("Envio do PDF",
-                "O PDF de *" + mesLabel + "* foi gerado, mas falhou o envio pelo WhatsApp. Abre *Relatórios → PDF* no app. Detalhe: "
-                    + e.getMessage());
+        boolean pdfOk = evolutionApiService.enviarDocumentoPdf(from, opt.get().bytes(), opt.get().nomeArquivo(), instance);
+        if (!pdfOk) {
+            return msgErro(userId, "Envio do PDF",
+                "O PDF de *" + mesLabel + "* foi gerado, mas falhou o envio pelo WhatsApp (Evolution offline ou erro de rede). Abre *Relatórios → PDF* no app.");
         }
         return msgOk("Relatório PDF", "Enviei o ficheiro *" + opt.get().nomeArquivo() + "* acima nesta conversa.");
     }
@@ -580,8 +847,12 @@ public class WhatsAppCommandService {
     }
 
     private void sendOutgoingIfPresent(String to, String message, Long userId) {
+        sendOutgoingIfPresent(to, message, userId, null);
+    }
+
+    private void sendOutgoingIfPresent(String to, String message, Long userId, String webhookEvolutionInstanceHint) {
         if (message != null && !message.isBlank()) {
-            sendOutgoingMessage(to, message, userId);
+            sendOutgoingMessage(to, message, userId, webhookEvolutionInstanceHint);
         }
     }
 
@@ -602,7 +873,7 @@ public class WhatsAppCommandService {
             CardMatchResult m = findBestCard(userId, d.cardToken);
             if (m.card == null) {
                 awaitingParcelaJurosEmbutidos.remove(userId);
-                return Optional.of(msgErro("Cartão", "Não encontrei o cartão. Envia de novo o comando com o nome do banco/cartão."));
+                return Optional.of(msgErro(userId, "Cartão", "Não encontrei o cartão. Envia de novo o comando com o nome do banco/cartão."));
             }
             try {
                 List<TransacaoDTO> criadas = parcelamentoService.criarParcelamentoComJuros(
@@ -614,7 +885,7 @@ public class WhatsAppCommandService {
                         + BRL.format(d.valorParcela.multiply(BigDecimal.valueOf(d.n))) + "*)."));
             } catch (Exception e) {
                 awaitingParcelaJurosEmbutidos.remove(userId);
-                return Optional.of(msgErro("Parcelamento", humanizarErroComando(e.getMessage())));
+                return Optional.of(msgErro(userId, "Parcelamento", humanizarErroComando(e.getMessage())));
             }
         }
         return Optional.of(msgInfo("Confirmação", "Responde *sim* para gravar o parcelamento com juros ou *não* para cancelar."));
@@ -645,7 +916,7 @@ public class WhatsAppCommandService {
             BigDecimal purchasePrice = readOptionalBigDecimal(cmd, "purchasePrice");
 
             if (nParcelas >= 2 && matchResult.card == null) {
-                return msgErro("Parcelamento", "Para parcelar no cartão, indica o banco ou apelido (ex.: *no Nubank*).");
+                return msgErro(userId, "Parcelamento", "Para parcelar no cartão, indica o banco ou apelido (ex.: *no Nubank*).");
             }
 
             if (nParcelas >= 2 && matchResult.card != null && installmentAmount != null
@@ -702,8 +973,9 @@ public class WhatsAppCommandService {
 
             TransacaoDTO created = transacaoService.criarTransacao(dto, userId);
             String invoiceMessage = vincularNaFatura(matchResult, amount, userId);
+            String jarvisLinha = jarvisProtocolService.formatExpenseCatalogued(BRL.format(created.getValor()));
             if (matchResult.card != null) {
-                String detalhe = BRL.format(created.getValor()) + " em *" + created.getDescricao() + "* no cartão *"
+                String detalhe = jarvisLinha + "\n\n*" + created.getDescricao() + "* no cartão *"
                     + matchResult.card.getNome() + "*.\n" + invoiceMessage.trim();
                 if (matchResult.pendingReview) {
                     detalhe += "\n⚠️ Ficou *pendente de conferência* (há mais do que um cartão parecido com o nome que disseste).";
@@ -711,10 +983,10 @@ public class WhatsAppCommandService {
                 return msgOk("Despesa registada", detalhe);
             }
             return msgOk("Despesa registada",
-                BRL.format(created.getValor()) + " em *" + created.getDescricao() + "* (sem cartão associado).\n" + invoiceMessage.trim());
+                jarvisLinha + "\n\n*" + created.getDescricao() + "* (sem cartão associado).\n" + invoiceMessage.trim());
         } catch (RuntimeException e) {
             log.info("WhatsApp despesa: {}", e.getMessage());
-            return msgErro("Despesa", humanizarErroComando(e.getMessage()));
+            return msgErro(userId, "Despesa", humanizarErroComando(e.getMessage()));
         }
     }
 
@@ -750,7 +1022,7 @@ public class WhatsAppCommandService {
                 BRL.format(created.getValor()) + " em *" + created.getDescricao() + "*.");
         } catch (RuntimeException e) {
             log.info("WhatsApp receita: {}", e.getMessage());
-            return msgErro("Receita", humanizarErroComando(e.getMessage()));
+            return msgErro(userId, "Receita", humanizarErroComando(e.getMessage()));
         }
     }
 
@@ -771,10 +1043,10 @@ public class WhatsAppCommandService {
             }
             return body;
         } catch (IllegalArgumentException e) {
-            return msgErro("Configuração salarial", e.getMessage());
+            return msgErro(userId, "Configuração salarial", e.getMessage());
         } catch (Exception e) {
             log.warn("SET_SALARY_CONFIG: {}", e.getMessage());
-            return msgErro("Configuração salarial",
+            return msgErro(userId, "Configuração salarial",
                 "Não consegui guardar. Envia bruto, descontos (valor + nome) e *dia de pagamento* (ex.: *dia 5*).");
         }
     }
@@ -838,7 +1110,7 @@ public class WhatsAppCommandService {
                         + "*, limite *" + BRL.format(updated.getLimiteCredito()) + "*.");
             }
             log.warn("WhatsApp cartão: {}", m);
-            return msgErro("Cartão", m != null && !m.isBlank() ? m : "Não foi possível concluir o cadastro do cartão.");
+            return msgErro(userId, "Cartão", m != null && !m.isBlank() ? m : "Não foi possível concluir o cadastro do cartão.");
         }
     }
 
@@ -846,7 +1118,7 @@ public class WhatsAppCommandService {
     private String handleUpdateAccountConfig(JsonNode cmd, Long userId, String sourceText) {
         String cardRef = whatsAppFirstNonBlank(cmd.path("cardName").asText(""), cmd.path("bank").asText(""));
         if (cardRef.isBlank()) {
-            return msgErro("Editar cartão", "Diz qual cartão (apelido) queres alterar. Ex.: *edita o limite do Nubank para 5000*.");
+            return msgErro(userId, "Editar cartão", "Diz qual cartão (apelido) queres alterar. Ex.: *edita o limite do Nubank para 5000*.");
         }
         BigDecimal newLimit = readOptionalBigDecimal(cmd, "newLimit");
         if (newLimit == null) {
@@ -855,7 +1127,7 @@ public class WhatsAppCommandService {
         BigDecimal newAvail = readOptionalBigDecimal(cmd, "newAvailableLimit");
         String newName = whatsAppFirstNonBlank(cmd.path("newCardName").asText(""), cmd.path("newCardNickname").asText(""));
         if (newLimit == null && newAvail == null && newName.isBlank()) {
-            return msgErro("Editar cartão",
+            return msgErro(userId, "Editar cartão",
                 "Não percebi o que mudar. Indica novo *limite*, *limite disponível* ou *apelido*. Ex.: *aumenta o limite do Inter para 10000*.");
         }
         ObjectNode updates = JsonNodeFactory.instance.objectNode();
@@ -872,7 +1144,7 @@ public class WhatsAppCommandService {
         root.put("targetEntity", "CARTAO");
         root.put("identifier", cardRef);
         root.set("updates", updates);
-        return formatarRespostaEntidade(whatsAppEntityConfigUpdateService.executar(userId, root));
+        return formatarRespostaEntidade(whatsAppEntityConfigUpdateService.executar(userId, root), userId);
     }
 
     private static String whatsAppFirstNonBlank(String a, String b) {
@@ -1036,9 +1308,9 @@ public class WhatsAppCommandService {
             return digits;
         }
         if (digits.length() >= 4) {
-            return "000000000" + digits.substring(digits.length() - 4);
+            return digits.substring(digits.length() - 4);
         }
-        return "0000000000000";
+        return "0000";
     }
 
     private String resolveEffectiveMediaType(String mediaType, String text) {
@@ -1056,25 +1328,63 @@ public class WhatsAppCommandService {
             return false;
         }
         String trimmed = text.trim();
-        for (String prefix : new String[]{"🚀", "📸", "📝", "✅", "❌", "⚠️"}) {
+        for (String prefix : new String[]{"🚀", "📸", "📝", "✅", "❌", "⚠️", "📄", "⏳"}) {
             if (trimmed.startsWith(prefix)) {
                 return true;
             }
         }
         String normalized = normalize(trimmed);
         return normalized.contains("lancado com sucesso")
+            || normalized.startsWith("nao consegui")
+            || normalized.startsWith("recebi sua fatura")
+            || normalized.contains("consumoesperto esta lendo sua fatura")
+            || normalized.contains("estou extraindo os lancamentos")
+            || normalized.startsWith("recebi seu contracheque")
+            || normalized.startsWith("confirmei sua importacao")
+            || normalized.startsWith("confirmei seu contracheque")
             || normalized.contains("desculpe, nao consegui ler")
             || normalized.contains("ola! notei que voce tem")
             || normalized.contains("erro ao processar comando")
             || normalized.contains("vi que voce gastou")
             || normalized.contains("posso lancar isso na categoria")
+            || normalized.contains("deseja que eu adicione todos agora")
+            || normalized.contains("deseja atualizar sua renda")
             || normalized.contains("resposta sim para lançar")
             || normalized.contains("meta salva no consumoesperto")
             || normalized.contains("nao identifiquei padroes claros")
             || normalized.contains("nao ha despesas confirmadas")
+            || normalized.contains("previsao de fechamento do mes")
+            || normalized.contains("projecao indica risco de fechar o mes")
+            || normalized.contains("saldo projetado")
+            || normalized.contains("probabilidade estimada")
+            || normalized.contains("alerta financeiro proativo")
             || normalized.contains("estou a preparar o seu relatorio")
             || normalized.contains("segue o pdf acima")
-            || normalized.contains("relatorio_export");
+            || normalized.contains("relatorio_export")
+            || normalized.contains("compreendido, senhor")
+            || normalized.contains("ouvindo seu audio")
+            || normalized.contains("recebi o arquivo")
+            || normalized.contains("extracao de dados fiscais")
+            || normalized.contains("analisando sua mensagem")
+            || normalized.contains("jarvis | consumoesperto")
+            || normalized.contains("revisao semanal")
+            || normalized.contains("identifiquei que a fatura")
+            || normalized.contains("identifiquei o fechamento da fatura")
+            || normalized.contains("protocolos de liquidacao")
+            || normalized.contains("protocolos de pagamento")
+            || normalized.contains("mediacao familiar")
+            || normalized.contains("liquidez ociosa")
+            || normalized.contains("registro programado: a conta")
+            || normalized.contains("score de saude financeira")
+            || normalized.contains("encerramento do mes nos registros")
+            || normalized.contains("relatorio visual concluido")
+            || normalized.contains("protocolo de renda ativo")
+            || normalized.contains("varredura de fatura concluida")
+            || normalized.contains("recebi o documento")
+            || normalized.contains("processando a sua mensagem")
+            || normalized.contains("sistemas ativos")
+            || normalized.contains("lamento, senhor")
+            || normalized.contains("meus sistemas de visao");
     }
 
     private String preview(String text) {
@@ -1089,21 +1399,76 @@ public class WhatsAppCommandService {
     }
 
     private void sendOutgoingMessage(String to, String message, Long userId) {
+        sendOutgoingMessage(to, message, userId, null);
+    }
+
+    /**
+     * @param webhookEvolutionInstanceHint instância que recebeu o evento Evolution; usada apenas se não houver nome na {@link UsuarioAiConfig}.
+     */
+    private void sendOutgoingMessage(String to, String message, Long userId, String webhookEvolutionInstanceHint) {
+        String body = jarvisProtocolService.ensureSigned(message);
         String normalizedEvolution = evolutionApiService.normalizeToNumber(to);
-        String instance = usuarioAiConfigRepository.findByUsuarioId(userId)
-            .map(c -> c.getEvolutionInstanceName())
-            .filter(s -> s != null && !s.isBlank())
-            .orElse(null);
-        try {
-            evolutionApiService.enviarMensagem(normalizedEvolution, message, instance);
-        } catch (Exception evolutionError) {
-            log.warn("Falha ao enviar pela Evolution API (instancia={}, fallback Twilio): {}", instance, evolutionError.getMessage());
-            try {
-                twilioWhatsAppService.sendMessage(to, message);
-            } catch (Exception twilioError) {
-                log.error("Falha também no fallback Twilio: {}", twilioError.getMessage(), twilioError);
-            }
+        String instance = resolveEvolutionInstanceForSend(userId, webhookEvolutionInstanceHint);
+        boolean evolutionOk = evolutionApiService.enviarMensagem(normalizedEvolution, body, instance);
+        if (evolutionOk) {
+            rememberOutgoingText(to, body);
+            return;
         }
+        log.warn("[J.A.R.V.I.S. Offline] Evolution API não enviou a mensagem (instância={}); tentando Twilio como fallback.", instance);
+        try {
+            twilioWhatsAppService.sendMessage(to, body);
+            rememberOutgoingText(to, body);
+        } catch (Exception twilioError) {
+            log.error("[J.A.R.V.I.S. Offline] Falha também no fallback Twilio: {}", twilioError.getMessage(), twilioError);
+        }
+    }
+
+    private String resolveEvolutionInstanceForSend(Long userId, String webhookEvolutionInstanceHint) {
+        String fromDb = usuarioAiConfigRepository.findByUsuarioId(userId)
+            .map(UsuarioAiConfig::getEvolutionInstanceName)
+            .filter(s -> s != null && !s.isBlank())
+            .map(String::trim)
+            .orElse(null);
+        if (fromDb != null && !fromDb.isEmpty()) {
+            return fromDb;
+        }
+        if (webhookEvolutionInstanceHint != null && !webhookEvolutionInstanceHint.isBlank()) {
+            return webhookEvolutionInstanceHint.trim();
+        }
+        return null;
+    }
+
+    private void rememberOutgoingText(String to, String message) {
+        String key = outgoingEchoKey(to, message);
+        if (!key.isBlank()) {
+            recentOutgoingTexts.put(key, LocalDateTime.now());
+        }
+        pruneRecentOutgoingTexts();
+    }
+
+    private boolean isRecentOutgoingEcho(String from, String text) {
+        String key = outgoingEchoKey(from, text);
+        if (key.isBlank()) {
+            return false;
+        }
+        pruneRecentOutgoingTexts();
+        LocalDateTime sentAt = recentOutgoingTexts.get(key);
+        return sentAt != null && sentAt.isAfter(LocalDateTime.now().minusMinutes(5));
+    }
+
+    private String outgoingEchoKey(String jidOrNumber, String text) {
+        if (jidOrNumber == null || jidOrNumber.isBlank() || text == null || text.isBlank()) {
+            return "";
+        }
+        return evolutionApiService.normalizeToNumber(jidOrNumber) + "|" + normalize(text).replaceAll("\\s+", " ").trim();
+    }
+
+    private void pruneRecentOutgoingTexts() {
+        if (recentOutgoingTexts.size() <= 100) {
+            return;
+        }
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(10);
+        recentOutgoingTexts.entrySet().removeIf(e -> e.getValue().isBefore(cutoff));
     }
 
     private String normalize(String text) {
@@ -1192,7 +1557,7 @@ public class WhatsAppCommandService {
                         "Activado. No *dia de pagamento* (manhã, horário de Brasília) registo uma *receita confirmada* "
                             + "com o teu salário líquido, *uma vez por mês* — o saldo do dashboard soma receitas e despesas *confirmadas*."));
                 } catch (Exception e) {
-                    return Optional.of(msgErro("Receita automática", e.getMessage()));
+                    return Optional.of(msgErro(userId, "Receita automática", e.getMessage()));
                 }
             }
             if (isNegativeReply(text)) {
@@ -1226,7 +1591,7 @@ public class WhatsAppCommandService {
                         BRL.format(created.getValor()) + " em *" + created.getDescricao() + "*. Vê no dashboard em *Transações*."));
                 } catch (Exception e) {
                     log.warn("[VISION-LOG] Falha ao salvar transação do cupom: {}", e.getMessage());
-                    return Optional.of(msgErro("Cupom / foto", "Não guardei o lançamento: " + e.getMessage()));
+                    return Optional.of(msgErro(userId, "Cupom / foto", "Não guardei o lançamento: " + e.getMessage()));
                 }
             }
             if (isNegativeReply(text)) {
@@ -1235,6 +1600,47 @@ public class WhatsAppCommandService {
                 return Optional.of(msgInfo("Cupom / foto", "Não guardei o lançamento. Podes enviar outra foto quando quiseres."));
             }
             return Optional.of(msgInfo("Cupom / foto", "Responde *sim* para lançar a despesa do cupom ou *não* para cancelar."));
+        }
+        if (awaitingFaturaImportConfirm.containsKey(userId)) {
+            Long importId = awaitingFaturaImportConfirm.get(userId);
+            if (isAffirmativeSaveReply(text)) {
+                awaitingFaturaImportConfirm.remove(userId);
+                try {
+                    FaturaPdfImportService.ResultadoConfirmacaoFatura resultado =
+                        faturaPdfImportService.confirmarTodosComResumo(userId, importId, false);
+                    return Optional.of(msgOk("Fatura importada",
+                        faturaPdfImportService.mensagemResumoImportacao(resultado)
+                            + " O cartão e o dashboard foram atualizados."));
+                } catch (Exception e) {
+                    return Optional.of(msgErro(userId, "Importação de fatura", "Não consegui confirmar: " + e.getMessage()));
+                }
+            }
+            if (isNegativeReply(text)) {
+                awaitingFaturaImportConfirm.remove(userId);
+                return Optional.of(msgInfo("Importação pendente",
+                    "Não adicionei os lançamentos agora. A importação segue disponível no Dashboard em *Importações Pendentes*."));
+            }
+            return Optional.of(msgInfo("Importação de fatura", "Responde *sim* para adicionar todos os lançamentos ou *não* para deixar pendente."));
+        }
+        if (awaitingContrachequeImportConfirm.containsKey(userId)) {
+            Long importId = awaitingContrachequeImportConfirm.get(userId);
+            if (isAffirmativeSaveReply(text)) {
+                awaitingContrachequeImportConfirm.remove(userId);
+                try {
+                    ContrachequeDTO c = contrachequeImportService.confirmar(userId, importId);
+                    return Optional.of(msgOk("Contracheque confirmado",
+                        "Atualizei sua renda para líquido *" + BRL.format(c.getSalarioLiquido())
+                            + "* e lancei a receita na categoria *Salário*. Seu Score ganhou pontos por importação consistente."));
+                } catch (Exception e) {
+                    return Optional.of(msgErro(userId, "Contracheque", "Não consegui confirmar: " + e.getMessage()));
+                }
+            }
+            if (isNegativeReply(text)) {
+                awaitingContrachequeImportConfirm.remove(userId);
+                return Optional.of(msgInfo("Contracheque pendente",
+                    "Não atualizei a renda agora. O contracheque segue disponível no histórico de renda para conferência."));
+            }
+            return Optional.of(msgInfo("Contracheque", "Responde *sim* para atualizar renda e lançar receita ou *não* para deixar pendente."));
         }
         if (awaitingSaveConfirm.containsKey(userId)) {
             if (isAffirmativeSaveReply(text)) {
@@ -1248,7 +1654,7 @@ public class WhatsAppCommandService {
                     return Optional.of(base);
                 } catch (Exception e) {
                     log.warn("[META-LOG] Falha ao salvar meta: {}", e.getMessage());
-                    return Optional.of(msgErro("Meta", "Não consegui guardar: " + e.getMessage()));
+                    return Optional.of(msgErro(userId, "Meta", "Não consegui guardar: " + e.getMessage()));
                 }
             }
             if (isNegativeReply(text)) {
@@ -1260,7 +1666,7 @@ public class WhatsAppCommandService {
         if (awaitingIncome.containsKey(userId)) {
             BigDecimal informada = parseSingleMoneyValue(text);
             if (informada == null || informada.compareTo(BigDecimal.ZERO) <= 0) {
-                return Optional.of(msgErro("Renda para a meta", "Não percebi o valor. Envia só o número (ex.: *5000* ou *3500,50*)."));
+                return Optional.of(msgErro(userId, "Renda para a meta", "Não percebi o valor. Envia só o número (ex.: *5000* ou *3500,50*)."));
             }
             MetaDraft draft = awaitingIncome.remove(userId);
             draft.rendaUsada = informada;
@@ -1301,7 +1707,7 @@ public class WhatsAppCommandService {
         BigDecimal pct = readPercentualMeta(cmd);
         String description = cmd.path("description").asText("Meta via WhatsApp");
         if (pct == null || pct.compareTo(BigDecimal.ZERO) <= 0 || pct.compareTo(new BigDecimal("100")) > 0) {
-            return msgErro("Simulação de meta", "Indica o *percentual da renda* (entre 1 e 100). Ex.: *10* para 10%.");
+            return msgErro(userId, "Simulação de meta", "Indica o *percentual da renda* (entre 1 e 100). Ex.: *10* para 10%.");
         }
         MetaDraft draft = new MetaDraft();
         draft.descricao = sanitizeDescription(description);
@@ -1325,7 +1731,7 @@ public class WhatsAppCommandService {
     private String buildMetaSimulationMessage(Long userId, MetaDraft d) {
         BigDecimal poupado = metaFinanceiraService.calcularValorPoupadoMensal(d.rendaUsada, d.percentualComprometimento);
         if (poupado.compareTo(BigDecimal.ZERO) <= 0) {
-            return msgErro("Simulação de meta",
+            return msgErro(userId, "Simulação de meta",
                 "Com esse percentual a poupança mensal dá zero ou negativa. Aumenta o % da renda e tenta de novo.");
         }
         BigDecimal prazo = metaFinanceiraService.calcularPrazoMeses(d.valorTotal, poupado);

@@ -1,0 +1,104 @@
+.familia-page {
+  display: grid;
+  gap: 18px;
+}
+
+.hero,
+.panel {
+  border-radius: 20px;
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: #111827;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #111827, #1f2937);
+}
+
+.hero p {
+  margin: 0 0 4px;
+  color: #93c5fd;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 12px;
+}
+
+.hero h1,
+.panel h2 {
+  margin: 0 0 8px;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.form-row mat-form-field {
+  min-width: 220px;
+}
+
+.members {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.members span {
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, .14);
+}
+
+.members span.pending {
+  background: rgba(245, 158, 11, .14);
+}
+
+.invite,
+.budget-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.invite-link {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, .12);
+}
+
+.invite-link img {
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+}
+
+.invite-link code {
+  display: block;
+  margin: 6px 0;
+  color: #93c5fd;
+  word-break: break-all;
+}
+
+.budget {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.empty,
+.budget small {
+  color: #9ca3af;
+}

@@ -1,10 +1,10 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.model.Transacao;
-import com.consumoesperto.model.WhatsAppLembretePendencia;
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.model.WhatsAppLembretePendencia;
 import com.consumoesperto.repository.TransacaoRepository;
-import com.consumoesperto.repository.UsuarioAiConfigRepository;
+import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.repository.WhatsAppLembretePendenciaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,8 +25,9 @@ public class NotificacaoService {
 
     private final TransacaoRepository transacaoRepository;
     private final WhatsAppLembretePendenciaRepository lembretePendenciaRepository;
-    private final EvolutionApiService evolutionApiService;
-    private final UsuarioAiConfigRepository usuarioAiConfigRepository;
+    private final WhatsAppNotificationService whatsAppNotificationService;
+    private final JarvisProtocolService jarvisProtocolService;
+    private final UsuarioRepository usuarioRepository;
 
     @Scheduled(cron = "0 0 10 * * *", zone = "America/Sao_Paulo")
     @Transactional
@@ -54,35 +55,26 @@ public class NotificacaoService {
                 continue;
             }
             int x = e.getValue().size();
-            String to = formatarToWhatsapp(whatsapp);
-            String msg = "Olá! Notei que você tem " + x
-                + " notas fiscais aguardando confirmação no seu painel. Vamos organizar isso hoje? 📝";
-            try {
-                String inst = usuarioAiConfigRepository.findByUsuarioId(usuario.getId())
-                    .map(c -> c.getEvolutionInstanceName())
-                    .filter(s -> s != null && !s.isBlank())
-                    .orElse(null);
-                evolutionApiService.enviarMensagem(to, msg, inst);
-                LocalDateTime agora = LocalDateTime.now();
-                for (Transacao t : e.getValue()) {
-                    WhatsAppLembretePendencia row = new WhatsAppLembretePendencia();
-                    row.setUsuarioId(usuario.getId());
-                    row.setTransacaoId(t.getId());
-                    row.setTipo(WhatsAppLembretePendencia.TIPO_PENDENCIA_CONFERENCIA);
-                    row.setEnviadoEm(agora);
-                    novosRegistros.add(row);
-                }
-            } catch (Exception ex) {
-                log.warn("Falha ao enviar lembrete WhatsApp para usuário {}: {}", e.getKey(), ex.getMessage());
+            String vocativo = jarvisProtocolService.resolveVocative(usuario.getId(), usuarioRepository);
+            String msg = jarvisProtocolService.proativoLembreteConferenciaNotas(vocativo, x);
+            boolean enviado = whatsAppNotificationService.enviarParaUsuario(usuario.getId(), msg);
+            if (!enviado) {
+                log.warn("[J.A.R.V.I.S. Offline] Lembrete conferência não enviado para usuário {}.", e.getKey());
+                continue;
+            }
+            LocalDateTime agora = LocalDateTime.now();
+            for (Transacao t : e.getValue()) {
+                WhatsAppLembretePendencia row = new WhatsAppLembretePendencia();
+                row.setUsuarioId(usuario.getId());
+                row.setTransacaoId(t.getId());
+                row.setTipo(WhatsAppLembretePendencia.TIPO_PENDENCIA_CONFERENCIA);
+                row.setEnviadoEm(agora);
+                novosRegistros.add(row);
             }
         }
 
         if (!novosRegistros.isEmpty()) {
             lembretePendenciaRepository.saveAll(novosRegistros);
         }
-    }
-
-    private static String formatarToWhatsapp(String stored) {
-        return stored == null ? "" : stored.replace("@s.whatsapp.net", "").replaceAll("[^0-9]", "");
     }
 }

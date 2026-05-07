@@ -7,6 +7,17 @@
  * @author ConsumoEsperto Team
  * @version 1.0
  */
+
+export type PreferenciaTratamentoJarvis =
+  | 'AUTOMATICO'
+  | 'SENHOR'
+  | 'SENHORA'
+  | 'DOUTOR'
+  | 'DOUTORA'
+  | 'NENHUM';
+
+export type GeneroUsuario = 'MALE' | 'FEMALE' | 'UNKNOWN';
+
 export interface Usuario {
   /** ID único do usuário no sistema (gerado automaticamente) */
   id?: number;
@@ -40,7 +51,25 @@ export interface Usuario {
 
   /** Numero de WhatsApp vinculado em formato internacional */
   whatsappNumero?: string;
-  
+
+  /** Preferência de tratamento J.A.R.V.I.S. (perfil / PATCH). */
+  preferenciaTratamentoJarvis?: PreferenciaTratamentoJarvis;
+
+  /** Resumo ex.: "Senhor João" — calculado no servidor. */
+  jarvisTratamentoResumo?: string;
+
+  /** Inferência inicial; confirmação no modal ou perfil. */
+  genero?: GeneroUsuario;
+
+  /** false até confirmar tratamento explícito (não só automático). */
+  generoConfirmado?: boolean;
+
+  /** Rótulo curto persistido no servidor (Senhor, Senhora…). */
+  tratamento?: string;
+
+  /** true após calibragem na app ou escolha explícita de tratamento no perfil. */
+  jarvisConfigurado?: boolean;
+
   /** Endereço residencial completo */
   endereco?: string;
   

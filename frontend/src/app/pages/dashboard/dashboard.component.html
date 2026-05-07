@@ -4,9 +4,16 @@
   <div class="dashboard-header">
     <div class="header-content">
       <h1>Dashboard</h1>
-      <p>Visão geral das suas finanças</p>
+      <p>{{ linhaCabecalhoDashboard }}</p>
     </div>
     <div class="header-actions">
+      <mat-slide-toggle
+        class="simulation-toggle"
+        [(ngModel)]="modoSimulacao"
+        (change)="alternarModoSimulacao()"
+        [disabled]="isLoading || ((isLoading$ | async) === true)">
+        Modo Simulação
+      </mat-slide-toggle>
       <button class="btn btn-success" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading || (isLoading$ | async)">
         <i class="fas fa-sync-alt" [class.fa-spin]="isLoading"></i>
         Atualizar Dados
@@ -49,6 +56,7 @@
           <mat-select formControlName="tipoTransacao">
             <mat-option [value]="tipoTransacaoEnum.DESPESA">Despesa</mat-option>
             <mat-option [value]="tipoTransacaoEnum.RECEITA">Receita</mat-option>
+            <mat-option [value]="tipoTransacaoEnum.INVESTIMENTO">Investimento</mat-option>
           </mat-select>
         </mat-form-field>
         <mat-form-field appearance="outline" class="exec-field exec-field-grow">
@@ -87,6 +95,48 @@
       </div>
     </div>
 
+    <section class="score-health-card" *ngIf="!errorMessage && usuarioScore">
+      <div>
+        <p>Score de Saúde Financeira</p>
+        <h2>{{ usuarioScore.score }}</h2>
+        <span>Faltam {{ usuarioScore.proximoNivelEm }} ponto(s) para o próximo nível</span>
+      </div>
+      <div class="score-badge" [class]="usuarioScore.nivel.toLowerCase()">
+        <i class="fas fa-trophy"></i>
+        {{ usuarioScore.nivel }}
+      </div>
+    </section>
+
+    <section class="yield-opportunity-card" *ngIf="!errorMessage && oportunidadeInvestimento">
+      <div>
+        <p>Oportunidade de Rendimento</p>
+        <h2>{{ oportunidadeInvestimento.melhorOpcao }}</h2>
+        <span>
+          Saldo ocioso {{ formatCurrency(oportunidadeInvestimento.saldoOcioso) }} ·
+          CDB {{ formatCurrency(oportunidadeInvestimento.rendimentoCdb) }} ·
+          Selic {{ formatCurrency(oportunidadeInvestimento.rendimentoTesouroSelic) }}
+        </span>
+      </div>
+      <i class="fas fa-sparkles"></i>
+    </section>
+
+    <section class="insights-feed-card" *ngIf="!errorMessage && insightsFeed.length">
+      <div class="feed-head">
+        <div>
+          <p>Centro de notificações e insights</p>
+          <h3>Feed de Insights</h3>
+        </div>
+        <i class="fas fa-bell"></i>
+      </div>
+      <div class="feed-item" *ngFor="let item of insightsFeed">
+        <i [class]="item.icon"></i>
+        <div>
+          <strong>{{ item.message }}</strong>
+          <span>{{ item.time }}</span>
+        </div>
+      </div>
+    </section>
+
     <!-- Configuração de Renda (dark) -->
     <section class="renda-config-wrap" *ngIf="!errorMessage && rendaConfig">
       <div class="renda-config-card">
@@ -115,6 +165,29 @@
             </li>
           </ul>
         </div>
+
+  <button class="ai-chat-toggle" (click)="chatAberto = !chatAberto" *ngIf="!isLoading">
+    <i class="fas fa-robot"></i>
+  </button>
+
+  <section class="ai-chat-panel" *ngIf="chatAberto && !isLoading">
+    <header>
+      <strong>J.A.R.V.I.S.</strong>
+      <button type="button" (click)="chatAberto = false"><i class="fas fa-times"></i></button>
+    </header>
+    <div class="chat-body">
+      <div class="chat-msg" *ngFor="let msg of chatHistorico" [class.user]="msg.autor === 'user'">
+        {{ msg.texto }}
+      </div>
+      <div class="chat-msg" *ngIf="chatCarregando">Consultando os sistemas…</div>
+    </div>
+    <form class="chat-form" (ngSubmit)="enviarChatIa()">
+      <input name="chatMensagem" [(ngModel)]="chatMensagem" placeholder="Como vou fechar o mês?">
+      <button type="submit" [disabled]="chatCarregando || !chatMensagem.trim()">
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </form>
+  </section>
       </div>
     </section>
 
@@ -137,22 +210,30 @@
 
     <!-- Gráficos e Estatísticas -->
     <div class="dashboard-charts" *ngIf="!errorMessage">
-      <!-- Gráfico de Gastos Mensais -->
+      <!-- Gráfico de Saldo Real x Projetado -->
       <div class="chart-card">
         <div class="chart-header">
-          <h3>Gastos Mensais</h3>
+          <h3>Saldo Real x Projetado</h3>
           <div class="chart-legend" *ngIf="spendingLineChartData.labels?.length">
             <span class="legend-item">
               <span class="legend-color" style="background-color: #10b981"></span>
-              Gastos
+              Real
+            </span>
+            <span class="legend-item">
+              <span class="legend-color" style="background-color: #38bdf8"></span>
+              Projetado
+            </span>
+            <span class="legend-item" *ngIf="modoSimulacao && (dashboardProjection?.simulacoesAtivas?.length || 0) > 0">
+              <span class="legend-color" style="background-color: #f59e0b"></span>
+              Simulado
             </span>
           </div>
         </div>
         <div class="chart-container">
           <div class="chart-placeholder" *ngIf="!spendingLineChartData.labels?.length">
             <i class="fas fa-chart-line"></i>
-            <p>Nenhum gasto registrado</p>
-            <small>Adicione transações para ver o gráfico</small>
+            <p>Nenhuma projeção disponível</p>
+            <small>Adicione transações para ver saldo real e projetado</small>
           </div>
           <div class="chart-content" *ngIf="spendingLineChartData.labels?.length">
             <canvas
@@ -193,6 +274,31 @@
         </div>
       </div>
     </div>
+
+    <section class="impact-timeline" *ngIf="!errorMessage && timelineImpacto.length">
+      <div class="timeline-header">
+        <h3>Timeline de Impacto</h3>
+        <p>Como as simulações ativas afetam suas metas.</p>
+      </div>
+      <div class="timeline-items">
+        <div class="timeline-item" *ngFor="let item of timelineImpacto">
+          <div class="timeline-icon">
+            <i [class]="'fas fa-' + item.icone"></i>
+          </div>
+          <div class="timeline-body">
+            <strong>{{ item.titulo }}</strong>
+            <span>
+              {{ item.mesesOriginais }} meses
+              <i class="fas fa-arrow-right"></i>
+              {{ item.mesesProjetados }} meses
+            </span>
+          </div>
+          <div class="timeline-badge" [class.delayed]="item.deslocamentoMeses > 0">
+            {{ item.deslocamentoMeses > 0 ? '+' + item.deslocamentoMeses + ' mês(es)' : 'sem atraso' }}
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- Estatísticas Detalhadas -->
     <div class="dashboard-stats">
@@ -368,4 +474,34 @@
     <mat-spinner *ngIf="isSilentRefreshing" diameter="14" class="live-footer-spinner"></mat-spinner>
     <span class="live-footer-text">Atualizado em: {{ ultimaAtualizacao | date:'HH:mm' }}</span>
   </footer>
+</div>
+
+<div class="jarvis-wizard-overlay" *ngIf="showJarvisTratamentoWizard" role="dialog" aria-modal="true" aria-labelledby="jarvis-wizard-title">
+  <div class="jarvis-wizard-modal">
+    <div class="jarvis-wizard-header">
+      <span class="jarvis-wizard-brand">J.A.R.V.I.S.</span>
+    </div>
+    <p id="jarvis-wizard-title" class="jarvis-wizard-text">
+      Identifiquei um novo acesso aos sistemas, Senhor(a). Para calibrar meus protocolos de tratamento, como devo me referir a você?
+    </p>
+    <div class="jarvis-wizard-preview">
+      <span class="preview-label">Pré-visualização</span>
+      <span class="preview-value">{{ linhaPreviewJarvisWizard }}</span>
+    </div>
+    <div class="jarvis-wizard-actions">
+      <button
+        type="button"
+        class="jarvis-opt"
+        *ngFor="let opt of opcoesTratamentoWizard"
+        [class.highlight]="jarvisWizardPreviewPref === opt.value"
+        [disabled]="salvarTratamentoEmAndamento"
+        (mouseenter)="onHoverOpcaoWizard(opt.value)"
+        (focus)="onHoverOpcaoWizard(opt.value)"
+        (click)="confirmarTratamentoJarvis(opt.value)"
+      >
+        {{ opt.label }}
+      </button>
+    </div>
+    <p class="jarvis-wizard-note" *ngIf="salvarTratamentoEmAndamento"><i class="fas fa-spinner fa-spin"></i> Sincronizando protocolos…</p>
+  </div>
 </div>

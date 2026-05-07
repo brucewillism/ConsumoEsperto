@@ -35,6 +35,10 @@ public class AiProvidersConfigService {
     @Value("${consumoesperto.ai.platform-groq-api-key:}")
     private String platformGroqApiKey;
 
+    /** Chave OpenAI/GitHub Models mestra (servidor). Usada só quando o utilizador não tem chave na BD. */
+    @Value("${consumoesperto.ai.platform-openai-api-key:}")
+    private String platformOpenaiApiKey;
+
     /**
      * Preenche a chave Groq em memória: prioridade à chave do utilizador; se vazia, usa a mestra do servidor.
      */
@@ -59,6 +63,28 @@ public class AiProvidersConfigService {
             return;
         }
         g.setApiKey(platformGroqApiKey.trim());
+    }
+
+    /**
+     * Preenche a chave OpenAI/GitHub Models em memória: prioridade à chave do utilizador;
+     * se vazia, usa a mestra do servidor.
+     */
+    public void applyOpenaiMasterFallback(AiProvidersConfig cfg) {
+        if (cfg == null) {
+            return;
+        }
+        OpenaiSection o = cfg.getOpenai();
+        if (o == null) {
+            o = defaultOpenai();
+            cfg.setOpenai(o);
+        }
+        if (meaningful(o.getApiKey())) {
+            return;
+        }
+        if (platformOpenaiApiKey == null || platformOpenaiApiKey.isBlank()) {
+            return;
+        }
+        o.setApiKey(platformOpenaiApiKey.trim());
     }
 
     @Transactional(readOnly = true)
@@ -154,9 +180,9 @@ public class AiProvidersConfigService {
         c.setOllamaBaseUrl(l.getBaseUrl());
         c.setOllamaModel(l.getModel());
         try {
-            c.setProviderOrderJson(objectMapper.writeValueAsString(List.of("GROQ", "OPENAI", "OLLAMA")));
+            c.setProviderOrderJson(objectMapper.writeValueAsString(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA")));
         } catch (Exception e) {
-            c.setProviderOrderJson("[\"GROQ\",\"OPENAI\",\"OLLAMA\"]");
+            c.setProviderOrderJson("[\"GROQ\",\"GEMINI\",\"OPENAI\",\"OLLAMA\"]");
         }
     }
 
@@ -242,13 +268,13 @@ public class AiProvidersConfigService {
 
     private List<String> readProviderOrder(String json) {
         if (json == null || json.isBlank()) {
-            return new ArrayList<>(List.of("GROQ", "OPENAI", "OLLAMA"));
+            return new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA"));
         }
         try {
             List<String> list = objectMapper.readValue(json, new TypeReference<>() { });
-            return list != null && !list.isEmpty() ? new ArrayList<>(list) : new ArrayList<>(List.of("GROQ", "OPENAI", "OLLAMA"));
+            return list != null && !list.isEmpty() ? new ArrayList<>(list) : new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA"));
         } catch (Exception e) {
-            return new ArrayList<>(List.of("GROQ", "OPENAI", "OLLAMA"));
+            return new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA"));
         }
     }
 
@@ -288,7 +314,7 @@ public class AiProvidersConfigService {
 
     private static AiProvidersConfig normalize(AiProvidersConfig c) {
         if (c.getProviderOrder() == null || c.getProviderOrder().isEmpty()) {
-            c.setProviderOrder(new ArrayList<>(List.of("GROQ", "OPENAI", "OLLAMA")));
+            c.setProviderOrder(new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA")));
         }
         if (c.getGroq() == null) {
             c.setGroq(defaultGroq());
@@ -304,7 +330,7 @@ public class AiProvidersConfigService {
 
     private static AiProvidersConfig defaults() {
         AiProvidersConfig c = new AiProvidersConfig();
-        c.setProviderOrder(new ArrayList<>(List.of("GROQ", "OPENAI", "OLLAMA")));
+        c.setProviderOrder(new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA")));
         c.setGroq(defaultGroq());
         c.setOpenai(defaultOpenai());
         c.setOllama(defaultOllama());
@@ -352,7 +378,7 @@ public class AiProvidersConfigService {
     }
 
     public static class AiProvidersConfig {
-        private List<String> providerOrder = new ArrayList<>(List.of("GROQ", "OPENAI", "OLLAMA"));
+        private List<String> providerOrder = new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA"));
         /** Nome da instância Evolution vinculada a este usuário (webhook). */
         private String evolutionInstanceName;
         private String whatsappOwnerPhone;

@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { BaseChartDirective } from 'ng2-charts';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -12,11 +12,20 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { TransacaoService } from '../../services/transacao.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { RelatorioService } from '../../services/relatorio.service';
 import { RendaConfigService, RendaConfigDto } from '../../services/renda-config.service';
 import { CategoriaService } from '../../services/categoria.service';
+import { DashboardProjection, OportunidadeInvestimento, ProjecaoDashboardService, TimelineImpacto } from '../../services/projecao-dashboard.service';
+import { ScoreService, UsuarioScore } from '../../services/score.service';
+import { InboxNotification, NotificacaoInboxService } from '../../services/notificacao-inbox.service';
+import { IaChatService } from '../../services/ia-chat.service';
+import { AuthService } from '../../services/auth.service';
+import { UsuarioService } from '../../services/usuario.service';
+import { PreferenciaTratamentoJarvis, Usuario } from '../../models/usuario.model';
+import { HttpErrorResponse } from '@angular/common/http';
 import { DateFormatPipe } from '../../pipes/date-format.pipe';
 import { forkJoin, catchError, of, fromEvent, timer, Subscription, filter } from 'rxjs';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
@@ -94,6 +103,7 @@ interface ChartData {
     RouterLink,
     DateFormatPipe,
     BaseChartDirective,
+    FormsModule,
     ReactiveFormsModule,
     MatFormFieldModule,
     MatInputModule,
@@ -102,7 +112,8 @@ interface ChartData {
     MatSnackBarModule,
     MatProgressSpinnerModule,
     MatIconModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatSlideToggleModule
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
@@ -223,6 +234,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
   cartoesFormulario: CartaoCredito[] = [];
   salvandoQuickTransacao = false;
   readonly tipoTransacaoEnum = TipoTransacao;
+  modoSimulacao = false;
+  dashboardProjection: DashboardProjection | null = null;
+  timelineImpacto: TimelineImpacto[] = [];
+  usuarioScore: UsuarioScore | null = null;
+  oportunidadeInvestimento: OportunidadeInvestimento | null = null;
+  insightsFeed: InboxNotification[] = [];
+  chatAberto = false;
+  chatMensagem = '';
+  chatCarregando = false;
+  chatHistorico: { autor: 'user' | 'ia'; texto: string }[] = [
+    { autor: 'ia', texto: 'Olá! Pergunte “Como vou fechar o mês?” ou “Onde invisto meu saldo?”.' }
+  ];
+
+  userPerfilJarvis: Usuario | null = null;
+  showJarvisTratamentoWizard = false;
+  /** Só avalia o wizard após GET /perfil (evita localStorage antigo sem jarvisConfigurado). */
+  private jarvisPerfilSincronizado = false;
+  jarvisWizardPreviewPref: PreferenciaTratamentoJarvis = 'SENHOR';
+  salvarTratamentoEmAndamento = false;
+  readonly opcoesTratamentoWizard: { value: PreferenciaTratamentoJarvis; label: string }[] = [
+    { value: 'SENHOR', label: 'Senhor' },
+    { value: 'SENHORA', label: 'Senhora' },
+    { value: 'DOUTOR', label: 'Doutor' },
+    { value: 'DOUTORA', label: 'Doutora' },
+    { value: 'NENHUM', label: 'Apenas meu nome' },
+  ];
 
   constructor(
     private transacaoService: TransacaoService,
@@ -232,6 +269,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private loadingService: LoadingService,
     private financaAlteracao: FinancaAlteracaoService,
     private categoriaService: CategoriaService,
+    private projecaoDashboardService: ProjecaoDashboardService,
+    private scoreService: ScoreService,
+    private notificacaoInbox: NotificacaoInboxService,
+    private iaChatService: IaChatService,
+    private authService: AuthService,
+    private usuarioService: UsuarioService,
     private fb: FormBuilder,
     private snackBar: MatSnackBar
   ) {
@@ -258,6 +301,25 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   ngOnInit() {
     console.log('🚀 Dashboard inicializando...');
+    this.authService.currentUser$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((u) => {
+        this.userPerfilJarvis = u;
+        if (this.jarvisPerfilSincronizado) {
+          this.avaliarWizardJarvis(u);
+        }
+      });
+    this.authService.reloadCurrentUserProfile().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.jarvisPerfilSincronizado = true;
+        this.avaliarWizardJarvis(this.authService.getCurrentUser());
+      },
+      error: () => {
+        this.jarvisPerfilSincronizado = true;
+        this.avaliarWizardJarvis(this.authService.getCurrentUser());
+      },
+    });
+    this.carregarInsightsFeed();
     this.quickTransacaoForm.get('tipoTransacao')?.valueChanges.subscribe((tipo) => {
       if (tipo === TipoTransacao.RECEITA) {
         this.quickTransacaoForm.patchValue({ cartaoCreditoId: '' }, { emitEvent: false });
@@ -282,6 +344,31 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.pollingSubscription = timer(60000, 60000)
       .pipe(filter(() => document.visibilityState === 'visible'))
       .subscribe(() => this.loadDashboardData({ silent: true }));
+  }
+
+  carregarInsightsFeed(): void {
+    this.notificacaoInbox.loadInbox().subscribe((items) => {
+      this.insightsFeed = items.slice(0, 5);
+    });
+  }
+
+  enviarChatIa(): void {
+    const mensagem = this.chatMensagem.trim();
+    if (!mensagem || this.chatCarregando) return;
+    this.chatHistorico.push({ autor: 'user', texto: mensagem });
+    this.chatMensagem = '';
+    this.chatCarregando = true;
+    this.iaChatService.perguntar(mensagem).subscribe({
+      next: (res) => {
+        this.chatHistorico.push({ autor: 'ia', texto: res.resposta || 'Os sistemas não devolveram texto neste momento, Senhor.' });
+        this.chatCarregando = false;
+        this.loadDashboardData({ silent: true });
+      },
+      error: () => {
+        this.chatHistorico.push({ autor: 'ia', texto: 'J.A.R.V.I.S. indisponível no momento. Verifique a conexão com o servidor.' });
+        this.chatCarregando = false;
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -423,6 +510,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const bruto = rawRenda != null ? Number(rawRenda.salarioBruto) : 0;
     this.rendaConfig = rawRenda != null && bruto > 0 ? rawRenda : null;
     this.syncRendaDoughnut();
+    this.usuarioScore = data.usuarioScore || null;
+    this.oportunidadeInvestimento = data.oportunidadeInvestimento || null;
     
     // Cartões: totais a partir da lista (limite utilizado = soma na fatura aberta; nunca mistura com saldo em conta)
     const cartoesList = data.cartoes || [];
@@ -469,6 +558,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     
     // Atualiza gráficos com dados reais
     this.atualizarGraficosComDadosReais(transacoesMes);
+    this.dashboardProjection = data.dashboardProjection || null;
+    this.timelineImpacto = this.dashboardProjection?.timelineImpacto || [];
+    this.syncSpendingLineChart();
     this.atualizarDoughnutComRelatorio(data.despesasCategoriaMesAtual);
     
     console.log('✅ Dados processados:', {
@@ -603,6 +695,49 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private syncSpendingLineChart(): void {
+    if (this.dashboardProjection?.labels?.length) {
+      const datasets: ChartConfiguration<'line'>['data']['datasets'] = [
+        {
+          label: 'Real',
+          data: this.dashboardProjection.real,
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.12)',
+          fill: false,
+          tension: 0.35,
+          pointBackgroundColor: '#10b981',
+          borderWidth: 2
+        },
+        {
+          label: 'Projetado',
+          data: this.dashboardProjection.projetado,
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56, 189, 248, 0.10)',
+          fill: false,
+          tension: 0.35,
+          pointBackgroundColor: '#38bdf8',
+          borderWidth: 2,
+          borderDash: [6, 4]
+        }
+      ];
+      if (this.modoSimulacao && (this.dashboardProjection.simulacoesAtivas?.length || 0) > 0) {
+        datasets.push({
+          label: 'Simulado',
+          data: this.dashboardProjection.simulado,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.10)',
+          fill: false,
+          tension: 0.35,
+          pointBackgroundColor: '#f59e0b',
+          borderWidth: 2,
+          borderDash: [2, 5]
+        });
+      }
+      this.spendingLineChartData = {
+        labels: [...this.dashboardProjection.labels],
+        datasets
+      };
+      return;
+    }
     const sc = this.spendingChartData;
     if (!sc?.labels?.length || !sc.datasets?.[0]?.data?.length) {
       this.spendingLineChartData = { labels: [], datasets: [] };
@@ -864,6 +999,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       ),
       rendaConfig: this.rendaConfigService.obter().pipe(
         catchError(() => of(null))
+      ),
+      dashboardProjection: this.projecaoDashboardService.dashboard().pipe(
+        catchError(() => of(null))
+      ),
+      usuarioScore: this.scoreService.obter().pipe(
+        catchError(() => of(null))
+      ),
+      oportunidadeInvestimento: this.projecaoDashboardService.oportunidadeInvestimento().pipe(
+        catchError(() => of(null))
       )
     }).subscribe({
       next: (data) => {
@@ -898,5 +1042,101 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return 0;
     }
     return (this.totalSpent / total) * 100;
+  }
+
+  alternarModoSimulacao(): void {
+    this.projecaoDashboardService.definirSimulacoesAtivas(this.modoSimulacao).subscribe({
+      next: () => {
+        this.projecaoDashboardService.dashboard().subscribe((p) => {
+          this.dashboardProjection = p;
+          this.timelineImpacto = p.timelineImpacto || [];
+          this.syncSpendingLineChart();
+        });
+      },
+      error: () => {
+        this.modoSimulacao = !this.modoSimulacao;
+        this.snackBar.open('Não foi possível atualizar o modo simulação.', 'Fechar', { duration: 3000 });
+      }
+    });
+  }
+
+  get linhaCabecalhoDashboard(): string {
+    const u = this.userPerfilJarvis;
+    if (u?.jarvisConfigurado === true && u.jarvisTratamentoResumo?.trim()) {
+      return `Bem-vindo de volta, ${u.jarvisTratamentoResumo}.`;
+    }
+    return 'Visão geral das suas finanças';
+  }
+
+  private avaliarWizardJarvis(user: Usuario | null): void {
+    if (!user?.id) {
+      this.showJarvisTratamentoWizard = false;
+      return;
+    }
+    if (user.jarvisConfigurado === true) {
+      this.showJarvisTratamentoWizard = false;
+      return;
+    }
+    this.showJarvisTratamentoWizard = true;
+    this.jarvisWizardPreviewPref = this.inferDefaultSelecaoTratamento(user);
+  }
+
+  private inferDefaultSelecaoTratamento(user: Usuario): PreferenciaTratamentoJarvis {
+    const p = user.preferenciaTratamentoJarvis;
+    if (p && p !== 'AUTOMATICO') {
+      return p;
+    }
+    if (user.genero === 'MALE') return 'SENHOR';
+    if (user.genero === 'FEMALE') return 'SENHORA';
+    return 'NENHUM';
+  }
+
+  previewJarvisTratamento(p: PreferenciaTratamentoJarvis): string {
+    const u = this.userPerfilJarvis ?? this.authService.getCurrentUser();
+    const n = u?.nome?.trim();
+    const pn = n ? (n.split(/\s+/)[0] || '') : '';
+    switch (p) {
+      case 'NENHUM':
+        return pn || 'você';
+      case 'SENHOR':
+        return pn ? `Senhor ${pn}` : 'Senhor';
+      case 'SENHORA':
+        return pn ? `Senhora ${pn}` : 'Senhora';
+      case 'DOUTOR':
+        return pn ? `Doutor ${pn}` : 'Doutor';
+      case 'DOUTORA':
+        return pn ? `Doutora ${pn}` : 'Doutora';
+      default:
+        return u?.jarvisTratamentoResumo || '—';
+    }
+  }
+
+  onHoverOpcaoWizard(p: PreferenciaTratamentoJarvis): void {
+    this.jarvisWizardPreviewPref = p;
+  }
+
+  get linhaPreviewJarvisWizard(): string {
+    return this.previewJarvisTratamento(this.jarvisWizardPreviewPref);
+  }
+
+  confirmarTratamentoJarvis(pref: PreferenciaTratamentoJarvis): void {
+    if (this.salvarTratamentoEmAndamento) return;
+    this.salvarTratamentoEmAndamento = true;
+    this.usuarioService.patchPerfilJarvis(pref).subscribe({
+      next: (dto) => {
+        this.authService.applyPerfilResponse(dto);
+        this.userPerfilJarvis = dto;
+        this.showJarvisTratamentoWizard = false;
+        this.salvarTratamentoEmAndamento = false;
+      },
+      error: (err: HttpErrorResponse) => {
+        this.salvarTratamentoEmAndamento = false;
+        let msg =
+          err.status === 0
+            ? 'Sem ligação à API. Verifique se o backend está ligado e se environment.apiUrl usa a mesma porta (ex.: 8080).'
+            : 'Não foi possível salvar o protocolo J.A.R.V.I.S.';
+        this.snackBar.open(msg, 'Fechar', { duration: 5000 });
+      },
+    });
   }
 }

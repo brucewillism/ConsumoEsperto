@@ -19,6 +19,20 @@ export interface RendaConfigDto {
   receitaAutomaticaAtiva: boolean;
 }
 
+export interface ContrachequeDto {
+  id: number;
+  empresa: string;
+  mes: number;
+  ano: number;
+  salarioBruto: number;
+  salarioLiquido: number;
+  totalDescontos: number;
+  descontos: DescontoFixoDto[];
+  insights: string[];
+  status: string;
+  dataCriacao: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class RendaConfigService {
   private readonly apiUrl = `${environment.apiUrl}/renda-config`;
@@ -38,5 +52,22 @@ export class RendaConfigService {
 
   obter(): Observable<RendaConfigDto> {
     return this.http.get<RendaConfigDto>(this.apiUrl, { headers: this.headers() });
+  }
+
+  historicoContracheques(): Observable<ContrachequeDto[]> {
+    return this.http.get<ContrachequeDto[]>(`${this.apiUrl}/contracheques`, { headers: this.headers() });
+  }
+
+  confirmarContracheque(id: number): Observable<ContrachequeDto> {
+    return this.http.post<ContrachequeDto>(`${this.apiUrl}/contracheques/${id}/confirmar`, {}, { headers: this.headers() });
+  }
+
+  uploadContracheque(file: File): Observable<ContrachequeDto> {
+    const form = new FormData();
+    form.append('file', file);
+    const token = this.authService.getToken();
+    return this.http.post<ContrachequeDto>(`${this.apiUrl}/contracheques/upload`, form, {
+      headers: new HttpHeaders({ Authorization: `Bearer ${token}` })
+    });
   }
 }

@@ -69,10 +69,16 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
       
       const isHandledByComponent =
         request.url.includes('/usuarios/perfil') ||
+        request.url.includes('/usuarios/perfil-jarvis') ||
+        request.url.includes('/usuarios/preferencia-tratamento') ||
         request.url.includes('/usuarios/whatsapp/vincular') ||
         request.url.includes('/usuarios/whatsapp/desvincular') ||
         request.url.includes('/auth/google') ||
-        request.url.includes('/notificacoes');
+        request.url.includes('/notificacoes') ||
+        request.url.includes('/relatorios/alertas') ||
+        request.url.includes('/projecoes') ||
+        request.url.includes('/renda-config') ||
+        request.url.includes('/score');
 
       if (error.status !== 401 && !isHandledByComponent) {
         toastService.error('Erro na operação. Tente novamente.');

@@ -108,16 +108,21 @@ export class FaturaService {
 
   // Métodos auxiliares de conversão
   private converterParaDTO(fatura: Fatura): FaturaDTO {
+    const cartaoId =
+      fatura.cartaoCreditoId ??
+      (fatura.cardId != null && String(fatura.cardId).trim() !== ''
+        ? Number(fatura.cardId)
+        : undefined);
     return {
       id: fatura.id,
       valorFatura: fatura.valorFatura || fatura.valor || 0,
-      valorPago: fatura.valorPago || 0,
+      valorPago: fatura.valorPago ?? 0,
       dataVencimento: fatura.dataVencimento || fatura.dueDate,
       dataFechamento: fatura.dataFechamento || fatura.closingDate,
       dataPagamento: fatura.dataPagamento,
       statusFatura: fatura.statusFatura || this.converterStatus(fatura.status),
       numeroFatura: fatura.numeroFatura,
-      cartaoCreditoId: fatura.cartaoCreditoId,
+      cartaoCreditoId: cartaoId,
       nomeCartao: fatura.bankName,
       banco: fatura.bankName,
       dataCriacao: fatura.dataCriacao,
@@ -128,7 +133,8 @@ export class FaturaService {
   private converterParaModelo(dto: FaturaDTO): Fatura {
     return {
       id: dto.id,
-      valorFatura: dto.valorFatura,
+      valorFatura: dto.valorFatura ?? dto.valorTotal ?? 0,
+      valorTotal: dto.valorTotal,
       valorPago: dto.valorPago,
       dataVencimento: dto.dataVencimento,
       dataFechamento: dto.dataFechamento,
@@ -141,11 +147,12 @@ export class FaturaService {
       bankName: dto.banco || dto.nomeCartao || 'Banco',
       
       // Propriedades de compatibilidade
-      valor: dto.valorFatura,
+      valor: dto.valorFatura ?? dto.valorTotal ?? 0,
       status: dto.statusFatura,
       dueDate: dto.dataVencimento,
       closingDate: dto.dataFechamento,
-      amount: dto.valorFatura
+      amount: dto.valorFatura ?? dto.valorTotal ?? 0,
+      transactions: dto.transacoes || []
     };
   }
 
@@ -153,8 +160,9 @@ export class FaturaService {
     return {
       id: fatura.id?.toString() || '',
       cardId: fatura.cartaoCreditoId?.toString() || '',
+      numeroFatura: fatura.numeroFatura,
       bankName: fatura.bankName || fatura.nomeCartao || fatura.banco || 'Banco',
-      amount: fatura.valorFatura || fatura.valor || 0,
+      amount: fatura.valorFatura ?? fatura.valorTotal ?? fatura.valor ?? 0,
       dueDate: fatura.dataVencimento || fatura.dueDate || new Date(),
       closingDate: fatura.dataFechamento || fatura.closingDate || new Date(),
       status: this.converterStatusParaCreditCard(fatura.statusFatura || fatura.status),
@@ -164,11 +172,13 @@ export class FaturaService {
 
   private converterParaFatura(fatura: CreditCardInvoice): Fatura {
     return {
+      id: fatura.id ? Number(fatura.id) : undefined,
       valorFatura: fatura.amount,
       valorPago: 0,
       dataVencimento: fatura.dueDate,
       dataFechamento: fatura.closingDate,
       statusFatura: this.converterStatusDeCreditCard(fatura.status),
+      numeroFatura: fatura.numeroFatura,
       cartaoCreditoId: fatura.cardId ? Number(fatura.cardId) : undefined,
       bankName: fatura.bankName,
       amount: fatura.amount,

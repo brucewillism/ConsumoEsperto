@@ -118,6 +118,45 @@ public class Usuario {
     private ProvedorAuth provedorAuth = ProvedorAuth.LOCAL;
 
     /**
+     * Gênero para personalização: inferência pelo primeiro nome até o utilizador confirmar no tratamento J.A.R.V.I.S.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "genero", length = 16)
+    private GeneroUsuario genero = GeneroUsuario.UNKNOWN;
+
+    /**
+     * {@code true} quando o utilizador confirmou tratamento/J.A.R.V.I.S. ({@link #preferenciaTratamentoJarvis} diferente de automático).
+     */
+    @Column(name = "genero_confirmado")
+    private Boolean generoConfirmado = false;
+
+    /**
+     * Evita reenviar a mensagem de sincronização Google/J.A.R.V.I.S. no WhatsApp.
+     */
+    @Column(name = "jarvis_google_genero_notificado")
+    private Boolean jarvisGoogleGeneroNotificado = false;
+
+    /**
+     * Preferência fixa de tratamento pelo J.A.R.V.I.S.; {@link PreferenciaTratamentoJarvis#AUTOMATICO}
+     * usa gênero Google/inferência. Qualquer outro valor bloqueia a sobrescrita no OAuth quando {@link #generoConfirmado} é true.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "preferencia_tratamento_jarvis", length = 32)
+    private PreferenciaTratamentoJarvis preferenciaTratamentoJarvis = PreferenciaTratamentoJarvis.AUTOMATICO;
+
+    /**
+     * Título escolhido para o J.A.R.V.I.S. (ex.: Senhor, Senhora). Vazio quando só o primeiro nome.
+     */
+    @Column(name = "tratamento", length = 32)
+    private String tratamento;
+
+    /**
+     * Indica que o utilizador concluiu a calibragem inicial do protocolo na aplicação.
+     */
+    @Column(name = "jarvis_configurado", nullable = false)
+    private Boolean jarvisConfigurado = false;
+
+    /**
      * Numero de WhatsApp vinculado ao usuario em formato E.164 (ex: +5511999999999)
      */
     @Column(name = "whatsapp_number", unique = true, length = 20)
@@ -196,6 +235,38 @@ public class Usuario {
     public ProvedorAuth getProvedorAuth() { return provedorAuth; }
     public void setProvedorAuth(ProvedorAuth provedorAuth) { this.provedorAuth = provedorAuth; }
 
+    public GeneroUsuario getGenero() { return genero; }
+    public void setGenero(GeneroUsuario genero) { this.genero = genero; }
+
+    public Boolean getGeneroConfirmado() { return generoConfirmado; }
+    public void setGeneroConfirmado(Boolean generoConfirmado) { this.generoConfirmado = generoConfirmado; }
+
+    public Boolean getJarvisGoogleGeneroNotificado() { return jarvisGoogleGeneroNotificado; }
+    public void setJarvisGoogleGeneroNotificado(Boolean jarvisGoogleGeneroNotificado) {
+        this.jarvisGoogleGeneroNotificado = jarvisGoogleGeneroNotificado;
+    }
+
+    public PreferenciaTratamentoJarvis getPreferenciaTratamentoJarvis() {
+        return preferenciaTratamentoJarvis;
+    }
+
+    public void setPreferenciaTratamentoJarvis(PreferenciaTratamentoJarvis preferenciaTratamentoJarvis) {
+        this.preferenciaTratamentoJarvis = preferenciaTratamentoJarvis;
+    }
+
+    public String getTratamento() { return tratamento; }
+    public void setTratamento(String tratamento) {
+        this.tratamento = tratamento;
+    }
+
+    public Boolean getJarvisConfigurado() {
+        return jarvisConfigurado;
+    }
+
+    public void setJarvisConfigurado(Boolean jarvisConfigurado) {
+        this.jarvisConfigurado = jarvisConfigurado;
+    }
+
     public String getWhatsappNumero() { return whatsappNumero; }
     public void setWhatsappNumero(String whatsappNumero) { this.whatsappNumero = whatsappNumero; }
 
@@ -226,5 +297,20 @@ public class Usuario {
     public enum ProvedorAuth {
         LOCAL,   // Autenticação local com username/password
         GOOGLE   // Autenticação via Google OAuth2
+    }
+
+    public enum GeneroUsuario {
+        MALE,
+        FEMALE,
+        UNKNOWN
+    }
+
+    public enum PreferenciaTratamentoJarvis {
+        AUTOMATICO,
+        SENHOR,
+        SENHORA,
+        DOUTOR,
+        DOUTORA,
+        NENHUM
     }
 }

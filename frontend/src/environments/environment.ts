@@ -12,7 +12,9 @@ export const environment = {
   /** Indica se está em modo de produção (false para desenvolvimento) */
   production: false,
   
-  /** URL base da API — alinhar com rodar-backend-evolution.bat (Spring na 8081). Se usar rodar-backend.bat na 8080, mude para 8080. */
+  /** URL da API REST (Spring Boot).
+   *  Na stack local com Evolution API Node, Evolution costuma usar :8080 e o Spring :8081
+   *  (ver `.cursor/rules/stack-local.mdc`). Só use :8080 aqui se o Java for o único serviço nessa porta. */
   apiUrl: 'http://localhost:8081/api',
   
   /** ID do cliente Google OAuth2 para autenticação via Google
