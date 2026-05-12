@@ -1,33 +1,109 @@
-<!-- Dashboard - ConsumoEsperto -->
-<div class="dashboard-container">
-  <!-- Header do Dashboard -->
-  <div class="dashboard-header">
+<!-- Central de Comando J.A.R.V.I.S. -->
+<div class="dashboard-container jarvis-command-center">
+  <div class="dashboard-header hud-header hud-animate" [style.--stagger]="0">
     <div class="header-content">
-      <h1>Dashboard</h1>
-      <p>{{ linhaCabecalhoDashboard }}</p>
+      <h1 class="hud-main-title">CENTRAL DE COMANDO J.A.R.V.I.S.</h1>
+      <p class="hud-brand-sub">ConsumoEsperto 🚀</p>
+      <p class="hud-header-meta">{{ linhaCabecalhoDashboard }}</p>
     </div>
     <div class="header-actions">
-      <mat-slide-toggle
-        class="simulation-toggle"
-        [(ngModel)]="modoSimulacao"
-        (change)="alternarModoSimulacao()"
-        [disabled]="isLoading || ((isLoading$ | async) === true)">
-        Modo Simulação
-      </mat-slide-toggle>
-      <button class="btn btn-success" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading || (isLoading$ | async)">
-        <i class="fas fa-sync-alt" [class.fa-spin]="isLoading"></i>
-        Atualizar Dados
+      <button
+        type="button"
+        class="btn btn-hud btn-hud-ghost memoria-nucleo-btn"
+        (click)="alternarPainelMemoria()"
+        [disabled]="isLoading || (isLoading$ | async) === true"
+        matTooltip="Recordações táticas que o núcleo de memória usa nas decisões (histórico semântico).">
+        <i class="fas fa-brain" aria-hidden="true"></i>
+        <span class="memoria-btn-text">Memória</span>
       </button>
-      <button class="btn btn-primary" routerLink="/transacoes" [disabled]="isLoading$ | async">
+      <button
+        type="button"
+        class="btn btn-hud btn-hud-ghost simulation-mode-btn"
+        [class.simulation-mode-on]="modoSimulacao"
+        (click)="clicarModoSimulacao()"
+        [disabled]="isLoading || (isLoading$ | async) === true"
+        role="switch"
+        [attr.aria-checked]="modoSimulacao"
+        matTooltip="Ligado: o painel mistura projeção real com os cenários “E se…” das simulações. Desligado: apenas o fluxo real.">
+        <i class="fas fa-flask simulation-mode-ico" aria-hidden="true"></i>
+        <span class="simulation-mode-text">Simulação</span>
+        <span class="simulation-mode-badge" *ngIf="modoSimulacao">on</span>
+      </button>
+      <button class="btn btn-hud btn-hud-ghost" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading || (isLoading$ | async)">
+        <i class="fas fa-sync-alt" [class.fa-spin]="isLoading"></i>
+        Atualizar
+      </button>
+      <button class="btn btn-hud btn-hud-primary" routerLink="/transacoes" [disabled]="isLoading$ | async">
         <i class="fas fa-plus"></i>
         Nova Transação
       </button>
-      <button class="btn btn-secondary" routerLink="/relatorios" [disabled]="isLoading$ | async">
+      <button class="btn btn-hud btn-hud-ghost" routerLink="/relatorios" [disabled]="isLoading$ | async">
         <i class="fas fa-chart-bar"></i>
-        Ver Relatórios
+        Relatórios
       </button>
     </div>
   </div>
+
+  <!-- Oráculo externo — letreiro de mercado + nota da Sentinela -->
+  <section
+    class="hud-market-strip hud-animate jarvis-hud-ticker"
+    *ngIf="!isLoading && (tickerMercadoSegmentos.length || previsaoFuturoChart?.notaJarvisMercado)"
+    [style.--stagger]="1"
+    [class.ticker-hud-radar-pulse]="radarPulsoHud">
+    <div class="hud-market-ticker" *ngIf="tickerMercadoSegmentos.length">
+      <span class="hud-ticker-eyebrow">Oráculo externo · mercado</span>
+      <div class="hud-ticker-marquee ticker-hud-scanline" aria-live="polite">
+        <div class="hud-ticker-track">
+          <div class="hud-ticker-chunk" *ngFor="let _ of [0, 1]">
+            <ng-container *ngFor="let seg of tickerMercadoSegmentos; let last = last">
+              <span class="hud-ticker-text ticker-neon-base" [ngClass]="classeSegMercado(seg)">{{ seg.text }}</span>
+              <span class="hud-ticker-sep" *ngIf="!last"> · </span>
+            </ng-container>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="hud-jarvis-mercado-nota" *ngIf="previsaoFuturoChart?.notaJarvisMercado">
+      <i class="fas fa-satellite-dish" aria-hidden="true"></i>
+      {{ previsaoFuturoChart?.notaJarvisMercado }}
+      <span
+        class="hud-fator-infla"
+        *ngIf="previsaoFuturoChart?.fatorCorrecaoInflacao != null"
+        [class.hud-fator-infla--amber]="(previsaoFuturoChart!.fatorCorrecaoInflacao! > 1.0001)">
+        · Delta de ajuste (recorrente):
+        {{ (previsaoFuturoChart!.fatorCorrecaoInflacao! * 100 - 100) | number : '1.1-1' }}%
+      </span>
+    </p>
+  </section>
+
+  <!-- Núcleo de memória semântica — timeline tática -->
+  <section class="memoria-tatica-drawer hud-animate" *ngIf="painelMemoriaAberto" [style.--stagger]="1">
+    <div class="memoria-tatica-inner">
+      <div class="memoria-tatica-head">
+        <h2 class="memoria-tatica-title"><i class="fas fa-brain" aria-hidden="true"></i> Recordações táticas</h2>
+        <button type="button" class="btn btn-hud btn-hud-ghost btn-icon-only" (click)="alternarPainelMemoria()" aria-label="Fechar memória">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <p class="memoria-tatica-sub">Contextos que o J.A.R.V.I.S. indexou com embeddings — usados para correlacionar padrões ao longo do tempo.</p>
+      <div class="memoria-tatica-loading" *ngIf="memoriaCarregando">
+        <mat-spinner diameter="36"></mat-spinner>
+      </div>
+      <ul class="memoria-tatica-timeline" *ngIf="!memoriaCarregando && itensMemoria.length">
+        <li *ngFor="let m of itensMemoria; let i = index" class="memoria-tatica-node" [style.--i]="i">
+          <span class="memoria-node-dot" [class.sem-embedding]="m.temEmbedding === false"></span>
+          <div class="memoria-node-body">
+            <div class="memoria-node-meta">
+              <span class="memoria-cat" *ngIf="m.categoriaOrigem">{{ m.categoriaOrigem }}</span>
+              <time class="memoria-data" *ngIf="m.dataRegistro">{{ m.dataRegistro | date : 'short' }}</time>
+            </div>
+            <p class="memoria-contexto">{{ m.contexto }}</p>
+          </div>
+        </li>
+      </ul>
+      <p class="memoria-tatica-empty" *ngIf="!memoriaCarregando && !itensMemoria.length">Nenhuma recordação indexada ainda. Use o WhatsApp — <em>Jarvis, anote isso: …</em> — ou aguarde sumários de insights.</p>
+    </div>
+  </section>
 
   <!-- Loading State -->
   <div class="loading-container" *ngIf="isLoading">
@@ -95,51 +171,244 @@
       </div>
     </div>
 
-    <section class="score-health-card" *ngIf="!errorMessage && usuarioScore">
-      <div>
-        <p>Score de Saúde Financeira</p>
-        <h2>{{ usuarioScore.score }}</h2>
-        <span>Faltam {{ usuarioScore.proximoNivelEm }} ponto(s) para o próximo nível</span>
-      </div>
-      <div class="score-badge" [class]="usuarioScore.nivel.toLowerCase()">
-        <i class="fas fa-trophy"></i>
-        {{ usuarioScore.nivel }}
-      </div>
+    <section class="hud-command-strip" *ngIf="!errorMessage">
+      <article class="hud-card hud-glass hud-animate" [style.--stagger]="1">
+        <header class="hud-card-head">
+          <span class="hud-chip">Sentinela</span>
+          <span class="hud-card-title">Disponibilidade real</span>
+        </header>
+        <p class="hud-sentinela-value" *ngIf="previsaoFuturoChart != null; else semSentinela">
+          {{ formatCurrency(previsaoFuturoChart.saldoAtual) }}
+        </p>
+        <ng-template #semSentinela>
+          <p class="hud-sentinela-value hud-muted">—</p>
+        </ng-template>
+        <p class="hud-cautela" *ngIf="protocoloCautelaAtivo">
+          <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+          Protocolo de cautela ativo — monitorar fluxo.
+        </p>
+        <p class="hud-subline" *ngIf="!protocoloCautelaAtivo">Linha de base operacional dentro do esperado.</p>
+      </article>
+
+      <article class="hud-card hud-glass hud-animate" [style.--stagger]="2">
+        <header class="hud-card-head">
+          <span class="hud-chip hud-chip-roxo">Métrica</span>
+          <span class="hud-card-title">Score J.A.R.V.I.S.</span>
+        </header>
+        <div class="hud-gauge-block" *ngIf="usuarioScore; else semScore">
+          <svg class="hud-gauge-svg" viewBox="0 0 96 56" aria-hidden="true">
+            <defs>
+              <linearGradient id="jarvisScoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color: #7b1fa2" />
+                <stop offset="100%" style="stop-color: #00e5ff" />
+              </linearGradient>
+            </defs>
+            <path d="M 8 48 A 40 40 0 0 1 88 48" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="6" stroke-linecap="round" pathLength="100"/>
+            <path
+              d="M 8 48 A 40 40 0 0 1 88 48"
+              fill="none"
+              stroke="url(#jarvisScoreGrad)"
+              stroke-width="6"
+              stroke-linecap="round"
+              pathLength="100"
+              [attr.stroke-dasharray]="100"
+              [attr.stroke-dashoffset]="100 - scoreGaugePct" />
+          </svg>
+          <div class="hud-gauge-meta">
+            <strong class="hud-score-num">{{ usuarioScore.score }}</strong>
+            <span class="hud-score-tier">{{ usuarioScore.nivel }}</span>
+            <small>Faltam {{ usuarioScore.proximoNivelEm }} pts · nível seguinte</small>
+          </div>
+        </div>
+        <ng-template #semScore>
+          <p class="hud-subline">Score ainda não sincronizado.</p>
+        </ng-template>
+      </article>
+
+      <article class="hud-card hud-glass hud-animate" [style.--stagger]="3">
+        <header class="hud-card-head">
+          <span class="hud-chip hud-chip-amber">Reserva</span>
+          <span class="hud-card-title">Escudo de energia</span>
+        </header>
+        <ng-container *ngIf="mesesReservaRunway != null; else semReserva">
+          <p class="hud-reserva-meses">
+            {{ mesesReservaRunway | number:'1.1-1' }} <span>MESES</span>
+          </p>
+          <div class="hud-progress-shell" aria-hidden="true">
+            <div
+              class="hud-progress-inner"
+              [class.hud-progress-vibrante]="mesesReservaSaudavel"
+              [class.hud-progress-warn]="!mesesReservaSaudavel"
+              [style.width.%]="mesesReservaBarPct">
+            </div>
+          </div>
+          <p class="hud-subline">
+            {{ mesesReservaSaudavel ? 'Reserva tática acima de 6,0 meses.' : 'Abaixo do limiar de 6 meses — reforçar escudo.' }}
+          </p>
+        </ng-container>
+        <ng-template #semReserva>
+          <p class="hud-subline">Cadastre despesas no mês para estimar a autonomia em meses.</p>
+        </ng-template>
+      </article>
     </section>
 
-    <section class="yield-opportunity-card" *ngIf="!errorMessage && oportunidadeInvestimento">
+    <div class="hud-animate" [style.--stagger]="4" *ngIf="!errorMessage">
+      <aside class="protocolo-panico-card hud-glass" *ngIf="exibirBotaoOtimizacaoProtocolo">
+        <div class="protocolo-panico-copy">
+          <p class="protocolo-panico-eyebrow">J.A.R.V.I.S. · prioridade tática</p>
+          <p class="protocolo-panico-title">Colisão financeira detectada nos sistemas de projeção.</p>
+          <p class="protocolo-panico-sub">
+            Autorize o rebalanceamento automático dos tetos em categorias não essenciais para estabilizar o Escudo de Energia.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="protocolo-panico-btn"
+          (click)="executarOtimizacaoProtocolo()"
+          [disabled]="protocoloOtimizacaoEmAndamento">
+          {{ protocoloOtimizacaoEmAndamento ? 'Sincronizando protocolo…' : '[ EXECUTAR OTIMIZAÇÃO DE PROTOCOLO ]' }}
+        </button>
+      </aside>
+      <app-previsao-futuro-chart
+        [usarEntradaPai]="true"
+        [painelCarregando]="isLoading"
+        [chartInput]="previsaoFuturoChart"
+        [radarAtivo]="radarPulsoHud"
+        [novoFuturoCiano]="novoFuturoProtocolo">
+      </app-previsao-futuro-chart>
+    </div>
+
+    <section class="yield-opportunity-card hud-animate hud-glass hud-yield" *ngIf="!errorMessage && oportunidadeInvestimento" [style.--stagger]="5">
       <div>
-        <p>Oportunidade de Rendimento</p>
-        <h2>{{ oportunidadeInvestimento.melhorOpcao }}</h2>
-        <span>
+        <p class="hud-yield-eyebrow">Oráculo · Oportunidade de rendimento</p>
+        <h2 class="hud-yield-title">{{ oportunidadeInvestimento.melhorOpcao }}</h2>
+        <span class="hud-yield-meta">
           Saldo ocioso {{ formatCurrency(oportunidadeInvestimento.saldoOcioso) }} ·
           CDB {{ formatCurrency(oportunidadeInvestimento.rendimentoCdb) }} ·
           Selic {{ formatCurrency(oportunidadeInvestimento.rendimentoTesouroSelic) }}
         </span>
       </div>
-      <i class="fas fa-sparkles"></i>
+      <i class="fas fa-sparkles hud-yield-icon" aria-hidden="true"></i>
     </section>
 
-    <section class="insights-feed-card" *ngIf="!errorMessage && insightsFeed.length">
-      <div class="feed-head">
-        <div>
-          <p>Centro de notificações e insights</p>
-          <h3>Feed de Insights</h3>
+    <section
+      class="hud-bottom-deck hud-animate"
+      *ngIf="!errorMessage && (insightsFeed.length || sugestoesContencaoJarvis.length || categoriaRanking.length)"
+      [style.--stagger]="6">
+      <div class="hud-bottom-grid">
+        <div class="hud-bottom-col">
+          <div class="hud-card hud-glass hud-feed" *ngIf="insightsFeed.length">
+            <div class="hud-feed-head">
+              <div>
+                <p class="hud-eyebrow-row"><i class="fas fa-satellite-dish" aria-hidden="true"></i> Cronos / notificações</p>
+                <h3 class="hud-panel-title">Feed de insights</h3>
+              </div>
+              <i class="fas fa-bell hud-feed-icon" aria-hidden="true"></i>
+            </div>
+            <div class="hud-feed-item" *ngFor="let item of insightsFeed">
+              <i [class]="iconeInsightTematico(item.message) + ' hud-feed-ico'" aria-hidden="true"></i>
+              <div class="hud-feed-item-body">
+                <strong>{{ item.message }}</strong>
+                <span>{{ item.time }}</span>
+              </div>
+              <div class="hud-feedback-thumbs" role="group" aria-label="Feedback ao núcleo tático">
+                <button
+                  type="button"
+                  class="hud-thumb hud-thumb-up"
+                  (click)="enviarFeedbackNotificacao(item, true)"
+                  matTooltip="Útil — reforça este tipo de alerta">
+                  <i class="fas fa-chevron-up" aria-hidden="true"></i>
+                </button>
+                <button
+                  type="button"
+                  class="hud-thumb hud-thumb-down"
+                  (click)="enviarFeedbackNotificacao(item, false)"
+                  matTooltip="Recalibrar — menos deste protocolo">
+                  <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="hud-card hud-glass hud-jarvis" *ngIf="sugestoesContencaoJarvis.length">
+            <div class="hud-feed-head">
+              <div>
+                <p class="hud-eyebrow-row"><i class="fas fa-robot" aria-hidden="true"></i> Oráculo · Contenção</p>
+                <h3 class="hud-panel-title">Protocolos sugeridos</h3>
+                <span class="hud-panel-sub">Metas de teto com base no histórico recente.</span>
+              </div>
+              <i class="fas fa-shield-virus hud-feed-icon" aria-hidden="true"></i>
+            </div>
+            <div class="hud-jarvis-item" *ngFor="let s of sugestoesContencaoJarvis">
+              <p class="hud-jarvis-texto">{{ s.mensagemResumo || s.rotuloExibicao || s.categoriaNome }}</p>
+              <div class="hud-jarvis-meta" *ngIf="s.valorTetoSugerido != null">
+                <span>Teto sugerido: <strong>{{ formatCurrency(s.valorTetoSugerido) }}</strong></span>
+                <span *ngIf="s.mesAlvo && s.anoAlvo"> · período alvo {{ s.mesAlvo }}/{{ s.anoAlvo }}</span>
+              </div>
+              <div class="hud-jarvis-feedback-row">
+                <div class="hud-feedback-thumbs" role="group" aria-label="Feedback ao protocolo sugerido">
+                  <button
+                    type="button"
+                    class="hud-thumb hud-thumb-up"
+                    (click)="enviarFeedbackContencao(s, true)"
+                    matTooltip="Concordo com a leitura da Sentinela">
+                    <i class="fas fa-chevron-up" aria-hidden="true"></i>
+                  </button>
+                  <button
+                    type="button"
+                    class="hud-thumb hud-thumb-down"
+                    (click)="enviarFeedbackContencao(s, false)"
+                    matTooltip="Recalibrar sugestões desta categoria">
+                    <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="hud-sys-actions">
+                <button
+                  type="button"
+                  class="hud-sys-link hud-sys-link-muted"
+                  (click)="recusarSugestaoContencaoJarvis(s)"
+                  [disabled]="sugestaoContencaoEmAcao === s.id">
+                  [&nbsp;Ignorar protocolo&nbsp;]
+                </button>
+                <button
+                  type="button"
+                  class="hud-sys-link hud-sys-link-primary"
+                  (click)="aceitarSugestaoContencaoJarvis(s)"
+                  [disabled]="sugestaoContencaoEmAcao === s.id">
+                  <mat-spinner *ngIf="sugestaoContencaoEmAcao === s.id" diameter="16" class="btn-inline-spinner"></mat-spinner>
+                  <span *ngIf="sugestaoContencaoEmAcao !== s.id">[&nbsp;Aceitar protocolo&nbsp;]</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <i class="fas fa-bell"></i>
-      </div>
-      <div class="feed-item" *ngFor="let item of insightsFeed">
-        <i [class]="item.icon"></i>
-        <div>
-          <strong>{{ item.message }}</strong>
-          <span>{{ item.time }}</span>
+
+        <div class="hud-card hud-glass hud-ranking" *ngIf="categoriaRanking.length">
+          <h3 class="hud-panel-title">Ranking de categorias · Hábitos</h3>
+          <p class="hud-panel-sub">Comparativo ao mês anterior, quando disponível.</p>
+          <div class="hud-rank-row" *ngFor="let row of categoriaRanking">
+            <div class="hud-rank-top">
+              <span class="hud-rank-name">{{ row.categoria }}</span>
+              <span class="hud-rank-money">{{ formatCurrency(row.valor) }}</span>
+            </div>
+            <div class="hud-dual-track">
+              <div class="hud-dual-bg"></div>
+              <div class="hud-dual-fill" [style.width.%]="row.pctOfMax"></div>
+            </div>
+            <div class="hud-rank-var" *ngIf="row.variacaoPct != null" [class.hud-rank-excesso]="row.excesso">
+              <i class="fas fa-fire" *ngIf="row.excesso" aria-hidden="true"></i>
+              {{ row.variacaoPct >= 0 ? '+' : '' }}{{ row.variacaoPct | number:'1.0-1' }}%
+              <span class="hud-vs">vs mês ant.</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- Configuração de Renda (dark) -->
     <section class="renda-config-wrap" *ngIf="!errorMessage && rendaConfig">
-      <div class="renda-config-card">
+      <div class="renda-config-card hud-glass">
         <div class="renda-config-head">
           <h3><i class="fas fa-money-bill-wave"></i> Configuração de Renda</h3>
           <p class="renda-meta" *ngIf="rendaConfig.diaPagamento">
@@ -165,8 +434,10 @@
             </li>
           </ul>
         </div>
+      </div>
+    </section>
 
-  <button class="ai-chat-toggle" (click)="chatAberto = !chatAberto" *ngIf="!isLoading">
+  <button class="ai-chat-toggle" type="button" (click)="chatAberto = !chatAberto" *ngIf="!isLoading">
     <i class="fas fa-robot"></i>
   </button>
 
@@ -188,8 +459,6 @@
       </button>
     </form>
   </section>
-      </div>
-    </section>
 
     <!-- Cards Informativos -->
     <div class="dashboard-cards" *ngIf="!errorMessage">

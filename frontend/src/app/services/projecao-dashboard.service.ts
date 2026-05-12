@@ -42,9 +42,69 @@ export interface OportunidadeInvestimento {
   explicacaoIa: string;
 }
 
+export interface PrevisaoFuturoPonto {
+  dia: number;
+  saldo: number;
+  serie: 'REAL' | 'PROJETADO';
+}
+
+export interface MarketIndicatorsHud {
+  selicAa?: number | null;
+  ipcaMes?: number | null;
+  dolarBrl?: number | null;
+  fonteResumo?: string;
+  dadosParciais?: boolean;
+}
+
+export interface ProvisaoMemoriaHud {
+  diaAlvo: number;
+  valor: number;
+  rotulo?: string;
+  periodoHistorico?: string;
+  contextoOrigem?: string;
+}
+
+export interface PrevisaoFuturoChart {
+  diaHoje: number;
+  ultimoDiaMes: number;
+  saldoAtual: number;
+  saldoProjetadoFimMes: number;
+  projecaoNegativa: boolean;
+  protocoloOtimizacaoRecomendado?: boolean;
+  mesesEscudoEnergia?: number | null;
+  diasAteSaldoNegativo?: number | null;
+  /** Dias com vencimento de obrigações fixas (Sentinela). */
+  diasVencimentoDespesasFixas?: number[];
+  /** Projeção — marcos de “gasto fantasma” (memória sazonal). */
+  diasProvisaoMemoria?: number[];
+  provisoesMemoria?: ProvisaoMemoriaHud[];
+  indicadoresMercado?: MarketIndicatorsHud;
+  fatorCorrecaoInflacao?: number | null;
+  notaJarvisMercado?: string;
+  pontos: PrevisaoFuturoPonto[];
+}
+
+export interface ProtocoloOtimizacaoAjuste {
+  orcamentoId?: number;
+  categoriaNome?: string;
+  limiteAnterior?: number;
+  limiteNovo?: number;
+}
+
+export interface ProtocoloOtimizacaoResponse {
+  mensagemJarvis?: string;
+  fatorAjusteEmergenciaMedio?: number;
+  percentualMedioReducaoTetos?: number;
+  sobrevidaSaldoProjetado?: number;
+  novoSaldoProjetadoFimMes?: number;
+  ajustes?: ProtocoloOtimizacaoAjuste[];
+  previsaoAjustada?: PrevisaoFuturoChart;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ProjecaoDashboardService {
   private readonly base = `${environment.apiUrl}/projecoes`;
+  private readonly jarvisBase = `${environment.apiUrl}/jarvis`;
 
   constructor(private http: HttpClient) {}
 
@@ -58,5 +118,15 @@ export class ProjecaoDashboardService {
 
   oportunidadeInvestimento(): Observable<OportunidadeInvestimento> {
     return this.http.get<OportunidadeInvestimento>(`${this.base}/oportunidade-investimento`);
+  }
+
+  /** Sentinela — série saldo real vs projeção até fim do mês. */
+  previsaoFuturo(): Observable<PrevisaoFuturoChart> {
+    return this.http.get<PrevisaoFuturoChart>(`${this.base}/previsao-futuro`);
+  }
+
+  /** Protocolo de otimização — ajuste de tetos em categorias não essenciais + série projetada. */
+  otimizarProtocoloMetas(): Observable<ProtocoloOtimizacaoResponse> {
+    return this.http.patch<ProtocoloOtimizacaoResponse>(`${this.jarvisBase}/otimizar-metas`, {});
   }
 }

@@ -24,11 +24,11 @@ public final class FinanceInsightProfileClassifier {
         }
         // Hábito de consumo: variável, físico/recorrente no dia a dia
         String[] habitos = {
-            "posto", "combustivel", "gasolina", "etanol", "shell", "ipiranga", "petrobras",
-            "supermercado", " mercado ", " hiper ", "atacadao", "atacadista", "padaria",
-            "restaurante", "delivery", "ifood ", " rappi", "burguer ", "lanche",
+            "posto", "combustivel", "gasolina", "etanol", "diesel", "shell", "ipiranga", "petrobras", "raizen",
+            "supermercado", "mercadinho", " mercado ", " hiper ", "atacadao", "atacadista", "padaria", " horti ",
+            "restaurante", "alimentacao", "lanchonete", "delivery", "ifood ", " rappi", "burguer ", "lanche",
             "farmacia ", "drogaria", "drogasil", "droga raia", "pacheco",
-            "cantina", " cafeteria"
+            "cantina", " cafeteria", "conveniencia ", "mini mercado"
         };
         for (String h : habitos) {
             if (n.contains(h.trim())) {

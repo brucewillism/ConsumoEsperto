@@ -1,7 +1,45 @@
-.metas-page {
+@keyframes hudFadeUpMeta {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ringWarnPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 6px rgba(255, 23, 68, 0.45));
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(156, 39, 176, 0.75));
+  }
+}
+
+.hud-metas-module {
   padding: 24px;
   max-width: 960px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.hud-animate-meta {
+  opacity: 0;
+  animation: hudFadeUpMeta 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(0.07s * var(--stagger, 0));
+}
+
+.hud-eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #00e5ff;
 }
 
 .header-card,
@@ -13,14 +51,14 @@
 .renda-banner {
   margin-top: 12px;
   padding: 10px 12px;
-  background: #111827;
-  border-radius: 8px;
-  border: 1px solid #374151;
+  background: rgba(0, 229, 255, 0.06);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 229, 255, 0.15);
   color: #e5e7eb;
 }
 
 .renda-banner .warn {
-  color: #fbbf24;
+  color: #ffc107;
 }
 
 .renda-banner .total-pct {
@@ -33,10 +71,10 @@
 .alerta-banner {
   margin-top: 12px;
   padding: 12px 14px;
-  border-radius: 8px;
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid #d97706;
-  color: #fcd34d;
+  border-radius: 10px;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.45);
+  color: #ffe082;
   font-size: 14px;
 }
 
@@ -69,8 +107,9 @@
 .preview {
   margin-top: 12px;
   padding: 12px;
-  background: #0f172a;
-  border-radius: 8px;
+  background: rgba(13, 14, 18, 0.65);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 229, 255, 0.1);
   p {
     margin: 6px 0;
     color: #d1d5db;
@@ -95,6 +134,7 @@
   margin: 24px 0 12px;
   font-size: 1.1rem;
   color: #e5e7eb;
+  letter-spacing: 0.06em;
 }
 
 .metas-grid {
@@ -104,9 +144,6 @@
 }
 
 .meta-card {
-  background: var(--exec-surface, #1e293b);
-  border: 1px solid var(--exec-border, #334155);
-  color: var(--text-primary, #e5e7eb);
   min-width: 0;
 
   ::ng-deep .mat-mdc-card-title {
@@ -130,20 +167,105 @@
   }
 }
 
-.bar-wrap {
-  margin-top: 12px;
-  span {
-    font-size: 12px;
-    color: #9ca3af;
+.meta-energy-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.meta-copy {
+  flex: 1;
+  min-width: 160px;
+
+  p {
+    margin: 6px 0;
+    color: #cbd5e1;
   }
-  .pct {
-    float: right;
+}
+
+.energy-ring-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.energy-ring-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.energy-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 8;
+}
+
+.energy-ring-fill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s ease, stroke 0.35s ease;
+}
+
+.ring-energy-norm .energy-ring-fill {
+  stroke: #38bdf8;
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.35));
+}
+
+.ring-energy-high .energy-ring-fill {
+  stroke: #00e5ff;
+  filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.55));
+}
+
+.ring-energy-critical .energy-ring-fill {
+  stroke: #e040fb;
+  animation: ringWarnPulse 1.8s ease-in-out infinite;
+}
+
+.energy-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+
+  strong {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #f8fafc;
+    font-variant-numeric: tabular-nums;
   }
-  mat-progress-bar {
-    margin-top: 6px;
+
+  small {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: #94a3b8;
+    text-transform: uppercase;
   }
+}
+
+.ring-warn-copy {
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  color: #ff8a80;
+  letter-spacing: 0.04em;
 }
 
 .empty {
   color: #9ca3af;
+}
+
+.edit-meta-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.fullw {
+  width: 100%;
 }

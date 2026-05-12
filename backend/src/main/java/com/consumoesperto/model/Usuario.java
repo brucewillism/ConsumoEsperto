@@ -163,6 +163,15 @@ public class Usuario {
     private String whatsappNumero;
 
     /**
+     * Refresh token Google (escopo calendar.readonly) para integração Cronos — sensível; concedido via fluxo dedicado.
+     */
+    @Column(name = "google_calendar_refresh_token", columnDefinition = "TEXT")
+    private String googleCalendarRefreshToken;
+
+    @Column(name = "google_calendar_linked_at")
+    private LocalDateTime googleCalendarLinkedAt;
+
+    /**
      * Lista de transações financeiras do usuário
      * Relacionamento um-para-muitos: um usuário pode ter várias transações
      * Carregamento lazy para melhor performance
@@ -269,6 +278,16 @@ public class Usuario {
 
     public String getWhatsappNumero() { return whatsappNumero; }
     public void setWhatsappNumero(String whatsappNumero) { this.whatsappNumero = whatsappNumero; }
+
+    public String getGoogleCalendarRefreshToken() { return googleCalendarRefreshToken; }
+    public void setGoogleCalendarRefreshToken(String googleCalendarRefreshToken) {
+        this.googleCalendarRefreshToken = googleCalendarRefreshToken;
+    }
+
+    public LocalDateTime getGoogleCalendarLinkedAt() { return googleCalendarLinkedAt; }
+    public void setGoogleCalendarLinkedAt(LocalDateTime googleCalendarLinkedAt) {
+        this.googleCalendarLinkedAt = googleCalendarLinkedAt;
+    }
 
     public Set<Transacao> getTransacoes() { return transacoes; }
     public void setTransacoes(Set<Transacao> transacoes) { this.transacoes = transacoes; }

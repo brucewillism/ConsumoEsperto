@@ -1,5 +1,6 @@
-<div class="metas-page">
-  <mat-card class="header-card">
+<div class="metas-page hud-metas-module">
+  <mat-card class="header-card hud-animate-meta" style="--stagger: 0">
+    <p class="hud-eyebrow">Módulo · Escudos de energia</p>
     <mat-card-title>Metas financeiras</mat-card-title>
     <mat-card-subtitle>
       Quanto tempo para comprar algo guardando até X% da sua renda média (últimos 3 meses de receitas confirmadas).
@@ -20,7 +21,7 @@
     </div>
   </mat-card>
 
-  <mat-card class="sim-card">
+  <mat-card class="sim-card hud-animate-meta" style="--stagger: 1">
     <mat-card-title>Simulador</mat-card-title>
     <mat-card-content>
       <div class="sim-row">
@@ -47,7 +48,7 @@
     </mat-card-content>
   </mat-card>
 
-  <mat-card class="form-card">
+  <mat-card class="form-card hud-animate-meta" style="--stagger: 2">
     <mat-card-title>Nova meta</mat-card-title>
     <mat-card-content>
       <div class="form-grid">
@@ -79,7 +80,7 @@
 
   <h2 class="section-title">Suas metas</h2>
   <div class="metas-grid" *ngIf="metas.length; else vazio">
-    <mat-card *ngFor="let m of metas" class="meta-card">
+    <mat-card *ngFor="let m of metas; let mi = index" class="meta-card hud-animate-meta" [style.--stagger]="3 + mi">
       <mat-card-header>
         <mat-card-title>{{ m.descricao }}</mat-card-title>
         <mat-card-subtitle>
@@ -87,14 +88,32 @@
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        <p>Objetivo: <strong>{{ formatMoney(m.valorTotal) }}</strong></p>
-        <p>{{ m.percentualComprometimento }}% da renda → poupar <strong>{{ formatMoney(m.valorPoupadoMensal) }}</strong>/mês</p>
-        <p>Prazo: <strong>{{ m.prazoMeses }}</strong> meses</p>
-        <div class="bar-wrap">
-          <span>Progresso (tempo)</span>
-          <mat-progress-bar mode="determinate" [value]="m.progressPercent"></mat-progress-bar>
-          <span class="pct">{{ m.progressPercent }}%</span>
+        <div class="meta-energy-row">
+          <div class="energy-ring-wrap" [ngClass]="ringEnergyClass(m.progressPercent)">
+            <svg class="energy-ring-svg" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="energy-ring-bg" cx="50" cy="50" r="42" />
+              <circle
+                class="energy-ring-fill"
+                cx="50"
+                cy="50"
+                r="42"
+                transform="rotate(-90 50 50)"
+                [attr.stroke-dasharray]="energyRingCircumference"
+                [attr.stroke-dashoffset]="ringDashOffset(m.progressPercent)"
+              />
+            </svg>
+            <div class="energy-ring-center">
+              <strong>{{ m.progressPercent }}%</strong>
+              <small>tempo</small>
+            </div>
+          </div>
+          <div class="meta-copy">
+            <p>Objetivo: <strong>{{ formatMoney(m.valorTotal) }}</strong></p>
+            <p>{{ m.percentualComprometimento }}% da renda → poupar <strong>{{ formatMoney(m.valorPoupadoMensal) }}</strong>/mês</p>
+            <p>Prazo: <strong>{{ m.prazoMeses }}</strong> meses</p>
+          </div>
         </div>
+        <p class="ring-warn-copy" *ngIf="m.progressPercent > 100">Aviso: progresso temporal acima do planejado.</p>
       </mat-card-content>
       <mat-card-actions align="end" class="meta-acoes">
         <button mat-icon-button color="primary" type="button" (click)="abrirEdicao(m)" title="Editar" [disabled]="salvando || carregando">

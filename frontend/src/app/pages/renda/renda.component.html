@@ -1,27 +1,27 @@
-<div class="renda-page">
-  <section class="hero">
+<div class="renda-page hud-module">
+  <section class="hero hud-glass hud-animate" style="--stagger: 0">
     <div>
-      <p>Renda e contracheques</p>
+      <p class="hud-eyebrow">Módulo · Renda &amp; contracheque</p>
       <h1>Histórico de Contracheques</h1>
-      <span>Compare salário bruto versus líquido e revise auditorias de descontos.</span>
+      <span class="hero-sub">Conferência de bruto, líquido e descontos; decomposição linha a linha no holerite.</span>
     </div>
-    <button mat-raised-button color="primary" (click)="carregar()">
+    <button mat-raised-button color="primary" type="button" (click)="carregar()">
       <mat-icon>refresh</mat-icon>
       Atualizar
     </button>
   </section>
 
-  <mat-card class="upload-card">
+  <mat-card class="upload-card hud-animate" style="--stagger: 1">
     <h2>Upload manual de contracheque</h2>
     <p>Envie um PDF para a IA extrair bruto, líquido, descontos e insights. A renda só muda após confirmação.</p>
     <input #paycheckFile type="file" accept="application/pdf,.pdf" hidden (change)="onFileSelected($event)">
-    <button mat-raised-button color="primary" (click)="paycheckFile.click()" [disabled]="enviandoPdf">
+    <button mat-raised-button color="primary" type="button" (click)="paycheckFile.click()" [disabled]="enviandoPdf">
       <mat-icon>upload_file</mat-icon>
       {{ enviandoPdf ? 'Processando...' : 'Enviar PDF' }}
     </button>
   </mat-card>
 
-  <mat-card class="chart-card">
+  <mat-card class="chart-card hud-animate" style="--stagger: 2">
     <h2>Bruto vs. Líquido</h2>
     <div class="chart-box" *ngIf="chartData.labels?.length; else emptyChart">
       <canvas baseChart [type]="'bar'" [data]="chartData" [options]="chartOptions"></canvas>
@@ -31,32 +31,78 @@
     </ng-template>
   </mat-card>
 
-  <mat-card class="paycheck-card" *ngFor="let c of contracheques">
-    <div class="paycheck-head">
+  <mat-card
+    class="paycheck-card hud-animate"
+    *ngFor="let c of contracheques; let idx = index"
+    [class.expanded]="expandedId === c.id"
+    [class.audit-warn]="c.auditoriaSomaBrutoOk === false"
+    [style.--stagger]="3 + idx"
+  >
+    <div class="paycheck-head" (click)="toggleExpand(c.id)" role="button" tabindex="0" (keydown.enter)="toggleExpand(c.id)">
       <div>
         <h2>{{ c.empresa }}</h2>
-        <span>{{ c.mes }}/{{ c.ano }} · {{ c.status }}</span>
+        <span class="meta-line">{{ c.mes }}/{{ c.ano }} · {{ c.status }}</span>
+        <span class="expand-hint">{{ expandedId === c.id ? '▲ Recolher módulo' : '▼ Abrir leitura técnica' }}</span>
       </div>
-      <button mat-raised-button color="primary" *ngIf="c.status === 'PENDENTE'" (click)="confirmar(c)">
+      <button
+        mat-raised-button
+        color="primary"
+        type="button"
+        *ngIf="c.status === 'PENDENTE'"
+        (click)="$event.stopPropagation(); confirmar(c)"
+      >
         Confirmar
       </button>
     </div>
 
-    <div class="values">
-      <strong>Bruto {{ brl(c.salarioBruto) }}</strong>
-      <strong>Líquido {{ brl(c.salarioLiquido) }}</strong>
-      <strong>Descontos {{ brl(c.totalDescontos) }}</strong>
+    <div class="telemetry-strip">
+      <div class="telemetry-item">
+        <span class="telemetry-label">Salário bruto</span>
+        <strong class="telemetry-value font-mono-amount">{{ brl(c.salarioBruto) }}</strong>
+      </div>
+      <div class="telemetry-item">
+        <span class="telemetry-label">Salário líquido</span>
+        <strong class="telemetry-value font-mono-amount">{{ brl(c.salarioLiquido) }}</strong>
+      </div>
+      <div class="telemetry-item">
+        <span class="telemetry-label">Total de descontos</span>
+        <strong class="telemetry-value font-mono-amount">{{ brl(c.totalDescontos) }}</strong>
+      </div>
+      <div class="telemetry-item" *ngIf="c.auditoriaSomaBrutoOk === false && c.auditoriaDeltaBruto != null">
+        <span class="telemetry-label">Diferença (auditoria)</span>
+        <strong class="telemetry-value font-mono-amount warn-val">{{ brl(Math.abs(c.auditoriaDeltaBruto)) }}</strong>
+      </div>
     </div>
 
-    <div class="insights" *ngIf="c.insights?.length">
-      <p *ngFor="let i of c.insights">• {{ i }}</p>
+    <div class="jarvis-audit-msg" *ngIf="c.auditoriaSomaBrutoOk === false">
+      ⚠️ Senhor, detectamos um Delta de R$ {{ brlSemPrefixoDelta(c.auditoriaDeltaBruto) }}. Recomendo revisão manual.
     </div>
 
-    <div class="discounts" *ngIf="c.descontos?.length">
-      <h3>Descontos extraídos pela IA</h3>
-      <div class="discount-row" *ngFor="let d of c.descontos">
-        <span>{{ d.rotulo }}</span>
-        <strong>{{ brl(d.valor) }}</strong>
+    <div class="auditoria-strip" *ngIf="c.auditoriaSomaBrutoOk === true" [class.ok]="true">
+      <mat-icon>verified</mat-icon>
+      <span>Bruto confere com líquido + soma dos descontos (auditoria).</span>
+    </div>
+
+    <div class="expand-panel" *ngIf="expandedId === c.id">
+      <div class="insights" *ngIf="c.insights?.length">
+        <p *ngFor="let i of c.insights">• {{ i }}</p>
+      </div>
+
+      <div class="discounts" *ngIf="c.descontos?.length">
+        <h3>Leitura técnica · decomposição</h3>
+        <p class="discounts-hint">Grid de linhas extraídas (INSS, IRRF, benefícios, etc.).</p>
+        <div class="discount-tech-grid">
+          <div class="discount-tech-head">
+            <span>#</span>
+            <span>Descrição</span>
+            <span>Valor</span>
+          </div>
+          <div class="discount-tech-row" *ngFor="let d of c.descontos; let i = index">
+            <span class="mono">#{{ lineId(i) }}</span>
+            <span>{{ d.rotulo }}</span>
+            <strong class="font-mono-amount">{{ brl(d.valor) }}</strong>
+          </div>
+        </div>
       </div>
     </div>
   </mat-card>

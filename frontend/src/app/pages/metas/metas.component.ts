@@ -6,7 +6,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSliderModule } from '@angular/material/slider';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -32,7 +31,6 @@ import { forkJoin } from 'rxjs';
     MatFormFieldModule,
     MatInputModule,
     MatSliderModule,
-    MatProgressBarModule,
     MatIconModule,
     MatSelectModule,
     MatDialogModule
@@ -272,5 +270,25 @@ export class MetasComponent implements OnInit {
       return '—';
     }
     return d.toLocaleDateString('pt-BR');
+  }
+
+  /** Circunferência do anel SVG (r = 42 em viewBox 100). */
+  readonly energyRingCircumference = 2 * Math.PI * 42;
+
+  ringDashOffset(percent: number): number {
+    const p = Math.max(0, Number(percent) || 0);
+    const capped = Math.min(p, 100);
+    return this.energyRingCircumference * (1 - capped / 100);
+  }
+
+  ringEnergyClass(percent: number): string {
+    const p = Number(percent) || 0;
+    if (p > 100) {
+      return 'ring-energy-critical';
+    }
+    if (p >= 80) {
+      return 'ring-energy-high';
+    }
+    return 'ring-energy-norm';
   }
 }

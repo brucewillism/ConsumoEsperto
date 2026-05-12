@@ -6,6 +6,8 @@ import { UsuarioService } from '../../services/usuario.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { PreferenciaTratamentoJarvis, Usuario } from '../../models/usuario.model';
+import { GoogleCalendarLinkService } from '../../services/google-calendar-link.service';
+import { DespesaFixa, DespesasFixaService } from '../../services/despesas-fixa.service';
 
 @Component({
   selector: 'app-perfil',
@@ -19,6 +21,12 @@ export class PerfilComponent implements OnInit {
   carregando = false;
   modalAberto = false;
   escolhaModal: PreferenciaTratamentoJarvis = 'AUTOMATICO';
+
+  fixas: DespesaFixa[] = [];
+  carregandoFixas = false;
+  modalFixasAberto = false;
+  editandoFixa: DespesaFixa | null = null;
+  formFixa: DespesaFixa = this.novaFixaVazia();
 
   readonly opcoes: { value: PreferenciaTratamentoJarvis; label: string; hint?: string }[] = [
     {
@@ -38,7 +46,9 @@ export class PerfilComponent implements OnInit {
   constructor(
     private usuarioService: UsuarioService,
     private authService: AuthService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private googleCalendarLink: GoogleCalendarLinkService,
+    private despesasFixaService: DespesasFixaService
   ) {}
 
   ngOnInit(): void {
@@ -53,6 +63,7 @@ export class PerfilComponent implements OnInit {
         this.linhaTratamento = u.jarvisTratamentoResumo || '';
         this.escolhaModal = u.preferenciaTratamentoJarvis || 'AUTOMATICO';
         this.carregando = false;
+        this.carregarFixas();
       },
       error: () => {
         this.carregando = false;
@@ -95,5 +106,118 @@ export class PerfilComponent implements OnInit {
   textoCard(): string {
     const r = this.linhaTratamento || this.usuario?.jarvisTratamentoResumo || '…';
     return `Tratamento do J.A.R.V.I.S.: ${r}`;
+  }
+
+  private novaFixaVazia(): DespesaFixa {
+    return { descricao: '', valor: 0, diaVencimento: 1, categoria: 'Obrigações fixas' };
+  }
+
+  carregarFixas(): void {
+    this.carregandoFixas = true;
+    this.despesasFixaService.listar().subscribe({
+      next: (list) => {
+        this.fixas = list;
+        this.carregandoFixas = false;
+      },
+      error: () => {
+        this.carregandoFixas = false;
+        this.toastService.error('Não foi possível carregar obrigações fixas.');
+      },
+    });
+  }
+
+  abrirModalFixas(): void {
+    this.editandoFixa = null;
+    this.formFixa = this.novaFixaVazia();
+    this.modalFixasAberto = true;
+  }
+
+  fecharModalFixas(): void {
+    this.modalFixasAberto = false;
+    this.editandoFixa = null;
+  }
+
+  editarFixa(f: DespesaFixa): void {
+    this.editandoFixa = f;
+    this.formFixa = {
+      id: f.id,
+      descricao: f.descricao,
+      valor: f.valor,
+      diaVencimento: f.diaVencimento,
+      categoria: f.categoria || 'Obrigações fixas',
+    };
+    this.modalFixasAberto = true;
+  }
+
+  salvarFixa(): void {
+    if (!this.formFixa.descricao?.trim() || !this.formFixa.valor || this.formFixa.valor <= 0) {
+      this.toastService.error('Preencha descrição e valor válidos.');
+      return;
+    }
+    const d = Math.min(31, Math.max(1, Math.floor(Number(this.formFixa.diaVencimento)) || 1));
+    this.formFixa.diaVencimento = d;
+    this.carregandoFixas = true;
+    if (this.editandoFixa?.id != null) {
+      this.despesasFixaService.atualizar(this.editandoFixa.id, this.formFixa).subscribe({
+        next: () => {
+          this.toastService.success('Obrigação fixa atualizada.');
+          this.fecharModalFixas();
+          this.carregarFixas();
+        },
+        error: () => {
+          this.carregandoFixas = false;
+        },
+      });
+      return;
+    }
+    this.despesasFixaService.criar(this.formFixa).subscribe({
+      next: () => {
+        this.toastService.success('Obrigação fixa criada.');
+        this.fecharModalFixas();
+        this.carregarFixas();
+      },
+      error: () => {
+        this.carregandoFixas = false;
+      },
+    });
+  }
+
+  excluirFixa(f: DespesaFixa): void {
+    if (f.id == null) {
+      return;
+    }
+    if (!confirm(`Remover "${f.descricao}" das obrigações fixas?`)) {
+      return;
+    }
+    this.carregandoFixas = true;
+    this.despesasFixaService.excluir(f.id).subscribe({
+      next: () => {
+        this.toastService.success('Removido.');
+        this.carregarFixas();
+      },
+      error: () => {
+        this.carregandoFixas = false;
+      },
+    });
+  }
+
+  vinculandoCalendar = false;
+
+  vincularGoogleCalendar(): void {
+    this.vinculandoCalendar = true;
+    this.googleCalendarLink.iniciarVinculacao().subscribe({
+      next: (r) => {
+        this.vinculandoCalendar = false;
+        if (r?.authorizationUrl) {
+          window.location.href = r.authorizationUrl;
+        } else {
+          this.toastService.error('Resposta inválida ao iniciar vinculação.');
+        }
+      },
+      error: () => {
+        this.vinculandoCalendar = false;
+        this.toastService.error('Não foi possível obter o link do Google Calendar.');
+      },
+    });
   }
 }

@@ -1,4 +1,5 @@
 import { Component, DestroyRef, OnDestroy, OnInit, inject } from '@angular/core';
+import { DashboardService } from '../../services/dashboard.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
@@ -12,22 +13,30 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { TransacaoService } from '../../services/transacao.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { RelatorioService } from '../../services/relatorio.service';
 import { RendaConfigService, RendaConfigDto } from '../../services/renda-config.service';
 import { CategoriaService } from '../../services/categoria.service';
-import { DashboardProjection, OportunidadeInvestimento, ProjecaoDashboardService, TimelineImpacto } from '../../services/projecao-dashboard.service';
+import {
+  DashboardProjection,
+  OportunidadeInvestimento,
+  PrevisaoFuturoChart,
+  TimelineImpacto,
+} from '../../services/projecao-dashboard.service';
+import { PrevisaoFuturoChartComponent } from '../../components/previsao-futuro-chart/previsao-futuro-chart.component';
 import { ScoreService, UsuarioScore } from '../../services/score.service';
 import { InboxNotification, NotificacaoInboxService } from '../../services/notificacao-inbox.service';
 import { IaChatService } from '../../services/ia-chat.service';
+import { ContencaoJarvisService, SugestaoContencaoJarvis } from '../../services/contencao-jarvis.service';
+import { JarvisMemoriaService, JarvisMemoriaTimelineItem } from '../../services/jarvis-memoria.service';
+import { JarvisFeedbackService } from '../../services/jarvis-feedback.service';
 import { AuthService } from '../../services/auth.service';
 import { UsuarioService } from '../../services/usuario.service';
 import { PreferenciaTratamentoJarvis, Usuario } from '../../models/usuario.model';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DateFormatPipe } from '../../pipes/date-format.pipe';
-import { forkJoin, catchError, of, fromEvent, timer, Subscription, filter } from 'rxjs';
+import { forkJoin, catchError, of, fromEvent, timer, Subscription, filter, finalize } from 'rxjs';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { LoadingService } from '../../services/loading.service';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
@@ -40,6 +49,7 @@ import {
   descricaoComIndicadorParcela,
   transacaoMostraBadgeJuros
 } from '../../utils/transacao-parcela.util';
+import { EstadoDashboardCompleto, RecentTxRow, TickerMercadoSegmento } from '../../models/jarvis-hud.model';
 
 /**
  * Interface que define a estrutura de um card do dashboard
@@ -56,21 +66,13 @@ interface DashboardCard {
   color: string;        // Cor principal do card
 }
 
-/**
- * Interface que define a estrutura dos dados dos gráficos
- * 
- * Usada para configurar gráficos de gastos por mês e por categoria
- * usando a biblioteca Chart.js.
- */
-/** Linha exibida em “Transações recentes” */
-interface RecentTxRow {
-  id?: number;
-  description: string;
-  amount: number;
-  category: string;
-  date: Date;
-  type: 'credit' | 'debit';
-  showJurosWarning?: boolean;
+/** Linha do ranking HUD (hábitos por categoria). */
+interface CategoriaRankingRow {
+  categoria: string;
+  valor: number;
+  pctOfMax: number;
+  variacaoPct: number | null;
+  excesso: boolean;
 }
 
 interface ChartData {
@@ -113,7 +115,7 @@ interface ChartData {
     MatProgressSpinnerModule,
     MatIconModule,
     MatTooltipModule,
-    MatSlideToggleModule
+    PrevisaoFuturoChartComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
@@ -235,11 +237,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
   salvandoQuickTransacao = false;
   readonly tipoTransacaoEnum = TipoTransacao;
   modoSimulacao = false;
+  /** Sentinela — mesma fonte que {@link PrevisaoFuturoChartComponent} quando integrado ao painel. */
+  previsaoFuturoChart: PrevisaoFuturoChart | null = null;
+  /** Mantém a série retornada pelo protocolo (GET /previsao-futuro ainda usa burn histórico, não o corte simulado). */
+  preservarGraficoPosProtocolo = false;
+  novoFuturoProtocolo = false;
+  protocoloOtimizacaoEmAndamento = false;
+  categoriaRanking: CategoriaRankingRow[] = [];
   dashboardProjection: DashboardProjection | null = null;
   timelineImpacto: TimelineImpacto[] = [];
   usuarioScore: UsuarioScore | null = null;
   oportunidadeInvestimento: OportunidadeInvestimento | null = null;
   insightsFeed: InboxNotification[] = [];
+  /** Metas de contenção sugeridas pelo J.A.R.V.I.S. (hábito / pós-importação). */
+  sugestoesContencaoJarvis: SugestaoContencaoJarvis[] = [];
+  sugestaoContencaoEmAcao: number | null = null;
   chatAberto = false;
   chatMensagem = '';
   chatCarregando = false;
@@ -253,6 +265,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private jarvisPerfilSincronizado = false;
   jarvisWizardPreviewPref: PreferenciaTratamentoJarvis = 'SENHOR';
   salvarTratamentoEmAndamento = false;
+
+  /** Painel de memória semântica J.A.R.V.I.S. */
+  painelMemoriaAberto = false;
+  memoriaCarregando = false;
+  itensMemoria: JarvisMemoriaTimelineItem[] = [];
+
+  /** Segmentos para marquee com classes por indicador (Selic / IPCA / USD). */
+  tickerMercadoSegmentos: TickerMercadoSegmento[] = [];
+  /** Radar HUD — mesma flag que o gráfico Sentinela (emitida em um único tick pelo {@link DashboardService}). */
+  radarPulsoHud = false;
   readonly opcoesTratamentoWizard: { value: PreferenciaTratamentoJarvis; label: string }[] = [
     { value: 'SENHOR', label: 'Senhor' },
     { value: 'SENHORA', label: 'Senhora' },
@@ -269,10 +291,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private loadingService: LoadingService,
     private financaAlteracao: FinancaAlteracaoService,
     private categoriaService: CategoriaService,
-    private projecaoDashboardService: ProjecaoDashboardService,
+    private dashboardService: DashboardService,
     private scoreService: ScoreService,
     private notificacaoInbox: NotificacaoInboxService,
     private iaChatService: IaChatService,
+    private contencaoJarvisService: ContencaoJarvisService,
+    private jarvisMemoriaService: JarvisMemoriaService,
+    private jarvisFeedbackService: JarvisFeedbackService,
     private authService: AuthService,
     private usuarioService: UsuarioService,
     private fb: FormBuilder,
@@ -331,6 +356,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef), catchError(() => of([] as Categoria[])))
       .subscribe((c) => (this.categorias = c));
 
+    this.dashboardService.estadoDashboardCompleto$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((e: EstadoDashboardCompleto) => {
+        this.previsaoFuturoChart = e.previsaoFuturoChart;
+        this.tickerMercadoSegmentos = e.tickerMercadoSegmentos;
+        this.preservarGraficoPosProtocolo = e.preservarGraficoPosProtocolo;
+        this.novoFuturoProtocolo = e.novoFuturoProtocolo;
+        this.protocoloOtimizacaoEmAndamento = e.protocoloOtimizacaoEmAndamento;
+        this.radarPulsoHud = e.radarPulsoHud;
+      });
+
     this.loadDashboardData();
 
     fromEvent(document, 'visibilitychange')
@@ -350,6 +386,130 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.notificacaoInbox.loadInbox().subscribe((items) => {
       this.insightsFeed = items.slice(0, 5);
     });
+  }
+
+  /** Chaves `tipo:id:positivo` para evitar cliques duplicados no feedback. */
+  private readonly jarvisFeedbackDedup = new Set<string>();
+
+  classeSegMercado(seg: TickerMercadoSegmento): Record<string, boolean> {
+    const fator = this.previsaoFuturoChart?.fatorCorrecaoInflacao ?? 1;
+    const ind = this.previsaoFuturoChart?.indicadoresMercado;
+    const selic = ind?.selicAa != null ? Number(ind.selicAa) : null;
+    const ipca = ind?.ipcaMes != null ? Number(ind.ipcaMes) : null;
+    const inflaAlta = fator > 1.0001;
+    const selicFavorInvest =
+      selic != null && (selic >= 10 || (ipca != null && !Number.isNaN(ipca) && selic > ipca));
+    return {
+      'ticker-seg--amber': seg.kind === 'ipca' && inflaAlta,
+      'ticker-seg--cyan': seg.kind === 'selic' && selicFavorInvest,
+    };
+  }
+
+  enviarFeedbackNotificacao(item: InboxNotification, positivo: boolean): void {
+    const id = (item.key ?? (item.serverId != null ? `db-${item.serverId}` : '')).trim();
+    if (!id) {
+      return;
+    }
+    const dedup = `NOTIFICACAO:${id}:${positivo}`;
+    if (this.jarvisFeedbackDedup.has(dedup)) {
+      return;
+    }
+    this.jarvisFeedbackDedup.add(dedup);
+    this.jarvisFeedbackService
+      .enviar({ insightId: id, positivo, tipoAlvo: 'NOTIFICACAO' })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.snackBar.open(
+            positivo ? 'Feedback positivo registrado no núcleo tático.' : 'Recalibrando prioridades de análise, Senhor.',
+            'Fechar',
+            { duration: 4000 }
+          );
+        },
+        error: () => {
+          this.jarvisFeedbackDedup.delete(dedup);
+          this.snackBar.open('Não foi possível enviar o feedback agora.', 'Fechar', { duration: 3500 });
+        },
+      });
+  }
+
+  enviarFeedbackContencao(s: SugestaoContencaoJarvis, positivo: boolean): void {
+    if (s.id == null) {
+      return;
+    }
+    const id = String(s.id);
+    const dedup = `CONTENCAO:${id}:${positivo}`;
+    if (this.jarvisFeedbackDedup.has(dedup)) {
+      return;
+    }
+    this.jarvisFeedbackDedup.add(dedup);
+    const chave = (s.chaveAgrupamento || s.categoriaNome || s.rotuloExibicao || '').trim();
+    this.jarvisFeedbackService
+      .enviar({
+        insightId: id,
+        positivo,
+        tipoAlvo: 'CONTENCAO',
+        ...(chave ? { categoriaChave: chave } : {}),
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.snackBar.open(
+            positivo ? 'Protocolo de contenção validado. Obrigado, Senhor.' : 'Prioridade deste protocolo reduzida por 30 dias.',
+            'Fechar',
+            { duration: 4500 }
+          );
+        },
+        error: () => {
+          this.jarvisFeedbackDedup.delete(dedup);
+          this.snackBar.open('Não foi possível enviar o feedback agora.', 'Fechar', { duration: 3500 });
+        },
+      });
+  }
+
+  aceitarSugestaoContencaoJarvis(s: SugestaoContencaoJarvis): void {
+    const id = s.id;
+    if (id == null) return;
+    this.sugestaoContencaoEmAcao = id;
+    this.contencaoJarvisService
+      .aceitar(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.sugestaoContencaoEmAcao = null;
+          this.snackBar.open(
+            'Protocolo de contenção ativo. Vamos monitorar seus lançamentos e avisar perto de 80% do limite.',
+            'Fechar',
+            { duration: 6000 }
+          );
+          this.sugestoesContencaoJarvis = this.sugestoesContencaoJarvis.filter((x) => x.id !== id);
+          this.financaAlteracao.notificar();
+        },
+        error: () => {
+          this.sugestaoContencaoEmAcao = null;
+          this.snackBar.open('Não foi possível ativar o protocolo. Tente novamente.', 'Fechar', { duration: 4000 });
+        },
+      });
+  }
+
+  recusarSugestaoContencaoJarvis(s: SugestaoContencaoJarvis): void {
+    const id = s.id;
+    if (id == null) return;
+    this.sugestaoContencaoEmAcao = id;
+    this.contencaoJarvisService
+      .recusar(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.sugestaoContencaoEmAcao = null;
+          this.snackBar.open('Sugestão recusada.', 'Fechar', { duration: 3000 });
+          this.sugestoesContencaoJarvis = this.sugestoesContencaoJarvis.filter((x) => x.id !== id);
+        },
+        error: () => {
+          this.sugestaoContencaoEmAcao = null;
+          this.snackBar.open('Não foi possível recusar agora.', 'Fechar', { duration: 4000 });
+        },
+      });
   }
 
   enviarChatIa(): void {
@@ -457,6 +617,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   public loadDashboardData(options?: { silent?: boolean }) {
     const silent = options?.silent === true;
 
+    if (!silent) {
+      this.dashboardService.prepararNovaRecargaCompleta();
+    }
     if (this.isLoadingData) {
       console.log('⚠️ Carregamento já em andamento, ignorando chamada duplicada');
       return;
@@ -512,6 +675,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.syncRendaDoughnut();
     this.usuarioScore = data.usuarioScore || null;
     this.oportunidadeInvestimento = data.oportunidadeInvestimento || null;
+    this.dashboardService.sincronizarPrevisaoAposFetch(data.previsaoFuturo ?? null);
     
     // Cartões: totais a partir da lista (limite utilizado = soma na fatura aberta; nunca mistura com saldo em conta)
     const cartoesList = data.cartoes || [];
@@ -562,6 +726,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.timelineImpacto = this.dashboardProjection?.timelineImpacto || [];
     this.syncSpendingLineChart();
     this.atualizarDoughnutComRelatorio(data.despesasCategoriaMesAtual);
+    this.syncCategoriaRankingHud(data.despesasCategoriaMesAtual, data.relatorioCategoriaMesPassado);
     
     console.log('✅ Dados processados:', {
       totalSpent: this.totalSpent,
@@ -983,6 +1148,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     
+    const prevRef = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevAno = prevRef.getFullYear();
+    const prevMes = prevRef.getMonth() + 1;
+
     // Faz múltiplas chamadas em paralelo para obter todos os dados REAIS
     forkJoin({
       transacoesMes: this.transacaoService.buscarDoMesAtual().pipe(
@@ -997,20 +1166,28 @@ export class DashboardComponent implements OnInit, OnDestroy {
       despesasCategoriaMesAtual: this.relatorioService.getDespesasPorCategoriaMesAtual().pipe(
         catchError(() => of({ itens: [] }))
       ),
+      relatorioCategoriaMesPassado: this.relatorioService.getRelatorioPorCategoria(prevAno, prevMes).pipe(
+        catchError(() => of(null))
+      ),
       rendaConfig: this.rendaConfigService.obter().pipe(
         catchError(() => of(null))
       ),
-      dashboardProjection: this.projecaoDashboardService.dashboard().pipe(
+      dashboardProjection: this.dashboardService.projection().pipe(
+        catchError(() => of(null))
+      ),
+      previsaoFuturo: this.dashboardService.previsaoFluxoCaixa().pipe(
         catchError(() => of(null))
       ),
       usuarioScore: this.scoreService.obter().pipe(
         catchError(() => of(null))
       ),
-      oportunidadeInvestimento: this.projecaoDashboardService.oportunidadeInvestimento().pipe(
+      oportunidadeInvestimento: this.dashboardService.oportunidadeInvestimento().pipe(
         catchError(() => of(null))
-      )
+      ),
+      sugestoesContencao: this.contencaoJarvisService.listarPendentes().pipe(catchError(() => of([] as SugestaoContencaoJarvis[])))
     }).subscribe({
       next: (data) => {
+        this.sugestoesContencaoJarvis = Array.isArray(data.sugestoesContencao) ? data.sugestoesContencao : [];
         this.processarDadosReais(data);
         this.ultimaAtualizacao = new Date();
         this.isLoading = false;
@@ -1045,9 +1222,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   alternarModoSimulacao(): void {
-    this.projecaoDashboardService.definirSimulacoesAtivas(this.modoSimulacao).subscribe({
+    this.dashboardService.definirSimulacoesAtivas(this.modoSimulacao).subscribe({
       next: () => {
-        this.projecaoDashboardService.dashboard().subscribe((p) => {
+        this.dashboardService.projection().subscribe((p) => {
           this.dashboardProjection = p;
           this.timelineImpacto = p.timelineImpacto || [];
           this.syncSpendingLineChart();
@@ -1058,6 +1235,183 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.snackBar.open('Não foi possível atualizar o modo simulação.', 'Fechar', { duration: 3000 });
       }
     });
+  }
+
+  /** Alterna cenários no gráfico (substitui o slide toggle Material, alinhado aos outros botões do HUD). */
+  clicarModoSimulacao(): void {
+    if (this.isLoading) {
+      return;
+    }
+    this.modoSimulacao = !this.modoSimulacao;
+    this.alternarModoSimulacao();
+  }
+
+  alternarPainelMemoria(): void {
+    this.painelMemoriaAberto = !this.painelMemoriaAberto;
+    if (this.painelMemoriaAberto) {
+      this.carregarMemoriaTatica();
+    }
+  }
+
+  private carregarMemoriaTatica(): void {
+    this.memoriaCarregando = true;
+    this.jarvisMemoriaService.timeline(48).subscribe({
+      next: (rows) => {
+        this.itensMemoria = rows ?? [];
+        this.memoriaCarregando = false;
+      },
+      error: () => {
+        this.itensMemoria = [];
+        this.memoriaCarregando = false;
+        this.snackBar.open('Não foi possível carregar a memória tática.', 'Fechar', { duration: 3500 });
+      }
+    });
+  }
+
+  get scoreGaugePct(): number {
+    const s = this.usuarioScore?.score;
+    if (s == null || Number.isNaN(Number(s))) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, Number(s) / 10));
+  }
+
+  get protocoloCautelaAtivo(): boolean {
+    return !!(
+      this.previsaoFuturoChart?.projecaoNegativa ||
+      this.previsaoFuturoChart?.protocoloOtimizacaoRecomendado ||
+      (this.sugestoesContencaoJarvis?.length ?? 0) > 0
+    );
+  }
+
+  get exibirBotaoOtimizacaoProtocolo(): boolean {
+    const p = this.previsaoFuturoChart;
+    return !!p && (!!p.projecaoNegativa || !!p.protocoloOtimizacaoRecomendado);
+  }
+
+  executarOtimizacaoProtocolo(): void {
+    if (this.protocoloOtimizacaoEmAndamento) {
+      return;
+    }
+    this.dashboardService.setProtocoloOtimizacaoEmAndamento(true);
+    this.dashboardService
+      .otimizarProtocoloMetas()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => {
+          this.dashboardService.setProtocoloOtimizacaoEmAndamento(false);
+        })
+      )
+      .subscribe({
+        next: (res) => {
+          if (res.previsaoAjustada?.pontos?.length) {
+            this.dashboardService.aplicarPrevisaoPosOtimizacao(res.previsaoAjustada);
+          }
+          this.financaAlteracao.notificar();
+          const msg = (res.mensagemJarvis ?? 'Protocolo aplicado.')
+            .replace(/\*([^*]+)\*/g, '$1')
+            .trim();
+          this.snackBar.open(msg, 'Fechar', {
+            duration: 22_000,
+            panelClass: ['jarvis-protocolo-snack'],
+          });
+        },
+        error: (err: HttpErrorResponse) => {
+          const m =
+            (typeof err.error === 'object' && err.error && 'message' in err.error
+              ? String((err.error as { message?: string }).message)
+              : null) || err.message || 'Não foi possível executar o protocolo.';
+          this.snackBar.open(m, 'Fechar', { duration: 7000 });
+        },
+      });
+  }
+
+  get mesesReservaRunway(): number | null {
+    if (this.totalSpent <= 0) {
+      return null;
+    }
+    const m = this.balance / this.totalSpent;
+    return Math.round(m * 10) / 10;
+  }
+
+  get mesesReservaBarPct(): number {
+    const m = this.mesesReservaRunway;
+    if (m == null || m <= 0) {
+      return 0;
+    }
+    return Math.min(100, (m / 12) * 100);
+  }
+
+  get mesesReservaSaudavel(): boolean {
+    const m = this.mesesReservaRunway;
+    return m != null && m >= 6;
+  }
+
+  iconeInsightTematico(msg: string): string {
+    const t = (msg || '').toLowerCase();
+    if (/\b(meta|calend|agend|praz|viagem|crono|venc)\b/i.test(msg)) {
+      return 'fas fa-calendar-days';
+    }
+    if (/\b(combust|gasolina|viatura|fuel)\b/i.test(msg)) {
+      return 'fas fa-gas-pump';
+    }
+    if (/\b(jarvis|protocolo|oráculo|oraculo|consultoria|sistemas)\b/i.test(msg)) {
+      return 'fas fa-robot';
+    }
+    if (/\b(cart|fatura|cartão|cartao|limite)\b/i.test(msg)) {
+      return 'fas fa-credit-card';
+    }
+    return 'fas fa-bolt';
+  }
+
+  private mapRelatorioCategoriaPassado(raw: Record<string, unknown> | null): Map<string, number> {
+    const m = new Map<string, number>();
+    const rows = raw?.['transacoesPorCategoria'];
+    if (!Array.isArray(rows)) {
+      return m;
+    }
+    for (const row of rows) {
+      if (Array.isArray(row) && row.length >= 2) {
+        const nome = String(row[0] ?? 'Sem categoria');
+        const valor = Number(row[1] ?? 0);
+        m.set(nome, valor);
+      }
+    }
+    return m;
+  }
+
+  private syncCategoriaRankingHud(atualData: { itens?: Array<{ categoria?: string; valor?: number }> } | null, rawPassado: Record<string, unknown> | null): void {
+    const itens = Array.isArray(atualData?.itens) ? atualData!.itens! : [];
+    const prevMap = this.mapRelatorioCategoriaPassado(rawPassado);
+    if (!itens.length) {
+      this.categoriaRanking = [];
+      return;
+    }
+    const valores = itens.map((i) => Number(i.valor || 0));
+    const max = Math.max(...valores, 1);
+    const total = valores.reduce((a, b) => a + b, 0);
+    const media = total / itens.length;
+    this.categoriaRanking = itens
+      .map((item) => {
+        const nome = item.categoria || 'Sem categoria';
+        const valor = Number(item.valor || 0);
+        const prev = prevMap.get(nome);
+        let variacaoPct: number | null = null;
+        if (prev != null && prev > 0) {
+          variacaoPct = Math.round(((valor - prev) / prev) * 1000) / 10;
+        }
+        const excesso =
+          (variacaoPct != null && variacaoPct >= 15) || (variacaoPct == null && valor > media * 1.35);
+        return {
+          categoria: nome,
+          valor,
+          pctOfMax: (valor / max) * 100,
+          variacaoPct,
+          excesso,
+        };
+      })
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 8);
   }
 
   get linhaCabecalhoDashboard(): string {

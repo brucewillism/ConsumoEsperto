@@ -3,6 +3,7 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.MetaFinanceiraDTO;
 import com.consumoesperto.dto.MetaFinanceiraListResponse;
 import com.consumoesperto.dto.MetaFinanceiraRequest;
+import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.RendaMediaResponse;
 import com.consumoesperto.model.MetaFinanceira;
 import com.consumoesperto.model.Transacao;
@@ -39,6 +40,7 @@ public class MetaFinanceiraService {
     private final MetaFinanceiraRepository metaFinanceiraRepository;
     private final TransacaoRepository transacaoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final RendaConfigService rendaConfigService;
 
     /**
      * Soma das receitas confirmadas nos últimos 3 meses, dividida por 3 (média mensal).
@@ -296,6 +298,35 @@ public class MetaFinanceiraService {
         log.info("[META-LOG] Meta financeira removida id={} usuario={}", id, usuarioId);
     }
 
+    @Transactional
+    public MetaFinanceiraDTO criarMetaTemporariaModoViagem(
+        Long usuarioId,
+        String tituloEvento,
+        BigDecimal valorTeto,
+        LocalDate dataExpiracao,
+        String googleEventId
+    ) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+            .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        BigDecimal renda = calcularRendaMensalMediaUltimosTresMeses(usuarioId)
+            .orElseGet(() -> rendaConfigService.obterDto(usuarioId)
+                .map(RendaConfigDTO::getSalarioLiquido)
+                .filter(b -> b != null && b.compareTo(BigDecimal.ZERO) > 0)
+                .orElse(new BigDecimal("5000")));
+        MetaFinanceiraRequest req = new MetaFinanceiraRequest();
+        req.setDescricao("[Modo Viagem] " + (tituloEvento == null ? "Evento" : tituloEvento.trim()));
+        req.setValorTotal(valorTeto);
+        req.setPercentualComprometimento(new BigDecimal("2"));
+        req.setPrioridade(4);
+        MetaFinanceiraDTO dto = salvarComRenda(req, usuario, renda);
+        MetaFinanceira m = metaFinanceiraRepository.findByIdAndUsuarioId(dto.getId(), usuarioId)
+            .orElseThrow(() -> new RuntimeException("Meta não persistida"));
+        m.setDataExpiracao(dataExpiracao);
+        m.setGoogleCalendarEventId(googleEventId);
+        m = metaFinanceiraRepository.save(m);
+        return toDto(m);
+    }
+
     private int resolvePrioridade(MetaFinanceiraRequest request) {
         Integer p = request.getPrioridade();
         return p != null ? p : 3;
@@ -314,7 +345,9 @@ public class MetaFinanceiraService {
             m.getPrioridade() != null ? m.getPrioridade() : 3,
             calcularProgressoPercentual(m),
             null,
-            null
+            null,
+            m.getDataExpiracao(),
+            m.getGoogleCalendarEventId()
         );
     }
 

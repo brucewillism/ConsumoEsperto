@@ -17,16 +17,18 @@ import { ToastService } from '../../services/toast.service';
 })
 export class RendaComponent implements OnInit {
   contracheques: ContrachequeDto[] = [];
+  expandedId: string | number | null = null;
   carregando = true;
   enviandoPdf = false;
+  Math = Math;
   chartData: ChartConfiguration<'bar'>['data'] = { labels: [], datasets: [] };
   chartOptions: ChartOptions<'bar'> = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#e2e8f0' } } },
+    plugins: { legend: { labels: { color: '#94a3b8' } } },
     scales: {
-      x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,.45)' } },
-      y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,.45)' } }
+      x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(0, 229, 255, 0.06)' } },
+      y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(0, 229, 255, 0.06)' } }
     }
   };
 
@@ -92,13 +94,27 @@ export class RendaComponent implements OnInit {
     return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
+  /** Valor numérico para mensagem J.A.R.V.I.S. (sem prefixo R$ duplicado no template). */
+  brlSemPrefixoDelta(delta: number | null | undefined): string {
+    const v = Math.abs(Number(delta ?? 0));
+    return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  toggleExpand(id: string | number): void {
+    this.expandedId = this.expandedId === id ? null : id;
+  }
+
+  lineId(i: number): string {
+    return String(i + 1).padStart(2, '0');
+  }
+
   private syncChart(): void {
     const ordered = [...this.contracheques].reverse().slice(-12);
     this.chartData = {
       labels: ordered.map(c => `${String(c.mes).padStart(2, '0')}/${c.ano}`),
       datasets: [
-        { label: 'Bruto', data: ordered.map(c => Number(c.salarioBruto || 0)), backgroundColor: '#38bdf8' },
-        { label: 'Líquido', data: ordered.map(c => Number(c.salarioLiquido || 0)), backgroundColor: '#10b981' }
+        { label: 'Bruto', data: ordered.map(c => Number(c.salarioBruto || 0)), backgroundColor: '#00e5ff' },
+        { label: 'Líquido', data: ordered.map(c => Number(c.salarioLiquido || 0)), backgroundColor: '#7b1fa2' }
       ]
     };
   }

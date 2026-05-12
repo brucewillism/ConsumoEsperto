@@ -59,6 +59,8 @@ public class EvolutionWebhookController {
         JsonNode key = data.path("key");
         String effectiveRemote = extractEffectiveRemoteJid(key, payload);
         String messageKeyId = key.path("id").asText("");
+        boolean fromMeFlag = key.path("fromMe").asBoolean(false);
+        String dedupBodySnippet = extractTextPreviewForDedup(data);
         String instance = firstNonBlank(
             payload.path("instance").asText(""),
             payload.path("instanceName").asText(""),
@@ -72,7 +74,7 @@ public class EvolutionWebhookController {
             return ResponseEntity.ok(Map.of("status", "ignored", "reason", "group-or-broadcast"));
         }
 
-        if (!evolutionWebhookDedupService.claimDelivery(instance, messageKeyId)) {
+        if (!evolutionWebhookDedupService.claimDelivery(instance, messageKeyId, effectiveRemote, fromMeFlag, dedupBodySnippet)) {
             return ResponseEntity.ok(Map.of("status", "ignored", "reason", "duplicate-message-key"));
         }
 
@@ -221,7 +223,30 @@ public class EvolutionWebhookController {
 
     /**
      * Baileys pode envolver texto/mídia em ephemeralMessage ou viewOnceMessage.
+     * Primeira linha de texto do payload (dedupe quando o Evolution omite {@code key.id}).
      */
+    private static String extractTextPreviewForDedup(JsonNode data) {
+        if (data == null || !data.has("message")) {
+            return "";
+        }
+        try {
+            JsonNode message = unwrapInnerMessage(data.path("message"));
+            String text = message.path("conversation").asText("");
+            if (text.isBlank()) {
+                text = message.path("extendedTextMessage").path("text").asText("");
+            }
+            if (text.isBlank()) {
+                text = message.path("documentMessage").path("caption").asText("");
+            }
+            if (text.isBlank()) {
+                text = message.path("imageMessage").path("caption").asText("");
+            }
+            return text;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private static JsonNode unwrapInnerMessage(JsonNode message) {
         if (message == null || message.isMissingNode()) {
             return message;
@@ -251,6 +276,9 @@ public class EvolutionWebhookController {
         String texto = incoming.getText();
         if (texto != null && !texto.isBlank() && jarvisProtocolService.isProceduralAckEcho(texto)) {
             return "jarvis-procedural-echo";
+        }
+        if (texto != null && !texto.isBlank() && jarvisProtocolService.isOurSignedStackMessage(texto)) {
+            return "jarvis-signed-stack-message";
         }
 
         if (!whatsAppBotAllowlist.isEvolutionSelfChatThread(fromJid, userId)) {

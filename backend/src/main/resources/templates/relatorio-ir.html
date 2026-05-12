@@ -31,20 +31,41 @@
             font-weight: 700;
             color: #f8fafc;
         }
-        .sub { color: #94a3b8; font-size: 10px; margin-bottom: 18px; }
+        h2 {
+            margin: 22px 0 8px 0;
+            font-size: 12px;
+            font-weight: 700;
+            color: #e2e8f0;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .sub { color: #94a3b8; font-size: 10px; margin-bottom: 12px; }
+        .stats {
+            display: table;
+            width: 100%;
+            margin-bottom: 14px;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+        .stats span { margin-right: 16px; }
         .nota {
             background: #1e293b;
             border: 1px solid #334155;
             border-radius: 8px;
             padding: 12px 14px;
-            margin-bottom: 18px;
+            margin-bottom: 16px;
             color: #cbd5e1;
             font-size: 10px;
+        }
+        .nota--amber {
+            border-color: #b45309;
+            background: rgba(180, 83, 9, 0.12);
+            color: #fcd34d;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 8px;
+            margin-top: 6px;
         }
         th {
             text-align: left;
@@ -52,13 +73,14 @@
             text-transform: uppercase;
             letter-spacing: 0.06em;
             color: #94a3b8;
-            padding: 10px 8px;
+            padding: 8px 6px;
             border-bottom: 1px solid #334155;
         }
         td {
-            padding: 10px 8px;
+            padding: 8px 6px;
             border-bottom: 1px solid #1e293b;
             vertical-align: top;
+            font-size: 10px;
         }
         tr:nth-child(even) td { background: rgba(30, 41, 59, 0.45); }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -66,15 +88,19 @@
             font-weight: 700;
             border-top: 2px solid #334155;
             border-bottom: none;
-            padding-top: 14px;
+            padding-top: 10px;
             color: #f87171;
         }
+        .total-row--pend td { color: #fbbf24; }
         .vazio {
             text-align: center;
             color: #94a3b8;
-            padding: 28px 12px;
+            padding: 24px 12px;
             font-size: 11px;
         }
+        .detalhe-table td { font-size: 9px; padding: 6px 4px; }
+        .status-conf { color: #6ee7b7; }
+        .status-pend { color: #fbbf24; }
     </style>
 </head>
 <body>
@@ -85,37 +111,100 @@
     · Gerado em <span th:text="${geradoEm}">—</span>
     · <span th:text="${usuarioNome}">—</span>
 </p>
+<div class="stats" th:if="${!semDados}">
+    <span th:text="|Confirmadas: ${qtdLancamentosConfirmados} lanç. · Total ${totalDespesas}|">—</span>
+    <span th:if="${temPendentesResumo}" th:text="|Pendentes: ${qtdLancamentosPendentes} lanç. · Total ${totalPendentes}|">—</span>
+</div>
 <div class="nota">
-    Resumo das <strong>despesas confirmadas</strong> no período, agrupadas por categoria e CNPJ do estabelecimento (quando informado).
-    Documento informativo; conferir sempre com o seu contabilista e com a legislação vigente.
+    Resumo por <strong>categoria</strong> e <strong>CNPJ</strong> (quando informado). A data efetiva considera a data da transação ou,
+    se vazia, a data de criação do registo — para não excluir lançamentos legados.
+    O <strong>CSV</strong> exportado pela API continua a listar apenas despesas <strong>confirmadas</strong>; este PDF inclui também
+    pendentes para revisão interna (validar com o contabilista antes de declarar).
+</div>
+<div class="nota nota--amber" th:if="${temPendentesResumo}">
+    Há despesas <strong>pendentes de conferência</strong>. Não use valores pendentes na declaração sem confirmar.
 </div>
 
-<table th:if="${!semDados}">
+<h2 th:if="${temConfirmadas}">1. Resumo — despesas confirmadas</h2>
+<table th:if="${temConfirmadas}">
     <thead>
     <tr>
         <th style="width:32%">Categoria</th>
         <th style="width:28%">CNPJ</th>
         <th class="num" style="width:22%">Valor</th>
-        <th class="num" style="width:18%">Qtd. lançamentos</th>
+        <th class="num" style="width:18%">Qtd.</th>
     </tr>
     </thead>
     <tbody>
     <tr th:each="linha : ${linhas}">
         <td th:text="${linha.categoria}">—</td>
-        <td class="mono" th:text="${linha.cnpj}" style="font-family: 'Courier New', monospace; font-size: 10px;">—</td>
+        <td class="mono" th:text="${linha.cnpj}" style="font-family: 'Courier New', monospace; font-size: 9px;">—</td>
         <td class="num" th:text="${linha.valorFormatado}">—</td>
         <td class="num" th:text="${linha.quantidade}">0</td>
     </tr>
     <tr class="total-row">
-        <td colspan="2">Total despesas (confirmadas)</td>
+        <td colspan="2">Total (confirmadas)</td>
         <td class="num" th:text="${totalDespesas}">—</td>
         <td></td>
     </tr>
     </tbody>
 </table>
 
+<h2 th:if="${temPendentesResumo}">2. Resumo — pendentes de conferência</h2>
+<table th:if="${temPendentesResumo}">
+    <thead>
+    <tr>
+        <th style="width:32%">Categoria</th>
+        <th style="width:28%">CNPJ</th>
+        <th class="num" style="width:22%">Valor</th>
+        <th class="num" style="width:18%">Qtd.</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="linha : ${linhasPendentes}">
+        <td th:text="${linha.categoria}">—</td>
+        <td class="mono" th:text="${linha.cnpj}" style="font-family: 'Courier New', monospace; font-size: 9px;">—</td>
+        <td class="num" th:text="${linha.valorFormatado}">—</td>
+        <td class="num" th:text="${linha.quantidade}">0</td>
+    </tr>
+    <tr class="total-row total-row--pend">
+        <td colspan="2">Total (pendentes — só referência)</td>
+        <td class="num" th:text="${totalPendentes}">—</td>
+        <td></td>
+    </tr>
+    </tbody>
+</table>
+
+<h2 th:if="${!semDados}">3. Anexo analítico — todos os lançamentos</h2>
+<table th:if="${!semDados}" class="detalhe-table">
+    <thead>
+    <tr>
+        <th style="width:11%">Data</th>
+        <th style="width:34%">Descrição</th>
+        <th style="width:15%">Categoria</th>
+        <th style="width:18%">CNPJ</th>
+        <th class="num" style="width:12%">Valor</th>
+        <th style="width:10%">Estado</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="d : ${detalhes}">
+        <td th:text="${d.data}">—</td>
+        <td th:text="${d.descricao}">—</td>
+        <td th:text="${d.categoria}">—</td>
+        <td style="font-family: 'Courier New', monospace; font-size: 8px;" th:text="${d.cnpj}">—</td>
+        <td class="num" th:text="${d.valorFormatado}">—</td>
+        <td>
+            <span th:if="${d.statusConferencia == 'Confirmada'}" class="status-conf" th:text="${d.statusConferencia}">—</span>
+            <span th:if="${d.statusConferencia == 'Pendente'}" class="status-pend" th:text="${d.statusConferencia}">—</span>
+        </td>
+    </tr>
+    </tbody>
+</table>
+
 <p class="vazio" th:if="${semDados}">
-    Não há despesas confirmadas registadas neste ano-calendário.
+    Não há despesas (confirmadas nem pendentes) neste ano-calendário com os critérios acima.
+    Confirme se escolheu o ano certo ou se os lançamentos estão noutro período.
 </p>
 </body>
 </html>

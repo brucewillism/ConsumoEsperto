@@ -1,10 +1,12 @@
 package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.DashboardProjectionDTO;
+import com.consumoesperto.dto.PrevisaoFuturoChartDTO;
 import com.consumoesperto.dto.SimulacaoImpactoDTO;
 import com.consumoesperto.dto.SimulacaoImpactoRequest;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.DashboardProjectionService;
+import com.consumoesperto.service.PrevisaoFluxoCaixaService;
 import com.consumoesperto.service.SaldoService;
 import com.consumoesperto.service.SimulacaoImpactoService;
 import lombok.RequiredArgsConstructor;
@@ -25,10 +27,16 @@ public class ProjecaoController {
     private final DashboardProjectionService dashboardProjectionService;
     private final SimulacaoImpactoService simulacaoImpactoService;
     private final SaldoService saldoService;
+    private final PrevisaoFluxoCaixaService previsaoFluxoCaixaService;
 
     @GetMapping("/dashboard")
     public ResponseEntity<DashboardProjectionDTO> dashboard(@AuthenticationPrincipal UserPrincipal user) {
         return ResponseEntity.ok(dashboardProjectionService.projetar(user.getId()));
+    }
+
+    @GetMapping("/previsao-futuro")
+    public ResponseEntity<PrevisaoFuturoChartDTO> previsaoFuturo(@AuthenticationPrincipal UserPrincipal user) {
+        return ResponseEntity.ok(previsaoFluxoCaixaService.buildPrevisaoFuturoChart(user.getId()));
     }
 
     @GetMapping("/oportunidade-investimento")

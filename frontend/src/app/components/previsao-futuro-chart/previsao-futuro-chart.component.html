@@ -1,0 +1,38 @@
+<section class="previsao-futuro-wrap hud-glass" aria-label="Futuro provável — saldo projetado">
+  <div class="previsao-head">
+    <div>
+      <p class="eyebrow">Nível 2 · Projeção de fluxo</p>
+      <h3 class="hud-section-title">Trajetória de caixa</h3>
+      <p class="sub">Histórico real (linha sólida) e projeção até o fim do mês (tracejado). Losangos âmbar: vencimento de obrigação fixa (Sentinela). Área âmbar/vermelha: risco de descoberto.</p>
+    </div>
+  </div>
+
+  <div class="previsao-loading" *ngIf="carregando || (usarEntradaPai && painelCarregando)">
+    <i class="fas fa-spinner fa-spin"></i>
+    <span>Sincronizando telemetry…</span>
+  </div>
+
+  <div class="previsao-erro" *ngIf="!carregando && !(usarEntradaPai && painelCarregando) && erro">
+    <p>Não foi possível carregar a projeção. Atualize o painel mais tarde.</p>
+  </div>
+
+  <ng-container *ngIf="!carregando && !(usarEntradaPai && painelCarregando) && !erro">
+    <div
+      class="previsao-chart-box"
+      [class.alerta-negativa]="negativa"
+      [class.radar-sweep-active]="radarAtivo">
+      <canvas
+        baseChart
+        type="line"
+        [data]="lineData"
+        [options]="lineOptions"
+        aria-label="Gráfico de linha saldo real e projetado">
+      </canvas>
+    </div>
+    <p class="previsao-foot" *ngIf="resumoFimMes">
+      Projeção último dia do mês: <strong>{{ resumoFimMes }}</strong>
+      <span *ngIf="negativa" class="tag-perigo"> · Protocolo de cautela — trajetória em risco</span>
+      <span *ngIf="novoFuturoCiano && !negativa" class="tag-ok"> · Novo futuro sincronizado (protocolo J.A.R.V.I.S.)</span>
+    </p>
+  </ng-container>
+</section>

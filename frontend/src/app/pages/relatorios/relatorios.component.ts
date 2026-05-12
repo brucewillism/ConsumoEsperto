@@ -69,6 +69,8 @@ export class RelatoriosComponent implements OnInit {
   carregando = false;
   exportandoIr = false;
   dadosCarregados = false;
+  /** Anos para o PDF de IR (declarar/rever anos anteriores). */
+  readonly anosIrCalendario: number[];
 
   // Resumo
   resumo = {
@@ -86,12 +88,15 @@ export class RelatoriosComponent implements OnInit {
     private loadingService: LoadingService,
     private snackBar: MatSnackBar
   ) {
+    const y = new Date().getFullYear();
+    this.anosIrCalendario = [y, y - 1, y - 2, y - 3, y - 4, y - 5];
     this.formFiltros = this.fb.group({
       periodo: ['mesAtual'],
       dataInicio: [null],
       dataFim: [null],
       tipoTransacao: [''],
-      cartaoId: ['']
+      cartaoId: [''],
+      anoIr: [y - 1],
     });
   }
 
@@ -116,12 +121,14 @@ export class RelatoriosComponent implements OnInit {
   }
 
   baixarRelatorioIr(): void {
-    const anoAnterior = new Date().getFullYear() - 1;
+    const raw = this.formFiltros.get('anoIr')?.value;
+    const ano = typeof raw === 'number' ? raw : Number(raw);
+    const anoIr = Number.isFinite(ano) ? ano : new Date().getFullYear() - 1;
     this.exportandoIr = true;
-    this.relatorioService.exportarIrPdf(anoAnterior).subscribe({
+    this.relatorioService.exportarIrPdf(anoIr).subscribe({
       next: (blob) => {
         this.exportandoIr = false;
-        const nome = `consumo-esperto-ir-${anoAnterior}.pdf`;
+        const nome = `consumo-esperto-ir-${anoIr}.pdf`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -28,4 +29,7 @@ public class MetaFinanceiraDTO {
     /** Preenchido em respostas de criação/atualização quando aplicável. */
     private BigDecimal totalPercentualComprometidoMetas;
     private String alertaComprometimento;
+    /** Modo Viagem / Cronos — opcional. */
+    private LocalDate dataExpiracao;
+    private String googleCalendarEventId;
 }

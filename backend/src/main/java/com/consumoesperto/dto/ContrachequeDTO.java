@@ -16,6 +16,9 @@ public class ContrachequeDTO {
     private List<String> insights;
     private String status;
     private LocalDateTime dataCriacao;
+    /** null = legado; true quando |bruto − (líquido + Σ descontos)| ≤ tolerância. */
+    private Boolean auditoriaSomaBrutoOk;
+    private BigDecimal auditoriaDeltaBruto;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -39,4 +42,8 @@ public class ContrachequeDTO {
     public void setStatus(String status) { this.status = status; }
     public LocalDateTime getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+    public Boolean getAuditoriaSomaBrutoOk() { return auditoriaSomaBrutoOk; }
+    public void setAuditoriaSomaBrutoOk(Boolean auditoriaSomaBrutoOk) { this.auditoriaSomaBrutoOk = auditoriaSomaBrutoOk; }
+    public BigDecimal getAuditoriaDeltaBruto() { return auditoriaDeltaBruto; }
+    public void setAuditoriaDeltaBruto(BigDecimal auditoriaDeltaBruto) { this.auditoriaDeltaBruto = auditoriaDeltaBruto; }
 }

@@ -35,6 +35,7 @@ public class FinancialProactiveService {
     private final MetaFinanceiraRepository metaFinanceiraRepository;
     private final OpenAiService openAiService;
     private final ComportamentoService comportamentoService;
+    private final HabitDominoService habitDominoService;
 
     @Transactional(readOnly = true)
     public Optional<Categoria> sugerirCategoria(Long usuarioId, String descricao) {
@@ -86,6 +87,11 @@ public class FinancialProactiveService {
             comportamentoService.avaliarAposDespesa(transacao);
         } catch (Exception e) {
             log.warn("Falha ao avaliar comportamento após despesa {}: {}", id(transacao), e.getMessage());
+        }
+        try {
+            habitDominoService.avaliarEfeitoDominioPosDespesa(transacao);
+        } catch (Exception e) {
+            log.warn("Falha efeito dominó após despesa {}: {}", id(transacao), e.getMessage());
         }
     }
 

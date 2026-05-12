@@ -1,12 +1,13 @@
 import { ApplicationConfig } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptorsFromDi, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideNativeDateAdapter } from '@angular/material/core';
 
 import { routes } from './app.routes';
 import { AuthInterceptor } from './interceptors/auth.interceptor';
+import { ErrorInterceptor } from './interceptors/error.interceptor';
 import { LoadingInterceptor } from './interceptors/loading.interceptor';
 
 /**
@@ -33,7 +34,7 @@ export const appConfig: ApplicationConfig = {
     // Configura o cliente HTTP com interceptors personalizados
     // - AuthInterceptor: adiciona automaticamente token JWT nas requisições
     provideHttpClient(
-      withInterceptors([LoadingInterceptor, AuthInterceptor])
+      withInterceptors([LoadingInterceptor, ErrorInterceptor, AuthInterceptor])
     ),
     
     // Habilita animações básicas do Angular

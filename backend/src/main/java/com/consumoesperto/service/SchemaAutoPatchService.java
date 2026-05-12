@@ -46,10 +46,19 @@ public class SchemaAutoPatchService {
         ensureMetasFinanceirasTable();
         ensureGrupoFamiliarTables();
         ensureOrcamentosTable();
+        ensureDespesasFixasTable();
         ensureImportacoesFaturaCartaoTable();
+        ensureSugestoesContencaoJarvisTable();
         ensureContrachequesScoreTables();
         ensureUsuarioGeneroColumns();
         ensureUsuarioJarvisPerfilColumns();
+        ensureUsuarioGoogleCalendarColumns();
+        ensureMetasFinanceirasCronosColumns();
+        ensureJarvisCronosEventLogTable();
+        ensureAuditLogTable();
+        ensurePgvectorExtensionAndMemoriaSemanticaJarvisTable();
+        ensureJarvisFeedbackTable();
+        ensureJarvisFeedbackDataExpiracaoColumn();
         try {
             List<String> schemas = jdbcTemplate.queryForList(
                 "SELECT table_schema " +
@@ -253,6 +262,64 @@ public class SchemaAutoPatchService {
         }
     }
 
+    private void ensureDespesasFixasTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.despesas_fixas ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "descricao VARCHAR(200) NOT NULL,"
+                    + "valor NUMERIC(19,2) NOT NULL,"
+                    + "dia_vencimento INTEGER NOT NULL,"
+                    + "categoria VARCHAR(120),"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_atualizacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_despesas_fixas_usuario ON public.despesas_fixas(usuario_id)"
+            );
+            log.info("Schema patch: tabela public.despesas_fixas verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE despesas_fixas: {}", e.getMessage());
+        }
+    }
+
+    private void ensureSugestoesContencaoJarvisTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.sugestoes_contencao_jarvis ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "importacao_fatura_cartao_id BIGINT REFERENCES public.importacoes_fatura_cartao(id) ON DELETE SET NULL,"
+                    + "categoria_id BIGINT REFERENCES public.categorias(id) ON DELETE SET NULL,"
+                    + "chave_agrupamento VARCHAR(200) NOT NULL,"
+                    + "rotulo_exibicao VARCHAR(260) NOT NULL,"
+                    + "tipo_habito VARCHAR(24) NOT NULL DEFAULT 'OUTRO',"
+                    + "valor_gasto_referencia NUMERIC(19,2) NOT NULL,"
+                    + "media_tres_meses NUMERIC(19,2),"
+                    + "percentual_aumento NUMERIC(8,2),"
+                    + "valor_teto_sugerido NUMERIC(19,2) NOT NULL,"
+                    + "mes_alvo INTEGER NOT NULL,"
+                    + "ano_alvo INTEGER NOT NULL,"
+                    + "status VARCHAR(16) NOT NULL DEFAULT 'PENDENTE',"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_sugestoes_contencao_usuario_status "
+                    + "ON public.sugestoes_contencao_jarvis(usuario_id, status, data_criacao DESC)"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_sugestoes_contencao_importacao "
+                    + "ON public.sugestoes_contencao_jarvis(importacao_fatura_cartao_id)"
+            );
+            log.info("Schema patch: tabela public.sugestoes_contencao_jarvis verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE sugestoes_contencao_jarvis: {}", e.getMessage());
+        }
+    }
+
     private void ensureImportacoesFaturaCartaoTable() {
         try {
             executeDdlAutocommit(
@@ -306,6 +373,23 @@ public class SchemaAutoPatchService {
             executeDdlAutocommit(
                 "CREATE INDEX IF NOT EXISTS idx_contracheques_usuario_periodo "
                     + "ON public.contracheques_importados(usuario_id, ano DESC, mes DESC)"
+            );
+            executeDdlAutocommit(
+                "ALTER TABLE public.contracheques_importados ADD COLUMN IF NOT EXISTS auditoria_soma_bruto_ok BOOLEAN"
+            );
+            executeDdlAutocommit(
+                "ALTER TABLE public.contracheques_importados ADD COLUMN IF NOT EXISTS auditoria_delta_bruto NUMERIC(19,2)"
+            );
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.contracheque_descontos ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "contracheque_importado_id BIGINT NOT NULL REFERENCES public.contracheques_importados(id) ON DELETE CASCADE,"
+                    + "descricao VARCHAR(200) NOT NULL,"
+                    + "valor NUMERIC(19,2) NOT NULL"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_contracheque_desc_import_id ON public.contracheque_descontos(contracheque_importado_id)"
             );
             executeDdlAutocommit(
                 "CREATE TABLE IF NOT EXISTS public.usuarios_score ("
@@ -399,6 +483,81 @@ public class SchemaAutoPatchService {
         }
     }
 
+    private void ensureUsuarioGoogleCalendarColumns() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedUsuarios = schema + ".usuarios";
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios + " ADD COLUMN IF NOT EXISTS google_calendar_refresh_token TEXT");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios + " ADD COLUMN IF NOT EXISTS google_calendar_linked_at TIMESTAMP");
+            }
+            log.info("Schema patch: colunas Google Calendar verificadas em usuarios.");
+        } catch (Exception e) {
+            log.warn("Falha ao aplicar colunas Google Calendar: {}", e.getMessage());
+        }
+    }
+
+    private void ensureMetasFinanceirasCronosColumns() {
+        try {
+            executeDdlAutocommit("ALTER TABLE public.metas_financeiras ADD COLUMN IF NOT EXISTS data_expiracao DATE");
+            executeDdlAutocommit(
+                "ALTER TABLE public.metas_financeiras ADD COLUMN IF NOT EXISTS google_calendar_event_id VARCHAR(128)");
+            log.info("Schema patch: metas_financeiras — colunas Cronos verificadas.");
+        } catch (Exception e) {
+            log.warn("Falha ao aplicar colunas Cronos em metas_financeiras: {}", e.getMessage());
+        }
+    }
+
+    private void ensureAuditLogTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.audit_log ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "tipo VARCHAR(64),"
+                    + "descricao TEXT NOT NULL,"
+                    + "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit("CREATE INDEX IF NOT EXISTS idx_audit_log_usuario ON public.audit_log(usuario_id)");
+            log.info("Schema patch: audit_log verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE audit_log: {}", e.getMessage());
+        }
+    }
+
+    private void ensureJarvisCronosEventLogTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.jarvis_cronos_evento_log ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "event_fingerprint VARCHAR(256) NOT NULL,"
+                    + "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "CONSTRAINT uk_cronos_evento UNIQUE(usuario_id, event_fingerprint)"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_cronos_evento_usuario ON public.jarvis_cronos_evento_log(usuario_id)");
+            log.info("Schema patch: jarvis_cronos_evento_log verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE jarvis_cronos_evento_log: {}", e.getMessage());
+        }
+    }
+
     private void ensureGrupoFamiliarTables() {
         try {
             executeDdlAutocommit(
@@ -434,6 +593,117 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: grupos familiares verificados.");
         } catch (Exception e) {
             log.warn("Falha ao CREATE grupos familiares: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * pgvector + memória semântica J.A.R.V.I.S. (uma tabela por schema que contém {@code usuarios}).
+     */
+    private void ensurePgvectorExtensionAndMemoriaSemanticaJarvisTable() {
+        try {
+            executeDdlAutocommit("CREATE EXTENSION IF NOT EXISTS vector");
+        } catch (Exception e) {
+            log.warn(
+                "Schema patch: CREATE EXTENSION vector falhou (ex.: sem superuser). "
+                    + "Instale pgvector no Postgres ou conceda privilégio: {}",
+                e.getMessage());
+        }
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                log.warn("Schema patch: 'usuarios' inexistente; memoria_semantica_jarvis não criada.");
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedUsuarios = schema + ".usuarios";
+                String qualified = schema + ".memoria_semantica_jarvis";
+                executeDdlAutocommit(
+                    "CREATE TABLE IF NOT EXISTS " + qualified + " ("
+                        + "id BIGSERIAL PRIMARY KEY,"
+                        + "usuario_id BIGINT NOT NULL REFERENCES " + qualifiedUsuarios + "(id) ON DELETE CASCADE,"
+                        + "contexto TEXT NOT NULL,"
+                        + "embedding vector(1536),"
+                        + "data_registro TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),"
+                        + "categoria_origem VARCHAR(32) NOT NULL "
+                        + "CHECK (categoria_origem IN ('FINANCAS','HABITO','AGENDA'))"
+                        + ")"
+                );
+                executeDdlAutocommit(
+                    "CREATE INDEX IF NOT EXISTS idx_mem_sem_jarvis_usuario_registro ON "
+                        + qualified + " (usuario_id, data_registro DESC)"
+                );
+            }
+            log.info("Schema patch: memoria_semantica_jarvis verificada em {} schema(s).", schemas.size());
+        } catch (Exception e) {
+            log.warn("Schema patch memoria_semantica_jarvis: {}", e.getMessage());
+        }
+    }
+
+    private void ensureJarvisFeedbackTable() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String u = schema + ".usuarios";
+                String t = schema + ".jarvis_feedback";
+                executeDdlAutocommit(
+                    "CREATE TABLE IF NOT EXISTS " + t + " ("
+                        + "id BIGSERIAL PRIMARY KEY,"
+                        + "usuario_id BIGINT NOT NULL REFERENCES " + u + "(id) ON DELETE CASCADE,"
+                        + "insight_id VARCHAR(120) NOT NULL,"
+                        + "tipo_alvo VARCHAR(32) NOT NULL,"
+                        + "positivo BOOLEAN NOT NULL,"
+                        + "categoria_chave VARCHAR(200),"
+                        + "data_registro TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()"
+                        + ")"
+                );
+                executeDdlAutocommit(
+                    "CREATE INDEX IF NOT EXISTS idx_jarvis_fb_usuario_registro ON " + t
+                        + " (usuario_id, data_registro DESC)"
+                );
+            }
+            log.info("Schema patch: jarvis_feedback verificada em {} schema(s).", schemas.size());
+        } catch (Exception e) {
+            log.warn("Schema patch jarvis_feedback: {}", e.getMessage());
+        }
+    }
+
+    private void ensureJarvisFeedbackDataExpiracaoColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'jarvis_feedback' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String t = schema + ".jarvis_feedback";
+                executeDdlAutocommit(
+                    "ALTER TABLE " + t + " ADD COLUMN IF NOT EXISTS data_expiracao TIMESTAMP WITHOUT TIME ZONE");
+            }
+        } catch (Exception e) {
+            log.warn("Schema patch jarvis_feedback.data_expiracao: {}", e.getMessage());
         }
     }
 }

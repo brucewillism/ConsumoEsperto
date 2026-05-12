@@ -4,12 +4,16 @@ import com.consumoesperto.dto.CartaoCreditoDTO;
 import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.dto.ImportacaoFaturaDTO;
+import com.consumoesperto.dto.SugestaoContencaoJarvisDTO;
 import com.consumoesperto.dto.MetaFinanceiraDTO;
 import com.consumoesperto.dto.MetaFinanceiraRequest;
 import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.dto.DespesaFixaRequest;
 import com.consumoesperto.model.CartaoCredito;
+import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.Fatura;
+import com.consumoesperto.model.MemoriaCategoriaOrigem;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -76,6 +80,11 @@ public class WhatsAppCommandService {
     private final SaldoService saldoService;
     private final JarvisProtocolService jarvisProtocolService;
     private final UsuarioRepository usuarioRepository;
+    private final ContencaoJarvisService contencaoJarvisService;
+    private final PrevisaoFluxoCaixaService previsaoFluxoCaixaService;
+    private final DespesaFixaService despesaFixaService;
+    private final CronosJarvisService cronosJarvisService;
+    private final CerebroSemanticoService cerebroSemanticoService;
 
     /** Confirmação de parcelamento com juros embutido (N×parcela > total citado). */
     private static final class ParcelaJurosEmbutidosDraft {
@@ -99,7 +108,12 @@ public class WhatsAppCommandService {
     private final java.util.Set<Long> awaitingSalaryAutoConfirm = java.util.Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Map<Long, Long> awaitingFaturaImportConfirm = new ConcurrentHashMap<>();
     private final Map<Long, Long> awaitingContrachequeImportConfirm = new ConcurrentHashMap<>();
+    private final Map<Long, PendingDespesaFixaDraft> awaitingDespesaFixaDia = new ConcurrentHashMap<>();
     private final Map<String, LocalDateTime> recentOutgoingTexts = new ConcurrentHashMap<>();
+
+    /** “Jarvis, anote isso: …” — grava memória semântica financeira. */
+    private static final Pattern JARVIS_ANOTE_ISSO = Pattern.compile(
+        "(?i)\\bjarvis\\b\\s*,?\\s*anote\\s+isso\\s*[:\\-–]\\s*(.+)$");
 
     public void processIncomingMessage(String from, String body, String mediaUrl, String mediaContentType) {
         Long userId = null;
@@ -138,6 +152,26 @@ public class WhatsAppCommandService {
                 sendOutgoingMessage(from, respostaInvestimento(userId), userId);
                 return;
             }
+            Optional<String> disp = tryDisponibilidadeRealRelatorio(userId, sourceText);
+            if (disp.isPresent()) {
+                sendOutgoingMessage(from, disp.get(), userId);
+                return;
+            }
+            Optional<String> oracle = tryAnaliseGrandeCompra(userId, sourceText);
+            if (oracle.isPresent()) {
+                sendOutgoingMessage(from, oracle.get(), userId);
+                return;
+            }
+            Optional<String> despesaFixa = tryIniciarDespesaFixaPorTextoLivre(userId, sourceText);
+            if (despesaFixa.isPresent()) {
+                sendOutgoingMessage(from, despesaFixa.get(), userId);
+                return;
+            }
+            Optional<String> jarvisNota = tryJarvisAnoteIsso(userId, sourceText);
+            if (jarvisNota.isPresent()) {
+                sendOutgoingMessage(from, jarvisNota.get(), userId);
+                return;
+            }
             JsonNode parsed = openAiService.parseCommand(sourceText, userId);
             String response;
             String act = parsed.path("action").asText("");
@@ -170,11 +204,31 @@ public class WhatsAppCommandService {
             if (parcelaJurosReply.isPresent()) {
                 return parcelaJurosReply.get();
             }
+            Optional<String> importContr = tryImportacaoContrachequeInstrucoes(userId, text);
+            if (importContr.isPresent()) {
+                return importContr.get();
+            }
             if (isForecastQuestion(text)) {
                 return forecastFinanceiroService.montarRespostaWhatsapp(userId);
             }
             if (isInvestmentQuestion(text)) {
                 return respostaInvestimento(userId);
+            }
+            Optional<String> disp = tryDisponibilidadeRealRelatorio(userId, text);
+            if (disp.isPresent()) {
+                return disp.get();
+            }
+            Optional<String> oracle = tryAnaliseGrandeCompra(userId, text);
+            if (oracle.isPresent()) {
+                return oracle.get();
+            }
+            Optional<String> despesaFixa = tryIniciarDespesaFixaPorTextoLivre(userId, text);
+            if (despesaFixa.isPresent()) {
+                return despesaFixa.get();
+            }
+            Optional<String> jarvisNota = tryJarvisAnoteIsso(userId, text);
+            if (jarvisNota.isPresent()) {
+                return jarvisNota.get();
             }
             JsonNode parsed = openAiService.parseCommand(text, userId);
             String act = parsed.path("action").asText("");
@@ -263,11 +317,18 @@ public class WhatsAppCommandService {
             if (fromMe) {
                 log.debug("Conteúdo identificado como input do usuário. Seguindo...");
             }
-            if ("document".equalsIgnoreCase(mediaType) && isPdfMime(incoming.getMediaMimeType()) && mediaBytes != null && mediaBytes.length > 0) {
-                if (!incoming.isJarvisInstantAckSent()) {
-                    sendOutgoingMessage(from, jarvisProtocolService.statusLeituraPdfExtracaoFiscal(), userId, webhookEvolutionInstanceHint);
+            if ("document".equalsIgnoreCase(mediaType)) {
+                if (mediaBytes == null || mediaBytes.length == 0) {
+                    response = msgInfo("Documento", jarvisProtocolService.documentoRecebidoSemConteudoBinario());
+                } else if (isPdfMime(incoming.getMediaMimeType()) || isPdfMagic(mediaBytes)) {
+                    if (!incoming.isJarvisInstantAckSent()) {
+                        sendOutgoingMessage(from, jarvisProtocolService.statusLeituraPdfExtracaoFiscal(), userId, webhookEvolutionInstanceHint);
+                    }
+                    response = handlePdfDocument(userId, mediaBytes);
+                } else {
+                    response = msgErro(userId, "Documento",
+                        "Este ficheiro não é *PDF*. Para *contracheque*, *fatura* ou holerite, envia o documento em PDF.");
                 }
-                response = handlePdfDocument(userId, mediaBytes);
             } else if ("image".equalsIgnoreCase(mediaType) && mediaBytes != null && mediaBytes.length > 0) {
                 response = handleImageReceiptBytes(from, userId, mediaBytes, incoming.getMediaMimeType());
             } else {
@@ -281,34 +342,63 @@ public class WhatsAppCommandService {
                         + "• No servidor: chave Groq da plataforma (`GROQ_API_KEY` / `consumoesperto.ai.platform-groq-api-key`), "
                         + "e `evolution.url` + `evolution.apikey` alinhados à instância.";
                 } else {
-                    if ("text".equalsIgnoreCase(resolveEffectiveMediaType(mediaType, sourceText)) && !incoming.isJarvisInstantAckSent()) {
-                        sendOutgoingMessage(from, jarvisProtocolService.statusLeituraTextoEmAndamento(), userId, webhookEvolutionInstanceHint);
-                    }
-                    Optional<String> metaReply = tryResolveMetaConversation(userId, sourceText);
-                    if (metaReply.isPresent()) {
-                        response = metaReply.get();
+                    Optional<String> importContrEv = tryImportacaoContrachequeInstrucoes(userId, sourceText);
+                    if (importContrEv.isPresent()) {
+                        response = importContrEv.get();
                     } else {
-                        Optional<String> pj = tryResolveParcelaJurosEmbutidos(userId, sourceText);
-                        if (pj.isPresent()) {
-                            response = pj.get();
+                        if ("text".equalsIgnoreCase(resolveEffectiveMediaType(mediaType, sourceText)) && !incoming.isJarvisInstantAckSent()) {
+                            sendOutgoingMessage(from, jarvisProtocolService.statusLeituraTextoEmAndamento(), userId, webhookEvolutionInstanceHint);
+                        }
+                        Optional<String> metaReply = tryResolveMetaConversation(userId, sourceText);
+                        if (metaReply.isPresent()) {
+                            response = metaReply.get();
                         } else {
-                        if (isForecastQuestion(sourceText)) {
-                            response = forecastFinanceiroService.montarRespostaWhatsapp(userId);
-                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                            return;
-                        }
-                        if (isInvestmentQuestion(sourceText)) {
-                            response = respostaInvestimento(userId);
-                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                            return;
-                        }
-                        JsonNode parsed = openAiService.parseCommand(sourceText, userId);
-                        String actEv = parsed.path("action").asText("");
-                        if ("GENERATE_REPORT".equals(actEv) || "GERAR_RELATORIO".equals(actEv)) {
-                            response = handleGenerateReport(parsed, userId, from, sourceText, evolutionInstanceName);
-                        } else {
-                            response = executeCommand(parsed, userId, sourceText);
-                        }
+                            Optional<String> pj = tryResolveParcelaJurosEmbutidos(userId, sourceText);
+                            if (pj.isPresent()) {
+                                response = pj.get();
+                            } else {
+                                if (isForecastQuestion(sourceText)) {
+                                    response = forecastFinanceiroService.montarRespostaWhatsapp(userId);
+                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                    return;
+                                }
+                                if (isInvestmentQuestion(sourceText)) {
+                                    response = respostaInvestimento(userId);
+                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                    return;
+                                }
+                                Optional<String> dispEv = tryDisponibilidadeRealRelatorio(userId, sourceText);
+                                if (dispEv.isPresent()) {
+                                    response = dispEv.get();
+                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                    return;
+                                }
+                                Optional<String> oracleEv = tryAnaliseGrandeCompra(userId, sourceText);
+                                if (oracleEv.isPresent()) {
+                                    response = oracleEv.get();
+                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                    return;
+                                }
+                                Optional<String> despesaFixaEv = tryIniciarDespesaFixaPorTextoLivre(userId, sourceText);
+                                if (despesaFixaEv.isPresent()) {
+                                    response = despesaFixaEv.get();
+                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                    return;
+                                }
+                                Optional<String> jarvisNotaEv = tryJarvisAnoteIsso(userId, sourceText);
+                                if (jarvisNotaEv.isPresent()) {
+                                    response = jarvisNotaEv.get();
+                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                    return;
+                                }
+                                JsonNode parsed = openAiService.parseCommand(sourceText, userId);
+                                String actEv = parsed.path("action").asText("");
+                                if ("GENERATE_REPORT".equals(actEv) || "GERAR_RELATORIO".equals(actEv)) {
+                                    response = handleGenerateReport(parsed, userId, from, sourceText, evolutionInstanceName);
+                                } else {
+                                    response = executeCommand(parsed, userId, sourceText);
+                                }
+                            }
                         }
                     }
                 }
@@ -493,11 +583,7 @@ public class WhatsAppCommandService {
             if ("CONTRACHEQUE".equalsIgnoreCase(tipo)) {
                 ContrachequeDTO c = contrachequeImportService.processarExtracao(userId, extracted);
                 awaitingContrachequeImportConfirm.put(userId, c.getId());
-                List<String> insights = c.getInsights() != null ? c.getInsights() : List.of();
-                return jarvisProtocolService.formatoContrachequeAnalisado(
-                    c.getEmpresa() != null && !c.getEmpresa().isBlank() ? c.getEmpresa() : "—",
-                    BRL.format(c.getSalarioLiquido()),
-                    insights);
+                return jarvisProtocolService.protocoloRendaConcluidoComDecomposicao(c);
             }
             if ("FATURA_CARTAO".equalsIgnoreCase(tipo) || faturaPdfImportService.pareceFaturaCartao(extracted)) {
                 ImportacaoFaturaDTO imp = faturaPdfImportService.processarExtracao(userId, extracted);
@@ -649,6 +735,45 @@ public class WhatsAppCommandService {
         return mime != null && mime.toLowerCase(Locale.ROOT).contains("pdf");
     }
 
+    /** PDF enviado pelo WhatsApp às vezes vem como {@code application/octet-stream}; o anexo continua sendo PDF. */
+    private static boolean isPdfMagic(byte[] data) {
+        if (data == null || data.length < 5) {
+            return false;
+        }
+        return data[0] == '%' && data[1] == 'P' && data[2] == 'D' && data[3] == 'F' && data[4] == '-';
+    }
+
+    private Optional<String> tryImportacaoContrachequeInstrucoes(Long userId, String sourceText) {
+        if (!isPedidoImportacaoContrachequeTexto(sourceText)) {
+            return Optional.empty();
+        }
+        return Optional.of(msgInfo("Contracheque", jarvisProtocolService.instrucoesImportarContrachequeSohTexto()));
+    }
+
+    private static boolean isPedidoImportacaoContrachequeTexto(String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return false;
+        }
+        String t = Normalizer.normalize(sourceText, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+        boolean alvoDoc = t.contains("recibo")
+            || t.contains("contracheque")
+            || t.contains("holerite")
+            || t.contains("folha de pagamento")
+            || t.contains("recibo de pagamento");
+        boolean alvoSalario = (t.contains("salario") || t.contains("ordenado")) && (t.contains("pagamento") || t.contains("liquido"));
+        if (!alvoDoc && !alvoSalario) {
+            return false;
+        }
+        return t.contains("importar") || t.contains("importa")
+            || (t.contains("envia") && (t.contains("pdf") || t.contains("arquivo") || t.contains("documento")))
+            || t.contains("anex")
+            || t.contains("subir")
+            || t.contains("carregar")
+            || t.contains("mandar meu") || t.contains("enviar meu");
+    }
+
     private String respostaInvestimento(Long userId) {
         String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
         String intro = jarvisProtocolService.introducaoProjecaoRotasCapital();
@@ -685,6 +810,139 @@ public class WhatsAppCommandService {
             || (t.contains("saldo") && t.contains("rende"))
             || (t.contains("poupanca") && t.contains("cdb"))
             || t.contains("tesouro selic");
+    }
+
+    private Optional<String> tryDisponibilidadeRealRelatorio(Long userId, String sourceText) {
+        if (!isDisponibilidadeRealQuery(sourceText)) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(previsaoFluxoCaixaService.montarRelatorioDisponibilidadeWhatsapp(userId));
+        } catch (Exception e) {
+            log.warn("[SENTINELA] {}", e.getMessage());
+            return Optional.of(msgErro(userId, "Disponibilidade", "Não consegui calcular o relatório agora."));
+        }
+    }
+
+    private static boolean isDisponibilidadeRealQuery(String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return false;
+        }
+        String t = Normalizer.normalize(sourceText, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+        return t.contains("sentinela")
+            || t.contains("disponibilidade real")
+            || (t.contains("disponibilidade") && (t.contains("obrig") || t.contains("saldo") || t.contains("fixa")))
+            || (t.contains("fluxo") && t.contains("caixa") && (t.contains("real") || t.contains("liquido")));
+    }
+
+    /**
+     * Oráculo “grande compra” — só quando há intenção explícita de análise de compra.
+     * Não intercepta cadastro de cartão (limite/vencimento) nem gestão de conta.
+     */
+    private Optional<String> tryAnaliseGrandeCompra(Long userId, String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return Optional.empty();
+        }
+        String t = Normalizer.normalize(sourceText, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+        if (contextoCartaoOuCadastroForaOracle(t)) {
+            return Optional.empty();
+        }
+        BigDecimal valor = extrairMaiorValorMonetario(sourceText);
+        if (valor == null || valor.compareTo(new BigDecimal("500")) < 0) {
+            return Optional.empty();
+        }
+        boolean intencaoAnalise = t.contains("vale a pena")
+            || t.contains("vale pena")
+            || t.contains("compensa")
+            || t.contains("devo comprar")
+            || t.contains("deve comprar")
+            || t.contains("sera que compro")
+            || t.contains("será que compro")
+            || t.contains("grande compra")
+            || t.contains("oraculo") || t.contains("oráculo")
+            || t.contains("analise se") || t.contains("análise se")
+            || t.contains("analise:") || t.contains("análise:")
+            || t.contains("iphone")
+            || t.contains("notebook")
+            || t.contains("geladeira")
+            || t.contains("televisao") || t.contains("televisão")
+            || t.contains("carro zero")
+            || t.contains("parcelado em")
+            || (t.contains("comprar") && (t.contains("agora") || t.contains("essa") || t.contains("este") || t.contains("isto")));
+        if (!intencaoAnalise) {
+            return Optional.empty();
+        }
+        BigDecimal saldo = saldoService.saldoContaCorrente(userId);
+        if (saldo == null) {
+            saldo = BigDecimal.ZERO;
+        }
+        BigDecimal rendimentoMes = valor.multiply(new BigDecimal("0.01")).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal pct = saldo.compareTo(BigDecimal.ZERO) <= 0
+            ? new BigDecimal("100")
+            : valor.divide(saldo, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(1, RoundingMode.HALF_UP);
+        String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+        String msg = jarvisProtocolService.proativoAnaliseGrandeCompra(voc, BRL.format(rendimentoMes), pct, 3);
+        return Optional.of(msgOk("Consultoria — J.A.R.V.I.S.", msg));
+    }
+
+    /** Cadastro de cartão / limite / vencimento — não confundir com cenário de “grande compra”. */
+    private static boolean contextoCartaoOuCadastroForaOracle(String t) {
+        if (t == null || t.isBlank()) {
+            return false;
+        }
+        if (t.contains("cadastr") || t.contains("cadastro") || t.contains("registr")) {
+            return true;
+        }
+        boolean cartao = t.contains("cartao") || t.contains("cartão");
+        if (!cartao) {
+            return false;
+        }
+        return t.contains("limite")
+            || t.contains("vencimento")
+            || t.contains("final ")
+            || t.contains("final:")
+            || t.contains("titular");
+    }
+
+    private static BigDecimal extrairMaiorValorMonetario(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        Pattern pat = Pattern.compile("(\\d{1,3}(?:\\.\\d{3})*(?:,\\d{2})|\\d+(?:,\\d{2})|\\d{2,}(?:\\.\\d{2})?)");
+        Matcher m = pat.matcher(raw);
+        BigDecimal max = null;
+        while (m.find()) {
+            BigDecimal v = parseValorBr(m.group(1));
+            if (v != null && v.compareTo(BigDecimal.ZERO) > 0) {
+                if (max == null || v.compareTo(max) > 0) {
+                    max = v;
+                }
+            }
+        }
+        return max;
+    }
+
+    private static BigDecimal parseValorBr(String s) {
+        if (s == null || s.isBlank()) {
+            return null;
+        }
+        String x = s.trim();
+        if (x.contains(",") && x.contains(".")) {
+            x = x.replace(".", "").replace(",", ".");
+        } else if (x.contains(",") && !x.contains(".")) {
+            x = x.replace(",", ".");
+        }
+        try {
+            return new BigDecimal(x);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** Respostas de {@link WhatsAppEntityConfigUpdateService} já trazem texto claro (incl. ✅ em sucesso). */
@@ -1542,11 +1800,91 @@ public class WhatsAppCommandService {
         return "Sem categoria";
     }
 
+    private Optional<String> tryResolveContencaoProtocolo(Long userId, String sourceText) {
+        String text = sourceText != null ? sourceText.trim() : "";
+        Optional<Long> sidOpt = contencaoJarvisService.pollSugestaoIdParaConfirmacaoWhatsApp(userId);
+        if (sidOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        Long sid = sidOpt.get();
+        if (isAffirmativeContencaoReply(text)) {
+            try {
+                SugestaoContencaoJarvisDTO d = contencaoJarvisService.aceitar(userId, sid);
+                String extra = contencaoJarvisService.pollSugestaoIdParaConfirmacaoWhatsApp(userId)
+                    .map(ignored -> "\n\n_Há *outra sugestão* na fila — responda *sim* para aplicar o teto ou *não* para recusar._")
+                    .orElse("");
+                return Optional.of(msgOk("Protocolo J.A.R.V.I.S.", d.getMensagemResumo() + extra));
+            } catch (Exception e) {
+                log.warn("[CONTENCAO-JARVIS] Falha ao aceitar sugestão {}: {}", sid, e.getMessage());
+                return Optional.of(msgErro(userId, "Protocolo de contenção", e.getMessage()));
+            }
+        }
+        if (isNegativeReply(text)) {
+            contencaoJarvisService.recusar(userId, sid);
+            if (contencaoJarvisService.pollSugestaoIdParaConfirmacaoWhatsApp(userId).isPresent()) {
+                return Optional.of(msgInfo("Sugestão",
+                    "Recusada. Responda *sim* para configurar a *próxima* sugestão de teto ou *não* para descartar."));
+            }
+            return Optional.of(msgInfo("Sugestão", "Sem outras sugestões na fila. Pode acompanhar ou aceitar novas metas no app."));
+        }
+        return Optional.of(msgInfo("Protocolo J.A.R.V.I.S.",
+            "Responda *sim*, *pode ser* ou *configure* para ativar o teto sugerido, ou *não* para recusar."));
+    }
+
+    private Optional<String> tryResolveModoViagemProtocolo(Long userId, String sourceText) {
+        String text = sourceText != null ? sourceText.trim() : "";
+        if (cronosJarvisService.pollModoViagemParaConfirmacaoWhatsApp(userId).isEmpty()) {
+            return Optional.empty();
+        }
+        if (isAffirmativeContencaoReply(text)) {
+            try {
+                cronosJarvisService.aceitarModoViagemTopoDaFila(userId);
+                String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+                return Optional.of(msgOk("Modo Viagem",
+                    voc + ", *protocolo de viagem ativo*. Registei uma *meta temporária* com o teto sugerido. "
+                        + "Monitoro os lançamentos e relembrarei o foco na reserva."));
+            } catch (Exception e) {
+                log.warn("[CRONOS] aceite: {}", e.getMessage());
+                return Optional.of(msgErro(userId, "Modo Viagem", e.getMessage()));
+            }
+        }
+        if (isNegativeReply(text)) {
+            cronosJarvisService.descartarTopoModoViagem(userId);
+            return Optional.of(msgInfo("Modo Viagem",
+                "Sem o teto temporário por ora. Pode ativar mais tarde ou ajustar no app."));
+        }
+        return Optional.of(msgInfo("Modo Viagem",
+            "Responda *sim* para ativar o *Modo Viagem* com o teto sugerido ou *não* para recusar."));
+    }
+
+    private boolean isAffirmativeContencaoReply(String raw) {
+        if (isAffirmativeSaveReply(raw)) {
+            return true;
+        }
+        if (raw == null || raw.isBlank()) {
+            return false;
+        }
+        String t = normalize(raw);
+        return t.contains("pode ser") || t.contains("configure") || t.contains("configura") || t.contains("aceito") || t.contains("aceita");
+    }
+
     private Optional<String> tryResolveMetaConversation(Long userId, String sourceText) {
         String text = sourceText != null ? sourceText.trim() : "";
+        Optional<String> despesaFixaDia = tryResolveDespesaFixaDiaPendente(userId, text);
+        if (despesaFixaDia.isPresent()) {
+            return despesaFixaDia;
+        }
         Optional<String> gestao = whatsAppGestaoProativaService.tentarConsumirResposta(userId, text);
         if (gestao.isPresent()) {
             return gestao;
+        }
+        Optional<String> contencao = tryResolveContencaoProtocolo(userId, text);
+        if (contencao.isPresent()) {
+            return contencao;
+        }
+        Optional<String> cronos = tryResolveModoViagemProtocolo(userId, text);
+        if (cronos.isPresent()) {
+            return cronos;
         }
         if (awaitingSalaryAutoConfirm.contains(userId)) {
             if (isAffirmativeSaveReply(text)) {
@@ -1702,6 +2040,7 @@ public class WhatsAppCommandService {
         awaitingSaveConfirm.remove(userId);
         awaitingCupomConfirm.remove(userId);
         awaitingSalaryAutoConfirm.remove(userId);
+        awaitingDespesaFixaDia.remove(userId);
         whatsAppGestaoProativaService.cancelarSessao(userId);
         BigDecimal amount = readAmount(cmd, sourceText);
         BigDecimal pct = readPercentualMeta(cmd);
@@ -1811,6 +2150,198 @@ public class WhatsAppCommandService {
         }
     }
 
+    private Optional<String> tryResolveDespesaFixaDiaPendente(Long userId, String sourceText) {
+        if (userId == null || !awaitingDespesaFixaDia.containsKey(userId)) {
+            return Optional.empty();
+        }
+        String text = sourceText != null ? sourceText.trim() : "";
+        if (isNegativeReply(text)) {
+            awaitingDespesaFixaDia.remove(userId);
+            return Optional.of(msgInfo("Despesa fixa", "Registo cancelado. Pode enviar o comando outra vez quando quiser."));
+        }
+        Integer dia = extrairPrimeiroDiaMesValido(text);
+        if (dia == null) {
+            return Optional.of(msgErro(userId, "Vencimento",
+                "Indique só o *dia* do mês (1 a 31), por exemplo *10*."));
+        }
+        PendingDespesaFixaDraft d = awaitingDespesaFixaDia.remove(userId);
+        try {
+            return Optional.of(persistDespesaFixaWhatsapp(userId, d.descricao, d.valor, dia));
+        } catch (IllegalArgumentException ex) {
+            return Optional.of(msgErro(userId, "Despesa fixa", ex.getMessage()));
+        }
+    }
+
+    private Optional<String> tryJarvisAnoteIsso(Long userId, String raw) {
+        if (userId == null || raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        Matcher m = JARVIS_ANOTE_ISSO.matcher(raw.trim());
+        if (!m.matches()) {
+            return Optional.empty();
+        }
+        String note = m.group(1).trim();
+        if (note.isBlank()) {
+            String v = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+            return Optional.of(msgInfo("Memória", v + ", indique o texto a gravar após *anote isso*."));
+        }
+        cerebroSemanticoService.gravarMemoria(userId, note, MemoriaCategoriaOrigem.FINANCAS);
+        String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+        return Optional.of(jarvisProtocolService.confirmacaoMemoriaNucleo(voc));
+    }
+
+    private Optional<String> tryIniciarDespesaFixaPorTextoLivre(Long userId, String raw) {
+        if (userId == null || raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        if (awaitingDespesaFixaDia.containsKey(userId)) {
+            return Optional.empty();
+        }
+        DespesaFixaIntent intent = parseDespesaFixaIntent(raw.trim());
+        if (intent == null) {
+            return Optional.empty();
+        }
+        if (intent.diaVencimento == null) {
+            PendingDespesaFixaDraft d = new PendingDespesaFixaDraft();
+            d.valor = intent.valor;
+            d.descricao = intent.descricao;
+            awaitingDespesaFixaDia.put(userId, d);
+            String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+            return Optional.of(jarvisProtocolService.perguntarDiaVencimentoDespesaFixa(voc, intent.descricao));
+        }
+        try {
+            return Optional.of(persistDespesaFixaWhatsapp(userId, intent.descricao, intent.valor, intent.diaVencimento));
+        } catch (IllegalArgumentException ex) {
+            return Optional.of(msgErro(userId, "Despesa fixa", ex.getMessage()));
+        }
+    }
+
+    private String persistDespesaFixaWhatsapp(Long userId, String descricao, BigDecimal valor, int dia) {
+        Optional<DespesaFixa> sim = despesaFixaService.encontrarSimilar(userId, descricao, null);
+        if (sim.isPresent()) {
+            throw new IllegalArgumentException(
+                "Já existe registo semelhante (*" + sim.get().getDescricao() + "* — "
+                    + BRL.format(sim.get().getValor()) + "). Ajuste em *Perfil → Obrigações fixas* ou use outro nome.");
+        }
+        DespesaFixaRequest req = new DespesaFixaRequest();
+        req.setDescricao(sanitizeDescription(descricao));
+        req.setValor(valor);
+        req.setDiaVencimento(dia);
+        req.setCategoria("Obrigações fixas");
+        despesaFixaService.criar(userId, req);
+        return jarvisProtocolService.protocoloSentinelaDespesaFixaRegistrada(req.getDescricao(), BRL.format(valor), dia);
+    }
+
+    private DespesaFixaIntent parseDespesaFixaIntent(String t) {
+        Matcher m1 = Pattern.compile("(?i)(?:salve\\s+)?(?:essa\\s+)?despesa\\s+fixa\\s+de\\s*R?\\$?\\s*([0-9]+(?:[\\.,][0-9]+)?)\\s*(?:reais?)?\\s*(?:para|pro|pra)\\s+(.+)").matcher(t);
+        if (m1.find()) {
+            return montarIntentValorDesc(m1.group(1), m1.group(2));
+        }
+        Matcher m4 = Pattern.compile("(?i)despesa\\s+fixa\\s*(?:de\\s*)?R?\\$?\\s*([0-9]+(?:[\\.,][0-9]+)?)\\s*(?:reais?)?\\s*(?:para|pro|pra)\\s+(.+)").matcher(t);
+        if (m4.find()) {
+            return montarIntentValorDesc(m4.group(1), m4.group(2));
+        }
+        Matcher m2 = Pattern.compile("(?i)adicione\\s+despesa\\s+fixa\\s*:?\\s*(.+)").matcher(t);
+        if (m2.find()) {
+            return parseListaSeparadaVirgulaDespesaFixa(m2.group(1).trim());
+        }
+        Matcher m3 = Pattern.compile("(?i)(?:cadastr(?:ar|a)|registr(?:ar|a))\\s+despesa\\s+fixa\\s*:?\\s*(.+)").matcher(t);
+        if (m3.find()) {
+            return parseListaSeparadaVirgulaDespesaFixa(m3.group(1).trim());
+        }
+        return null;
+    }
+
+    private DespesaFixaIntent montarIntentValorDesc(String valorStr, String descTail) {
+        BigDecimal v = parseSingleMoneyValue(valorStr);
+        if (v == null || v.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        String work = descTail == null ? "" : descTail.trim();
+        Integer dia = extrairDiaDoUltimoTrecho(work);
+        if (dia != null) {
+            work = removerUltimoDiaTrecho(work);
+        }
+        work = sanitizeDescription(work);
+        if (work.isBlank()) {
+            return null;
+        }
+        DespesaFixaIntent i = new DespesaFixaIntent();
+        i.valor = v.setScale(2, RoundingMode.HALF_UP);
+        i.descricao = work;
+        i.diaVencimento = dia;
+        return i;
+    }
+
+    private DespesaFixaIntent parseListaSeparadaVirgulaDespesaFixa(String chunk) {
+        String[] parts = chunk.split("\\s*,\\s*");
+        if (parts.length < 2) {
+            return null;
+        }
+        String descPart = sanitizeDescription(parts[0].trim());
+        if (descPart.isBlank()) {
+            return null;
+        }
+        BigDecimal v = parseSingleMoneyValue(parts[1]);
+        if (v == null || v.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        Integer dia = null;
+        if (parts.length >= 3) {
+            dia = extrairPrimeiroDiaMesValido(parts[2]);
+        }
+        if (dia == null) {
+            dia = extrairDiaDoUltimoTrecho(chunk);
+        }
+        DespesaFixaIntent i = new DespesaFixaIntent();
+        i.valor = v.setScale(2, RoundingMode.HALF_UP);
+        i.descricao = descPart;
+        i.diaVencimento = dia;
+        return i;
+    }
+
+    private static Integer extrairDiaDoUltimoTrecho(String work) {
+        if (work == null || work.isBlank()) {
+            return null;
+        }
+        String s = work.trim();
+        Matcher m = Pattern.compile("(?i)(?:,\\s*)?(?:todo\\s+)?dia\\s*(\\d{1,2})\\s*$").matcher(s);
+        if (m.find()) {
+            int d = Integer.parseInt(m.group(1));
+            return d >= 1 && d <= 31 ? d : null;
+        }
+        m = Pattern.compile("(?i)(?:,\\s*)?venc(?:imento)?(?:\\s+do\\s+m[eê]s)?\\s*(?:dia\\s*)?(\\d{1,2})\\s*$").matcher(s);
+        if (m.find()) {
+            int d = Integer.parseInt(m.group(1));
+            return d >= 1 && d <= 31 ? d : null;
+        }
+        return null;
+    }
+
+    private static String removerUltimoDiaTrecho(String work) {
+        if (work == null) {
+            return "";
+        }
+        String s = work.trim();
+        s = Pattern.compile("(?i)(?:,\\s*)?(?:todo\\s+)?dia\\s*\\d{1,2}\\s*$").matcher(s).replaceFirst("").trim();
+        s = Pattern.compile("(?i)(?:,\\s*)?venc(?:imento)?(?:\\s+do\\s+m[eê]s)?\\s*(?:dia\\s*)?\\d{1,2}\\s*$").matcher(s).replaceFirst("").trim();
+        return s.replaceAll(",\\s*$", "").trim();
+    }
+
+    private static Integer extrairPrimeiroDiaMesValido(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        Matcher m = Pattern.compile("(\\d{1,2})").matcher(text.trim());
+        if (m.find()) {
+            int d = Integer.parseInt(m.group(1));
+            if (d >= 1 && d <= 31) {
+                return d;
+            }
+        }
+        return null;
+    }
+
     private boolean isAffirmativeSaveReply(String raw) {
         if (raw == null || raw.isBlank()) {
             return false;
@@ -1836,6 +2367,17 @@ public class WhatsAppCommandService {
             || t.startsWith("nao ")
             || t.contains("nao quero")
             || t.contains("cancela");
+    }
+
+    private static class PendingDespesaFixaDraft {
+        BigDecimal valor;
+        String descricao;
+    }
+
+    private static class DespesaFixaIntent {
+        BigDecimal valor;
+        String descricao;
+        Integer diaVencimento;
     }
 
     private static class MetaDraft {

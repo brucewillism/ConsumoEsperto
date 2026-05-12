@@ -19,6 +19,7 @@ import { CreditCardInvoice } from '../../models/credit-card-invoice.model';
 import { CartaoCredito } from '../../models/cartao-credito.model';
 import { FaturaService } from '../../services/fatura.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
+import { OrcamentoService, Orcamento } from '../../services/orcamento.service';
 import { FaturaMesGrupo } from './faturas-mes-grupo.model';
 
 @Component({
@@ -57,6 +58,8 @@ export class FaturasComponent implements OnInit, OnDestroy {
   faturaProcessandoId: string | null = null;
   showForm = false;
   faturaTransacoesSelecionada: CreditCardInvoice | null = null;
+  /** Orçamentos do mês da fatura aberta no modal (scanner). */
+  orcamentosModal: Orcamento[] = [];
   
   // Filtros
   filtroStatus = '';
@@ -78,6 +81,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
   constructor(
     private faturaService: FaturaService,
     private cartaoCreditoService: CartaoCreditoService,
+    private orcamentoService: OrcamentoService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
     private fb: FormBuilder
@@ -284,11 +288,56 @@ export class FaturasComponent implements OnInit, OnDestroy {
 
   visualizarTransacoes(fatura: CreditCardInvoice, template: TemplateRef<unknown>): void {
     this.faturaTransacoesSelecionada = fatura;
+    this.orcamentosModal = [];
+    const refDate = new Date(fatura.closingDate);
+    if (!Number.isNaN(refDate.getTime())) {
+      this.orcamentoService
+        .listar(refDate.getMonth() + 1, refDate.getFullYear())
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (list) => {
+            this.orcamentosModal = list || [];
+          },
+          error: () => {
+            this.orcamentosModal = [];
+          }
+        });
+    }
     this.dialog.open(template, {
       width: 'min(920px, 96vw)',
       maxHeight: '86vh',
       panelClass: 'fatura-transacoes-dialog'
     });
+  }
+
+  badgeCategoria(t: any): string {
+    const nome = (t?.categoriaNome ?? t?.categoria?.nome) as string | undefined;
+    const s = (nome || '').trim();
+    return s ? s.toUpperCase() : 'SEM_CATEGORIA';
+  }
+
+  categoriaInstavel(t: any): boolean {
+    const id = t?.categoriaId as number | undefined;
+    const nome = this.badgeCategoria(t).toLowerCase();
+    for (const o of this.orcamentosModal) {
+      if (id != null && Number(o.categoriaId) === Number(id)) {
+        return o.percentualUso > 100 || o.status === 'VERMELHO';
+      }
+      const on = (o.categoriaNome || '').trim().toLowerCase();
+      if (on && on === nome) {
+        return o.percentualUso > 100 || o.status === 'VERMELHO';
+      }
+    }
+    return false;
+  }
+
+  logTimestamp(t: any): string {
+    const d = new Date(t?.dataTransacao || t?.date || 0);
+    if (Number.isNaN(d.getTime())) {
+      return '--:--:--';
+    }
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   aplicarFiltros(): void {

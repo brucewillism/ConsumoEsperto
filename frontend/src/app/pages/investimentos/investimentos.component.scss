@@ -1,28 +1,202 @@
-.invest-page {
-  display: grid;
-  gap: 18px;
+@keyframes hudFadeInv {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.hero,
-.invest-card,
-.simulator {
-  color: #e5e7eb;
-  background: #111827;
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 20px;
+.hud-invest-module {
+  display: grid;
+  gap: 18px;
+  position: relative;
+  z-index: 1;
+}
+
+.hud-animate-inv {
+  opacity: 0;
+  animation: hudFadeInv 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(0.07s * var(--stagger, 0));
 }
 
 .hero {
   padding: 24px;
-  background: linear-gradient(135deg, #111827, #1f2937);
+  color: #e5e7eb;
+  background: rgba(22, 24, 32, 0.45);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  border-radius: 20px;
+
+  h1 {
+    margin: 0 0 8px;
+    font-size: clamp(1.2rem, 2.4vw, 1.6rem);
+    letter-spacing: 0.04em;
+  }
 }
 
-.hero p {
-  color: #fde68a;
+.hud-tag {
+  margin: 0 0 6px;
+  color: #00e5ff;
   text-transform: uppercase;
-  letter-spacing: .08em;
-  margin: 0 0 4px;
-  font-size: 12px;
+  letter-spacing: 0.14em;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.hero-desc {
+  color: #94a3af;
+  font-size: 0.9rem;
+}
+
+.invest-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: 18px;
+  align-items: start;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.invest-main {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.oracle-aside {
+  position: sticky;
+  top: 88px;
+}
+
+.oracle-block {
+  padding: 1.25rem;
+  border-radius: 16px;
+  background: rgba(123, 31, 162, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  box-shadow: 0 0 24px rgba(123, 31, 162, 0.12);
+  color: #e2e8f0;
+}
+
+.oracle-eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  font-weight: 800;
+  color: #ffc107;
+}
+
+.oracle-block h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  color: #f8fafc;
+}
+
+.oracle-score {
+  margin: 0 0 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+
+  strong {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #00e5ff;
+    text-shadow: 0 0 18px rgba(0, 229, 255, 0.35);
+  }
+
+  .nivel {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #c4b5fd;
+    text-transform: uppercase;
+  }
+}
+
+.oracle-muted {
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+.oracle-body {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+  margin: 0 0 14px;
+}
+
+.oracle-value {
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  margin: 0 0 10px;
+
+  .lbl {
+    display: block;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    color: #00e5ff;
+    margin-bottom: 4px;
+  }
+
+  strong {
+    font-size: 1.35rem;
+    font-family: var(--font-mono-amount);
+    color: #f8fafc;
+  }
+}
+
+.oracle-foot {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.4;
+
+  strong {
+    color: #fde68a;
+    margin-left: 4px;
+  }
+}
+
+.chart-panel {
+  padding: 1.25rem;
+}
+
+.panel-title {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.panel-sub {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.chart-host {
+  min-height: 300px;
+  height: 320px;
+}
+
+.chart-host ::ng-deep .previsao-futuro-wrap {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0;
+}
+
+.chart-host ::ng-deep .previsao-chart-box {
+  height: 280px;
 }
 
 .cards,
@@ -34,26 +208,44 @@
 
 .invest-card {
   text-align: center;
+  color: #e5e7eb;
+  padding: 1rem;
 }
 
 .invest-card mat-icon {
-  color: #93c5fd;
-  transform: scale(1.4);
+  color: #00e5ff;
+  transform: scale(1.25);
+  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.35));
+}
+
+.invest-card h2 {
+  font-size: 1rem;
+  margin: 8px 0;
 }
 
 .invest-card strong,
 .projection-grid strong {
   display: block;
-  font-size: 24px;
+  font-size: 22px;
   color: #86efac;
+  font-family: var(--font-mono-amount);
 }
 
 .invest-card.best {
-  border-color: rgba(16, 185, 129, .45);
-  box-shadow: 0 0 24px rgba(16, 185, 129, .12);
+  border-color: rgba(0, 229, 255, 0.45) !important;
 }
 
-.simulator input[type="range"] {
+.simulator {
+  padding: 1.25rem;
+  color: #e5e7eb;
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+  }
+}
+
+.simulator input[type='range'] {
   width: 100%;
   margin: 18px 0;
 }
@@ -61,10 +253,17 @@
 .projection-grid div {
   padding: 14px;
   border-radius: 14px;
-  background: rgba(255,255,255,.05);
+  background: rgba(0, 229, 255, 0.06);
+  border: 1px solid rgba(0, 229, 255, 0.1);
+
+  span {
+    color: #94a3b8;
+    font-size: 0.78rem;
+  }
 }
 
 small,
 .invest-card span {
   color: #9ca3af;
+  font-size: 0.8rem;
 }

@@ -1,8 +1,15 @@
 /* Global Styles — Dark Mode Executivo (terminal / command center) */
 
+
 :root {
+  /* Stark HUD — alinhado ao dashboard J.A.R.V.I.S. */
+  --hud-bg: #0d0e12;
+  --hud-cyan: #00e5ff;
+  --hud-cyan-border: rgba(0, 229, 255, 0.15);
+  --hud-glass: rgba(22, 24, 32, 0.48);
+
   /* Paleta pedida */
-  --exec-bg: #0f172a;
+  --exec-bg: var(--hud-bg);
   --exec-surface: #1e293b;
   --exec-border: #334155;
   --exec-emerald: #2dd4bf;
@@ -109,6 +116,8 @@
 html {
   font-size: 16px;
   scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 229, 255, 0.45) rgba(13, 14, 18, 0.85);
 }
 
 body {
@@ -117,7 +126,7 @@ body {
   font-weight: var(--font-weight-normal);
   line-height: 1.6;
   color: var(--text-primary);
-  background-color: var(--bg-primary);
+  background-color: var(--hud-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -531,22 +540,23 @@ a {
   .d-sm-flex { display: flex; }
 }
 
-/* Scrollbar styling */
+/* Scrollbar — ultra-fina, ciano HUD */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: rgba(13, 14, 18, 0.85);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-color);
+  background: rgba(0, 229, 255, 0.35);
   border-radius: 4px;
-  
+  border: 1px solid rgba(0, 229, 255, 0.45);
+
   &:hover {
-    background: var(--text-secondary);
+    background: rgba(0, 229, 255, 0.55);
   }
 }
 
@@ -559,23 +569,69 @@ a {
 
 .mat-mdc-raised-button.mat-primary,
 .mat-mdc-unelevated-button.mat-primary {
-  --mdc-filled-button-container-color: #059669;
-  --mdc-filled-button-label-text-color: #0f172a;
+  --mdc-filled-button-container-color: rgba(0, 229, 255, 0.22);
+  --mdc-filled-button-label-text-color: #f8fafc;
+  letter-spacing: 1px;
+  font-weight: 600 !important;
+  border: 1px solid rgba(0, 229, 255, 0.45) !important;
+  transition:
+    box-shadow 0.22s ease,
+    border-color 0.22s ease,
+    filter 0.22s ease;
+
+  &:hover:not(:disabled) {
+    --mdc-filled-button-container-color: rgba(0, 229, 255, 0.32);
+    box-shadow:
+      0 0 0 1px rgba(0, 229, 255, 0.35),
+      0 0 24px rgba(0, 229, 255, 0.35);
+    border-color: rgba(0, 229, 255, 0.75) !important;
+  }
 }
 
 .mat-mdc-card {
-  --mdc-elevated-card-container-color: var(--exec-surface);
-  --mdc-elevated-card-container-elevation: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --mdc-elevated-card-container-color: transparent;
+  --mdc-elevated-card-container-elevation: none;
+  background: var(--hud-glass) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--hud-cyan-border) !important;
+  border-radius: 14px !important;
+  transition:
+    box-shadow 0.28s ease,
+    border-color 0.28s ease,
+    transform 0.28s ease;
+
+  &:hover {
+    box-shadow:
+      0 0 0 1px rgba(0, 229, 255, 0.12),
+      0 0 22px rgba(0, 229, 255, 0.18),
+      0 16px 40px rgba(0, 0, 0, 0.4);
+    border-color: rgba(0, 229, 255, 0.35) !important;
+  }
 }
 
 .mat-mdc-card,
 .mat-mdc-dialog-surface {
-  border: 1px solid var(--exec-border) !important;
+  border: 1px solid var(--hud-cyan-border) !important;
+}
+
+.mat-mdc-table {
+  background: transparent !important;
+  border: 1px solid var(--hud-cyan-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mat-mdc-table .mat-mdc-header-row,
+.mat-mdc-table .mat-mdc-row {
+  background: rgba(22, 24, 32, 0.35);
+  backdrop-filter: blur(8px);
 }
 
 .mat-mdc-table .mat-mdc-header-cell,
 .mat-mdc-table .mat-mdc-cell {
   color: var(--text-primary);
+  border-bottom-color: rgba(0, 229, 255, 0.12) !important;
 }
 
 .mat-mdc-form-field {
@@ -663,12 +719,66 @@ a {
       0 0 14px rgba(56, 189, 248, 0.28),
       0 12px 28px rgba(0, 0, 0, 0.45) !important;
   }
+
+  &.jarvis-success-snackbar {
+    --mdc-snackbar-container-color: #0f172a;
+    --mdc-snackbar-supporting-text-color: #e0f7fa;
+    --mat-mdc-snack-bar-button-color: #00e5ff;
+    border: 1px solid #00e5ff;
+    border-radius: 10px !important;
+    box-shadow:
+      0 0 0 1px rgba(0, 229, 255, 0.35),
+      0 0 22px rgba(0, 229, 255, 0.35),
+      0 12px 28px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  /** Erro HUD — roxo + âmbar (protocolo J.A.R.V.I.S.) */
+  &.jarvis-error-snackbar {
+    --mdc-snackbar-container-color: #1a1025;
+    --mdc-snackbar-supporting-text-color: #fde68a;
+    --mat-mdc-snack-bar-button-color: #c084fc;
+    max-width: min(560px, 96vw) !important;
+    border: 1px solid rgba(192, 132, 252, 0.65);
+    border-radius: 10px !important;
+    box-shadow:
+      0 0 0 1px rgba(245, 158, 11, 0.35),
+      0 0 24px rgba(126, 34, 206, 0.35),
+      0 12px 28px rgba(0, 0, 0, 0.55) !important;
+
+    .mat-mdc-snack-bar-label,
+    .mdc-snackbar__label {
+      white-space: pre-line;
+      line-height: 1.45;
+    }
+  }
+
+  &.jarvis-protocolo-snack {
+    --mdc-snackbar-container-color: #151822;
+    --mdc-snackbar-supporting-text-color: #e2e8f0;
+    --mat-mdc-snack-bar-button-color: #00e5ff;
+    max-width: min(560px, 96vw) !important;
+    border: 1px solid rgba(0, 229, 255, 0.4);
+    border-radius: 10px !important;
+    box-shadow:
+      0 0 0 1px rgba(123, 31, 162, 0.3),
+      0 0 24px rgba(0, 229, 255, 0.22),
+      0 12px 28px rgba(0, 0, 0, 0.5) !important;
+
+    .mat-mdc-snack-bar-label,
+    .mdc-snackbar__label {
+      white-space: pre-line;
+      line-height: 1.45;
+    }
+  }
 }
 
 /* Legado MatSnackBar (caso algum painel ainda use classes antigas no DOM) */
 .success-snackbar,
 .error-snackbar,
 .warning-snackbar,
-.info-snackbar {
+.info-snackbar,
+.jarvis-protocolo-snack,
+.jarvis-success-snackbar,
+.jarvis-error-snackbar {
   font-family: var(--font-sans) !important;
 }

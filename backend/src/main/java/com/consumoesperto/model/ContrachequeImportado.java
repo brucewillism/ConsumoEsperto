@@ -3,6 +3,8 @@ package com.consumoesperto.model;
 import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "contracheques_importados")
@@ -34,6 +36,14 @@ public class ContrachequeImportado {
     @Column(name = "total_descontos", precision = 19, scale = 2)
     private BigDecimal totalDescontos;
 
+    /** Bruto ≈ líquido + descontos (auditoria automática). */
+    @Column(name = "auditoria_soma_bruto_ok")
+    private Boolean auditoriaSomaBrutoOk;
+
+    /** salarioBruto − (salarioLiquido + totalDescontos); próximo de zero quando coerente. */
+    @Column(name = "auditoria_delta_bruto", precision = 19, scale = 2)
+    private BigDecimal auditoriaDeltaBruto;
+
     @Lob
     @Column(name = "descontos_json")
     private String descontosJson;
@@ -41,6 +51,9 @@ public class ContrachequeImportado {
     @Lob
     @Column(name = "insights_json")
     private String insightsJson;
+
+    @OneToMany(mappedBy = "contrachequeImportado", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ContrachequeDesconto> descontosDetalhados = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
@@ -76,10 +89,18 @@ public class ContrachequeImportado {
     public void setSalarioLiquido(BigDecimal salarioLiquido) { this.salarioLiquido = salarioLiquido; }
     public BigDecimal getTotalDescontos() { return totalDescontos; }
     public void setTotalDescontos(BigDecimal totalDescontos) { this.totalDescontos = totalDescontos; }
+    public Boolean getAuditoriaSomaBrutoOk() { return auditoriaSomaBrutoOk; }
+    public void setAuditoriaSomaBrutoOk(Boolean auditoriaSomaBrutoOk) { this.auditoriaSomaBrutoOk = auditoriaSomaBrutoOk; }
+    public BigDecimal getAuditoriaDeltaBruto() { return auditoriaDeltaBruto; }
+    public void setAuditoriaDeltaBruto(BigDecimal auditoriaDeltaBruto) { this.auditoriaDeltaBruto = auditoriaDeltaBruto; }
     public String getDescontosJson() { return descontosJson; }
     public void setDescontosJson(String descontosJson) { this.descontosJson = descontosJson; }
     public String getInsightsJson() { return insightsJson; }
     public void setInsightsJson(String insightsJson) { this.insightsJson = insightsJson; }
+    public List<ContrachequeDesconto> getDescontosDetalhados() { return descontosDetalhados; }
+    public void setDescontosDetalhados(List<ContrachequeDesconto> descontosDetalhados) {
+        this.descontosDetalhados = descontosDetalhados;
+    }
     public Status getStatus() { return status; }
     public void setStatus(Status status) { this.status = status; }
     public LocalDateTime getDataCriacao() { return dataCriacao; }

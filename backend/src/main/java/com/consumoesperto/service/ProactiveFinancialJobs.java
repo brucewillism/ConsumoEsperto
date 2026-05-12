@@ -43,6 +43,7 @@ public class ProactiveFinancialJobs {
     private final GrupoFamiliarService grupoFamiliarService;
     private final OpenAiService openAiService;
     private final JarvisProtocolService jarvisProtocolService;
+    private final PrevisaoFluxoCaixaService previsaoFluxoCaixaService;
 
     @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)
@@ -78,6 +79,23 @@ public class ProactiveFinancialJobs {
             if (!faturaRepository.findVencidasByUsuarioId(usuario.getId(), LocalDateTime.now()).isEmpty()) {
                 scoreService.registrarEvento(usuario.getId(), ScoreService.EventoScore.FATURA_VENCIDA,
                     "Fatura vencida detectada no monitoramento diário");
+            }
+        }
+    }
+
+    /** Sentinela — dia 5: relatório de disponibilidade real após obrigações. */
+    @Scheduled(cron = "0 30 9 5 * *", zone = "America/Sao_Paulo")
+    @Transactional(readOnly = true)
+    public void enviarDisponibilidadeRealDiaCinco() {
+        for (Usuario usuario : usuarioRepository.findAll()) {
+            if (usuario.getWhatsappNumero() == null || usuario.getWhatsappNumero().isBlank()) {
+                continue;
+            }
+            try {
+                String msg = previsaoFluxoCaixaService.montarRelatorioDisponibilidadeWhatsapp(usuario.getId());
+                whatsAppNotificationService.enviarParaUsuario(usuario.getId(), msg);
+            } catch (Exception e) {
+                log.warn("[SENTINELA] user {}: {}", usuario.getId(), e.getMessage());
             }
         }
     }

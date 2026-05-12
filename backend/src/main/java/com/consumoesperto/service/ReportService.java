@@ -201,8 +201,15 @@ public class ReportService {
         ctx.setVariable("anoIr", anoCalendario);
         ctx.setVariable("linhas", dados.linhas());
         ctx.setVariable("totalDespesas", BRL.format(dados.totalDespesas()));
+        ctx.setVariable("linhasPendentes", dados.linhasPendentes());
+        ctx.setVariable("totalPendentes", BRL.format(dados.totalPendentes()));
+        ctx.setVariable("temConfirmadas", !dados.linhas().isEmpty());
+        ctx.setVariable("temPendentesResumo", !dados.linhasPendentes().isEmpty());
+        ctx.setVariable("detalhes", dados.detalhes());
+        ctx.setVariable("qtdLancamentosConfirmados", dados.qtdLancamentosConfirmados());
+        ctx.setVariable("qtdLancamentosPendentes", dados.qtdLancamentosPendentes());
         ctx.setVariable("geradoEm", LocalDateTime.now().format(GERADO));
-        ctx.setVariable("semDados", dados.linhas().isEmpty());
+        ctx.setVariable("semDados", dados.semDados());
         String html = templateEngine.process("relatorio-ir", ctx);
         byte[] pdf = renderPdf(html);
         String nomeArquivo = "consumo-esperto-ir-" + anoCalendario + ".pdf";

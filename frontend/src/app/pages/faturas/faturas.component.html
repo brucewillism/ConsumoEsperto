@@ -1,9 +1,10 @@
-<div class="faturas-container">
+<div class="faturas-container hud-faturas-module">
   <!-- Header -->
   <div class="header">
     <div class="header-left">
+      <p class="hud-module-tag">Módulo · Scanner de combate</p>
       <h1>Faturas de Cartão</h1>
-      <p class="subtitle">Gerencie suas faturas e acompanhe vencimentos</p>
+      <p class="subtitle">Linha do tempo tática e log de lançamentos por fatura</p>
     </div>
     <div class="header-actions">
       <button mat-raised-button color="accent" (click)="loadData()" [disabled]="loading">
@@ -368,9 +369,10 @@
   </mat-card>
 
   <ng-template #transacoesModal>
-    <div class="transacoes-modal">
+    <div class="transacoes-modal combat-scanner">
       <header class="transacoes-modal-header">
         <div>
+          <p class="scanner-eyebrow">RAW_INVOICE_STREAM</p>
           <h2>Transações da fatura</h2>
           <p *ngIf="faturaTransacoesSelecionada">
             {{ getBancoNome(faturaTransacoesSelecionada.bankName) }} ·
@@ -384,19 +386,30 @@
       </header>
 
       <div class="transacoes-modal-lista" *ngIf="transacoesDaFatura(faturaTransacoesSelecionada).length; else semTransacoes">
-        <div class="transacao-linha transacao-linha-cabecalho">
-          <span>Data</span>
-          <span>Descrição</span>
-          <span>Parcela</span>
-          <span>Valor</span>
+        <div class="scanner-log scanner-log-head">
+          <span class="col-ts">TS</span>
+          <span class="col-id">SEQ</span>
+          <span class="col-cat">CATEGORIA</span>
+          <span class="col-desc">EVENTO</span>
+          <span class="col-val">VAL</span>
         </div>
-        <div class="transacao-linha" *ngFor="let transacao of transacoesDaFatura(faturaTransacoesSelecionada)">
-          <span>{{ formatarData(transacao.dataTransacao || transacao.date) }}</span>
-          <span class="transacao-descricao">{{ transacao.descricao || transacao.description || 'Lançamento' }}</span>
-          <span>
-            {{ transacao.parcelaAtual && transacao.totalParcelas ? transacao.parcelaAtual + '/' + transacao.totalParcelas : '-' }}
+        <div
+          class="scanner-log scanner-log-row"
+          *ngFor="let transacao of transacoesDaFatura(faturaTransacoesSelecionada); let ix = index"
+          [class.scanline-warn]="categoriaInstavel(transacao)"
+        >
+          <span class="col-ts mono">[{{ logTimestamp(transacao) }}]</span>
+          <span class="col-id mono">{{ ix + 1 }}</span>
+          <span class="col-cat">
+            <span class="neon-badge">{{ badgeCategoria(transacao) }}</span>
           </span>
-          <span class="transacao-valor">{{ formatarMoeda(transacao.valor || transacao.amount || 0) }}</span>
+          <span class="col-desc">
+            {{ transacao.descricao || transacao.description || 'LANÇAMENTO' }}
+            <ng-container *ngIf="transacao.parcelaAtual && transacao.totalParcelas">
+              · PARC_{{ transacao.parcelaAtual }}/{{ transacao.totalParcelas }}
+            </ng-container>
+          </span>
+          <span class="col-val mono strong">{{ formatarMoeda(transacao.valor || transacao.amount || 0) }}</span>
         </div>
       </div>
 

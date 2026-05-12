@@ -22,12 +22,12 @@ import java.util.Locale;
 @Slf4j
 public class DocumentoIAContextService {
 
-    /** Acima deste volume o texto vai em várias chamadas à IA para não omitir páginas finais sob limite efetivo de contexto. */
-    private static final int MAX_CHARS_CHUNK = 11_500;
-    private static final int OVERLAP_CHARS = 700;
+    /** Acima deste volume o texto vai em várias chamadas à IA; partições respeitam limites de página para não cortar tabelas ao meio. */
+    private static final int MAX_CHARS_CHUNK = 12_000;
+    private static final int OVERLAP_CHARS = 900;
     private static final int LOG_JSON_MAX_CHARS = 16_000;
-    /** Revisão/consolidação: inclui todas as páginas possíveis com teto segurança para o modelo. */
-    private static final int TEXTO_REVISION_MAX_CHARS = 38_000;
+    /** Revisão/consolidação: inclui o máximo de texto possível numa segunda passada (teto por segurança de contexto). */
+    private static final int TEXTO_REVISION_MAX_CHARS = 48_000;
 
     private final PdfTextExtractionService pdfTextExtractionService;
     private final OpenAiService openAiService;
@@ -61,6 +61,27 @@ public class DocumentoIAContextService {
         return s.substring(0, max) + "...[truncado]";
     }
 
+    /**
+     * INFO: resumo com entrada/JSON truncados para não poluir o console.
+     * DEBUG: string bruta completa enviada ao modelo e JSON integral retornado (auditoria).
+     */
+    private void registrarAuditoria(LogAuditoria op, String mensagemUsuario, JsonNode resultadoJson) {
+        log.info("{}", textoAuditoria(op, mensagemUsuario, resultadoJson));
+        if (!log.isDebugEnabled()) {
+            return;
+        }
+        try {
+            String jsonFull = resultadoJson == null ? "null"
+                : objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(resultadoJson);
+            log.debug("[AUDITORIA-IA-PDF:{}] RAW_PROMPT_COMPLETO ({} chars):\n{}",
+                op.name(), mensagemUsuario != null ? mensagemUsuario.length() : 0, mensagemUsuario);
+            log.debug("[AUDITORIA-IA-PDF:{}] RAW_JSON_COMPLETO ({} chars):\n{}",
+                op.name(), jsonFull.length(), jsonFull);
+        } catch (Exception e) {
+            log.debug("[AUDITORIA-IA-PDF:{}] RAW_JSON_COMPLETO: <erro serializando> {}", op.name(), e.getMessage());
+        }
+    }
+
     enum LogAuditoria {
         PDF_EXTRACAO_COMPLETA,
         PDF_CHUNK,
@@ -75,6 +96,7 @@ public class DocumentoIAContextService {
         if (fullText.length() < 80) {
             throw new IllegalArgumentException("Não consegui ler texto suficiente do PDF.");
         }
+        log.info("[PDF-FULL-SCAN] paginasExtraidas={} caracteresTotais={}", paginas.size(), fullText.length());
         List<String> trechos = fatiarTextoParaModelo(paginas);
         JsonNode extracted;
         if (trechos.size() == 1) {
@@ -83,10 +105,10 @@ public class DocumentoIAContextService {
             extracted = extrairJsonPrimeiroTrecho(usuarioId, trechos.get(0), true, LogAuditoria.PDF_CHUNK);
             for (int i = 1; i < trechos.size(); i++) {
                 JsonNode cont = extrairLancamentosContinuacao(usuarioId, trechos.get(i), i + 1, trechos.size());
-                mesclarLancamentosNoAlvo(extracted, cont);
+                mesclarFragmentoExtracaoNoAlvo(extracted, cont);
             }
-            log.info("{}",
-                textoAuditoria(LogAuditoria.PDF_CHUNK_CONTINUACAO, "merge trechos=" + trechos.size(), extracted));
+            registrarAuditoria(LogAuditoria.PDF_CHUNK_CONTINUACAO,
+                "merge_trechos=" + trechos.size() + " lancamentos=" + extracted.path("lancamentos").size(), extracted);
         }
         String textoRevisao = fullText.length() > TEXTO_REVISION_MAX_CHARS
             ? fullText.substring(0, TEXTO_REVISION_MAX_CHARS)
@@ -110,16 +132,62 @@ public class DocumentoIAContextService {
     }
 
     /**
-     * Marca páginas e partições longas por limite (~tokens), com ligamento por sobreposição.
+     * Particiona por páginas inteiras até o teto de caracteres; só depois, se uma única página exceder o teto, fatia essa página por tamanho.
+     * Evita cortar tabelas de lançamentos no meio entre dois envios à IA.
      */
     private static List<String> fatiarTextoParaModelo(List<String> paginas) {
-        StringBuilder rotuloCompleto = new StringBuilder();
+        List<String> blocosPagina = new ArrayList<>();
         for (int i = 0; i < paginas.size(); i++) {
             String p = paginas.get(i) != null ? paginas.get(i) : "";
-            rotuloCompleto.append("--- Página ").append(i + 1).append(" ---\n").append(p).append('\n');
+            blocosPagina.add("--- Página " + (i + 1) + " ---\n" + p);
         }
-        String full = rotuloCompleto.toString().trim();
-        return fatiarPorTamanhoComSobreposicao(full, MAX_CHARS_CHUNK);
+        List<String> porPaginas = fatiarPorPaginasInteiras(blocosPagina, MAX_CHARS_CHUNK, OVERLAP_CHARS);
+        if (porPaginas.size() <= 1) {
+            return porPaginas;
+        }
+        List<String> expandido = new ArrayList<>();
+        for (String trecho : porPaginas) {
+            if (trecho.length() <= MAX_CHARS_CHUNK) {
+                expandido.add(trecho);
+            } else {
+                expandido.addAll(fatiarPorTamanhoComSobreposicao(trecho, MAX_CHARS_CHUNK));
+            }
+        }
+        return expandido;
+    }
+
+    /** Agrupa blocos "--- Página N ---" sem ultrapassar {@code limite}; repete cauda ({@code overlap}) no trecho seguinte para contexto. */
+    private static List<String> fatiarPorPaginasInteiras(List<String> blocosPagina, int limite, int overlap) {
+        List<String> chunks = new ArrayList<>();
+        if (blocosPagina == null || blocosPagina.isEmpty()) {
+            return chunks;
+        }
+        StringBuilder atual = new StringBuilder();
+        for (String bloco : blocosPagina) {
+            String b = bloco == null ? "" : bloco;
+            int addLen = b.length() + (atual.length() > 0 ? 1 : 0);
+            if (atual.length() + addLen > limite && atual.length() > 0) {
+                chunks.add(atual.toString().trim());
+                String cauda = overlap > 0 && atual.length() > overlap
+                    ? atual.substring(Math.max(0, atual.length() - overlap))
+                    : "";
+                atual = new StringBuilder();
+                if (!cauda.isBlank()) {
+                    atual.append("(…continuação do trecho anterior…)\n").append(cauda).append('\n');
+                }
+            }
+            if (atual.length() > 0) {
+                atual.append('\n');
+            }
+            atual.append(b);
+        }
+        if (atual.length() > 0) {
+            chunks.add(atual.toString().trim());
+        }
+        if (chunks.isEmpty()) {
+            chunks.add(blocosPagina.get(0));
+        }
+        return chunks;
     }
 
     private static List<String> fatiarPorTamanhoComSobreposicao(String texto, int limite) {
@@ -148,25 +216,27 @@ public class DocumentoIAContextService {
 
     private JsonNode extrairJsonPrimeiroTrecho(Long usuarioId, String trechoUsuario, boolean esquemaCabecalho, LogAuditoria logOp) {
         String system = sistemaExtracaoCabecalho(esquemaCabecalho);
-        JsonNode json = openAiService.gerarJson(usuarioId, system,
-            "(Trecho inicial do PDF; pode haver continuações.)\n\nTexto extraído:\n" + trechoUsuario);
-        log.info("{}", textoAuditoria(logOp, trechoUsuario, json));
+        String userMsg = "(Trecho inicial do PDF; pode haver continuações.)\n\nTexto extraído:\n" + trechoUsuario;
+        JsonNode json = openAiService.gerarJson(usuarioId, system, userMsg);
+        registrarAuditoria(logOp, userMsg, json);
         return json;
     }
 
     private JsonNode extrairLancamentosContinuacao(Long usuarioId, String trecho, int parteNum, int totalTrechos) {
-        String system = "Você continua a extração da MESMA fatura de cartão brasileira. Retorne apenas JSON válido "
-            + "{\"lancamentos\":[{\"data\":\"yyyy-MM-dd\",\"descricao\":\"string\",\"valor\":0.0,\"parcelaAtual\":null,\"totalParcelas\":null}]}. "
+        String system = "Você continua a extração da MESMA fatura de cartão brasileira. Retorne apenas JSON válido no formato "
+            + "{\"lancamentos\":[...],\"taxasForaDaTabelaPrincipal\":[{\"tipo\":\"ANUIDADE|IOF|JUROS|TARIFA|OUTRO\",\"valor\":0.0,\"descricao\":\"string\"}]}. "
+            + "taxasForaDaTabelaPrincipal pode ser [] se não houver nada novo neste trecho. "
             + "Liste somente novos lançamentos presentes neste trecho que ainda não constem em trechos anteriores "
-            + "(cartão, PIX, parcelas 02/10, assinaturas, multas internacionais etc.). "
+            + "(cartão, PIX, parcelas 02/10, compras internacionais, saques, assinaturas, multas etc.). "
             + "ATENÇÃO Itaú/outros: padrão 'DD/MM estabelecimento … N/N valor' — o par N/N imediatamente antes do valor (ex.: '10/10 64,10') "
             + "é parcela atual/total, NÃO separador de milhar; o valor cobrado NESTA fatura é só o último número (ex.: 64.10). "
             + "Use 1064.10 apenas quando o PDF mostrar milhar com ponto brasileiro explícito (ex.: '1.064,10' ou linha 'R$ 1.064,10'), nunca por causa de '10/10' antes dos centavos. "
-            + "Continue procurando além das tabelas principais tarifas: Anuidade, IOF, Juros Rotativos, Tarifas. "
-            + "Linhas já extraídas noutras partes NÃO repetir.";
-        JsonNode json = openAiService.gerarJson(usuarioId, system,
-            "Trecho PDF parte " + parteNum + " de ~" + totalTrechos + "\n\n" + trecho);
-        log.info("{}", textoAuditoria(LogAuditoria.PDF_CHUNK, trecho, json));
+            + "Varredura explícita neste trecho: procure em rodapés, quadros e fora da tabela principal por Anuidade, IOF (compra internacional/exterior), "
+            + "Juros (rotativo/atraso/financiamento), Tarifas de serviço/cobrança, Seguro prestamista — registre em taxasForaDaTabelaPrincipal E como lançamento descritivo quando couber. "
+            + "Não omita linhas por serem muitas; não resuma listas. Linhas já extraídas noutras partes NÃO repetir.";
+        String userMsg = "Trecho PDF parte " + parteNum + " de ~" + totalTrechos + "\n\n" + trecho;
+        JsonNode json = openAiService.gerarJson(usuarioId, system, userMsg);
+        registrarAuditoria(LogAuditoria.PDF_CHUNK, userMsg, json);
         return json;
     }
 
@@ -178,6 +248,11 @@ public class DocumentoIAContextService {
         }
         return "Você classifica e extrai PDFs financeiros brasileiros. Retorne apenas JSON válido. "
             + "Reconheça CONTRACHEQUE quando houver termos como Vencimentos, Líquido, IRRF, INSS, Folha, FGTS, holerite. "
+            + "Para CONTRACHEQUE: extraia obrigatoriamente salarioBruto (valor bruto total), salarioLiquido (valor líquido creditado) "
+            + "e o array descontos com TODAS as linhas de desconto/bases visíveis: cada item {\"rotulo\":\"NOME_EXATO\" ou use campo \"descricao\" equivalente, \"valor\": número decimal}. "
+            + "Inclua INSS, IRRF, vale-transporte, plano de saúde, pensão, sindicato, faltas, empréstimo consignado, etc. "
+            + "Ignore colunas de referência, código interno ou bases de cálculo que não sejam o valor descontado efetivo; foque no valor debitado/descontado na folha. "
+            + "Não agrupe nem omita linhas por serem pequenas. "
             + "Classifique como FATURA_CARTAO quando houver vencimento da fatura, pagamento mínimo, fechamento, limite, cartão, compras parceladas, total da fatura ou lançamentos de cartão. "
             + "Classifique como EXTRATO_CONTA somente quando for movimentação de conta corrente com saldo, crédito/débito em conta, agência/conta, PIX/TED/depósito/saque, sem vencimento de fatura. "
             + taxasEhLeituraFatura()
@@ -192,7 +267,7 @@ public class DocumentoIAContextService {
             + "\"lancamentos\":[{\"data\":\"yyyy-MM-dd\",\"descricao\":\"...\",\"valor\":0.0,\"parcelaAtual\":null,\"totalParcelas\":null}],"
             + "\"insights\":[\"pontos objetivos opcionais: não confundir assinatura mensal fixa com hábito de consumo variável conforme auditoria financeira humanizada\"],"
             + "\"empresa\":\"...\",\"mes\":1,\"ano\":2026,\"salarioBruto\":0.0,\"salarioLiquido\":0.0,"
-            + "\"descontos\":[{\"rotulo\":\"INSS\",\"valor\":0.0}]}";
+            + "\"descontos\":[{\"rotulo\":\"INSS\",\"valor\":0.0},{\"descricao\":\"IRRF\",\"valor\":0.0}]}";
     }
 
     private static String sistemaSóFatura(String baseAudit) {
@@ -208,7 +283,8 @@ public class DocumentoIAContextService {
 
     private static String taxasEhLeituraFatura() {
         return "Em faturas de cartão, extraia TODOS os lançamentos visíveis em TODAS as páginas do trecho; "
-            + "não resuma listas longas. Se a descrição indicar parcelamento como 02/10, 2/10, parcela 2 de 10, "
+            + "não resuma listas longas nem pule páginas por limite de atenção — cada página do trecho deve ser varrida linha a linha. "
+            + "Se a descrição indicar parcelamento como 02/10, 2/10, parcela 2 de 10, "
             + "ou coluna de parcela separada da descrição, preencha parcelaAtual=2 e totalParcelas=10. "
             + "Leitura de valores BR: O valor cobrado na linha é normalmente o ÚLTIMO valor monetário. "
             + "Quando aparecer 'N/M' (dois números usados de parcela) seguido de vírgula decimal (ex.: '10/10 64,10'), "
@@ -216,15 +292,61 @@ public class DocumentoIAContextService {
             + "Separador de milhar só quando o PDF traz ponto entre grupos antes da vírgula decimal (ex.: '1.064,10' → 1064.10). "
             + "Não duplique linhas da secção 'Compras parceladas - próximas faturas' / 'próxima fatura' que já estão em 'Lançamentos: compras e saques' ou 'produtos e serviços' deste mês. "
             + "O valor de cada lançamento deve ser o valor cobrado nesta fatura, não o valor total original da compra. "
-            + "Procure ativamente em rodapés, boxes e resumos taxas: Anuidade, IOF, Juros Rotativos, Tarifas e seguros do cartão. "
-            + "Inclua essas taxas tanto em \"lancamentos\" (nome descritivo) quanto repetindo o mesmo valor em \"taxasForaDaTabelaPrincipal\" quando forem classificadas. "
+            + "TAXAS (varredura dedicada): em cada página, procure além da tabela principal por Anuidade, IOF (internacional/exterior), Juros (rotativo/multa/encargo), "
+            + "Tarifas de cobrança/serviço, multa, seguro do cartão — muitas vezes em rodapé, box lateral ou resumo. "
+            + "Inclua essas taxas tanto em \"lancamentos\" (descrição clara, ex.: 'IOF compra internacional') quanto em \"taxasForaDaTabelaPrincipal\" com tipo adequado. "
             + "Confira a soma dos lançamentos contra o valorTotal informado pela fatura e contra subtotais do PDF (ex.: 'Lançamentos no cartão', 'Total dos lançamentos atuais'); se não bater, revise linhas de parcela N/N e duplicatas. ";
     }
 
     private static String auditoriaFinanceiraHumanaLinhas() {
-        return "Persona auditoria (texto opcional insights): diferenciar Assinaturas/Serviços Telefonia/Streaming/Software/Educacao digital "
-            + "com gastos hábituais VARIÁVEIS (postos de combustível, supermercados, restaurantes, farmácias). "
-            + "Nunca escreva no insights que algo como posto de combustível ou alimentação são 'assinatura' — trate aumento nelas como variação de consumo.";
+        return "Persona auditoria (campo insights opcional). Diferencie Assinaturas de Hábitos Frequentes. "
+            + "Assinatura/Serviço: valor fixo ou aproximado, ocorrência mensal, categorias como Streaming, Software, Educação digital, Telecom. "
+            + "Hábito de consumo: valores variáveis, categorias como Posto de gasolina, Supermercado, Restaurante, Farmácia, delivery. "
+            + "ATENÇÃO: Nunca sugira 'revisar assinatura' nem trate como assinatura postos de combustível, supermercado, restaurante ou farmácia — "
+            + "nesses casos use linguagem de alerta de variação de consumo ou hábito de gasto.";
+    }
+
+    /**
+     * Mescla lançamentos e taxas de um trecho subsequente no JSON acumulado (mesma fatura).
+     */
+    private void mesclarFragmentoExtracaoNoAlvo(JsonNode alvoCompleto, JsonNode fragmentoTrecho) {
+        mesclarLancamentosNoAlvo(alvoCompleto, fragmentoTrecho);
+        mesclarTaxasForaDaTabelaNoAlvo(alvoCompleto, fragmentoTrecho);
+    }
+
+    private static void mesclarTaxasForaDaTabelaNoAlvo(JsonNode alvoCompleto, JsonNode fragmentoTrecho) {
+        if (!(alvoCompleto instanceof ObjectNode objeto)) {
+            return;
+        }
+        ArrayNode alvoTax = objeto.path("taxasForaDaTabelaPrincipal").isArray()
+            ? (ArrayNode) objeto.path("taxasForaDaTabelaPrincipal")
+            : JsonNodeFactory.instance.arrayNode();
+        if (!objeto.has("taxasForaDaTabelaPrincipal")) {
+            objeto.set("taxasForaDaTabelaPrincipal", alvoTax);
+        }
+        ArrayNode adding = fragmentoTrecho.path("taxasForaDaTabelaPrincipal").isArray()
+            ? (ArrayNode) fragmentoTrecho.path("taxasForaDaTabelaPrincipal")
+            : JsonNodeFactory.instance.arrayNode();
+        LinkedHashMap<String, JsonNode> vistos = new LinkedHashMap<>();
+        for (JsonNode t : alvoTax) {
+            vistos.putIfAbsent(chaveTaxaDedupe(t), t.deepCopy());
+        }
+        for (JsonNode t : adding) {
+            vistos.putIfAbsent(chaveTaxaDedupe(t), t.deepCopy());
+        }
+        ArrayNode novo = JsonNodeFactory.instance.arrayNode();
+        for (JsonNode t : vistos.values()) {
+            novo.add(t);
+        }
+        objeto.set("taxasForaDaTabelaPrincipal", novo);
+    }
+
+    private static String chaveTaxaDedupe(JsonNode n) {
+        String tipo = norm(n.path("tipo").asText(""));
+        String desc = norm(n.path("descricao").asText(""));
+        BigDecimal valor = money(n.path("valor"));
+        String vb = valor != null ? valor.setScale(2, RoundingMode.HALF_UP).toPlainString() : "0";
+        return tipo + "|" + vb + "|" + desc.substring(0, Math.min(desc.length(), 80));
     }
 
     private void mesclarLancamentosNoAlvo(JsonNode alvoCompleto, JsonNode fragmentoTrecho) {
@@ -278,12 +400,14 @@ public class DocumentoIAContextService {
             : objectMapper.createArrayNode();
         BigDecimal valorTotal = money(extracted.path("valorTotal"));
         BigDecimal soma = somaLancamentos(lancamentos);
+        boolean pdfLongo = text != null && text.length() > 22_000;
+        boolean subcapturaSuspeita = pdfLongo && lancamentos.size() > 0 && lancamentos.size() < 12;
         boolean poucosItens = lancamentos.size() > 0 && lancamentos.size() < 15;
         boolean somaDivergente = valorTotal != null
             && valorTotal.compareTo(BigDecimal.ZERO) > 0
             && soma != null
             && valorTotal.subtract(soma).abs().compareTo(new BigDecimal("1.00")) > 0;
-        if (!poucosItens && !somaDivergente) {
+        if (!poucosItens && !somaDivergente && !subcapturaSuspeita) {
             return extracted;
         }
 
@@ -300,8 +424,9 @@ public class DocumentoIAContextService {
             + "\"taxasForaDaTabelaPrincipal\":[{\"tipo\":\"ANUIDADE|IOF|JUROS|TARIFA|OUTRO\",\"valor\":0.0,\"descricao\":\"string\"}],"
             + "\"lancamentos\":[{\"data\":\"yyyy-MM-dd\",\"descricao\":\"...\",\"valor\":0.0,\"parcelaAtual\":null,\"totalParcelas\":null}]}";
 
-        JsonNode retry = openAiService.gerarJson(usuarioId, systemRetry, "Texto completo concatenado das páginas do PDF:\n" + text);
-        log.info("{}", textoAuditoria(LogAuditoria.PDF_REFINAMENTO, text, retry));
+        String userRetry = "Texto completo concatenado das páginas do PDF:\n" + text;
+        JsonNode retry = openAiService.gerarJson(usuarioId, systemRetry, userRetry);
+        registrarAuditoria(LogAuditoria.PDF_REFINAMENTO, userRetry, retry);
 
         ArrayNode retryLancamentos = retry.path("lancamentos").isArray()
             ? (ArrayNode) retry.path("lancamentos")
@@ -331,6 +456,7 @@ public class DocumentoIAContextService {
             return extracted;
         }
 
+        String userParcelas = "Texto extraído do PDF:\n" + text;
         JsonNode parcelas = openAiService.gerarJson(
             usuarioId,
             "Você é auditor de fatura de cartão. Retorne apenas JSON válido no formato "
@@ -338,9 +464,9 @@ public class DocumentoIAContextService {
                 + "Extraia SOMENTE lançamentos parcelados que estejam explicitamente marcados no texto da fatura "
                 + "por coluna/marcador como 02/10, 2/10, parcela 2 de 10, Parc. 02/10, ou coluna de parcela separada da descrição. "
                 + "Não invente parcelamento por data antiga; se não houver marcador explícito, retorne {\"parcelas\":[]}.",
-            "Texto extraído do PDF:\n" + text
+            userParcelas
         );
-        log.info("{}", textoAuditoria(LogAuditoria.PDF_PARCELAS, text, parcelas));
+        registrarAuditoria(LogAuditoria.PDF_PARCELAS, userParcelas, parcelas);
 
         ArrayNode arr = parcelas.path("parcelas").isArray() ? (ArrayNode) parcelas.path("parcelas") : objectMapper.createArrayNode();
         if (arr.isEmpty()) {

@@ -53,6 +53,13 @@
             </mat-select>
           </mat-form-field>
 
+          <mat-form-field appearance="outline">
+            <mat-label>Ano-calendário (IR)</mat-label>
+            <mat-select formControlName="anoIr">
+              <mat-option *ngFor="let a of anosIrCalendario" [value]="a">{{ a }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
           <button mat-raised-button color="primary" type="submit" [disabled]="carregando || (isLoading$ | async)">
             <mat-icon>refresh</mat-icon>
             {{ carregando ? 'Gerando...' : 'Gerar Relatório' }}

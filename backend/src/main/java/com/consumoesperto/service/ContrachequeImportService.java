@@ -4,6 +4,7 @@ import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.dto.DescontoFixoDTO;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.Categoria;
+import com.consumoesperto.model.ContrachequeDesconto;
 import com.consumoesperto.model.ContrachequeImportado;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -18,15 +19,22 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ContrachequeImportService {
+
+    private static final BigDecimal TOLERANCIA_AUDITORIA_BRUTO = new BigDecimal("0.05");
+    private static final NumberFormat BRL_AUDIT = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
     private static final TypeReference<List<DescontoFixoDTO>> DESCONTO_LIST = new TypeReference<>() {};
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {};
@@ -61,6 +69,11 @@ public class ContrachequeImportService {
             liquido = bruto.subtract(totalDesc).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
         }
 
+        BigDecimal somaLiquidoMaisDescontos = liquido.add(totalDesc).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal deltaBruto = bruto.subtract(somaLiquidoMaisDescontos).setScale(2, RoundingMode.HALF_UP);
+        boolean auditoriaOk = bruto.compareTo(BigDecimal.ZERO) <= 0
+            || deltaBruto.abs().compareTo(TOLERANCIA_AUDITORIA_BRUTO) <= 0;
+
         ContrachequeImportado c = new ContrachequeImportado();
         c.setUsuario(usuario);
         c.setEmpresa(extracted.path("empresa").asText("Empresa não identificada"));
@@ -69,17 +82,46 @@ public class ContrachequeImportService {
         c.setSalarioBruto(bruto);
         c.setSalarioLiquido(liquido);
         c.setTotalDescontos(totalDesc.setScale(2, RoundingMode.HALF_UP));
+        c.setAuditoriaDeltaBruto(deltaBruto);
+        c.setAuditoriaSomaBrutoOk(auditoriaOk);
         c.setDescontosJson(writeJson(descontos));
-        c.setInsightsJson(writeJson(insights(extracted, bruto, totalDesc, descontos)));
+
+        List<String> insightList = new ArrayList<>(insights(extracted, bruto, totalDesc, descontos));
+        if (!auditoriaOk && bruto.compareTo(BigDecimal.ZERO) > 0) {
+            insightList.add(0, "Auditoria: salário bruto não fecha com líquido + Σ descontos (Δ = "
+                + BRL_AUDIT.format(deltaBruto) + "). Revise o PDF ou valores extraídos.");
+        }
+
+        c.setInsightsJson(writeJson(insightList));
+
+        for (DescontoFixoDTO d : descontos) {
+            ContrachequeDesconto line = new ContrachequeDesconto();
+            line.setContrachequeImportado(c);
+            line.setDescricao(d.getRotulo() != null && !d.getRotulo().isBlank() ? d.getRotulo().trim() : "Desconto");
+            line.setValor(d.getValor());
+            c.getDescontosDetalhados().add(line);
+        }
+
         return toDto(contrachequeRepository.save(c));
     }
 
     @Transactional(readOnly = true)
     public List<ContrachequeDTO> listarHistorico(Long usuarioId) {
-        return contrachequeRepository.findByUsuarioIdOrderByAnoDescMesDescDataCriacaoDesc(usuarioId)
-            .stream()
-            .map(this::toDto)
-            .collect(Collectors.toList());
+        List<ContrachequeImportado> rows = contrachequeRepository.findByUsuarioIdOrderByAnoDescMesDescDataCriacaoDesc(usuarioId);
+        /** Um cartão por competência + empresa: importações repetidas (ex.: WhatsApp + web) ficam como linha só — a mais recente. */
+        Map<String, ContrachequeImportado> porChave = new LinkedHashMap<>();
+        for (ContrachequeImportado c : rows) {
+            String chave = c.getAno() + "|" + c.getMes() + "|" + normalizarEmpresaChave(c.getEmpresa());
+            porChave.putIfAbsent(chave, c);
+        }
+        return porChave.values().stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    private static String normalizarEmpresaChave(String empresa) {
+        if (empresa == null || empresa.isBlank()) {
+            return "_";
+        }
+        return empresa.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
     }
 
     @Transactional(readOnly = true)
@@ -141,7 +183,15 @@ public class ContrachequeImportService {
         dto.setSalarioBruto(c.getSalarioBruto());
         dto.setSalarioLiquido(c.getSalarioLiquido());
         dto.setTotalDescontos(c.getTotalDescontos());
-        dto.setDescontos(readDescontos(c.getDescontosJson()));
+        dto.setAuditoriaSomaBrutoOk(c.getAuditoriaSomaBrutoOk());
+        dto.setAuditoriaDeltaBruto(c.getAuditoriaDeltaBruto());
+        if (c.getDescontosDetalhados() != null && !c.getDescontosDetalhados().isEmpty()) {
+            dto.setDescontos(c.getDescontosDetalhados().stream()
+                .map(l -> new DescontoFixoDTO(l.getDescricao(), l.getValor()))
+                .collect(Collectors.toList()));
+        } else {
+            dto.setDescontos(readDescontos(c.getDescontosJson()));
+        }
         dto.setInsights(readStrings(c.getInsightsJson()));
         dto.setStatus(c.getStatus() != null ? c.getStatus().name() : null);
         dto.setDataCriacao(c.getDataCriacao());
@@ -155,9 +205,17 @@ public class ContrachequeImportService {
         }
         for (JsonNode n : arr) {
             BigDecimal valor = readMoney(n.path("valor"));
-            if (valor.compareTo(BigDecimal.ZERO) > 0) {
-                out.add(new DescontoFixoDTO(n.path("rotulo").asText("Desconto"), valor));
+            if (valor.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
             }
+            String rotulo = n.path("descricao").asText("").trim();
+            if (rotulo.isBlank()) {
+                rotulo = n.path("rotulo").asText("").trim();
+            }
+            if (rotulo.isBlank()) {
+                rotulo = "Desconto";
+            }
+            out.add(new DescontoFixoDTO(rotulo, valor));
         }
         return out;
     }

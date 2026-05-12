@@ -31,6 +31,10 @@ export interface ContrachequeDto {
   insights: string[];
   status: string;
   dataCriacao: string;
+  /** null = legado; true = bruto ≈ líquido + Σ descontos (tolerância no backend). */
+  auditoriaSomaBrutoOk?: boolean | null;
+  /** Diferença bruto − (líquido + descontos), quando a API envia. */
+  auditoriaDeltaBruto?: number | null;
 }
 
 @Injectable({ providedIn: 'root' })

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -89,13 +90,34 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     
     int deleteByUsuarioId(Long usuarioId);
 
+    /**
+     * Despesas no ano-calendário para exportação IR. Usa a data efetiva do lançamento:
+     * {@code COALESCE(dataTransacao, dataCriacao)} para não perder registos antigos sem data de movimento.
+     */
     @EntityGraph(attributePaths = "categoria")
-    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipo " +
-        "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA " +
-        "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim ORDER BY t.id")
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipo "
+        + "AND t.statusConferencia = :status "
+        + "AND COALESCE(t.dataTransacao, t.dataCriacao) >= :inicio "
+        + "AND COALESCE(t.dataTransacao, t.dataCriacao) <= :fim ORDER BY t.id")
     Page<Transacao> findPagedForIrExport(
         @Param("usuarioId") Long usuarioId,
         @Param("tipo") TipoTransacao tipo,
+        @Param("status") Transacao.StatusConferencia status,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim,
+        Pageable pageable
+    );
+
+    @EntityGraph(attributePaths = "categoria")
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipo "
+        + "AND t.statusConferencia IN :statuses "
+        + "AND COALESCE(t.dataTransacao, t.dataCriacao) >= :inicio "
+        + "AND COALESCE(t.dataTransacao, t.dataCriacao) <= :fim "
+        + "ORDER BY COALESCE(t.dataTransacao, t.dataCriacao) DESC, t.id DESC")
+    Page<Transacao> findPagedForIrDetalhe(
+        @Param("usuarioId") Long usuarioId,
+        @Param("tipo") TipoTransacao tipo,
+        @Param("statuses") Collection<Transacao.StatusConferencia> statuses,
         @Param("inicio") LocalDateTime inicio,
         @Param("fim") LocalDateTime fim,
         Pageable pageable
@@ -117,6 +139,18 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     List<Transacao> findDespesasConfirmadasDesde(
         @Param("usuarioId") Long usuarioId,
         @Param("inicio") LocalDateTime inicio
+    );
+
+    /** Despesas em conta (sem fatura de cartão) — base para burn rate diário. */
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.fatura IS NULL "
+        + "AND t.dataTransacao >= :inicio AND t.dataTransacao < :fim")
+    BigDecimal sumDespesaContaCorrenteConfirmadaPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
     );
 
     @Query("SELECT COUNT(t) FROM Transacao t WHERE t.usuario.id = :usuarioId "

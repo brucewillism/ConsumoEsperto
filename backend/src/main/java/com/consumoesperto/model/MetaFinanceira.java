@@ -9,6 +9,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -56,6 +57,13 @@ public class MetaFinanceira {
     @JoinColumn(name = "usuario_id", nullable = false)
     @JsonBackReference("usuario-metas")
     private Usuario usuario;
+
+    /** Meta temporária (ex.: Modo Viagem/Cronos). Expirada = ignorar em relatórios quando vencida. */
+    @Column(name = "data_expiracao")
+    private LocalDate dataExpiracao;
+
+    @Column(name = "google_calendar_event_id", length = 128)
+    private String googleCalendarEventId;
 
     @PrePersist
     protected void onCreate() {
@@ -145,5 +153,21 @@ public class MetaFinanceira {
 
     public void setPrioridade(Integer prioridade) {
         this.prioridade = prioridade;
+    }
+
+    public LocalDate getDataExpiracao() {
+        return dataExpiracao;
+    }
+
+    public void setDataExpiracao(LocalDate dataExpiracao) {
+        this.dataExpiracao = dataExpiracao;
+    }
+
+    public String getGoogleCalendarEventId() {
+        return googleCalendarEventId;
+    }
+
+    public void setGoogleCalendarEventId(String googleCalendarEventId) {
+        this.googleCalendarEventId = googleCalendarEventId;
     }
 }

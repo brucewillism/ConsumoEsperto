@@ -719,3 +719,163 @@
     font-size: 0.85rem;
   }
 }
+
+/* —— Stark HUD · Scanner de combate —— */
+.faturas-container.hud-faturas-module {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+.hud-module-tag {
+  margin: 0 0 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #00e5ff;
+}
+
+.faturas-container .header .header-left h1 {
+  text-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
+}
+
+.combat-scanner {
+  background: rgba(13, 14, 18, 0.94) !important;
+  border: 1px solid rgba(0, 229, 255, 0.2) !important;
+}
+
+.scanner-eyebrow {
+  margin: 0 0 4px;
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  color: rgba(0, 229, 255, 0.75);
+  font-weight: 800;
+}
+
+.scanner-log {
+  display: grid;
+  grid-template-columns: 118px 36px minmax(100px, 0.9fr) 1fr minmax(108px, auto);
+  gap: 10px;
+  align-items: center;
+  font-size: 0.78rem;
+  font-family: var(--font-mono-amount), ui-monospace, monospace;
+}
+
+.scanner-log-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 10px 8px;
+  background: rgba(13, 14, 18, 0.98);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.25);
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.scanner-log-row {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(0, 229, 255, 0.08);
+  color: #cbd5e1;
+
+  &:hover {
+    background: rgba(0, 229, 255, 0.04);
+  }
+
+  .strong {
+    font-weight: 800;
+    color: #f8fafc;
+  }
+}
+
+.neon-badge {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #00e5ff;
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes gritFlicker {
+  0% {
+    opacity: 1;
+  }
+  15% {
+    opacity: 0.82;
+  }
+  30% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 0.88;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes scanlines {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 8px;
+  }
+}
+
+.scanner-log-row.scanline-warn {
+  position: relative;
+  animation: gritFlicker 1.8s ease-in-out infinite;
+
+  &::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 23, 68, 0.07) 2px,
+      rgba(255, 23, 68, 0.07) 4px
+    );
+    animation: scanlines 4s linear infinite;
+    mix-blend-mode: overlay;
+  }
+
+  .neon-badge {
+    color: #ff8a80;
+    border-color: rgba(255, 23, 68, 0.55);
+    background: rgba(255, 23, 68, 0.12);
+    box-shadow: 0 0 14px rgba(255, 23, 68, 0.35);
+  }
+}
+
+@media (max-width: 840px) {
+  .scanner-log {
+    grid-template-columns: 1fr 1fr;
+    font-size: 0.72rem;
+  }
+
+  .scanner-log-head {
+    display: none;
+  }
+
+  .scanner-log-row {
+    grid-template-columns: 1fr;
+    border: 1px solid rgba(0, 229, 255, 0.12);
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
+}

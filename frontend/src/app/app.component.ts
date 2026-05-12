@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router, NavigationEnd, Event as RouterEvent } from '@angular/router';
+import { hudRouteAnimations } from './app.animations';
 import { AuthService } from './services/auth.service';
 import { Usuario } from './models/usuario.model';
 import { filter } from 'rxjs/operators';
@@ -14,9 +15,13 @@ import { ScoreService, UsuarioScore } from './services/score.service';
   imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
+  animations: [hudRouteAnimations],
 })
 export class AppComponent implements OnInit {
   title = 'ConsumoEsperto';
+
+  /** Estado para re-disparar hudRouteAnimations a cada navegação. */
+  routeAnimationState = '';
 
   isAuthenticated = false;
   currentUser: Usuario | null = null;
@@ -69,12 +74,15 @@ export class AppComponent implements OnInit {
       }
     });
 
+    this.routeAnimationState = this.router.url;
+
     this.router.events
       .pipe(filter((e: RouterEvent): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((event: NavigationEnd) => {
         const path = event.urlAfterRedirects || event.url;
         this.isLoginPage = path === '/login' || path === '/register';
         this.currentPage = this.tituloRota(path);
+        this.routeAnimationState = path;
       });
   }
 

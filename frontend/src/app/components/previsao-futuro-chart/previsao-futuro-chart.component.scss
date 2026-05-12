@@ -1,0 +1,115 @@
+.previsao-futuro-wrap.hud-glass {
+  margin-bottom: 1.5rem;
+  padding: 1.35rem 1.5rem;
+  border-radius: 14px;
+  background: rgba(18, 20, 28, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  box-shadow:
+    0 0 0 1px rgba(123, 31, 162, 0.12) inset,
+    0 12px 40px rgba(0, 0, 0, 0.35);
+  color: #e2e8f0;
+}
+
+.previsao-head .eyebrow {
+  margin: 0 0 0.35rem;
+  color: #00e5ff;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.previsao-head .hud-section-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  font-family: Inter, system-ui, sans-serif;
+  color: #f1f5f9;
+}
+
+.previsao-head .sub {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #94a3b8;
+  line-height: 1.45;
+  max-width: 52rem;
+}
+
+.previsao-loading,
+.previsao-erro {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 1.1rem 0;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.previsao-chart-box {
+  margin-top: 1rem;
+  height: 260px;
+  position: relative;
+  border-radius: 10px;
+  background: rgba(13, 14, 18, 0.45);
+  padding: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.previsao-chart-box.alerta-negativa {
+  box-shadow:
+    0 0 0 1px rgba(255, 193, 7, 0.25),
+    0 0 24px rgba(255, 23, 68, 0.12);
+}
+
+.previsao-foot {
+  margin: 0.85rem 0 0;
+  font-size: 0.875rem;
+  color: #cbd5e1;
+}
+
+.tag-perigo {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+.tag-ok {
+  color: #00e5ff;
+  font-weight: 600;
+}
+
+.previsao-chart-box.radar-sweep-active {
+  overflow: hidden;
+}
+
+.previsao-chart-box.radar-sweep-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(0, 229, 255, 0.14) 48%,
+    rgba(123, 31, 162, 0.22) 50%,
+    rgba(0, 229, 255, 0.12) 52%,
+    transparent 58%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: previsao-radar-sweep 1.35s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes previsao-radar-sweep {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}

@@ -28,6 +28,7 @@ public class SecurityConfig {
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
+    private final JwtAccessDeniedHandler accessDeniedHandler;
     private final PasswordEncoder passwordEncoder;
 
     /**
@@ -43,12 +44,16 @@ public class SecurityConfig {
             .csrf().disable()
             .cors().and()
             .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
-            .exceptionHandling().authenticationEntryPoint(unauthorizedHandler).and()
+            .exceptionHandling()
+                .authenticationEntryPoint(unauthorizedHandler)
+                .accessDeniedHandler(accessDeniedHandler)
+                .and()
             .authenticationProvider(authenticationProvider())
             .authorizeRequests()
                 .antMatchers(
                     "/api/auth/**",
                     "/api/oauth2/**",
+                    "/api/integracoes/google-calendar/oauth2/callback",
                     "/api/public/**",
                     "/api/whatsapp/**",
                     "/swagger-ui/**",

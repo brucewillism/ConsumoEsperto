@@ -48,6 +48,10 @@ public class OpenAiService {
     @Value("${consumoesperto.ai.gemini-model:gemini-2.5-flash}")
     private String geminiModel;
 
+    /** Modelo exclusivo OpenAI / endpoint compatível {@code /v1/embeddings}. */
+    @Value("${consumoesperto.ai.embedding-model:text-embedding-3-small}")
+    private String embeddingModel;
+
     public String transcribeAudio(byte[] audioBytes, String filename, String contentType, Long userId) {
         AiProvidersConfig cfg = cfgForAi(userId);
         return executeAIRequestWithFallback(
@@ -264,6 +268,48 @@ public class OpenAiService {
             log.warn("Geração de texto IA indisponível: {}", e.getMessage());
             return fallback;
         }
+    }
+
+    /**
+     * Embeddings OpenAI-compatíveis ({@code POST .../embeddings}). A camada PG usa 1536 dimensões.
+     */
+    public Optional<float[]> tryCreateEmbedding(String text, Long userId) {
+        if (text == null || text.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(createEmbeddingOpenAi(text.trim(), userId));
+        } catch (Exception e) {
+            log.warn("Embedding indisponível: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private float[] createEmbeddingOpenAi(String text, Long userId) throws Exception {
+        AiProvidersConfig cfg = cfgForAi(userId);
+        OpenaiSection o = openai(cfg);
+        if (!hasKey(o) || !hasUrl(o.getBaseUrl())) {
+            throw new RuntimeException("OpenAI (embeddings): API key ou base URL ausente");
+        }
+        String model = embeddingModel == null || embeddingModel.isBlank() ? "text-embedding-3-small" : embeddingModel.trim();
+        Map<String, Object> payload = Map.of("model", model, "input", text);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(o.getApiKey().trim());
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+        String url = trimTrailingSlash(o.getBaseUrl()) + "/embeddings";
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        JsonNode root = objectMapper.readTree(response.getBody());
+        JsonNode emb = root.path("data").path(0).path("embedding");
+        if (!emb.isArray() || emb.size() == 0) {
+            throw new RuntimeException("Resposta de embeddings sem vetor");
+        }
+        int n = emb.size();
+        float[] out = new float[n];
+        for (int i = 0; i < n; i++) {
+            out[i] = (float) emb.get(i).asDouble();
+        }
+        return out;
     }
 
     /**

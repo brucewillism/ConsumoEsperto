@@ -21,10 +21,100 @@
       <button type="button" class="btn outline" (click)="abrirModal()">Editar</button>
     </div>
 
+    <div class="alert-jarvis calendar-box" *ngIf="!carregando">
+      <div class="alert-icon"><i class="fas fa-calendar-alt"></i></div>
+      <div class="alert-body">
+        <strong>Agenda Google (Cronos)</strong>
+        <p class="hint">
+          Autorize leitura só de calendário para o J.A.R.V.I.S. detetar viagens/eventos e sugerir o Modo Viagem.
+          O login normal com Google <em>não</em> inclui este passo.
+        </p>
+      </div>
+      <button type="button" class="btn outline" (click)="vincularGoogleCalendar()" [disabled]="vinculandoCalendar">
+        {{ vinculandoCalendar ? 'A abrir…' : 'Vincular calendário' }}
+      </button>
+    </div>
+
+    <div class="alert-jarvis fixas-box" *ngIf="!carregando">
+      <div class="alert-icon"><i class="fas fa-lock"></i></div>
+      <div class="alert-body">
+        <strong>Módulo de Obrigações Fixas</strong>
+        <p class="hint">
+          Contas que saem todo mês (aluguel, internet, etc.). A Sentinela desconta no dia de vencimento no gráfico
+          <em>Futuro provável</em>. Também pode dizer ao J.A.R.V.I.S.:
+          <span class="mono">salve essa despesa fixa de 250 para internet</span>.
+        </p>
+        <ul class="fixas-mini" *ngIf="fixas.length && !carregandoFixas">
+          <li *ngFor="let f of fixas">
+            <span class="fixa-nome">{{ f.descricao }}</span>
+            <span class="fixa-meta"
+              >Dia {{ f.diaVencimento }} ·
+              {{ f.valor | currency : 'BRL' }}</span
+            >
+          </li>
+        </ul>
+        <p class="hint" *ngIf="!fixas.length && !carregandoFixas">Nenhuma obrigação fixa cadastrada.</p>
+      </div>
+      <button type="button" class="btn outline" (click)="abrirModalFixas()" [disabled]="carregandoFixas">
+        Gerir
+      </button>
+    </div>
+
     <div class="status-box" *ngIf="carregando">
       <i class="fas fa-spinner fa-spin"></i>
       <span>Carregando…</span>
     </div>
+  </div>
+</div>
+
+<div class="modal-layer" *ngIf="modalFixasAberto">
+  <div class="modal-backdrop" (click)="fecharModalFixas()"></div>
+  <div class="modal-panel modal-wide" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+    <h2>Obrigações fixas</h2>
+    <p class="hint">Edite ou adicione retenções mensais para o protocolo Sentinela.</p>
+
+    <div class="fixas-form">
+      <label class="fld">
+        <span>Descrição</span>
+        <input type="text" [(ngModel)]="formFixa.descricao" name="fxDesc" placeholder="Ex.: Aluguel" />
+      </label>
+      <label class="fld">
+        <span>Valor (R$)</span>
+        <input type="number" [(ngModel)]="formFixa.valor" name="fxValor" min="0.01" step="0.01" />
+      </label>
+      <label class="fld fld-dia">
+        <span>Vencimento (dia)</span>
+        <input type="number" [(ngModel)]="formFixa.diaVencimento" name="fxDia" min="1" max="31" />
+      </label>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn ghost" (click)="fecharModalFixas()" [disabled]="carregandoFixas">
+        Fechar
+      </button>
+      <button type="button" class="btn primary" (click)="salvarFixa()" [disabled]="carregandoFixas">
+        {{ editandoFixa ? 'Atualizar' : 'Adicionar' }}
+      </button>
+    </div>
+
+    <h3 class="list-title">Lista</h3>
+    <div class="fixas-table" *ngIf="fixas.length">
+      <div class="fixas-row head">
+        <span>Descrição</span>
+        <span>Valor</span>
+        <span>Dia</span>
+        <span></span>
+      </div>
+      <div class="fixas-row" *ngFor="let f of fixas">
+        <span>{{ f.descricao }}</span>
+        <span>{{ f.valor | currency : 'BRL' }}</span>
+        <span>{{ f.diaVencimento }}</span>
+        <span class="row-actions">
+          <button type="button" class="linkish" (click)="editarFixa(f)">Editar</button>
+          <button type="button" class="linkish danger" (click)="excluirFixa(f)">Excluir</button>
+        </span>
+      </div>
+    </div>
+    <p class="hint" *ngIf="!fixas.length">Ainda vazio — use o formulário acima.</p>
   </div>
 </div>
 

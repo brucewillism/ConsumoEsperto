@@ -1,52 +1,88 @@
-<div class="invest-page">
-  <section class="hero">
+<div class="invest-page hud-invest-module">
+  <section class="hero hud-animate-inv" style="--stagger: 0">
     <div>
-      <p>Marketplace visual</p>
+      <p class="hud-tag">Módulo · Projeção de capital</p>
       <h1>Oportunidades de Investimento</h1>
-      <span>Compare simulações educativas de Poupança, Tesouro Selic e CDB.</span>
+      <span class="hero-desc">Simulações educativas no mesmo idioma visual do Oráculo (previsão de saldo).</span>
     </div>
   </section>
 
-  <div class="cards">
-    <mat-card class="invest-card">
-      <mat-icon>savings</mat-icon>
-      <h2>Poupança</h2>
-      <strong>{{ brl(oportunidade?.rendimentoPoupanca || 0) }}</strong>
-      <span>estimativa em 1 mês</span>
-    </mat-card>
-    <mat-card class="invest-card featured">
-      <mat-icon>account_balance</mat-icon>
-      <h2>Tesouro Selic</h2>
-      <strong>{{ brl(oportunidade?.rendimentoTesouroSelic || 0) }}</strong>
-      <span>estimativa em 1 mês</span>
-    </mat-card>
-    <mat-card class="invest-card best">
-      <mat-icon>trending_up</mat-icon>
-      <h2>CDB Liquidez Diária</h2>
-      <strong>{{ brl(oportunidade?.rendimentoCdb || 0) }}</strong>
-      <span>estimativa em 1 mês</span>
-    </mat-card>
-  </div>
+  <div class="invest-layout">
+    <div class="invest-main">
+      <div class="cards hud-animate-inv" style="--stagger: 1">
+        <mat-card class="invest-card">
+          <mat-icon>savings</mat-icon>
+          <h2>Poupança</h2>
+          <strong>{{ brl(oportunidade?.rendimentoPoupanca || 0) }}</strong>
+          <span>estimativa em 1 mês</span>
+        </mat-card>
+        <mat-card class="invest-card featured">
+          <mat-icon>account_balance</mat-icon>
+          <h2>Tesouro Selic</h2>
+          <strong>{{ brl(oportunidade?.rendimentoTesouroSelic || 0) }}</strong>
+          <span>estimativa em 1 mês</span>
+        </mat-card>
+        <mat-card class="invest-card best">
+          <mat-icon>trending_up</mat-icon>
+          <h2>CDB Liquidez Diária</h2>
+          <strong>{{ brl(oportunidade?.rendimentoCdb || 0) }}</strong>
+          <span>estimativa em 1 mês</span>
+        </mat-card>
+      </div>
 
-  <mat-card class="simulator">
-    <h2>Simulador visual</h2>
-    <p>Valor simulado: <strong>{{ brl(valor) }}</strong></p>
-    <input type="range" min="500" max="50000" step="100" [(ngModel)]="valor">
+      <mat-card class="chart-panel hud-animate-inv" style="--stagger: 2">
+        <h2 class="panel-title">Projeção de saldo · série temporal</h2>
+        <p class="panel-sub">Linha sólida (real) e área de risco quando a projeção fica negativa — como no painel principal.</p>
+        <div class="chart-host">
+          <app-previsao-futuro-chart></app-previsao-futuro-chart>
+        </div>
+      </mat-card>
 
-    <div class="projection-grid">
-      <div>
-        <span>1 mês</span>
-        <strong>{{ brl(rendimento(0.0092, 1)) }}</strong>
-      </div>
-      <div>
-        <span>6 meses</span>
-        <strong>{{ brl(rendimento(0.0092, 6)) }}</strong>
-      </div>
-      <div>
-        <span>12 meses</span>
-        <strong>{{ brl(rendimento(0.0092, 12)) }}</strong>
-      </div>
+      <mat-card class="simulator hud-animate-inv" style="--stagger: 3">
+        <h2>Simulador de montante</h2>
+        <p>Valor simulado: <strong>{{ brl(valor) }}</strong></p>
+        <input type="range" min="500" max="50000" step="100" [(ngModel)]="valor">
+
+        <div class="projection-grid">
+          <div>
+            <span>1 mês</span>
+            <strong>{{ brl(rendimento(0.0092, 1)) }}</strong>
+          </div>
+          <div>
+            <span>6 meses</span>
+            <strong>{{ brl(rendimento(0.0092, 6)) }}</strong>
+          </div>
+          <div>
+            <span>12 meses</span>
+            <strong>{{ brl(rendimento(0.0092, 12)) }}</strong>
+          </div>
+        </div>
+        <small>{{ oportunidade?.explicacaoIa || 'Simulação educativa, sem promessa de rentabilidade.' }}</small>
+      </mat-card>
     </div>
-    <small>{{ oportunidade?.explicacaoIa || 'Simulação educativa, sem promessa de rentabilidade.' }}</small>
-  </mat-card>
+
+    <aside class="oracle-aside hud-animate-inv" style="--stagger: 2">
+      <div class="oracle-block">
+        <p class="oracle-eyebrow">ORÁCULO · CUSTO DE OPORTUNIDADE</p>
+        <h3>Score J.A.R.V.I.S.</h3>
+        <p class="oracle-score" *ngIf="usuarioScore">
+          <strong>{{ usuarioScore.score }}</strong>
+          <span class="nivel">{{ usuarioScore.nivel }}</span>
+        </p>
+        <p *ngIf="!usuarioScore" class="oracle-muted">Carregando perfil de autorização…</p>
+        <p class="oracle-body">
+          Com base no seu score e no capital ocioso estimado, o sistema projeta uma parcela de retorno deixada de lado
+          ao permanecer apenas em liquidez imediata frente ao melhor cenário de referência (CDB).
+        </p>
+        <p class="oracle-value">
+          <span class="lbl">CUSTO_MENSAL_EST.</span>
+          <strong>{{ brl(custoOportunidadeMensal) }}</strong>
+        </p>
+        <p class="oracle-foot">
+          Referência: CDB vs. saldo ocioso · fator disciplina
+          <strong>{{ fatorDisciplina | number : '1.2-2' }}</strong>
+        </p>
+      </div>
+    </aside>
+  </div>
 </div>

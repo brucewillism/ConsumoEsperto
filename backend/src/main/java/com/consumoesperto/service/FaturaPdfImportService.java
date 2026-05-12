@@ -65,6 +65,7 @@ public class FaturaPdfImportService {
     private final FaturaService faturaService;
     private final ScoreService scoreService;
     private final WhatsAppNotificationService whatsAppNotificationService;
+    private final ContencaoJarvisService contencaoJarvisService;
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
     public static boolean isBulletVisivelAoUsuario(String linhaAuditoria) {
@@ -106,11 +107,22 @@ public class FaturaPdfImportService {
         imp.setValorTotal(valorTotal);
         imp.setPagamentoMinimo(readMoney(extracted.path("pagamentoMinimo")));
         imp.setItensJson(writeJson(itens));
+        List<ImportacaoFaturaItemDTO> prevItens = List.of();
+        List<ImportacaoFaturaCartao> anteriores = importacaoRepository
+            .findByUsuarioIdAndCartaoCreditoIdOrderByDataVencimentoDesc(usuarioId, cartao.getId());
+        if (!anteriores.isEmpty()) {
+            prevItens = readItens(anteriores.get(0).getItensJson());
+        }
         List<String> auditorias = new ArrayList<>(auditarGastosFantasmas(usuarioId, cartao.getId(), itens));
+        List<ContencaoJarvisService.SugestaoContencaoDraft> contencaoDrafts = new ArrayList<>();
+        auditorias.addAll(contencaoJarvisService.montarAuditoriasComMetasNaImportacao(
+            usuarioId, cartao.getId(), prevItens, itens, contencaoDrafts));
         aplicarValidacaoChecksumFatura(valorTotal, itens, extracted, auditorias);
         imp.setAuditoriaJson(writeJson(auditorias));
         imp.setNovosDetectados((int) itens.stream().filter(ImportacaoFaturaItemDTO::isNovo).count());
-        return toDto(importacaoRepository.save(imp));
+        ImportacaoFaturaCartao salvo = importacaoRepository.save(imp);
+        contencaoJarvisService.persistirSugestoesPosImportacao(usuarioId, salvo.getId(), contencaoDrafts);
+        return toDto(salvo);
     }
 
     public boolean pareceFaturaCartao(JsonNode extracted) {
@@ -380,25 +392,13 @@ public class FaturaPdfImportService {
             }
             if (totalAtual.compareTo(totalAnterior.multiply(BigDecimal.valueOf(1.15))) > 0) {
                 String rotulo = rotuloPorChave.getOrDefault(chave, chave);
-                BigDecimal aumentoPct = totalAnterior.compareTo(BigDecimal.ZERO) <= 0
-                    ? BigDecimal.ZERO
-                    : totalAtual.subtract(totalAnterior)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(totalAnterior, 1, RoundingMode.HALF_UP);
-                BigDecimal deltaVal = totalAtual.subtract(totalAnterior).max(BigDecimal.ZERO);
-                int pontosImpacto = scoreService.estimarPerdaSimulacao(
-                    deltaVal.compareTo(BigDecimal.ZERO) <= 0 ? totalAtual.multiply(new BigDecimal("0.06")) : deltaVal);
                 if (FinanceInsightProfileClassifier.perfilPorDescricao(rotulo)
                     == FinanceInsightProfileClassifier.Perfil.ASSINATURA_SERVICO) {
-                    out.add("⚠️ Senhor, detectei uma elevação na assinatura de *" + rotulo + "*. O valor saltou de R$ "
-                        + formatBrl(totalAnterior) + " para R$ " + formatBrl(totalAtual)
-                        + ". Deseja *cancelar* este protocolo (deixar de sugerir lembretes) ou apenas *acompanhar*?");
-                } else {
-                    out.add("⛽ Senhor, os gastos em *" + rotulo + "* aumentaram *" + aumentoPct.stripTrailingZeros().toPlainString()
-                        + "%* face à fatura anterior (de R$ " + formatBrl(totalAnterior) + " para R$ "
-                        + formatBrl(totalAtual) + "). O impacto projetado no seu Score é de *"
-                        + pontosImpacto + "* pontos se o ritmo se mantiver.");
+                    out.add("⚠️ Senhor, detectei uma elevação na assinatura de *" + rotulo + "*. "
+                        + "O valor saltou de *R$ " + formatBrl(totalAnterior).trim() + "* para *R$ "
+                        + formatBrl(totalAtual).trim() + "*. Deseja *cancelar* este protocolo?");
                 }
+                // Hábito (combustível/mercado/restaurante): alerta + meta de teto vêm do ContencaoJarvisService (média 3 meses).
             }
         }
         BigDecimal juros = itens.stream()

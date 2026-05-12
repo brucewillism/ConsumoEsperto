@@ -19,14 +19,25 @@ public class EvolutionWebhookDedupService {
     private final ConcurrentHashMap<String, Long> seenAt = new ConcurrentHashMap<>();
 
     /**
+     * @param remoteJid     JID efetivo (só usado se {@code messageKeyId} vier vazio)
+     * @param fromMe        como em {@code key.fromMe} — distingue eco legítimo
+     * @param bodyPreview   texto (ou vazio) para compor chave sintética quando não há {@code key.id}
      * @return {@code true} se esta entrega deve ser processada; {@code false} se já foi vista.
      */
-    public boolean claimDelivery(String evolutionInstance, String messageKeyId) {
-        if (messageKeyId == null || messageKeyId.isBlank()) {
-            return true;
-        }
+    public boolean claimDelivery(String evolutionInstance, String messageKeyId, String remoteJid, boolean fromMe, String bodyPreview) {
         String inst = evolutionInstance == null ? "" : evolutionInstance.trim();
-        String key = inst + "|" + messageKeyId.trim();
+        String key;
+        if (messageKeyId != null && !messageKeyId.isBlank()) {
+            key = inst + "|id|" + messageKeyId.trim();
+        } else {
+            String rj = remoteJid == null ? "" : remoteJid.trim();
+            String norm = bodyPreview == null ? "" : bodyPreview.trim();
+            if (norm.length() > 320) {
+                norm = norm.substring(0, 320);
+            }
+            int h = norm.hashCode();
+            key = inst + "|noid|" + rj + "|" + fromMe + "|" + Integer.toHexString(h);
+        }
         long now = System.currentTimeMillis();
         Long prev = seenAt.putIfAbsent(key, now);
         if (prev != null) {

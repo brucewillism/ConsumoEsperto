@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.relatorio.IrPdfDeclaracaoDados;
+import com.consumoesperto.dto.relatorio.IrPdfDetalheVm;
 import com.consumoesperto.dto.relatorio.IrPdfLinhaVm;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.Transacao;
@@ -16,6 +17,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -322,20 +324,25 @@ public class RelatorioFinanceiroService {
      */
     @Transactional(readOnly = true)
     public IrPdfDeclaracaoDados prepararDeclaracaoIrPdf(Long usuarioId, int anoCalendario) {
-        LinkedHashMap<String, IrGrupoCsv> acumulado = acumularIrGrupos(usuarioId, anoCalendario);
         NumberFormat brl = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
-        BigDecimal total = BigDecimal.ZERO;
-        List<IrPdfLinhaVm> linhas = new ArrayList<>();
-        for (IrGrupoCsv g : acumulado.values()) {
-            total = total.add(g.total != null ? g.total : BigDecimal.ZERO);
-            linhas.add(new IrPdfLinhaVm(
-                g.categoria,
-                formatarCnpjExibicao(g.cnpj),
-                brl.format(g.total != null ? g.total : BigDecimal.ZERO),
-                g.quantidade
-            ));
-        }
-        return new IrPdfDeclaracaoDados(linhas, total);
+        LinkedHashMap<String, IrGrupoCsv> conf = acumularIrGrupos(usuarioId, anoCalendario, Transacao.StatusConferencia.CONFIRMADA);
+        LinkedHashMap<String, IrGrupoCsv> pend = acumularIrGrupos(usuarioId, anoCalendario, Transacao.StatusConferencia.PENDENTE);
+        List<IrPdfLinhaVm> linhasConfirmadas = mapAcumuladoParaLinhasVm(conf, brl);
+        List<IrPdfLinhaVm> linhasPendentesVm = mapAcumuladoParaLinhasVm(pend, brl);
+        BigDecimal totalConfirmado = totalAcumulado(conf);
+        BigDecimal totalPendenteValor = totalAcumulado(pend);
+        long qtdConf = quantidadeLancamentos(conf);
+        long qtdPend = quantidadeLancamentos(pend);
+        List<IrPdfDetalheVm> detalhes = montarDetalhesIr(usuarioId, anoCalendario, brl);
+        return new IrPdfDeclaracaoDados(
+            linhasConfirmadas,
+            totalConfirmado,
+            linhasPendentesVm,
+            totalPendenteValor,
+            detalhes,
+            qtdConf,
+            qtdPend
+        );
     }
 
     /**
@@ -346,7 +353,7 @@ public class RelatorioFinanceiroService {
     public void escreverCsvIr(Long usuarioId, int anoCalendario, PrintWriter writer) {
         writer.write('\uFEFF');
         writer.println("categoria;cnpj;soma_valor;quantidade_transacoes");
-        LinkedHashMap<String, IrGrupoCsv> acumulado = acumularIrGrupos(usuarioId, anoCalendario);
+        LinkedHashMap<String, IrGrupoCsv> acumulado = acumularIrGrupos(usuarioId, anoCalendario, Transacao.StatusConferencia.CONFIRMADA);
         for (IrGrupoCsv g : acumulado.values()) {
             writer.print(escaparCampoCsv(g.categoria));
             writer.print(";");
@@ -359,7 +366,85 @@ public class RelatorioFinanceiroService {
         writer.flush();
     }
 
-    private LinkedHashMap<String, IrGrupoCsv> acumularIrGrupos(Long usuarioId, int anoCalendario) {
+    private List<IrPdfLinhaVm> mapAcumuladoParaLinhasVm(LinkedHashMap<String, IrGrupoCsv> acumulado, NumberFormat brl) {
+        List<IrPdfLinhaVm> linhas = new ArrayList<>();
+        for (IrGrupoCsv g : acumulado.values()) {
+            linhas.add(new IrPdfLinhaVm(
+                g.categoria,
+                formatarCnpjExibicao(g.cnpj),
+                brl.format(g.total != null ? g.total : BigDecimal.ZERO),
+                g.quantidade
+            ));
+        }
+        return linhas;
+    }
+
+    private static BigDecimal totalAcumulado(LinkedHashMap<String, IrGrupoCsv> acumulado) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (IrGrupoCsv g : acumulado.values()) {
+            total = total.add(g.total != null ? g.total : BigDecimal.ZERO);
+        }
+        return total;
+    }
+
+    private static long quantidadeLancamentos(LinkedHashMap<String, IrGrupoCsv> acumulado) {
+        long n = 0;
+        for (IrGrupoCsv g : acumulado.values()) {
+            n += g.quantidade;
+        }
+        return n;
+    }
+
+    private List<IrPdfDetalheVm> montarDetalhesIr(Long usuarioId, int anoCalendario, NumberFormat brl) {
+        LocalDateTime inicio = LocalDate.of(anoCalendario, 1, 1).atStartOfDay();
+        LocalDateTime fim = LocalDate.of(anoCalendario, 12, 31).atTime(23, 59, 59);
+        List<Transacao.StatusConferencia> statuses = List.of(
+            Transacao.StatusConferencia.CONFIRMADA,
+            Transacao.StatusConferencia.PENDENTE
+        );
+        DateTimeFormatter df = DateTimeFormatter.ofPattern("dd/MM/yyyy", new Locale("pt", "BR"));
+        List<IrPdfDetalheVm> out = new ArrayList<>();
+        int pageIdx = 0;
+        Page<Transacao> page;
+        do {
+            page = transacaoRepository.findPagedForIrDetalhe(
+                usuarioId,
+                Transacao.TipoTransacao.DESPESA,
+                statuses,
+                inicio,
+                fim,
+                PageRequest.of(pageIdx++, 500)
+            );
+            for (Transacao t : page.getContent()) {
+                LocalDateTime ref = t.getDataTransacao() != null ? t.getDataTransacao() : t.getDataCriacao();
+                String dataStr = ref != null ? ref.format(df) : "—";
+                String st = t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA
+                    ? "Confirmada"
+                    : "Pendente";
+                String cat = t.getCategoria() != null ? t.getCategoria().getNome() : "Sem categoria";
+                String desc = truncarTextoIr(t.getDescricao(), 140);
+                out.add(new IrPdfDetalheVm(
+                    dataStr,
+                    desc,
+                    cat,
+                    formatarCnpjExibicao(t.getCnpj()),
+                    brl.format(t.getValor() != null ? t.getValor() : BigDecimal.ZERO),
+                    st
+                ));
+            }
+        } while (page.hasNext());
+        return out;
+    }
+
+    private static String truncarTextoIr(String s, int max) {
+        if (s == null || s.isBlank()) {
+            return "—";
+        }
+        String t = s.trim();
+        return t.length() <= max ? t : t.substring(0, max - 1) + "…";
+    }
+
+    private LinkedHashMap<String, IrGrupoCsv> acumularIrGrupos(Long usuarioId, int anoCalendario, Transacao.StatusConferencia status) {
         LocalDateTime inicio = LocalDate.of(anoCalendario, 1, 1).atStartOfDay();
         LocalDateTime fim = LocalDate.of(anoCalendario, 12, 31).atTime(23, 59, 59);
         LinkedHashMap<String, IrGrupoCsv> acumulado = new LinkedHashMap<>();
@@ -369,6 +454,7 @@ public class RelatorioFinanceiroService {
             page = transacaoRepository.findPagedForIrExport(
                 usuarioId,
                 Transacao.TipoTransacao.DESPESA,
+                status,
                 inicio,
                 fim,
                 PageRequest.of(pageIdx++, 500)
