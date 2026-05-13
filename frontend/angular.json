@@ -125,6 +125,13 @@
                   "with": "src/environments/environment.prod.ts"
                 }
               ],
+              "optimization": {
+                "scripts": true,
+                "styles": true,
+                "fonts": {
+                  "inline": false
+                }
+              },
               // Orçamentos de tamanho para otimização
               "budgets": [
                 {
