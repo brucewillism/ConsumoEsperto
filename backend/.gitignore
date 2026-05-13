@@ -12,6 +12,8 @@
 
 # Package Files
 *.jar
+# Wrapper do Maven precisa ser versionado para ./mvnw funcionar em servidores/CI
+!.mvn/wrapper/maven-wrapper.jar
 *.war
 *.nar
 *.ear
@@ -33,7 +35,6 @@ release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
-.mvn/wrapper/maven-wrapper.jar
 
 # Gradle
 .gradle
