@@ -93,7 +93,7 @@ public class UsuarioDTO {
      * Pode ser nula para usuários sem foto de perfil.
      * Para usuários OAuth2 (Google), contém a URL da foto do provedor.
      */
-    @Size(max = 500, message = "URL da foto deve ter no máximo 500 caracteres")
+    @Size(max = 4096, message = "URL da foto deve ter no máximo 4096 caracteres")
     private String fotoUrl;
 
     /**

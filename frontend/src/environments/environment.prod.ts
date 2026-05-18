@@ -4,5 +4,8 @@ export const environment = {
   apiUrl: '/api',
   /** Defina no ambiente/build de produção conforme o provedor usado. */
   googleClientID: '',
-  version: '1.0.0'
+  version: '1.0.0',
+
+  loadingGifUrl: 'assets/loading/loading.gif',
+  loadingOverlayTailMs: 200
 };

@@ -265,7 +265,18 @@ public class FaturaPdfImportService {
 
     private Optional<CartaoCredito> localizarCartao(Long usuarioId, String banco) {
         List<CartaoCredito> ativos = cartaoCreditoRepository.findByUsuarioIdAndAtivoTrue(usuarioId);
+        if (ativos.isEmpty()) {
+            return Optional.empty();
+        }
         String token = norm(banco);
+        if (token.isBlank()) {
+            if (ativos.size() == 1) {
+                return Optional.of(ativos.get(0));
+            }
+            log.warn("[FaturaPDF] bancoCartao vazio na extração; userId={} tem {} cartões ativos — não adivinho qual usar",
+                usuarioId, ativos.size());
+            return Optional.empty();
+        }
         return ativos.stream()
             .filter(c -> norm(c.getBanco()).contains(token) || token.contains(norm(c.getBanco()))
                 || norm(c.getNome()).contains(token) || token.contains(norm(c.getNome())))

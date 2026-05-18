@@ -8,6 +8,7 @@ import { filter } from 'rxjs/operators';
 import { LoadingService } from './services/loading.service';
 import { InboxNotification, NotificacaoInboxService } from './services/notificacao-inbox.service';
 import { ScoreService, UsuarioScore } from './services/score.service';
+import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
@@ -31,6 +32,8 @@ export class AppComponent implements OnInit {
   userName = '';
   userEmail = '';
   userPhoto = '';
+  /** Evita ícone de imagem partida quando a URL falha (ex.: URL truncada antiga no BD). */
+  userPhotoLoadError = false;
 
   showNotifications = false;
   notificationCount = 0;
@@ -40,6 +43,9 @@ export class AppComponent implements OnInit {
 
   notifications: InboxNotification[] = [];
   usuarioScore: UsuarioScore | null = null;
+
+  /** GIF do overlay global de loading (tools/img/loading.gif via angular.json). */
+  readonly loadingGifUrl = environment.loadingGifUrl;
 
   constructor(
     private authService: AuthService,
@@ -62,12 +68,17 @@ export class AppComponent implements OnInit {
         this.userName = user.nome || user.email || 'Usuário';
         this.userEmail = user.email || '';
         this.userPhoto = user.fotoUrl || '';
+        this.userPhotoLoadError = false;
         this.refreshNotifications();
         this.scoreService.obter().subscribe({
           next: (score) => this.usuarioScore = score,
           error: () => this.usuarioScore = null
         });
       } else {
+        this.userName = '';
+        this.userEmail = '';
+        this.userPhoto = '';
+        this.userPhotoLoadError = false;
         this.notifications = [];
         this.notificationCount = 0;
         this.usuarioScore = null;

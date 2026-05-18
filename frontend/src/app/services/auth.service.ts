@@ -47,6 +47,12 @@ export class AuthService {
   ) {
     // Carrega usuário armazenado no localStorage (se existir)
     this.loadStoredUser();
+
+    // Com sessão ativa, atualiza perfil no servidor (foto Google, tratamento JARVIS, etc.)
+    const token = localStorage.getItem('token');
+    if (token) {
+      this.loadUserInfo(token);
+    }
     
     // Inicializa a autenticação Google OAuth2
     this.initializeGoogleAuth();
@@ -379,12 +385,16 @@ export class AuthService {
   }
 
   private mapPerfilToUsuario(response: any): Usuario {
+    const foto =
+      response?.fotoUrl ??
+      response?.foto_url ??
+      '';
     return {
       id: response.id,
       username: response.username,
       email: response.email,
       nome: response.nome,
-      fotoUrl: response.fotoUrl,
+      fotoUrl: foto,
       whatsappNumero: response.whatsappNumero,
       dataCriacao: response.dataCriacao ? new Date(response.dataCriacao) : undefined,
       ultimoAcesso: response.ultimoAcesso ? new Date(response.ultimoAcesso) : undefined,

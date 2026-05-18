@@ -101,8 +101,9 @@
     <div class="sidebar-footer" *ngIf="!sidebarCollapsed">
       <div class="user-info">
         <div class="user-avatar">
-          <img *ngIf="userPhoto" [src]="userPhoto" [alt]="userName" class="user-photo">
-          <i *ngIf="!userPhoto" class="fas fa-user"></i>
+          <img *ngIf="userPhoto && !userPhotoLoadError" [src]="userPhoto" [alt]="userName" class="user-photo"
+            referrerpolicy="no-referrer" loading="lazy" (error)="userPhotoLoadError = true">
+          <i *ngIf="!userPhoto || userPhotoLoadError" class="fas fa-user"></i>
         </div>
         <div class="user-details">
           <span class="user-name">{{ userName || 'Usuário' }}</span>
@@ -180,8 +181,9 @@
         <div class="user-menu">
           <button class="user-menu-btn" (click)="toggleUserMenu()">
             <div class="user-avatar-small">
-              <img *ngIf="userPhoto" [src]="userPhoto" [alt]="userName" class="user-photo-small">
-              <i *ngIf="!userPhoto" class="fas fa-user"></i>
+              <img *ngIf="userPhoto && !userPhotoLoadError" [src]="userPhoto" [alt]="userName" class="user-photo-small"
+                referrerpolicy="no-referrer" loading="lazy" (error)="userPhotoLoadError = true">
+              <i *ngIf="!userPhoto || userPhotoLoadError" class="fas fa-user"></i>
             </div>
             <span>{{ userName || 'Usuário' }}</span>
             <i class="fas fa-chevron-down"></i>
@@ -219,9 +221,6 @@
 <!-- Overlay para fechar dropdowns quando clicar fora -->
 <div class="overlay" *ngIf="(showNotifications || showUserMenu) && !isLoginPage" (click)="closeDropdowns()"></div>
 
-<div class="global-loading-overlay" *ngIf="isLoading$ | async">
-  <div class="global-loading-content">
-    <i class="fas fa-spinner fa-spin"></i>
-    <span>Carregando...</span>
-  </div>
+<div class="global-loading-overlay" *ngIf="isLoading$ | async" aria-busy="true" aria-live="polite">
+  <img [src]="loadingGifUrl" alt="" class="global-loading-gif" />
 </div>

@@ -93,9 +93,9 @@ public class Usuario {
     private String googleId;
 
     /**
-     * URL da foto de perfil do usuário no Google
+     * URL da foto de perfil do usuário no Google (OAuth pode devolver URLs longas; TEXT evita truncagem).
      */
-    @Column(name = "foto_url", length = 500)
+    @Column(name = "foto_url", columnDefinition = "TEXT")
     private String fotoUrl;
 
     /**

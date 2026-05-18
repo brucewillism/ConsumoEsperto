@@ -782,3 +782,10 @@ a {
 .jarvis-error-snackbar {
   font-family: var(--font-sans) !important;
 }
+
+/* Host da app: evita comportamento inline do custom element e dá base estável a overlays full-viewport */
+app-root {
+  display: block;
+  min-height: 100vh;
+  min-height: 100dvh;
+}

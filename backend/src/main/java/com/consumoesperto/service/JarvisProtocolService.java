@@ -24,6 +24,12 @@ public class JarvisProtocolService {
 
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
+    @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.force-vocative:}")
+    private String forceVocative;
+
+    @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.british-persona:false}")
+    private boolean britishPersona;
+
     public static final String SIGNATURE_LINE = "J.A.R.V.I.S. | ConsumoEsperto 🚀";
     /** Sem emoji — substring comum nas mensagens assinadas pelo stack. */
     public static final String SIGNATURE_MARKER = "J.A.R.V.I.S. | ConsumoEsperto";
@@ -175,6 +181,32 @@ public class JarvisProtocolService {
             + "Seja educado; use termos como «sistemas online» ou «protocolos ativos». "
             + "Sua missão é proteger o patrimônio e elevar o Score de Saúde Financeira " + objeto + ". "
             + "Responda em português claro e cortês.\n\n";
+    }
+
+    /**
+     * Persona + interlocutor para prompts de IA (vocative forçado opcional, tom britânico opcional).
+     */
+    public String camadaPersonaCompletaParaIa(Usuario usuario) {
+        String voc;
+        if (forceVocative != null && !forceVocative.isBlank()) {
+            voc = forceVocative.trim();
+        } else if (usuario == null) {
+            voc = "Senhor";
+        } else {
+            voc = montarVocativoCompleto(usuario);
+        }
+        String instr;
+        if (forceVocative != null && !forceVocative.isBlank()) {
+            instr = "Trate o utilizador exclusamente pelo vocativo \"" + forceVocative.trim()
+                + "\" em todas as respostas cordiais.\n\n";
+        } else {
+            instr = usuario != null ? instrucaoInterlocutorJarvis(usuario) : "";
+        }
+        String layer = jarvisPersonaSystemLayer(voc);
+        if (britishPersona) {
+            layer += "Adote postura de assistente britânico: calmo, analítico, understatement cortês; mantenha respostas em português.\n\n";
+        }
+        return instr + layer;
     }
 
     public String resolveVocative(Long userId, UsuarioRepository usuarioRepository) {

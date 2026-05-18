@@ -8,6 +8,7 @@ import com.consumoesperto.repository.MetaFinanceiraRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +30,12 @@ public class FinancialProactiveService {
 
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
+    /** Cooldown entre alertas “risco vermelho” por utilizador (0 = desligado). */
+    @Value("${consumoesperto.jarvis.alerta-risco-cooldown-minutes:30}")
+    private int alertaRiscoCooldownMinutes;
+
+    private final ConcurrentHashMap<Long, Long> ultimoAlertaRiscoPorUsuarioMs = new ConcurrentHashMap<>();
+
     private final CategoriaRepository categoriaRepository;
     private final OrcamentoService orcamentoService;
     private final ForecastFinanceiroService forecastFinanceiroService;
@@ -36,6 +44,7 @@ public class FinancialProactiveService {
     private final OpenAiService openAiService;
     private final ComportamentoService comportamentoService;
     private final HabitDominoService habitDominoService;
+    private final SentinelaProtocolService sentinelaProtocolService;
 
     @Transactional(readOnly = true)
     public Optional<Categoria> sugerirCategoria(Long usuarioId, String descricao) {
@@ -99,18 +108,69 @@ public class FinancialProactiveService {
         if (!isDespesaConfirmada(transacao) || transacao.getUsuario() == null) {
             return;
         }
-        var forecast = forecastFinanceiroService.calcular(transacao.getUsuario().getId());
-        boolean vermelho = forecast.getSaldoProjetado().compareTo(BigDecimal.ZERO) < 0
+        Long uid = transacao.getUsuario().getId();
+        var forecast = forecastFinanceiroService.calcular(uid);
+        var sentinela = sentinelaProtocolService.calcularMargemSentinela(transacao);
+        boolean forecastRuim = forecast.getSaldoProjetado().compareTo(BigDecimal.ZERO) < 0
             || forecast.getProbabilidadeVermelho().compareTo(BigDecimal.valueOf(70)) >= 0;
-        if (!vermelho) {
+        boolean sentinelaRuim = sentinela.saldoMarginal().compareTo(BigDecimal.ZERO) < 0;
+        if (!forecastRuim && !sentinelaRuim) {
             return;
         }
-        String msg = "*Alerta financeiro proativo*\n"
-            + "Depois desse lançamento, a projeção indica risco de fechar o mês no vermelho.\n"
+        if (alertaRiscoCooldownMinutes > 0) {
+            long agora = System.currentTimeMillis();
+            long janelaMs = alertaRiscoCooldownMinutes * 60_000L;
+            Long anterior = ultimoAlertaRiscoPorUsuarioMs.get(uid);
+            if (anterior != null && agora - anterior < janelaMs) {
+                log.info("[JARVIS-LOG] Alerta risco suprimido (cooldown {} min) userId={}",
+                    alertaRiscoCooldownMinutes, uid);
+                return;
+            }
+            ultimoAlertaRiscoPorUsuarioMs.put(uid, agora);
+        }
+
+        log.info("[JARVIS-LOG] Alerta Sentinela/forecast userId={} sentinelaRuim={} forecastRuim={}",
+            uid, sentinelaRuim, forecastRuim);
+
+        String texto = montarMensagemAlertaRiscoUnica(transacao, sentinelaRuim, forecastRuim, sentinela, forecast);
+        whatsAppNotificationService.enviarParaUsuario(uid, texto);
+    }
+
+    /**
+     * Uma única notificação: se ambos os sinais disparam, evita duas chamadas à IA e blocos repetitivos.
+     */
+    private String montarMensagemAlertaRiscoUnica(
+        Transacao transacao,
+        boolean sentinelaRuim,
+        boolean forecastRuim,
+        SentinelaProtocolService.SentinelaMargemDTO sentinela,
+        com.consumoesperto.dto.ForecastFinanceiroDTO forecast
+    ) {
+        if (sentinelaRuim && forecastRuim) {
+            return "*Alerta financeiro proativo*\n"
+                + "Margem Sentinela (receitas − recorrências estimadas − esta despesa): *"
+                + BRL.format(sentinela.saldoMarginal()) + "*.\n\n"
+                + "Projeção de fechamento — saldo: *" + BRL.format(forecast.getSaldoProjetado()) + "*; "
+                + "probabilidade: *" + forecast.getProbabilidadeVermelho() + "%*.\n\n"
+                + forecast.getMensagemIa();
+        }
+        if (sentinelaRuim) {
+            return sentinelaProtocolService.gerarAlertaTaticoIfNegativo(transacao, sentinela)
+                .orElseGet(() -> mensagemFallbackSoSentinela(sentinela));
+        }
+        return "*Alerta financeiro proativo*\n"
+            + "A projeção de fechamento indica tensão no caixa.\n"
             + "Saldo projetado: *" + BRL.format(forecast.getSaldoProjetado()) + "*\n"
             + "Probabilidade estimada: *" + forecast.getProbabilidadeVermelho() + "%*\n\n"
             + forecast.getMensagemIa();
-        whatsAppNotificationService.enviarParaUsuario(transacao.getUsuario().getId(), msg);
+    }
+
+    private String mensagemFallbackSoSentinela(SentinelaProtocolService.SentinelaMargemDTO sentinela) {
+        return "*Alerta Sentinela*\n"
+            + "Margem após este lançamento: *" + BRL.format(sentinela.saldoMarginal()) + "* "
+            + "(receitas " + BRL.format(sentinela.receitasMes()) + " − recorrências estimadas "
+            + BRL.format(sentinela.somaAssinaturasEstimadas()) + " − despesa "
+            + BRL.format(sentinela.novaDespesa()) + ").";
     }
 
     private void auditarJuros(Transacao transacao) {

@@ -67,6 +67,8 @@ public class TransacaoService {
 
     private final ScoreService scoreService;
 
+    private final TransacaoSemanticaIndexService transacaoSemanticaIndexService;
+
     /**
      * Cria uma nova transação financeira no sistema
      * 
@@ -140,6 +142,7 @@ public class TransacaoService {
 
         // Persiste a transação no banco de dados
         Transacao transacaoSalva = transacaoRepository.save(transacao);
+        transacaoSemanticaIndexService.agendarIndexacao(transacaoSalva.getId());
         if (transacaoSalva.getFatura() != null) {
             faturaService.sincronizarValorFaturaComTransacoes(transacaoSalva.getFatura().getId());
         }
@@ -248,6 +251,7 @@ public class TransacaoService {
 
         // Persiste as alterações no banco de dados
         Transacao transacaoAtualizada = transacaoRepository.save(transacao);
+        transacaoSemanticaIndexService.agendarIndexacao(transacaoAtualizada.getId());
         Long faturaIdDepois = transacaoAtualizada.getFatura() != null ? transacaoAtualizada.getFatura().getId() : null;
         if (faturaIdAntes != null && !Objects.equals(faturaIdAntes, faturaIdDepois)) {
             faturaService.sincronizarValorFaturaComTransacoes(faturaIdAntes);
@@ -272,6 +276,7 @@ public class TransacaoService {
 
         transacao.setStatusConferencia(Transacao.StatusConferencia.valueOf(status.name()));
         Transacao atualizada = transacaoRepository.save(transacao);
+        transacaoSemanticaIndexService.agendarIndexacao(atualizada.getId());
         if (atualizada.getFatura() != null) {
             faturaService.sincronizarValorFaturaComTransacoes(atualizada.getFatura().getId());
         }
@@ -307,6 +312,7 @@ public class TransacaoService {
         // Soft delete para manter histórico e auditoria
         transacao.setExcluido(true);
         transacaoRepository.save(transacao);
+        transacaoSemanticaIndexService.agendarIndexacao(transacao.getId());
         if (faturaId != null) {
             faturaService.sincronizarValorFaturaComTransacoes(faturaId);
         }

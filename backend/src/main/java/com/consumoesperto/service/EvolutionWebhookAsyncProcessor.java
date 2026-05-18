@@ -17,9 +17,12 @@ public class EvolutionWebhookAsyncProcessor {
     public void processEvolutionMessageAsync(EvolutionIncomingMessageDTO incoming, Long userId, String evolutionInstanceName) {
         try {
             whatsAppCommandService.processIncomingEvolutionMessage(incoming, userId, evolutionInstanceName);
-        } catch (Exception e) {
+        } catch (Throwable t) {
             log.error("[WhatsAppFilter] Erro assíncrono ao processar Evolution userId={} remoteJid={}: {}",
-                userId, incoming != null ? incoming.getFromJid() : null, e.getMessage(), e);
+                userId, incoming != null ? incoming.getFromJid() : null, t.getMessage(), t);
+            if (incoming != null && userId != null) {
+                whatsAppCommandService.notifyWebhookAsyncFailure(incoming, userId, evolutionInstanceName, t);
+            }
         }
     }
 }

@@ -15,7 +15,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TransacaoService } from '../../services/transacao.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
-import { RelatorioService } from '../../services/relatorio.service';
+import { RelatorioCategoriaMesAtual, RelatorioService } from '../../services/relatorio.service';
 import { RendaConfigService, RendaConfigDto } from '../../services/renda-config.service';
 import { CategoriaService } from '../../services/categoria.service';
 import {
@@ -36,7 +36,8 @@ import { UsuarioService } from '../../services/usuario.service';
 import { PreferenciaTratamentoJarvis, Usuario } from '../../models/usuario.model';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DateFormatPipe } from '../../pipes/date-format.pipe';
-import { forkJoin, catchError, of, fromEvent, timer, Subscription, filter, finalize } from 'rxjs';
+import { forkJoin, catchError, of, fromEvent, timer, Subscription, filter, finalize, Observable } from 'rxjs';
+import { timeout } from 'rxjs/operators';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { LoadingService } from '../../services/loading.service';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
@@ -1130,6 +1131,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }).format(value);
   }
   
+  private wrapDashboardRequest<T>(
+    source: Observable<T>,
+    fallback: T,
+    label: string,
+    timeoutMs: number = 45_000
+  ): Observable<T> {
+    return source.pipe(
+      timeout(timeoutMs),
+      catchError((e) => {
+        console.warn(`[Dashboard] ${label}: falha ou tempo esgotado (${timeoutMs} ms)`, e);
+        return of(fallback);
+      })
+    );
+  }
+
   /**
    * Carrega dados do dashboard após tentativa de sincronização
    *
@@ -1152,57 +1168,80 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const prevAno = prevRef.getFullYear();
     const prevMes = prevRef.getMonth() + 1;
 
+    const despesasCategoriaFallback: RelatorioCategoriaMesAtual = {
+      ano: now.getFullYear(),
+      mes: now.getMonth() + 1,
+      totalDespesas: 0,
+      itens: [],
+    };
+
     // Faz múltiplas chamadas em paralelo para obter todos os dados REAIS
     forkJoin({
-      transacoesMes: this.transacaoService.buscarDoMesAtual().pipe(
-        catchError(() => of([]))
+      transacoesMes: this.wrapDashboardRequest(
+        this.transacaoService.buscarDoMesAtual(),
+        [] as Transacao[],
+        'Transações do mês'
       ),
-      resumoMes: this.transacaoService.obterResumoDoMesAtual().pipe(
-        catchError(() => of({}))
+      resumoMes: this.wrapDashboardRequest(this.transacaoService.obterResumoDoMesAtual(), {}, 'Resumo do mês'),
+      cartoes: this.wrapDashboardRequest(
+        this.cartaoCreditoService.buscarTodosCartoes(),
+        [] as CartaoCredito[],
+        'Cartões'
       ),
-      cartoes: this.cartaoCreditoService.buscarTodosCartoes().pipe(
-        catchError(() => of([]))
+      despesasCategoriaMesAtual: this.wrapDashboardRequest(
+        this.relatorioService.getDespesasPorCategoriaMesAtual(),
+        despesasCategoriaFallback,
+        'Despesas por categoria (mês)'
       ),
-      despesasCategoriaMesAtual: this.relatorioService.getDespesasPorCategoriaMesAtual().pipe(
-        catchError(() => of({ itens: [] }))
+      relatorioCategoriaMesPassado: this.wrapDashboardRequest(
+        this.relatorioService.getRelatorioPorCategoria(prevAno, prevMes),
+        null,
+        'Relatório categoria (mês anterior)'
       ),
-      relatorioCategoriaMesPassado: this.relatorioService.getRelatorioPorCategoria(prevAno, prevMes).pipe(
-        catchError(() => of(null))
+      rendaConfig: this.wrapDashboardRequest(this.rendaConfigService.obter(), null, 'Config. renda'),
+      dashboardProjection: this.wrapDashboardRequest(
+        this.dashboardService.projection(),
+        null,
+        'Projeção painel',
+        90_000
       ),
-      rendaConfig: this.rendaConfigService.obter().pipe(
-        catchError(() => of(null))
+      previsaoFuturo: this.wrapDashboardRequest(
+        this.dashboardService.previsaoFluxoCaixa(),
+        null,
+        'Previsão de fluxo',
+        90_000
       ),
-      dashboardProjection: this.dashboardService.projection().pipe(
-        catchError(() => of(null))
+      usuarioScore: this.wrapDashboardRequest(this.scoreService.obter(), null, 'Score utilizador'),
+      oportunidadeInvestimento: this.wrapDashboardRequest(
+        this.dashboardService.oportunidadeInvestimento(),
+        null,
+        'Oportunidade investimento'
       ),
-      previsaoFuturo: this.dashboardService.previsaoFluxoCaixa().pipe(
-        catchError(() => of(null))
+      sugestoesContencao: this.wrapDashboardRequest(
+        this.contencaoJarvisService.listarPendentes(),
+        [] as SugestaoContencaoJarvis[],
+        'Sugestões contenção'
       ),
-      usuarioScore: this.scoreService.obter().pipe(
-        catchError(() => of(null))
-      ),
-      oportunidadeInvestimento: this.dashboardService.oportunidadeInvestimento().pipe(
-        catchError(() => of(null))
-      ),
-      sugestoesContencao: this.contencaoJarvisService.listarPendentes().pipe(catchError(() => of([] as SugestaoContencaoJarvis[])))
-    }).subscribe({
-      next: (data) => {
-        this.sugestoesContencaoJarvis = Array.isArray(data.sugestoesContencao) ? data.sugestoesContencao : [];
-        this.processarDadosReais(data);
-        this.ultimaAtualizacao = new Date();
-        this.isLoading = false;
-        this.isLoadingData = false;
-        this.isSilentRefreshing = false;
-        console.log('✅ Dados carregados com sucesso');
-      },
-      error: (error) => {
-        console.error('❌ Erro ao carregar dados do dashboard:', error);
-        this.errorMessage = 'Erro ao carregar dados. Tente novamente.';
-        this.isLoading = false;
-        this.isLoadingData = false;
-        this.isSilentRefreshing = false;
-      }
-    });
+    })
+      .pipe(
+        finalize(() => {
+          this.isLoading = false;
+          this.isLoadingData = false;
+          this.isSilentRefreshing = false;
+        })
+      )
+      .subscribe({
+        next: (data) => {
+          this.sugestoesContencaoJarvis = Array.isArray(data.sugestoesContencao) ? data.sugestoesContencao : [];
+          this.processarDadosReais(data);
+          this.ultimaAtualizacao = new Date();
+          console.log('✅ Dados carregados com sucesso');
+        },
+        error: (error) => {
+          console.error('❌ Erro ao carregar dados do dashboard:', error);
+          this.errorMessage = 'Erro ao carregar dados. Tente novamente.';
+        },
+      });
   }
 
   getFluxoPercentualReceitas(): number {

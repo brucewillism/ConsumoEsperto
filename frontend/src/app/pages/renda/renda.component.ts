@@ -56,7 +56,10 @@ export class RendaComponent implements OnInit {
   confirmar(c: ContrachequeDto): void {
     this.rendaService.confirmarContracheque(c.id).subscribe({
       next: () => {
-        this.toast.success('Contracheque confirmado e renda atualizada.');
+        this.toast.success(
+          'Contracheque confirmado. Renda atualizada e receita automática do salário líquido ativada ' +
+            '(lança todo mês no teu dia de pagamento, à soma das outras receitas).'
+        );
         this.carregar();
       },
       error: (e) => this.toast.error(e?.error?.message || 'Erro ao confirmar contracheque.')

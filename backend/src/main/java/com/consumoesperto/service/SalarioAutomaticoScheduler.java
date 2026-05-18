@@ -1,9 +1,12 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.RendaConfig;
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.RendaConfigRepository;
+import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -27,6 +30,8 @@ public class SalarioAutomaticoScheduler {
 
     private final RendaConfigRepository rendaConfigRepository;
     private final TransacaoService transacaoService;
+    private final CategoriaRepository categoriaRepository;
+    private final UsuarioRepository usuarioRepository;
 
     @Scheduled(cron = "0 0 9 * * ?", zone = "America/Sao_Paulo")
     public void lancarReceitasSalariais() {
@@ -61,6 +66,7 @@ public class SalarioAutomaticoScheduler {
                 dto.setDescricao("Salário líquido (automático)");
                 dto.setValor(cfg.getSalarioLiquido());
                 dto.setTipoTransacao(TransacaoDTO.TipoTransacao.RECEITA);
+                dto.setCategoriaId(resolveCategoriaSalario(uid));
                 dto.setDataTransacao(LocalDateTime.now(ZONA_BR));
                 dto.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
                 transacaoService.criarTransacao(dto, uid);
@@ -71,5 +77,20 @@ public class SalarioAutomaticoScheduler {
                 log.warn("Salário automático falhou configId={}: {}", cfg.getId(), e.getMessage());
             }
         }
+    }
+
+    private Long resolveCategoriaSalario(Long usuarioId) {
+        Categoria existente = categoriaRepository.findByUsuarioIdAndNome(usuarioId, "Salário");
+        if (existente != null) {
+            return existente.getId();
+        }
+        Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow();
+        Categoria c = new Categoria();
+        c.setUsuario(usuario);
+        c.setNome("Salário");
+        c.setDescricao("Receitas de salário/contracheque");
+        c.setCor("#10b981");
+        c.setIcone("money-bill-wave");
+        return categoriaRepository.save(c).getId();
     }
 }

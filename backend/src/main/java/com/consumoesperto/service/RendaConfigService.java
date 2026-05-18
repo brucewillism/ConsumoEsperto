@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -90,11 +91,36 @@ public class RendaConfigService {
         if (diaPagamento != null) {
             cfg.setDiaPagamento(Math.max(1, Math.min(31, diaPagamento)));
         }
+        boolean registroNovo = cfg.getId() == null;
         if (receitaAutomaticaAtiva != null) {
             cfg.setReceitaAutomaticaAtiva(receitaAutomaticaAtiva);
+        } else if (registroNovo && liquido.compareTo(BigDecimal.ZERO) > 0) {
+            // Primeira configuração com líquido > 0: lançamento mensal automático por omissão.
+            cfg.setReceitaAutomaticaAtiva(true);
         }
         rendaConfigRepository.save(cfg);
         return toDto(cfg);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Integer> obterUltimoMesLancamentoAutomatico(Long usuarioId) {
+        return rendaConfigRepository.findByUsuarioId(usuarioId)
+            .map(RendaConfig::getUltimoMesLancamentoAuto);
+    }
+
+    /** Marca o mês civil (aaaaMM) como já tendo recebido o salário automático — evita duplicar com contracheque no mesmo mês. */
+    @Transactional
+    public void marcarMesSalarialAutomaticoLancado(Long usuarioId, YearMonth mes) {
+        if (mes == null) {
+            return;
+        }
+        RendaConfig cfg = rendaConfigRepository.findByUsuarioId(usuarioId).orElse(null);
+        if (cfg == null) {
+            return;
+        }
+        int ym = mes.getYear() * 100 + mes.getMonthValue();
+        cfg.setUltimoMesLancamentoAuto(ym);
+        rendaConfigRepository.save(cfg);
     }
 
     @Transactional

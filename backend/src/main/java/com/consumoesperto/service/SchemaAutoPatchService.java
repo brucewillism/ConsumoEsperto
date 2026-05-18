@@ -52,11 +52,13 @@ public class SchemaAutoPatchService {
         ensureContrachequesScoreTables();
         ensureUsuarioGeneroColumns();
         ensureUsuarioJarvisPerfilColumns();
+        ensureUsuarioFotoUrlTextColumn();
         ensureUsuarioGoogleCalendarColumns();
         ensureMetasFinanceirasCronosColumns();
         ensureJarvisCronosEventLogTable();
         ensureAuditLogTable();
         ensurePgvectorExtensionAndMemoriaSemanticaJarvisTable();
+        ensureTransacaoSemanticaIndexTable();
         ensureJarvisFeedbackTable();
         ensureJarvisFeedbackDataExpiracaoColumn();
         try {
@@ -483,6 +485,34 @@ public class SchemaAutoPatchService {
         }
     }
 
+    /**
+     * URLs de foto do Google OAuth frequentemente excedem VARCHAR(500); truncagem quebra a tag img no front.
+     */
+    private void ensureUsuarioFotoUrlTextColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.columns "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND column_name = 'foto_url' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedUsuarios = schema + ".usuarios";
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios + " ALTER COLUMN foto_url TYPE TEXT");
+            }
+            log.info("Schema patch: coluna usuarios.foto_url verificada como TEXT.");
+        } catch (Exception e) {
+            log.warn("Falha ao ampliar foto_url em usuarios: {}", e.getMessage());
+        }
+    }
+
     private void ensureUsuarioGoogleCalendarColumns() {
         try {
             List<String> schemas = jdbcTemplate.queryForList(
@@ -644,6 +674,56 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: memoria_semantica_jarvis verificada em {} schema(s).", schemas.size());
         } catch (Exception e) {
             log.warn("Schema patch memoria_semantica_jarvis: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Índice pgvector por transação (RAG analítico — Protocolo Memória Semântica nas movimentações).
+     */
+    private void ensureTransacaoSemanticaIndexTable() {
+        try {
+            executeDdlAutocommit("CREATE EXTENSION IF NOT EXISTS vector");
+        } catch (Exception e) {
+            log.warn(
+                "Schema patch transacao_semantica_index: CREATE EXTENSION vector falhou: {}",
+                e.getMessage());
+        }
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'transacoes' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                log.warn("Schema patch: 'transacoes' inexistente; transacao_semantica_index não criada.");
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qTx = schema + ".transacoes";
+                String qUs = schema + ".usuarios";
+                String qIdx = schema + ".transacao_semantica_index";
+                executeDdlAutocommit(
+                    "CREATE TABLE IF NOT EXISTS " + qIdx + " ("
+                        + "id BIGSERIAL PRIMARY KEY,"
+                        + "transacao_id BIGINT NOT NULL REFERENCES " + qTx + "(id) ON DELETE CASCADE,"
+                        + "usuario_id BIGINT NOT NULL REFERENCES " + qUs + "(id) ON DELETE CASCADE,"
+                        + "texto_indexado TEXT NOT NULL,"
+                        + "embedding vector(1536),"
+                        + "atualizado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),"
+                        + "CONSTRAINT uq_transacao_semantica_tx UNIQUE (transacao_id)"
+                        + ")"
+                );
+                executeDdlAutocommit(
+                    "CREATE INDEX IF NOT EXISTS idx_transacao_semantica_usuario ON " + qIdx + " (usuario_id)"
+                );
+            }
+            log.info("Schema patch: transacao_semantica_index verificada em {} schema(s).", schemas.size());
+        } catch (Exception e) {
+            log.warn("Schema patch transacao_semantica_index: {}", e.getMessage());
         }
     }
 

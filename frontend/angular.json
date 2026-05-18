@@ -97,6 +97,11 @@
               {
                 "glob": "**/*",        // Todos os arquivos
                 "input": "public"      // Do diretório public
+              },
+              {
+                "glob": "loading.gif",
+                "input": "../tools/img",
+                "output": "assets/loading"
               }
             ],
             

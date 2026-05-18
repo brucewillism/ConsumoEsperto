@@ -65,9 +65,8 @@ public class OpenAiService {
     public JsonNode parseCommand(String inputText, Long userId) {
         AiProvidersConfig cfg = cfgForAi(userId);
         Optional<Usuario> ou = userId == null ? Optional.empty() : usuarioRepository.findById(userId);
-        String vocativoCompleto = ou.map(jarvisProtocolService::montarVocativoCompleto).orElse("Senhor");
-        String instrucaoInterlocutor = ou.map(jarvisProtocolService::instrucaoInterlocutorJarvis).orElse("");
-        String persona = instrucaoInterlocutor + jarvisProtocolService.jarvisPersonaSystemLayer(vocativoCompleto);
+        Usuario uEnt = ou.orElse(null);
+        String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
             "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
@@ -145,6 +144,29 @@ public class OpenAiService {
                 return parseChatJsonForProvider(p, c, model, systemPrompt, userPrompt);
             },
             "Nao foi possivel processar IA (Groq/Gemini/OpenAI/Ollama). Detalhes: "
+        );
+    }
+
+    /**
+     * Resposta analítica usando contexto RAG (transações indexadas em pgvector).
+     */
+    public String gerarRespostaAnaliticaRag(Long userId, String pergunta, String contextoTransacoes) {
+        if (userId == null || pergunta == null || pergunta.isBlank()
+            || contextoTransacoes == null || contextoTransacoes.isBlank()) {
+            return "";
+        }
+        Usuario u = usuarioRepository.findById(userId).orElse(null);
+        String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(u);
+        String system = persona
+            + "Com base *somente* nos trechos de transações fornecidos, responda à pergunta com análise útil "
+            + "(totais, padrões, tendências). Se os trechos não forem suficientes, indique-o com franqueza. "
+            + "Texto corrido; listas curtas permitidas. Retorne JSON {\"texto\":\"...\"}.";
+        String userPrompt = "Pergunta: " + pergunta + "\n\nTrechos indexados (RAG / pgvector):\n" + contextoTransacoes;
+        return gerarTexto(
+            userId,
+            system,
+            userPrompt,
+            "Ainda não há memória semântica de transações suficiente para responder com precisão. Faça mais lançamentos ou reformule."
         );
     }
 

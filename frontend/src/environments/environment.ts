@@ -23,5 +23,11 @@ export const environment = {
    * Deve ser configurado no Google Cloud Console e corresponder
    * ao domínio de desenvolvimento (localhost:4200).
    */
-  googleClientID: '593452038228-47k24odoa6f18c78e3ssp9bhu56gugnm.apps.googleusercontent.com'
+  googleClientID: '593452038228-47k24odoa6f18c78e3ssp9bhu56gugnm.apps.googleusercontent.com',
+
+  /** Overlay global de pedidos HTTP — GIF em tools/img (copiado no build). */
+  loadingGifUrl: 'assets/loading/loading.gif',
+
+  /** Tempo extra (ms) após o fim do último pedido antes de ocultar o overlay (ex.: 200 = ⅕ s). */
+  loadingOverlayTailMs: 200
 };

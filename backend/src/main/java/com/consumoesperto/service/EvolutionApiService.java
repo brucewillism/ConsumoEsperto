@@ -98,10 +98,63 @@ public class EvolutionApiService {
     }
 
     /**
-     * Envia PDF como documento (base64) — mesmo contrato da Evolution {@code /message/sendMedia/:instance}.
+     * Envia mensagem de voz (PTT) — {@code POST /message/sendWhatsAppAudio/:instance}.
      */
+    public boolean enviarWhatsAppAudioPtt(String to, byte[] audioBytes, String evolutionInstanceOverride) {
+        try {
+            ensureApiConfigured();
+            if (audioBytes == null || audioBytes.length == 0) {
+                log.error("[EvolutionApi] Áudio PTT abortado: bytes vazios. [J.A.R.V.I.S. Offline]");
+                return false;
+            }
+            String number = normalizeToNumber(to);
+            if (number.isBlank()) {
+                log.error("[EvolutionApi] Áudio PTT abortado: número inválido. [J.A.R.V.I.S. Offline]");
+                return false;
+            }
+            String instance = resolveInstanceName(evolutionInstanceOverride);
+            if (instance == null || instance.isBlank()) {
+                log.error("[EvolutionApi] Áudio PTT abortado: instância Evolution ausente. [J.A.R.V.I.S. Offline]");
+                return false;
+            }
+            String base = evolutionUrl.endsWith("/") ? evolutionUrl.substring(0, evolutionUrl.length() - 1) : evolutionUrl;
+            String url = base + "/message/sendWhatsAppAudio/" + instance;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("apikey", evolutionApiKey);
+
+            String b64 = Base64.getEncoder().encodeToString(audioBytes);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("number", number);
+            payload.put("audio", b64);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
+            if (!response.getStatusCode().is2xxSuccessful() && !response.getStatusCode().is3xxRedirection()) {
+                log.error("[EvolutionApi] Falha HTTP ao enviar áudio PTT: {} instance={} [J.A.R.V.I.S. Offline]",
+                    response.getStatusCode(), instance);
+                return false;
+            }
+            log.info("[JARVIS-LOG] Evolution áudio PTT enviado instance={} destino={}", instance, number);
+            return true;
+        } catch (IllegalStateException cfg) {
+            log.error("[EvolutionApi] Áudio: configuração incompleta: {} [J.A.R.V.I.S. Offline]", cfg.getMessage());
+            return false;
+        } catch (ResourceAccessException ex) {
+            log.error("[EvolutionApi] Áudio PTT timeout/rede: {} [J.A.R.V.I.S. Offline]", ex.getMessage());
+            return false;
+        } catch (RestClientException ex) {
+            log.error("[EvolutionApi] Erro HTTP áudio PTT: {} [J.A.R.V.I.S. Offline]", ex.getMessage(), ex);
+            return false;
+        } catch (RuntimeException ex) {
+            log.error("[EvolutionApi] Erro áudio PTT: {} [J.A.R.V.I.S. Offline]", ex.getMessage(), ex);
+            return false;
+        }
+    }
+
     /**
-     * @return {@code true} se enviado com sucesso pela Evolution.
+     * Envia PDF como documento (base64) — {@code /message/sendMedia/:instance}.
      */
     public boolean enviarDocumentoPdf(String to, byte[] pdfBytes, String fileName, String evolutionInstanceOverride) {
         try {

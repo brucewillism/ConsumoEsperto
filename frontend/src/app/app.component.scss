@@ -690,7 +690,13 @@ body {
 .global-loading-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  width: 100vw;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  box-sizing: border-box;
+  /* Véu leve — o GIF funde com o dashboard por baixo */
+  background: rgba(15, 23, 42, 0.22);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -698,20 +704,57 @@ body {
   pointer-events: all;
 }
 
-.global-loading-content {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--shell-bg-to);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 14px 18px;
-  color: var(--text-primary);
-  font-weight: 600;
-
-  i {
-    color: var(--accent-color);
-  }
+/* Centro geométrico do viewport (não da área do main/sidebar) */
+.global-loading-gif {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5001;
+  display: block;
+  max-width: min(90vw, 440px);
+  max-height: min(72vh, 440px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  vertical-align: middle;
+  pointer-events: none;
+  /*
+   * Mascára mais suave: anéis escuros do GIF ficam muito apagados antes de transparente,
+   * para não restar halo/círculo escuro visível.
+   */
+  -webkit-mask-image: radial-gradient(
+    ellipse 82% 82% at 50% 50%,
+    #000 0%,
+    #000 32%,
+    rgba(0, 0, 0, 0.42) 44%,
+    rgba(0, 0, 0, 0.12) 52%,
+    rgba(0, 0, 0, 0.03) 58%,
+    transparent 64%
+  );
+  mask-image: radial-gradient(
+    ellipse 82% 82% at 50% 50%,
+    #000 0%,
+    #000 32%,
+    rgba(0, 0, 0, 0.42) 44%,
+    rgba(0, 0, 0, 0.12) 52%,
+    rgba(0, 0, 0, 0.03) 58%,
+    transparent 64%
+  );
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  /* Preto e cinzas muito escuros fundem com o fundo; menos “auréola” que plus-lighter. */
+  mix-blend-mode: screen;
+  /* Levanta ligeiramente os tons escuros do GIF (o halo costuma ser cinza‑quase‑preto). */
+  filter: brightness(1.14) contrast(1.04);
 }
 
 // Responsividade

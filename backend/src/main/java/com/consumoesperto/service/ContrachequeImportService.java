@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.dto.DescontoFixoDTO;
+import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContrachequeDesconto;
@@ -22,6 +23,7 @@ import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,6 +34,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ContrachequeImportService {
+
+    private static final ZoneId ZONA_BR = ZoneId.of("America/Sao_Paulo");
 
     private static final BigDecimal TOLERANCIA_AUDITORIA_BRUTO = new BigDecimal("0.05");
     private static final NumberFormat BRL_AUDIT = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
@@ -140,16 +144,34 @@ public class ContrachequeImportService {
             return toDto(c);
         }
         List<DescontoFixoDTO> descontos = readDescontos(c.getDescontosJson());
-        rendaConfigService.salvar(usuarioId, c.getSalarioBruto(), descontos, 5);
+        int diaPagamento = rendaConfigService.obterDto(usuarioId)
+            .map(RendaConfigDTO::getDiaPagamento)
+            .filter(d -> d != null && d >= 1 && d <= 31)
+            .orElse(5);
+        rendaConfigService.salvar(usuarioId, c.getSalarioBruto(), descontos, diaPagamento, Boolean.TRUE);
 
-        TransacaoDTO tx = new TransacaoDTO();
-        tx.setDescricao("Salário " + (c.getEmpresa() != null ? c.getEmpresa() : ""));
-        tx.setValor(c.getSalarioLiquido());
-        tx.setTipoTransacao(TransacaoDTO.TipoTransacao.RECEITA);
-        tx.setCategoriaId(resolveCategoriaSalario(usuarioId));
-        tx.setDataTransacao(YearMonth.of(c.getAno(), c.getMes()).atEndOfMonth().atStartOfDay());
-        tx.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
-        transacaoService.criarTransacao(tx, usuarioId);
+        YearMonth competencia = YearMonth.of(c.getAno(), c.getMes());
+        YearMonth mesCivilAtual = YearMonth.now(ZONA_BR);
+        int ymAtual = mesCivilAtual.getYear() * 100 + mesCivilAtual.getMonthValue();
+        boolean competenciaIgualMesAtual = competencia.equals(mesCivilAtual);
+        boolean salarioAutomaticoJaLancouEsteMes = rendaConfigService.obterUltimoMesLancamentoAutomatico(usuarioId)
+            .filter(u -> u == ymAtual)
+            .isPresent();
+
+        if (!competenciaIgualMesAtual || !salarioAutomaticoJaLancouEsteMes) {
+            TransacaoDTO tx = new TransacaoDTO();
+            tx.setDescricao("Salário " + (c.getEmpresa() != null ? c.getEmpresa() : ""));
+            tx.setValor(c.getSalarioLiquido());
+            tx.setTipoTransacao(TransacaoDTO.TipoTransacao.RECEITA);
+            tx.setCategoriaId(resolveCategoriaSalario(usuarioId));
+            tx.setDataTransacao(competencia.atEndOfMonth().atStartOfDay());
+            tx.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
+            transacaoService.criarTransacao(tx, usuarioId);
+        }
+
+        if (competenciaIgualMesAtual) {
+            rendaConfigService.marcarMesSalarialAutomaticoLancado(usuarioId, mesCivilAtual);
+        }
 
         c.setStatus(ContrachequeImportado.Status.CONFIRMADO);
         c.setDataConfirmacao(LocalDateTime.now());

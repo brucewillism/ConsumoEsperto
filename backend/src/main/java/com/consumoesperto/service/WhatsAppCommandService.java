@@ -86,7 +86,16 @@ public class WhatsAppCommandService {
     private final CronosJarvisService cronosJarvisService;
     private final CerebroSemanticoService cerebroSemanticoService;
 
-    /** Confirmação de parcelamento com juros embutido (N×parcela > total citado). */
+    private final SpeechToTextService speechToTextService;
+
+    private final ConciergeNfceUrlService conciergeNfceUrlService;
+
+    private final TextToSpeechService textToSpeechService;
+
+    private final TransacaoSemanticaIndexService transacaoSemanticaIndexService;
+
+    @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
+    private boolean whatsappVoiceReply;
     private static final class ParcelaJurosEmbutidosDraft {
         BigDecimal valorAVista;
         BigDecimal valorParcela;
@@ -208,6 +217,14 @@ public class WhatsAppCommandService {
             if (importContr.isPresent()) {
                 return importContr.get();
             }
+            Optional<String> nfce = conciergeNfceUrlService.processarSeUrlFiscal(userId, text, jarvisProtocolService);
+            if (nfce.isPresent()) {
+                return jarvisProtocolService.ensureSigned(nfce.get());
+            }
+            Optional<String> rag = tryRespostaRagAnalitico(userId, text);
+            if (rag.isPresent()) {
+                return jarvisProtocolService.ensureSigned(rag.get());
+            }
             if (isForecastQuestion(text)) {
                 return forecastFinanceiroService.montarRespostaWhatsapp(userId);
             }
@@ -258,11 +275,41 @@ public class WhatsAppCommandService {
         incoming.setJarvisInstantAckSent(true);
     }
 
+    /**
+     * Falha fora do {@code try/catch} de {@link #processIncomingEvolutionMessage} (ex.: {@link Error})
+     * ou no próprio despacho assíncrono — envia explicação ao utilizador para não ficar só com o ACK.
+     */
+    public void notifyWebhookAsyncFailure(
+        EvolutionIncomingMessageDTO incoming,
+        Long userId,
+        String evolutionInstanceName,
+        Throwable error
+    ) {
+        if (incoming == null || userId == null) {
+            return;
+        }
+        String from = incoming.getFromJid();
+        if (from == null || from.isBlank()) {
+            return;
+        }
+        try {
+            String v = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+            Exception ex = error instanceof Exception ? (Exception) error
+                : new RuntimeException(error != null ? error.getMessage() : "Erro interno", error);
+            sendOutgoingMessage(from, jarvisProtocolService.erroEvolutionUsuario(ex, v), userId, evolutionInstanceName);
+        } catch (Exception e) {
+            log.error("[J.A.R.V.I.S.] Não foi possível notificar falha assíncrona (userId={}): {}", userId, e.getMessage());
+        }
+    }
+
     public void processIncomingEvolutionMessage(EvolutionIncomingMessageDTO incoming, Long userId, String evolutionInstanceName) {
         if (incoming == null) {
             log.warn("Payload Evolution vazio recebido.");
             return;
         }
+        log.info("[Evolution async] início userId={} remoteJid={} mediaType={} mediaBytes={}",
+            userId, incoming.getFromJid(), incoming.getMediaType(),
+            incoming.getMediaBytes() == null ? -1 : incoming.getMediaBytes().length);
         String from = incoming.getFromJid();
         boolean fromMe = incoming.isFromMe();
         if (!whatsAppBotAllowlist.isEvolutionSelfChatThread(from, userId)) {
@@ -357,46 +404,54 @@ public class WhatsAppCommandService {
                             if (pj.isPresent()) {
                                 response = pj.get();
                             } else {
-                                if (isForecastQuestion(sourceText)) {
-                                    response = forecastFinanceiroService.montarRespostaWhatsapp(userId);
-                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                    return;
-                                }
-                                if (isInvestmentQuestion(sourceText)) {
-                                    response = respostaInvestimento(userId);
-                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                    return;
-                                }
-                                Optional<String> dispEv = tryDisponibilidadeRealRelatorio(userId, sourceText);
-                                if (dispEv.isPresent()) {
-                                    response = dispEv.get();
-                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                    return;
-                                }
-                                Optional<String> oracleEv = tryAnaliseGrandeCompra(userId, sourceText);
-                                if (oracleEv.isPresent()) {
-                                    response = oracleEv.get();
-                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                    return;
-                                }
-                                Optional<String> despesaFixaEv = tryIniciarDespesaFixaPorTextoLivre(userId, sourceText);
-                                if (despesaFixaEv.isPresent()) {
-                                    response = despesaFixaEv.get();
-                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                    return;
-                                }
-                                Optional<String> jarvisNotaEv = tryJarvisAnoteIsso(userId, sourceText);
-                                if (jarvisNotaEv.isPresent()) {
-                                    response = jarvisNotaEv.get();
-                                    sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                    return;
-                                }
-                                JsonNode parsed = openAiService.parseCommand(sourceText, userId);
-                                String actEv = parsed.path("action").asText("");
-                                if ("GENERATE_REPORT".equals(actEv) || "GERAR_RELATORIO".equals(actEv)) {
-                                    response = handleGenerateReport(parsed, userId, from, sourceText, evolutionInstanceName);
+                                Optional<String> nfceEv = conciergeNfceUrlService.processarSeUrlFiscal(userId, sourceText, jarvisProtocolService);
+                                if (nfceEv.isPresent()) {
+                                    response = nfceEv.get();
                                 } else {
-                                    response = executeCommand(parsed, userId, sourceText);
+                                    Optional<String> ragEv = tryRespostaRagAnalitico(userId, sourceText);
+                                    if (ragEv.isPresent()) {
+                                        response = ragEv.get();
+                                    } else if (isForecastQuestion(sourceText)) {
+                                        response = forecastFinanceiroService.montarRespostaWhatsapp(userId);
+                                        sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                        return;
+                                    } else if (isInvestmentQuestion(sourceText)) {
+                                        response = respostaInvestimento(userId);
+                                        sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                        return;
+                                    } else {
+                                        Optional<String> dispEv = tryDisponibilidadeRealRelatorio(userId, sourceText);
+                                        if (dispEv.isPresent()) {
+                                            response = dispEv.get();
+                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                            return;
+                                        }
+                                        Optional<String> oracleEv = tryAnaliseGrandeCompra(userId, sourceText);
+                                        if (oracleEv.isPresent()) {
+                                            response = oracleEv.get();
+                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                            return;
+                                        }
+                                        Optional<String> despesaFixaEv = tryIniciarDespesaFixaPorTextoLivre(userId, sourceText);
+                                        if (despesaFixaEv.isPresent()) {
+                                            response = despesaFixaEv.get();
+                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                            return;
+                                        }
+                                        Optional<String> jarvisNotaEv = tryJarvisAnoteIsso(userId, sourceText);
+                                        if (jarvisNotaEv.isPresent()) {
+                                            response = jarvisNotaEv.get();
+                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                            return;
+                                        }
+                                        JsonNode parsed = openAiService.parseCommand(sourceText, userId);
+                                        String actEv = parsed.path("action").asText("");
+                                        if ("GENERATE_REPORT".equals(actEv) || "GERAR_RELATORIO".equals(actEv)) {
+                                            response = handleGenerateReport(parsed, userId, from, sourceText, evolutionInstanceName);
+                                        } else {
+                                            response = executeCommand(parsed, userId, sourceText);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -473,8 +528,8 @@ public class WhatsAppCommandService {
                 mediaContentType != null ? mediaContentType : "audio/ogg"
             );
             String filename = filenameForTranscription(mime);
-            String transcript = openAiService.transcribeAudio(mediaBytes, filename, mime, userId);
-            log.info("Comando de voz Evolution transcrito: {}", transcript);
+            String transcript = speechToTextService.transcrever(mediaBytes, filename, mime, userId);
+            log.info("[JARVIS-LOG] Comando de voz Evolution transcrito: {}", transcript);
             return transcript;
         }
         return body != null ? body : "";
@@ -1111,7 +1166,49 @@ public class WhatsAppCommandService {
     private void sendOutgoingIfPresent(String to, String message, Long userId, String webhookEvolutionInstanceHint) {
         if (message != null && !message.isBlank()) {
             sendOutgoingMessage(to, message, userId, webhookEvolutionInstanceHint);
+            if (whatsappVoiceReply && textToSpeechService.configurado()) {
+                byte[] mp3 = textToSpeechService.sintetizarMp3(stripMarkdownParaVoz(message));
+                if (mp3 != null && mp3.length > 0) {
+                    String inst = resolveEvolutionInstanceForSend(userId, webhookEvolutionInstanceHint);
+                    evolutionApiService.enviarWhatsAppAudioPtt(to, mp3, inst);
+                }
+            }
         }
+    }
+
+    private static String stripMarkdownParaVoz(String message) {
+        if (message == null) {
+            return "";
+        }
+        return message.replace('*', ' ').replace('_', ' ').replace('`', ' ').replaceAll("\\s+", " ").trim();
+    }
+
+    private Optional<String> tryRespostaRagAnalitico(Long userId, String text) {
+        if (!mensagemPareceConsultaAnaliticaRag(text)) {
+            return Optional.empty();
+        }
+        String ctx = transacaoSemanticaIndexService.montarContextoParaRag(userId, text, 18);
+        if (ctx == null || ctx.isBlank()) {
+            log.info("[JARVIS-LOG] RAG: contexto vazio userId={}", userId);
+            return Optional.empty();
+        }
+        String ans = openAiService.gerarRespostaAnaliticaRag(userId, text, ctx);
+        if (ans == null || ans.isBlank()) {
+            return Optional.empty();
+        }
+        log.info("[JARVIS-LOG] RAG resposta gerada userId={}", userId);
+        return Optional.of(ans);
+    }
+
+    private boolean mensagemPareceConsultaAnaliticaRag(String text) {
+        if (text == null) {
+            return false;
+        }
+        String n = normalize(text);
+        if (n.length() < 24) {
+            return false;
+        }
+        return n.matches(".*(quanto|gast|gasto|total|últim|ultim|ano|anos|mês|mes|carro|categoria|categorias|média|media|compar|histórico|historico|período|periodo|semana|trimestre|invest).*");
     }
 
     private Optional<String> tryResolveParcelaJurosEmbutidos(Long userId, String body) {
