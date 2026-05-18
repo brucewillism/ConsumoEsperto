@@ -13,15 +13,14 @@ export const environment = {
   production: false,
   
   /** URL da API REST (Spring Boot).
-   *  Na stack local com Evolution API Node, Evolution costuma usar :8080 e o Spring :8081
-   *  (ver `.cursor/rules/stack-local.mdc`). Só use :8080 aqui se o Java for o único serviço nessa porta. */
-  apiUrl: 'http://localhost:8081/api',
+   *  Stack local: ver `scripts/stack-ports.ps1` — Spring :18081, Evolution Node :18080, Angular :14200. */
+  apiUrl: 'http://localhost:18081/api',
   
   /** ID do cliente Google OAuth2 para autenticação via Google
    * 
    * Este ID é usado para permitir login via Google na aplicação.
    * Deve ser configurado no Google Cloud Console e corresponder
-   * ao domínio de desenvolvimento (localhost:4200).
+   * ao domínio de desenvolvimento (localhost:14200).
    */
   googleClientID: '593452038228-47k24odoa6f18c78e3ssp9bhu56gugnm.apps.googleusercontent.com',
 

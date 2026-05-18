@@ -23,14 +23,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @RestController
 @RequestMapping("/api/integracoes/google-calendar")
 @RequiredArgsConstructor
-@CrossOrigin(originPatterns = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
+@CrossOrigin(originPatterns = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
 public class GoogleCalendarLinkController {
 
     private static final ConcurrentHashMap<String, Long> OAUTH_STATE_USER = new ConcurrentHashMap<>();
 
     private final GoogleCalendarService googleCalendarService;
 
-    @Value("${app.frontend-base-url:http://localhost:4200}")
+    @Value("${app.frontend-base-url:http://localhost:14200}")
     private String frontendBaseUrl;
 
     @GetMapping("/iniciar")

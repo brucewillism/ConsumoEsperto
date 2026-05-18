@@ -28,7 +28,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/jarvis")
 @RequiredArgsConstructor
-@CrossOrigin(originPatterns = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
+@CrossOrigin(originPatterns = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
 public class JarvisProtocolController {
 
     private final AutomacaoTaticaService automacaoTaticaService;

@@ -11,7 +11,7 @@ import java.util.Map;
 public class PublicTestController {
 
     @GetMapping("/health")
-    @CrossOrigin(origins = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
+    @CrossOrigin(origins = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
     public Map<String, Object> health() {
         return Map.of(
             "status", "success",
@@ -21,7 +21,7 @@ public class PublicTestController {
     }
 
     @GetMapping("/info")
-    @CrossOrigin(origins = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
+    @CrossOrigin(origins = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
     public Map<String, Object> info() {
         return Map.of(
             "name", "ConsumoEsperto API",

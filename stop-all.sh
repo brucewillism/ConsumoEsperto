@@ -35,14 +35,14 @@ echo "==> Encerrando processos por PID salvo..."
 kill_from_pid_file "${BACKEND_PID_FILE}" "backend"
 kill_from_pid_file "${EVOLUTION_PID_FILE}" "evolution"
 
-echo "==> Fallback de portas (8080 e 8081)..."
+echo "==> Fallback de portas da stack (18080, 18081, 14200, 14040)..."
 if command -v lsof >/dev/null 2>&1; then
-  pids="$(lsof -ti:8080,8081 || true)"
+  pids="$(lsof -ti:18080,18081,14200,14040 || true)"
   if [[ -n "${pids}" ]]; then
     echo "${pids}" | xargs kill -9 >/dev/null 2>&1 || true
-    echo "Processos nas portas 8080/8081 finalizados com kill -9."
+    echo "Processos nessas portas finalizados com kill -9."
   else
-    echo "Nenhum processo escutando em 8080/8081."
+    echo "Nenhum processo escutando nessas portas."
   fi
 else
   echo "lsof não encontrado; fallback de portas ignorado."

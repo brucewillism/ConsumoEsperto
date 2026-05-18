@@ -25,7 +25,7 @@ import java.util.List;
 @RequestMapping("/api/relatorios")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app", "*"})
+@CrossOrigin(origins = {"http://localhost:14200", "https://0d723f1e294f.ngrok-free.app", "*"})
 public class RelatorioPdfController {
 
     private final RelatorioPdfService relatorioPdfService;

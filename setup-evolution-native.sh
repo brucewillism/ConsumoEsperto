@@ -8,8 +8,8 @@ set -euo pipefail
 EVOLUTION_REPO_URL="${EVOLUTION_REPO_URL:-https://github.com/EvolutionAPI/evolution-api.git}"
 EVOLUTION_DIR="${EVOLUTION_DIR:-../evolution-api}"
 PROJECT_API_KEY="${PROJECT_API_KEY:-42abc123}"
-WEBHOOK_URL="${WEBHOOK_URL:-http://localhost:8081/api/public/evolution/webhook}"
-EVOLUTION_PORT="${EVOLUTION_PORT:-8080}"
+WEBHOOK_URL="${WEBHOOK_URL:-http://localhost:18081/api/public/evolution/webhook}"
+EVOLUTION_PORT="${EVOLUTION_PORT:-18080}"
 
 echo "==> Projeto atual: $(pwd)"
 echo "==> Repositório Evolution: ${EVOLUTION_REPO_URL}"

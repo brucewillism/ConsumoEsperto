@@ -18,7 +18,7 @@ import javax.validation.Valid;
 @RequestMapping("/api/metas")
 @RequiredArgsConstructor
 @Tag(name = "Metas financeiras", description = "Metas de compra com % da renda")
-@CrossOrigin(origins = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
+@CrossOrigin(origins = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
 public class MetaFinanceiraController {
 
     private final MetaFinanceiraService metaFinanceiraService;

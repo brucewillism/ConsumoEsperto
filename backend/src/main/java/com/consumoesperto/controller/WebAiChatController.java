@@ -17,7 +17,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/ia-chat")
 @RequiredArgsConstructor
-@CrossOrigin(originPatterns = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
+@CrossOrigin(originPatterns = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
 public class WebAiChatController {
 
     private final WhatsAppCommandService whatsAppCommandService;

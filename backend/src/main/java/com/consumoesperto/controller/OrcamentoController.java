@@ -17,7 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/orcamentos")
 @RequiredArgsConstructor
-@CrossOrigin(originPatterns = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
+@CrossOrigin(originPatterns = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
 public class OrcamentoController {
 
     private final OrcamentoService orcamentoService;

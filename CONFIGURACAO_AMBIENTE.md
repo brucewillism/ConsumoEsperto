@@ -2,9 +2,11 @@
 
 Guia curto para subir o projeto localmente. O fluxo padrao e:
 
-1. Evolution API em Node na porta `8080`
-2. Backend Spring Boot na porta `8081`
-3. Frontend Angular na porta `4200`
+1. Evolution API em Node na porta `18080`
+2. Backend Spring Boot na porta `18081`
+3. Frontend Angular na porta `14200`
+
+(Valores em `scripts/stack-ports.ps1`; escolhidos para reduzir choque com Apache/PHP noutras portas comuns.)
 
 ## Requisitos
 
@@ -44,9 +46,9 @@ npm run build
 
 O script `scripts\sincronizar-evolution-env.ps1` alinha o `.env` da Evolution com:
 
-- `SERVER_PORT=8080`
-- `SERVER_URL=http://localhost:8080`
-- `WEBHOOK_GLOBAL_URL=http://127.0.0.1:8081/api/public/evolution/webhook`
+- `SERVER_PORT=18080`
+- `SERVER_URL=http://localhost:18080`
+- `WEBHOOK_GLOBAL_URL=http://127.0.0.1:18081/api/public/evolution/webhook`
 - `DATABASE_CONNECTION_URI` para o banco da Evolution
 - `AUTHENTICATION_API_KEY` compartilhada com o backend
 
@@ -88,15 +90,15 @@ rodar-backend-evolution.bat
 
 ## Verificacoes Rapidas
 
-- Evolution: `http://localhost:8080/health`
-- Backend: `http://localhost:8081/actuator/health`
-- Frontend: `http://localhost:4200`
-- Webhook da Evolution para o Spring: `http://localhost:8081/api/public/evolution/webhook`
+- Evolution: `http://localhost:18080/health`
+- Backend: `http://localhost:18081/actuator/health`
+- Frontend: `http://localhost:14200`
+- Webhook da Evolution para o Spring: `http://localhost:18081/api/public/evolution/webhook`
 
 ## Problemas Comuns
 
 - `Nenhum JDK em tools\java`: instale/descompacte um JDK 17 dentro de `tools\java`.
 - `Node.js nao encontrado`: instale Node.js ou coloque `node.exe` em `tools\node`.
 - `Build nao encontrado (dist\main.js)`: rode `npm install` e `npm run build` em `tools\evolution-api`.
-- `Porta 8081 ja esta em uso`: execute `parar-servicos.bat` ou encerre o processo que esta usando a porta.
+- `Porta 18081 ja esta em uso`: execute `parar-servicos.bat` ou encerre o processo que esta usando a porta.
 - Erro de banco: confirme PostgreSQL, credenciais e se os bancos `consumoesperto` e `evolution_api` existem.

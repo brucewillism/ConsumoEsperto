@@ -35,7 +35,7 @@ public class SecurityConfig {
      * Padrões permitidos (origins), separados por vírgula. Em produção use o domínio HTTPS do frontend
      * (ex.: {@code https://app.exemplo.com}). Variável de ambiente: {@code CORS_ALLOWED_PATTERNS}.
      */
-    @Value("${app.security.cors-allowed-patterns:http://localhost:4200,https://*.ngrok-free.app,https://*.ngrok.io}")
+    @Value("${app.security.cors-allowed-patterns:http://localhost:14200,http://localhost:4200,https://*.ngrok-free.app,https://*.ngrok.io}")
     private String corsAllowedPatterns;
 
     @Bean
@@ -89,7 +89,7 @@ public class SecurityConfig {
             .filter(s -> !s.isEmpty())
             .collect(Collectors.toList());
         if (patterns.isEmpty()) {
-            patterns = List.of("http://localhost:4200");
+            patterns = List.of("http://localhost:14200");
         }
         configuration.setAllowedOriginPatterns(patterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));

@@ -6,10 +6,10 @@ set -euo pipefail
 # ===============================
 # Edite as variaveis abaixo conforme seu ambiente.
 
-EVOLUTION_URL="${EVOLUTION_URL:-http://localhost:8081}"
+EVOLUTION_URL="${EVOLUTION_URL:-http://localhost:18080}"
 EVOLUTION_APIKEY="${EVOLUTION_APIKEY:-trocar_apikey_aqui}"
 INSTANCE_NAME="${INSTANCE_NAME:-ConsumoEsperto}"
-WEBHOOK_URL="${WEBHOOK_URL:-http://localhost:8081/api/public/evolution/webhook}"
+WEBHOOK_URL="${WEBHOOK_URL:-http://localhost:18081/api/public/evolution/webhook}"
 
 echo "==> Evolution URL: ${EVOLUTION_URL}"
 echo "==> Instance: ${INSTANCE_NAME}"

@@ -1,4 +1,5 @@
-# Sobe SEMPRE: Evolution em Node (clone + npm se preciso) + backend 8081 + frontend 4200.
+# Sobe SEMPRE: Evolution em Node (clone + npm se preciso) + backend + frontend.
+# Portas: scripts/stack-ports.ps1 (18080 / 18081 / 14200).
 # Java/Maven: tools\ na sessao do backend.
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -91,8 +92,8 @@ if ($evolutionNode) {
         "/k", "cd /d `"$root`" && call rodar-evolution.bat"
     ) -WindowStyle Normal
     $evolutionSubiu = $true
-    Write-Host "Evolution (Node): http://localhost:8080"
-    Write-Host "Webhook -> Spring: http://localhost:8081/api/public/evolution/webhook ou http://localhost:8081/api/whatsapp/webhook"
+    Write-Host "Evolution (Node): http://localhost:18080"
+    Write-Host "Webhook -> Spring: http://localhost:18081/api/public/evolution/webhook ou http://localhost:18081/api/whatsapp/webhook"
 } else {
     throw "Evolution obrigatoria: instale Git para clonar tools\evolution-api ou defina EVOLUTION_DIR apontando para uma Evolution API Node valida."
 }
@@ -103,16 +104,16 @@ if (-not $evolutionSubiu) {
 
 Start-Sleep -Seconds 5
 
-Write-Host '[2/3] Backend (8081, dev-evolution, tools\java)...'
+Write-Host '[2/3] Backend (18081, dev-evolution, tools\java)...'
 Start-Process -FilePath "cmd.exe" -ArgumentList @(
     "/k", "cd /d `"$root`" && call rodar-backend-evolution.bat"
 ) -WindowStyle Normal
 
 Start-Sleep -Seconds 8
 
-Write-Host "[3/3] Frontend (4200)..."
+Write-Host "[3/3] Frontend (14200)..."
 Start-Process -FilePath "cmd.exe" -ArgumentList @(
     "/k", "cd /d `"$root`" && call rodar-frontend.bat"
 ) -WindowStyle Normal
 
-Write-Host 'Pronto. Evolution:8080 | API Spring:8081 | Angular:4200'
+Write-Host 'Pronto. Evolution:18080 | API Spring:18081 | Angular:14200'

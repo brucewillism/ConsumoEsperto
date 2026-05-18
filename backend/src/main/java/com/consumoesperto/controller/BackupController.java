@@ -25,7 +25,7 @@ import java.util.Map;
 @RequestMapping("/api/backup")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = {"http://localhost:4200", "https://0d723f1e294f.ngrok-free.app", "*"})
+@CrossOrigin(origins = {"http://localhost:14200", "https://0d723f1e294f.ngrok-free.app", "*"})
 public class BackupController {
 
     private final BackupAutomaticoService backupAutomaticoService;

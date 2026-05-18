@@ -47,7 +47,7 @@ public class OAuth2Service {
     @Value("${spring.security.oauth2.client.registration.google.client-secret}")
     private String googleClientSecret;
 
-    @Value("${oauth2.google.redirect-uri:http://localhost:4200/login}")
+    @Value("${oauth2.google.redirect-uri:http://localhost:14200/login}")
     private String googleRedirectUri;
 
     /**

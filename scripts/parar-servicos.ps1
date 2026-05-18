@@ -15,7 +15,8 @@ foreach ($p in $procsNodeEvolution) {
     Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
 }
 
-$projectPorts = @(4200, 8080, 8081, 4040)
+# Ver scripts/stack-ports.ps1 — não colidir com Apache/PHP comuns na VPS.
+$projectPorts = @(14200, 18080, 18081, 14040)
 foreach ($port in $projectPorts) {
     $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     foreach ($c in $conns) {

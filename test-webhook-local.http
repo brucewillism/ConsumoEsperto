@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:8080
+@baseUrl = http://localhost:18080
 
 ### Smoke test 1 - Texto (messages.upsert)
 POST {{baseUrl}}/api/public/evolution/webhook

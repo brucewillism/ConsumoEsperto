@@ -21,7 +21,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/projecoes")
 @RequiredArgsConstructor
-@CrossOrigin(originPatterns = {"http://localhost:4200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
+@CrossOrigin(originPatterns = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
 public class ProjecaoController {
 
     private final DashboardProjectionService dashboardProjectionService;

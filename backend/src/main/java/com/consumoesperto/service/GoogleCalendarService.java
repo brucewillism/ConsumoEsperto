@@ -53,7 +53,7 @@ public class GoogleCalendarService {
     @Value("${spring.security.oauth2.client.registration.google.client-secret}")
     private String googleClientSecret;
 
-    @Value("${consumoesperto.google.calendar.redirect-uri:http://localhost:8081/api/integracoes/google-calendar/oauth2/callback}")
+    @Value("${consumoesperto.google.calendar.redirect-uri:http://localhost:18081/api/integracoes/google-calendar/oauth2/callback}")
     private String calendarRedirectUri;
 
     public Optional<String> obterRefreshToken(Long usuarioId) {

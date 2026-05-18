@@ -53,18 +53,18 @@ if ($pass) {
 $content = Get-Content $evoEnv -Raw -Encoding UTF8
 $content = $content -replace "(?m)^DATABASE_CONNECTION_URI=.*", "DATABASE_CONNECTION_URI=$uri"
 $content = $content -replace "(?m)^CHATWOOT_IMPORT_DATABASE_CONNECTION_URI=.*", "CHATWOOT_IMPORT_DATABASE_CONNECTION_URI=$uri"
-# Stack local ConsumoEsperto: Evolution na 8080; Spring (dev-evolution) na 8081 — webhooks devem bater no Spring.
+# Stack ConsumoEsperto: Evolution na 18080; Spring (dev-evolution) na 18081 — webhooks devem bater no Spring.
 # 127.0.0.1 evita IPv6 ::1 vs IPv4 em alguns stacks Node→Java no Windows
-$springWebhook = "http://127.0.0.1:8081/api/public/evolution/webhook"
+$springWebhook = "http://127.0.0.1:18081/api/public/evolution/webhook"
 if ($content -match "(?m)^SERVER_PORT=") {
-    $content = $content -replace "(?m)^SERVER_PORT=.*", "SERVER_PORT=8080"
+    $content = $content -replace "(?m)^SERVER_PORT=.*", "SERVER_PORT=18080"
 } else {
-    $content = $content.TrimEnd() + "`r`nSERVER_PORT=8080`r`n"
+    $content = $content.TrimEnd() + "`r`nSERVER_PORT=18080`r`n"
 }
 if ($content -match "(?m)^SERVER_URL=") {
-    $content = $content -replace "(?m)^SERVER_URL=.*", "SERVER_URL=http://localhost:8080"
+    $content = $content -replace "(?m)^SERVER_URL=.*", "SERVER_URL=http://localhost:18080"
 } else {
-    $content = $content.TrimEnd() + "`r`nSERVER_URL=http://localhost:8080`r`n"
+    $content = $content.TrimEnd() + "`r`nSERVER_URL=http://localhost:18080`r`n"
 }
 if ($content -match "(?m)^WEBHOOK_GLOBAL_URL=") {
     $content = $content -replace "(?m)^WEBHOOK_GLOBAL_URL=.*", "WEBHOOK_GLOBAL_URL=$springWebhook"
@@ -97,8 +97,8 @@ if ($m.Success -and $m.Groups[1].Value.Trim()) {
     $secretsPath = Join-Path $secretsDir "application-dev-evolution-secrets.properties"
     $sec = @"
 # Gerado por sincronizar-evolution-env.ps1 (nao commitar). Sobrescreve evolution.apikey para igualar AUTHENTICATION_API_KEY da Evolution.
-# URL da API Evolution (Node) — porta 8080; o Spring com dev-evolution corre na 8081.
-evolution.url=http://localhost:8080
+# URL da API Evolution (Node) — porta 18080; o Spring com dev-evolution corre na 18081.
+evolution.url=http://localhost:18080
 evolution.apikey=$authKey
 evolution.instance=ConsumoEsperto
 "@

@@ -20,7 +20,7 @@
 #   CE_SKIP_EVOLUTION=1    — não clona/compila a Evolution (só BD evolution_api)
 #   CE_EVOLUTION_HOME=/opt/evolution-api
 #   CE_EVOLUTION_TAG=v2.3.7   — tag do repositório oficial EvolutionAPI/evolution-api
-#   CE_EVOLUTION_SERVER_URL — URL pública da API (ex.: https://evo.teudominio.com); default http://127.0.0.1:8081
+#   CE_EVOLUTION_SERVER_URL — URL pública da API Evolution (ex.: https://evo.teudominio.com); default http://127.0.0.1:18080
 #   CE_FORCE_EVOLUTION_ENV=1 — volta a escrever .env da Evolution (sobrescreve apikey local)
 #   CE_SKIP_NGINX=1      — não instala Nginx
 #   CE_SKIP_UFW=1        — não configura firewall
@@ -41,7 +41,7 @@ die() { printf '\n[\033[0;31mx\033[0m] %s\n' "$*" >&2; exit 1; }
 install_evolution_api() {
   local EVO_HOME="${CE_EVOLUTION_HOME:-/opt/evolution-api}"
   local TAG="${CE_EVOLUTION_TAG:-v2.3.7}"
-  local PUB_URL="${CE_EVOLUTION_SERVER_URL:-http://127.0.0.1:8081}"
+  local PUB_URL="${CE_EVOLUTION_SERVER_URL:-http://127.0.0.1:18080}"
   local ENC_PASS
   ENC_PASS="$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$DB_PASS")"
   local URI="postgresql://${DB_USER}:${ENC_PASS}@127.0.0.1:5432/evolution_api?schema=public"
@@ -83,6 +83,7 @@ install_evolution_api() {
 AUTHENTICATION_API_KEY=${AUTH_KEY}
 DATABASE_PROVIDER=postgresql
 DATABASE_CONNECTION_URI=${URI}
+SERVER_PORT=18080
 SERVER_URL=${PUB_URL}
 CONFIG_SESSION_PHONE_CLIENT=Evolution API
 CONFIG_SESSION_PHONE_NAME=Chrome
@@ -97,7 +98,7 @@ EVOENV
   if [[ -n "${SUDO_USER:-}" ]]; then
     chown -R "$SUDO_USER:$SUDO_USER" "$EVO_HOME" || true
   fi
-  log "Evolution API pronta em ${EVO_HOME}. Arranque: cd ${EVO_HOME} && npm run start:prod (porta 8081 por defeito)."
+  log "Evolution API pronta em ${EVO_HOME}. Arranque: cd ${EVO_HOME} && npm run start:prod (porta interna 18080 — ver scripts/stack-ports.ps1 no repo ConsumoEsperto)."
 }
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -242,7 +243,7 @@ Próximos passos — ConsumoEsperto (backend + frontend):
      Variáveis obrigatórias típicas: DATABASE_URL, DATABASE_USERNAME, DATABASE_PASSWORD,
      JWT_SECRET, CORS_ALLOWED_PATTERNS (ex.: https://app.teudominio.com),
      EVOLUTION_APIKEY (igual à AUTHENTICATION_API_KEY da Evolution), GOOGLE_CLIENT_* se usares OAuth.
-  3. Nginx: TLS, servir Angular (dist/) e proxy para API 8080; opcional proxy /evolution → 8081.
+  3. Nginx: TLS, servir Angular (dist/) e proxy para API Spring (ex.: 18081); opcional proxy /evolution → Node Evolution (ex.: 18080).
   4. Não exponhas /actuator nem Swagger na Internet (o profile prod já reduz exposição).
   5. systemd: serviços para java -jar backend e npm run start:prod na Evolution.
 

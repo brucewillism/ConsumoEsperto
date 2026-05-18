@@ -1526,7 +1526,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.salvarTratamentoEmAndamento = false;
         let msg =
           err.status === 0
-            ? 'Sem ligação à API. Verifique se o backend está ligado e se environment.apiUrl usa a mesma porta (ex.: 8080).'
+            ? 'Sem ligação à API. Verifique se o backend está ligado e se environment.apiUrl aponta para a API (ex.: :18081).'
             : 'Não foi possível salvar o protocolo J.A.R.V.I.S.';
         this.snackBar.open(msg, 'Fechar', { duration: 5000 });
       },
