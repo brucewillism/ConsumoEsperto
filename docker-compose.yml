@@ -1,0 +1,118 @@
+# ConsumoEsperto — portas na VPS (sem colidir com Postgres/Apache padrão)
+# Backend: 8087 | Frontend (Nginx): 8181 | Evolution: 8585 | Ollama: 11999 | Postgres host: 5439
+#
+# Copie variáveis: cp docker/env.docker.example .env  (ajuste nomes se quiser consumo_db)
+# docker compose up -d --build
+#
+# Nota: a Evolution usa a base evolution_api; o Spring usa consumo_db (POSTGRES_DB).
+
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: consumo_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-consumo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-consumo_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5439:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: consumo_redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: consumo_backend
+    restart: always
+    ports:
+      - "8087:8087"
+    environment:
+      SERVER_PORT: "8087"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-consumo_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-consumo}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no .env}
+      EVOLUTION_URL: http://evolution_api:8585
+      EVOLUTION_APIKEY: ${EVOLUTION_API_KEY:?Defina EVOLUTION_API_KEY no .env}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-ConsumoEsperto}
+      APP_FRONTEND_BASE_URL: ${APP_FRONTEND_BASE_URL:-http://localhost:8181}
+      CORS_ALLOWED_PATTERNS: ${CORS_ALLOWED_PATTERNS:-http://localhost:8181,http://127.0.0.1:8181}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: consumo_frontend
+    restart: always
+    ports:
+      - "8181:80"
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+
+  evolution_api:
+    # Se falhar o pull, experimente: atendai/evolution-api:v2.1.1 ou evoapicloud/evolution-api:latest
+    image: ${EVOLUTION_IMAGE:-atendare/evolution-api:latest}
+    container_name: consumo_evolution
+    restart: always
+    ports:
+      - "8585:8585"
+    environment:
+      SERVER_TYPE: http
+      SERVER_PORT: "8585"
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      SERVER_URL: ${EVOLUTION_PUBLIC_URL:-http://127.0.0.1:8585}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER:-consumo}:${POSTGRES_PASSWORD}@postgres:5432/evolution_api?schema=public
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/6
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_LOCAL_ENABLED: "false"
+      WEBHOOK_GLOBAL_URL: ${WEBHOOK_GLOBAL_URL:-http://backend:8087/api/public/evolution/webhook}
+      RABBITMQ_ENABLED: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: consumo_ollama
+    restart: always
+    ports:
+      - "11999:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:
+  evolution_instances:

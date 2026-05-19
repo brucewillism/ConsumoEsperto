@@ -1,0 +1,9 @@
+target/
+.idea/
+*.iml
+.git
+.gitignore
+logs/
+*.log
+config/*-secrets.properties
+**/db-local.properties

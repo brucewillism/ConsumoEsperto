@@ -1,0 +1,14 @@
+# Contexto raiz para build do frontend (compose)
+.git
+.idea
+**/node_modules
+**/dist
+**/.angular
+**/target
+**/*.log
+backend
+frontend/node_modules
+frontend/dist
+frontend/.angular
+# Evolution clonada localmente é enorme — não entra no build do front
+tools/evolution-api
