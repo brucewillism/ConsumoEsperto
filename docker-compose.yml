@@ -74,7 +74,8 @@ services:
 
       APP_FRONTEND_BASE_URL: ${APP_FRONTEND_BASE_URL:-http://localhost:8181}
 
-      CORS_ALLOWED_PATTERNS: ${CORS_ALLOWED_PATTERNS:-http://localhost:8181,http://127.0.0.1:8181}
+      # Todas as origens do browser onde o SPA roda (incluir :8443 se o Apache usar essa porta). Variável obrigatória em produção com domínio próprio.
+      CORS_ALLOWED_PATTERNS: ${CORS_ALLOWED_PATTERNS:-http://localhost:8181,http://127.0.0.1:8181,https://consumoesperto.brucew07.com.br,https://consumoesperto.brucew07.com.br:8443}
 
     depends_on:
       postgres:

@@ -35,7 +35,11 @@ public class SecurityConfig {
      * Padrões permitidos (origins), separados por vírgula. Em produção use o domínio HTTPS do frontend
      * (ex.: {@code https://app.exemplo.com}). Variável de ambiente: {@code CORS_ALLOWED_PATTERNS}.
      */
-    @Value("${app.security.cors-allowed-patterns:http://localhost:14200,http://localhost:4200,https://*.ngrok-free.app,https://*.ngrok.io}")
+    /**
+     * Incluir na VPS (env {@code CORS_ALLOWED_PATTERNS}) o host e porta exatos da origem do browser.
+     * Ex.: {@code https://consumoesperto.brucew07.com.br:8443}. Padrões com porta: {@code https://consumoesperto.brucew07.com.br:*}
+     */
+    @Value("${app.security.cors-allowed-patterns:http://localhost:14200,http://localhost:4200,http://localhost:8181,https://consumoesperto.brucew07.com.br,https://consumoesperto.brucew07.com.br:8443,https://consumoesperto.brucew07.com.br:*,http://consumoesperto.brucew07.com.br:*,https://*.ngrok-free.app,https://*.ngrok.io}")
     private String corsAllowedPatterns;
 
     @Bean

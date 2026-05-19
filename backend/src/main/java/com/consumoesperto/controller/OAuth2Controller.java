@@ -24,7 +24,6 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = {"http://localhost:14200", "https://0d723f1e294f.ngrok-free.app"})
 public class OAuth2Controller {
 
     private final OAuth2Service oAuth2Service;
