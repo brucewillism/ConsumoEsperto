@@ -68,7 +68,12 @@ services:
       JWT_SECRET: ${JWT_SECRET}
 
       EVOLUTION_URL: http://evolution_api:8585
+<<<<<<< Updated upstream
       EVOLUTION_APIKEY: ${EVOLUTION_API_KEY}
+=======
+      # Compose exige interpolação: use EVOLUTION_API_KEY (recom.) ou EVOLUTION_APIKEY legado.
+      EVOLUTION_APIKEY: ${EVOLUTION_API_KEY:-${EVOLUTION_APIKEY:?Defina EVOLUTION_API_KEY (ou EVOLUTION_APIKEY) no .env}}
+>>>>>>> Stashed changes
       EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-ConsumoEsperto}
 
       APP_FRONTEND_BASE_URL: ${APP_FRONTEND_BASE_URL:-http://localhost:8181}
@@ -109,12 +114,18 @@ services:
 
     environment:
       SERVER_TYPE: http
+<<<<<<< Updated upstream
       SERVER_PORT: 8585
 
       AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
 
       SERVER_URL: ${EVOLUTION_PUBLIC_URL:-http://localhost:8585}
 
+=======
+      SERVER_PORT: "8585"
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-${EVOLUTION_APIKEY:?Defina EVOLUTION_API_KEY ou EVOLUTION_APIKEY no .env}}
+      SERVER_URL: ${EVOLUTION_PUBLIC_URL:-http://127.0.0.1:8585}
+>>>>>>> Stashed changes
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: postgresql
 
