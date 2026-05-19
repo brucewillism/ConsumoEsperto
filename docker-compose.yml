@@ -67,6 +67,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    # Evita proxy reverso Apache/Nginx dar 502 enquanto o Spring Boot ainda arranca (Flyway + contexto pode levar > 30 s).
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8087/api/auth/status > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
 
   frontend:
     build:
@@ -77,7 +84,8 @@ services:
     ports:
       - "8181:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   evolution_api:
     image: atendai/evolution-api:latest
