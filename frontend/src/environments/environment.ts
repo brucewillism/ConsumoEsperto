@@ -14,7 +14,7 @@ export const environment = {
   
   /** URL da API REST (Spring Boot).
    *  Stack local: ver `scripts/stack-ports.ps1` — Spring :18081, Evolution Node :18080, Angular :14200. */
-  apiUrl: 'https://consumoesperto.brucew07.com.br:8443/api',
+   apiUrl: 'https://consumoesperto.brucew07.com.br/api',
   
   /** ID do cliente Google OAuth2 para autenticação via Google
    * 

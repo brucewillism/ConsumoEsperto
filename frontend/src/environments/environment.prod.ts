@@ -1,32 +1,19 @@
 /**
- * Configurações do ambiente de desenvolvimento
+ * Produção — substitui {@code environment.ts} no build ({@code ng build --configuration production}).
  *
- * Este arquivo contém as variáveis de configuração específicas
- * para o ambiente de desenvolvimento local. Em produção,
- * estas configurações são substituídas pelo environment.prod.ts
+ * O {@code apiUrl} deve usar o mesmo esquema + host (+ porta apenas se diferente de 443/80-padrão) que o
+ * utilizador abre no browser. Caso contrário há CORS (ex.: SPA em {@code https://domínio} e API {@code ...:8443}).
  *
- * @author ConsumoEsperto Team
- * @version 1.0
+ * Com proxy reverso mapeando {@code /api} → Spring Boot neste mesmo host, mantemos origem igual à do site.
  */
 export const environment = {
-  /** Indica se está em modo de produção (false para desenvolvimento) */
-  production: false,
+  production: true,
 
-  /** URL da API REST (Spring Boot).
-   *  Stack local: ver `scripts/stack-ports.ps1` — Spring :18081, Evolution Node :18080, Angular :14200. */
-  apiUrl: 'https://consumoesperto.brucew07.com.br:8443/api',
+  apiUrl: 'https://consumoesperto.brucew07.com.br/api',
 
-  /** ID do cliente Google OAuth2 para autenticação via Google
-   *
-   * Este ID é usado para permitir login via Google na aplicação.
-   * Deve ser configurado no Google Cloud Console e corresponder
-   * ao domínio de desenvolvimento (localhost:14200).
-   */
+  /** Cliente OAuth Web no Google Cloud; URIs autorizadas devem incluir este domínio (sem path no cliente). */
   googleClientID: '593452038228-47k24odoa6f18c78e3ssp9bhu56gugnm.apps.googleusercontent.com',
 
-  /** Overlay global de pedidos HTTP — GIF em tools/img (copiado no build). */
   loadingGifUrl: 'assets/loading/loading.gif',
-
-  /** Tempo extra (ms) após o fim do último pedido antes de ocultar o overlay (ex.: 200 = ⅕ s). */
   loadingOverlayTailMs: 200
 };
