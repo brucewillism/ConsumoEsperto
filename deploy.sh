@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # =========================================================
-#        🚀 CONSUMOESPERTO AUTO DEPLOY SYSTEM 🚀
+#         🚀 CONSUMOESPERTO AUTO DEPLOY SYSTEM 🚀
 # =========================================================
-#        Deploy automático FULL STACK
-#        Angular + Spring Boot + Docker + PostgreSQL
+#         Deploy automático FULL STACK - Versão Ultra Safe
+#         Angular + Spring Boot + Docker + PostgreSQL
 # =========================================================
 
 set -e
@@ -40,7 +40,7 @@ spinner() {
 # ---------- HEADER ----------
 echo -e "${PURPLE}"
 echo "====================================================="
-echo "      🚀 CONSUMOESPERTO DEPLOY AUTOMÁTICO 🚀"
+echo "     🚀 CONSUMOESPERTO DEPLOY AUTOMÁTICO 🚀"
 echo "====================================================="
 echo -e "${NC}"
 
@@ -58,64 +58,47 @@ then
     exit 1
 fi
 
-echo -e "${GREEN}✅ Docker OK${NC}"
+# ---------- BLINDAGEM DE PORTA (O SEGREDO) ----------
+echo -e "${YELLOW}🧹 Iniciando limpeza profunda de rede e portas...${NC}"
 
+# 1. Derruba o ambiente atual limpando containers órfãos
+echo -e "${CYAN}   -> Parando containers do projeto...${NC}"
+docker compose down --remove-orphans || true
+
+# 2. Caça e mata qualquer processo Java ou zumbi na porta 8087 do Host
+echo -e "${CYAN}   -> Desalocando a porta 8087 no sistema operacional...${NC}"
+sudo fuser -k 8087/tcp || true
+sudo lsof -t -i :8087 | xargs kill -9 2>/dev/null || true
+
+# 3. Pequena pausa para o kernel do Linux processar o encerramento do socket de rede
+sleep 2
+
+# ---------- BUILD E DEPLOY ----------
+echo -e "${YELLOW}🏗️  Reconstruindo imagens e subindo os serviços...${NC}"
+
+# Executa o compose forçando a recriação total para evitar o estado "Created" travado
+docker compose up -d --build --force-recreate
+
+echo -e "${GREEN}✅ Ambiente reconstruído com sucesso!${NC}"
 echo ""
 
-# ---------- GIT PULL ----------
-echo -e "${YELLOW}📥 Atualizando código do GitHub...${NC}"
-
-git pull origin main &
-spinner
-
-echo -e "${GREEN}✅ Código atualizado${NC}"
+# ---------- LIMPEZA DE CACHE ----------
+echo -e "${YELLOW}🧹 Limpando imagens antigas e não utilizadas...${NC}"
+docker image prune -f
+echo -e "${GREEN}✅ Limpeza concluída.${NC}"
 echo ""
 
-# ---------- PARANDO CONTAINERS ----------
-echo -e "${YELLOW}🛑 Derrubando containers antigos...${NC}"
-
-docker compose down &
-spinner
-
-echo -e "${GREEN}✅ Containers finalizados${NC}"
+# ---------- STATUS FINAL ----------
+echo -e "${PURPLE}=====================================================${NC}"
+echo -e "${GREEN}        ✅ DEPLOY FINALIZADO COM SUCESSO ✅        ${NC}"
+echo -e "${PURPLE}=====================================================${NC}"
 echo ""
 
-# ---------- BUILD ----------
-echo -e "${YELLOW}🏗️ Reconstruindo ambiente Docker...${NC}"
-
-docker compose up --build -d &
-spinner
-
-echo -e "${GREEN}✅ Ambiente reconstruído${NC}"
-echo ""
-
-# ---------- LIMPEZA ----------
-echo -e "${YELLOW}🧹 Limpando imagens antigas...${NC}"
-
-docker image prune -f &
-spinner
-
-echo -e "${GREEN}✅ Limpeza concluída${NC}"
-echo ""
-
-# ---------- STATUS ----------
-echo -e "${YELLOW}📦 Containers ativos:${NC}"
-docker ps
+echo -e "${BLUE}📦 Containers ativos:${NC}"
+docker compose ps
 
 echo ""
-
-# ---------- FINAL ----------
-echo -e "${GREEN}"
-echo "====================================================="
-echo "        ✅ DEPLOY FINALIZADO COM SUCESSO ✅"
-echo "====================================================="
-echo -e "${NC}"
-
-echo -e "${CYAN}🌐 Aplicação online${NC}"
-echo -e "${CYAN}⚡ Backend Spring Boot ativo${NC}"
-echo -e "${CYAN}🎨 Frontend Angular ativo${NC}"
-echo -e "${CYAN}🐳 Docker saudável${NC}"
-echo ""
-
-# ---------- SOM OPCIONAL ----------
-printf '\a'
+echo -e "${GREEN}🌐 Aplicação online!${NC}"
+echo -e "${CYAN}⚡ Backend Spring Boot ativo na porta 8087${NC}"
+echo -e "${CYAN}🎨 Frontend Angular ativo na porta 8181${NC}"
+echo -e "${CYAN}🐳 Docker saudável e rodando.${NC}"
