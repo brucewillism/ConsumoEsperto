@@ -62,6 +62,10 @@ services:
 
       APP_FRONTEND_BASE_URL: ${APP_FRONTEND_BASE_URL:-https://consumoesperto.brucew07.com.br}
       CORS_ALLOWED_PATTERNS: ${CORS_ALLOWED_PATTERNS:-http://localhost:8181,http://127.0.0.1:8181,https://consumoesperto.brucew07.com.br}
+
+      # Igual ao cliente OAuth "Web" do Google Cloud (mesmo valor que no Angular). O fluxo atual chama UserInfo só com Bearer, mas definir mantém parity e flujos codificados.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-disabled}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-disabled}
     depends_on:
       postgres:
         condition: service_healthy
