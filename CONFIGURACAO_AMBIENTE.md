@@ -71,8 +71,8 @@ Opcionalmente, se o QR demorar ou a Evolution devolver `qrcode` vazio nos primei
 Fluxo no frontend **WhatsApp**:
 
 1. Grava o número em `POST /api/usuarios/whatsapp/vincular`.
-2. O backend chama a Evolution e devolve `evolutionQrCodeDataUri` e/ou `evolutionPairingCode` quando existirem na resposta.
-3. Um modal faz **polling** a cada 5 s em `GET /api/usuarios/whatsapp/evolution-connection-status`; quando `connected` ficar verdadeiro, considera pareamento feito nesta **instancia** Evolution e fecha o modal.
+2. Quando falta parear na Evolution, abre sempre o modal; o mesmo pedido repete até surgir QR ou ficar Connected.
+3. Dentro do modal, a cada 5 s: `GET .../evolution-connection-status` e **`POST .../whatsapp/evolution-pairing-refresh`** para atualizar QR/pairing até `connected`.
 
 **Nota:** Se varios utilizadores partilharem **a mesma** instancia Evolution, estado de pareamento (`connected`) e um unico numero WhatsApp Evolution sao globais dessa instancia; o numero **vinculado no perfil** do app continua a servir para identificar o tenant nas mensagens.
 

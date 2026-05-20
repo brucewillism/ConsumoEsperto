@@ -2,9 +2,10 @@
   <div class="card">
     <h1>WhatsApp</h1>
     <p class="subtitle">
-      Vincule o número com o qual envia mensagens ao bot. Ao vincular, pode abrir-se um modal para escanear o QR Code da
-      Evolution (o servidor usa <code>EVOLUTION_URL</code> e a chave mestra). A IA (ex.: Groq) pode estar no servidor ou nas
-      definições por utilizador; instância e chave próprias da Evolution, se configuradas na IA, sobrepõem os valores globais.
+      Vincule o número com o qual envia mensagens ao bot. Ao gravar ou atualizar o vínculo, se a Evolution ainda não estiver
+      pareada nesta instância, abre-se um modal onde o QR aparece assim que ficar disponível (com atualização automática).
+      Usa-se <code>EVOLUTION_URL</code> e a chave mestra. A IA (ex.: Groq) pode estar no servidor ou nas definições por utilizador;
+      instância e chave próprias da Evolution, se configuradas na IA, sobrepõem os valores globais.
     </p>
 
     <div class="status-box" [class.linked]="!!numeroAtual">

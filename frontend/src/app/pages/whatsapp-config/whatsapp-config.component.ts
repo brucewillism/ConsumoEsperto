@@ -64,24 +64,22 @@ export class WhatsappConfigComponent implements OnInit {
           response?.message || 'WhatsApp vinculado com sucesso.';
         this.toastService.success(baseMsg);
 
-        if (response?.evolutionWarning) {
-          this.toastService.warning(response.evolutionWarning);
-        }
-
-        const deveMostrarQr =
-          !!response?.evolutionQrCodeDataUri || !!response?.evolutionPairingCode;
-
-        if (deveMostrarQr && !response?.evolutionAlreadyConnected) {
+        const faltaEvolution = !response?.evolutionAlreadyConnected;
+        /** Modal com QR ou polling até a Evolution responder (evita só um toast quando o QR vem mais tarde). */
+        if (faltaEvolution) {
           const dados: WhatsappEvolutionQrDialogData = {
-            qrDataUri: response.evolutionQrCodeDataUri,
+            qrDataUri: response.evolutionQrCodeDataUri ?? null,
             pairingCode: response.evolutionPairingCode ?? null,
             instanceName: response.evolutionInstanceName ?? null,
+            evolutionWarning: response.evolutionWarning ?? null,
           };
           this.dialog.open(WhatsappEvolutionQrDialogComponent, {
             width: '480px',
             maxWidth: '95vw',
             data: dados,
           });
+        } else if (response?.evolutionWarning) {
+          this.toastService.warning(response.evolutionWarning);
         }
       },
       error: (error) => {

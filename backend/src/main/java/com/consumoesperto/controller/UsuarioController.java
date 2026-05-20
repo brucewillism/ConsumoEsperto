@@ -198,18 +198,7 @@ public class UsuarioController {
                     : "Numero de WhatsApp vinculado com sucesso. Escaneie o QR quando aparecer ou use pairingCode.");
             body.put("usuarioId", atualizado.getId());
             body.put("whatsappNumero", atualizado.getWhatsappNumero());
-            body.put("evolutionInstanceName", pairing.getResolvedInstanceName());
-            body.put("evolutionAlreadyConnected", pairing.isAlreadyConnected());
-            body.put("evolutionHasAlternativePairingHints", pairing.isHasAlternativePairingHints());
-            if (pairing.getQrCodeDataUri() != null && !pairing.getQrCodeDataUri().isBlank()) {
-                body.put("evolutionQrCodeDataUri", pairing.getQrCodeDataUri());
-            }
-            if (pairing.getPairingCode() != null && !pairing.getPairingCode().isBlank()) {
-                body.put("evolutionPairingCode", pairing.getPairingCode());
-            }
-            if (pairing.getEvolutionWarning() != null && !pairing.getEvolutionWarning().isBlank()) {
-                body.put("evolutionWarning", pairing.getEvolutionWarning());
-            }
+            aplicarCamposEvolutionPairing(body, pairing);
 
             return ResponseEntity.ok(body);
         } catch (Exception e) {
@@ -218,6 +207,49 @@ public class UsuarioController {
                 "status", "error",
                 "message", e.getMessage()
             ));
+        }
+    }
+
+    /**
+     * Novo GET do QR/pairing sem gravar número (permite polling no modal após vínculo).
+     */
+    @PostMapping("/whatsapp/evolution-pairing-refresh")
+    public ResponseEntity<Map<String, Object>> evolutionPairingRefresh() {
+        try {
+            Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
+            if (!usuarioOpt.isPresent()) {
+                return ResponseEntity.status(401).body(Map.of(
+                    "status", "error",
+                    "message", "Usuario nao autenticado"
+                ));
+            }
+            EvolutionPairingOutcomeDTO pairing =
+                evolutionPairingService.invokeInstanceConnect(usuarioOpt.get().getId());
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("status", "success");
+            aplicarCamposEvolutionPairing(body, pairing);
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            log.error("Evolution pairing refresh: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of(
+                "status", "error",
+                "message", e.getMessage()
+            ));
+        }
+    }
+
+    private static void aplicarCamposEvolutionPairing(Map<String, Object> body, EvolutionPairingOutcomeDTO pairing) {
+        body.put("evolutionInstanceName", pairing.getResolvedInstanceName());
+        body.put("evolutionAlreadyConnected", pairing.isAlreadyConnected());
+        body.put("evolutionHasAlternativePairingHints", pairing.isHasAlternativePairingHints());
+        if (pairing.getQrCodeDataUri() != null && !pairing.getQrCodeDataUri().isBlank()) {
+            body.put("evolutionQrCodeDataUri", pairing.getQrCodeDataUri());
+        }
+        if (pairing.getPairingCode() != null && !pairing.getPairingCode().isBlank()) {
+            body.put("evolutionPairingCode", pairing.getPairingCode());
+        }
+        if (pairing.getEvolutionWarning() != null && !pairing.getEvolutionWarning().isBlank()) {
+            body.put("evolutionWarning", pairing.getEvolutionWarning());
         }
     }
 

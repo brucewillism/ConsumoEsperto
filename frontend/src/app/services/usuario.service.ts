@@ -18,6 +18,19 @@ export interface VincularWhatsappResponse {
   evolutionHasAlternativePairingHints?: boolean;
 }
 
+/** POST /usuarios/whatsapp/evolution-pairing-refresh — mesmo formato de campos Evolution que vincular (sem dados de perfil). */
+export type EvolutionPairingRefreshResponse = Pick<
+  VincularWhatsappResponse,
+  | 'evolutionInstanceName'
+  | 'evolutionAlreadyConnected'
+  | 'evolutionQrCodeDataUri'
+  | 'evolutionPairingCode'
+  | 'evolutionWarning'
+  | 'evolutionHasAlternativePairingHints'
+> & {
+  status?: string;
+};
+
 /** GET /usuarios/whatsapp/evolution-connection-status */
 export interface EvolutionWhatsappConnectionStatusDTO {
   connected: boolean;
@@ -100,6 +113,14 @@ export class UsuarioService {
   getEvolutionWhatsappConnectionStatus(): Observable<EvolutionWhatsappConnectionStatusDTO> {
     return this.http.get<EvolutionWhatsappConnectionStatusDTO>(
       `${this.apiUrl}/whatsapp/evolution-connection-status`
+    );
+  }
+
+  /** Re-pede dados de QR/pairing à Evolution sem alterar o número (polling no modal). */
+  refreshEvolutionPairing(): Observable<EvolutionPairingRefreshResponse> {
+    return this.http.post<EvolutionPairingRefreshResponse>(
+      `${this.apiUrl}/whatsapp/evolution-pairing-refresh`,
+      {}
     );
   }
 

@@ -1,6 +1,7 @@
 import { Component, Inject, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subscription, timer } from 'rxjs';
+import { Subscription, timer, of } from 'rxjs';
+import { catchError, map, switchMap } from 'rxjs/operators';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { UsuarioService } from '../services/usuario.service';
@@ -11,6 +12,8 @@ export interface WhatsappEvolutionQrDialogData {
   qrDataUri?: string | null;
   pairingCode?: string | null;
   instanceName?: string | null;
+  /** Aviso da primeira resposta; pode atualizar‑se até o QR chegar pelo polling */
+  evolutionWarning?: string | null;
 }
 
 @Component({
@@ -21,32 +24,34 @@ export interface WhatsappEvolutionQrDialogData {
     <h2 mat-dialog-title>Pareamento WhatsApp (Evolution)</h2>
 
     <mat-dialog-content class="content">
-      <p class="hint" *ngIf="data.instanceName">
-        Instância: <strong>{{ data.instanceName }}</strong>
+      <p class="hint" *ngIf="displayInstance">
+        Instância: <strong>{{ displayInstance }}</strong>
       </p>
+
+      <p class="warn-banner" *ngIf="bannerWarning">{{ bannerWarning }}</p>
 
       <p class="instructions">
         No celular: WhatsApp → Aparelhos associados → Associar um aparelho →
         quando solicitado, leia este código QR ou use o código alfanumérico abaixo.
       </p>
 
-      <div class="qr-wrap" *ngIf="data.qrDataUri">
-        <img class="qr" [src]="data.qrDataUri" alt="QR Code Evolution" />
+      <p class="spinner-line" *ngIf="waitingForQr">À obter o QR Code da Evolution (tentativa contínua)…</p>
+
+      <div class="qr-wrap" *ngIf="displayQr">
+        <img class="qr" [src]="displayQr" alt="QR Code Evolution" />
       </div>
 
-      <p class="pairing" *ngIf="data.pairingCode">
-        <strong>Código de associação (alternativa):</strong> {{ data.pairingCode }}
+      <p class="pairing" *ngIf="displayPairing">
+        <strong>Código de associação (alternativa):</strong> {{ displayPairing }}
       </p>
 
-      <p class="polling" *ngIf="polling">
-        À aguardar confirmação na Evolution… (verificação a cada 5 s)
+      <p class="polling" *ngIf="pollingHeartbeat">
+        A verificar estado na Evolution a cada 5 s — pode fechar e completar no Manager da Evolution se preferir.
       </p>
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button type="button" (click)="fechar()" [disabled]="fechando">
-        Ignorar por agora
-      </button>
+      <button mat-button type="button" (click)="fechar()" [disabled]="fechando">Ignorar por agora</button>
     </mat-dialog-actions>
   `,
   styles: [
@@ -60,9 +65,21 @@ export interface WhatsappEvolutionQrDialogData {
         opacity: 0.85;
         font-size: 0.9rem;
       }
+      .warn-banner {
+        background: rgba(255, 152, 0, 0.12);
+        border: 1px solid rgba(255, 152, 0, 0.45);
+        border-radius: 8px;
+        padding: 0.65rem 0.85rem;
+        font-size: 0.88rem;
+        line-height: 1.35;
+      }
       .instructions {
         font-size: 0.92rem;
         line-height: 1.35;
+      }
+      .spinner-line {
+        font-size: 0.9rem;
+        opacity: 0.82;
       }
       .qr-wrap {
         margin: 1rem 0;
@@ -88,10 +105,20 @@ export interface WhatsappEvolutionQrDialogData {
   ],
 })
 export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
-  polling = true;
+  pollingHeartbeat = true;
   fechando = false;
 
+  displayInstance: string | null | undefined;
+  displayQr: string | null | undefined;
+  displayPairing: string | null | undefined;
+  bannerWarning: string | null | undefined;
+
+  get waitingForQr(): boolean {
+    return !this.displayQr && !this.displayPairing;
+  }
+
   private pollSub?: Subscription;
+  private finishAlready = false;
 
   constructor(
     public dialogRef: MatDialogRef<WhatsappEvolutionQrDialogComponent, 'connected' | 'dismissed'>,
@@ -99,7 +126,55 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
     private usuarioService: UsuarioService,
     private toastService: ToastService
   ) {
-    this.pollSub = timer(0, 5000).subscribe(() => this.checarConectado());
+    this.displayInstance = data.instanceName ?? null;
+    this.displayQr = data.qrDataUri ?? undefined;
+    this.displayPairing = data.pairingCode ?? undefined;
+    this.bannerWarning = data.evolutionWarning ?? null;
+
+    this.pollSub = timer(0, 5000)
+      .pipe(
+        switchMap(() =>
+          this.usuarioService.getEvolutionWhatsappConnectionStatus().pipe(
+            switchMap((status) => {
+              if (status?.connected) {
+                return of({ kind: 'connected' as const });
+              }
+              return this.usuarioService.refreshEvolutionPairing().pipe(
+                map((pair) => ({ kind: 'pair' as const, pair })),
+                catchError(() => of({ kind: 'pair-error' as const }))
+              );
+            })
+          )
+        )
+      )
+      .subscribe((outcome) => {
+        if (outcome.kind === 'connected') {
+          this.finishConnected();
+          return;
+        }
+        if (outcome.kind === 'pair-error') {
+          return;
+        }
+        const p = outcome.pair;
+        if (p?.evolutionInstanceName) {
+          this.displayInstance = p.evolutionInstanceName;
+        }
+        if (p?.evolutionAlreadyConnected) {
+          this.finishConnected();
+          return;
+        }
+        if (p?.evolutionQrCodeDataUri) {
+          this.displayQr = p.evolutionQrCodeDataUri;
+        }
+        if (p?.evolutionPairingCode) {
+          this.displayPairing = p.evolutionPairingCode;
+        }
+        if (this.displayQr || this.displayPairing) {
+          this.bannerWarning = null;
+        } else if (p?.evolutionWarning) {
+          this.bannerWarning = p.evolutionWarning;
+        }
+      });
   }
 
   ngOnDestroy(): void {
@@ -111,22 +186,15 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
     this.dialogRef.close('dismissed');
   }
 
-  private checarConectado(): void {
-    this.usuarioService.getEvolutionWhatsappConnectionStatus().subscribe({
-      next: (r) => {
-        if (r?.connected) {
-          this.pollSub?.unsubscribe();
-          this.pollSub = undefined;
-          this.polling = false;
-          this.toastService.success(
-            'WhatsApp pareado com sucesso na Evolution. Pode fechar esta janela.'
-          );
-          this.dialogRef.close('connected');
-        }
-      },
-      error: () => {
-        /* silencioso: Evolution ou rede indisponível durante polling */
-      },
-    });
+  private finishConnected(): void {
+    if (this.finishAlready) {
+      return;
+    }
+    this.finishAlready = true;
+    this.pollSub?.unsubscribe();
+    this.pollSub = undefined;
+    this.pollingHeartbeat = false;
+    this.toastService.success('WhatsApp pareado com sucesso na Evolution.');
+    this.dialogRef.close('connected');
   }
 }
