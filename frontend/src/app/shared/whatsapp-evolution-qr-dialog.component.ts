@@ -32,7 +32,7 @@ export interface WhatsappEvolutionQrDialogData {
         Instância: <strong>{{ displayInstance }}</strong>
       </p>
 
-      <p class="warn-banner" *ngIf="bannerWarning">{{ bannerWarning }}</p>
+      <p class="warn-banner" *ngIf="safeBanner">{{ safeBanner }}</p>
 
       <p class="instructions">
         No celular: WhatsApp → Aparelhos associados → Associar um aparelho →
@@ -41,12 +41,12 @@ export interface WhatsappEvolutionQrDialogData {
 
       <p class="spinner-line" *ngIf="waitingForQr">À obter o QR Code da Evolution (tentativa contínua)…</p>
 
-      <div class="qr-wrap" *ngIf="displayQr">
-        <img class="qr" [src]="displayQr" alt="QR Code Evolution" />
+      <div class="qr-wrap" *ngIf="safeQrSrc">
+        <img class="qr" [src]="safeQrSrc" alt="QR Code Evolution" />
       </div>
 
-      <p class="pairing" *ngIf="displayPairing">
-        <strong>Código de associação (alternativa):</strong> {{ displayPairing }}
+      <p class="pairing" *ngIf="safePairing">
+        <strong>Código de associação (alternativa):</strong> {{ safePairing }}
       </p>
 
       <p class="polling" *ngIf="pollingHeartbeat">
@@ -113,12 +113,33 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
   fechando = false;
 
   displayInstance: string | null | undefined;
+  /** Só deve ser um data-uri ou URL string (nunca objeto). */
   displayQr: string | null | undefined;
-  displayPairing: string | null | undefined;
-  bannerWarning: string | null | undefined;
+  /** Estado bruto (object possível vindos da API); use safe* no template */
+  displayPairingRaw: unknown = undefined;
+  bannerRaw: unknown = null;
+
+  get safeBanner(): string | undefined {
+    return formatUnknownEvolutionBanner(this.bannerRaw);
+  }
+
+  get safePairing(): string | undefined {
+    return coerceEvolutionUserFacingText(this.displayPairingRaw);
+  }
+
+  get safeQrSrc(): string | undefined {
+    const d = typeof this.displayQr === 'string' ? this.displayQr.trim() : '';
+    if (!d || d === '[object Object]' || d.includes('[object Object]')) {
+      return undefined;
+    }
+    if (d.startsWith('data:image/') || d.startsWith('blob:') || d.startsWith('http')) {
+      return d;
+    }
+    return undefined;
+  }
 
   get waitingForQr(): boolean {
-    return !this.displayQr && !this.displayPairing;
+    return !this.safeQrSrc && !this.safePairing;
   }
 
   private pollSub?: Subscription;
@@ -132,10 +153,8 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
   ) {
     this.displayInstance = data.instanceName ?? null;
     this.displayQr = coerceEvolutionQrDataUri(data.qrDataUri ?? undefined);
-    this.displayPairing =
-      coerceEvolutionUserFacingText(data.pairingCode ?? undefined) ?? undefined;
-    this.bannerWarning =
-      coerceEvolutionUserFacingText(data.evolutionWarning ?? undefined) ?? null;
+    this.displayPairingRaw = data.pairingCode ?? undefined;
+    this.bannerRaw = data.evolutionWarning ?? null;
 
     this.pollSub = timer(0, 5000)
       .pipe(
@@ -176,13 +195,12 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
         const pairTxt =
           coerceEvolutionUserFacingText(p?.evolutionPairingCode ?? undefined);
         if (pairTxt) {
-          this.displayPairing = pairTxt;
+          this.displayPairingRaw = pairTxt;
         }
-        if (this.displayQr || this.displayPairing) {
-          this.bannerWarning = null;
+        if (this.safeQrSrc || this.safePairing) {
+          this.bannerRaw = null;
         } else if (p?.evolutionWarning != null) {
-          this.bannerWarning =
-            coerceEvolutionUserFacingText(p.evolutionWarning) ?? null;
+          this.bannerRaw = p.evolutionWarning;
         }
       });
   }
@@ -206,5 +224,28 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
     this.pollingHeartbeat = false;
     this.toastService.success('WhatsApp pareado com sucesso na Evolution.');
     this.dialogRef.close('connected');
+  }
+}
+
+/** Nunca devolve texto coercível a "[object Object]" no DOM. */
+function formatUnknownEvolutionBanner(value: unknown): string | undefined {
+  if (value == null || value === '') {
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    const t = value.trim();
+    if (!t.length || /^[\s]*\[object Object\][\s]*$/i.test(t)) {
+      return undefined;
+    }
+    return t;
+  }
+  const coerced = coerceEvolutionUserFacingText(value);
+  if (coerced?.trim() && coerced.trim() !== '[object Object]') {
+    return coerced.trim();
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return 'A Evolution devolveu um aviso neste formato; abra os detalhes no Manager ou nos logs.';
   }
 }
