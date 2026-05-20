@@ -4,6 +4,26 @@ import { Observable, catchError, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Usuario, PreferenciaTratamentoJarvis } from '../models/usuario.model';
 
+/** Resposta de POST /usuarios/whatsapp/vincular. */
+export interface VincularWhatsappResponse {
+  status?: string;
+  message?: string;
+  whatsappNumero?: string;
+  usuarioId?: number;
+  evolutionInstanceName?: string;
+  evolutionAlreadyConnected?: boolean;
+  evolutionQrCodeDataUri?: string | null;
+  evolutionPairingCode?: string | null;
+  evolutionWarning?: string | null;
+  evolutionHasAlternativePairingHints?: boolean;
+}
+
+/** GET /usuarios/whatsapp/evolution-connection-status */
+export interface EvolutionWhatsappConnectionStatusDTO {
+  connected: boolean;
+  instanceName?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -72,8 +92,15 @@ export class UsuarioService {
     return this.http.get<Usuario[]>(this.apiUrl);
   }
 
-  vincularWhatsapp(numero: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/whatsapp/vincular`, { numero });
+  vincularWhatsapp(numero: string): Observable<VincularWhatsappResponse> {
+    return this.http.post<VincularWhatsappResponse>(`${this.apiUrl}/whatsapp/vincular`, { numero });
+  }
+
+  /** Polling Evolution: instância em estado Connected/Open (pareamento feito). */
+  getEvolutionWhatsappConnectionStatus(): Observable<EvolutionWhatsappConnectionStatusDTO> {
+    return this.http.get<EvolutionWhatsappConnectionStatusDTO>(
+      `${this.apiUrl}/whatsapp/evolution-connection-status`
+    );
   }
 
   desvincularWhatsapp(): Observable<any> {

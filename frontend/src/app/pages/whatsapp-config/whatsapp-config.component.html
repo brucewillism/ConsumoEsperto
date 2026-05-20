@@ -1,7 +1,11 @@
 <div class="whatsapp-config-container">
   <div class="card">
     <h1>WhatsApp</h1>
-    <p class="subtitle">Vincule o número com o qual envia mensagens ao bot. A IA (Groq) é configurada no servidor pelo administrador.</p>
+    <p class="subtitle">
+      Vincule o número com o qual envia mensagens ao bot. Ao vincular, pode abrir-se um modal para escanear o QR Code da
+      Evolution (o servidor usa <code>EVOLUTION_URL</code> e a chave mestra). A IA (ex.: Groq) pode estar no servidor ou nas
+      definições por utilizador; instância e chave próprias da Evolution, se configuradas na IA, sobrepõem os valores globais.
+    </p>
 
     <div class="status-box" [class.linked]="!!numeroAtual">
       <strong>Status:</strong>
@@ -32,7 +36,15 @@
       <ul>
         <li>Use o mesmo número que envia mensagens para o bot (texto ou voz).</li>
         <li>Formato recomendado: +55 DDD número.</li>
-        <li>Vários utilizadores podem partilhar a mesma instância Evolution: o sistema identifica cada um pelo número vinculado.</li>
+        <li>
+          O servidor chama a Evolution com <code>EVOLUTION_URL</code> e <code>EVOLUTION_APIKEY</code> (.env Docker); na
+          configuração de IA pode definir instância e chave apenas para o seu utilizador.
+        </li>
+        <li>
+          Depois de vincular, se aparecer o QR: mantenha o modal aberto — a app verifica a cada 5 s se a instância ficou ligada e
+          fecha quando o pareamento estiver completo.
+        </li>
+        <li>Vários utilizadores podem partilhar a mesma instância Evolution; o utilizador é distinguido pelo número vinculado.</li>
       </ul>
     </div>
   </div>

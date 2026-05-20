@@ -1,8 +1,10 @@
 package com.consumoesperto.controller;
 
+import com.consumoesperto.dto.EvolutionPairingOutcomeDTO;
 import com.consumoesperto.dto.PerfilJarvisRequest;
 import com.consumoesperto.dto.PreferenciaTratamentoRequest;
 import com.consumoesperto.dto.UsuarioDTO;
+import com.consumoesperto.service.EvolutionPairingService;
 import com.consumoesperto.service.JarvisProtocolService;
 import com.consumoesperto.service.UsuarioService;
 import com.consumoesperto.service.WhatsAppUserMappingService;
@@ -13,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -38,6 +41,7 @@ public class UsuarioController {
     private final SecurityService securityService;
     private final WhatsAppUserMappingService whatsAppUserMappingService;
     private final JarvisProtocolService jarvisProtocolService;
+    private final EvolutionPairingService evolutionPairingService;
 
     /**
      * Busca o perfil do usuário autenticado
@@ -183,12 +187,31 @@ public class UsuarioController {
             com.consumoesperto.model.Usuario usuario = usuarioOpt.get();
             com.consumoesperto.model.Usuario atualizado = whatsAppUserMappingService.linkWhatsAppNumber(usuario.getId(), numero);
 
-            return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "message", "Numero de WhatsApp vinculado com sucesso",
-                "usuarioId", atualizado.getId(),
-                "whatsappNumero", atualizado.getWhatsappNumero()
-            ));
+            EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(usuario.getId());
+
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("status", "success");
+            body.put(
+                "message",
+                pairing.isAlreadyConnected()
+                    ? "Numero de WhatsApp vinculado. A Evolution ja estava pareada nesta instancia."
+                    : "Numero de WhatsApp vinculado com sucesso. Escaneie o QR quando aparecer ou use pairingCode.");
+            body.put("usuarioId", atualizado.getId());
+            body.put("whatsappNumero", atualizado.getWhatsappNumero());
+            body.put("evolutionInstanceName", pairing.getResolvedInstanceName());
+            body.put("evolutionAlreadyConnected", pairing.isAlreadyConnected());
+            body.put("evolutionHasAlternativePairingHints", pairing.isHasAlternativePairingHints());
+            if (pairing.getQrCodeDataUri() != null && !pairing.getQrCodeDataUri().isBlank()) {
+                body.put("evolutionQrCodeDataUri", pairing.getQrCodeDataUri());
+            }
+            if (pairing.getPairingCode() != null && !pairing.getPairingCode().isBlank()) {
+                body.put("evolutionPairingCode", pairing.getPairingCode());
+            }
+            if (pairing.getEvolutionWarning() != null && !pairing.getEvolutionWarning().isBlank()) {
+                body.put("evolutionWarning", pairing.getEvolutionWarning());
+            }
+
+            return ResponseEntity.ok(body);
         } catch (Exception e) {
             log.error("Erro ao vincular WhatsApp: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of(
@@ -196,6 +219,26 @@ public class UsuarioController {
                 "message", e.getMessage()
             ));
         }
+    }
+
+    /**
+     * Polling pelo frontend durante o pareamento: consulta Evolution {@code /instance/connectionState/:instance}.
+     */
+    @GetMapping("/whatsapp/evolution-connection-status")
+    public ResponseEntity<Map<String, Object>> evolutionWhatsAppConnectionStatus() {
+        Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
+        if (!usuarioOpt.isPresent()) {
+            return ResponseEntity.status(401).body(Map.of(
+                "status", "error",
+                "message", "Usuario nao autenticado"
+            ));
+        }
+        Long usuarioId = usuarioOpt.get().getId();
+        boolean connected = evolutionPairingService.isInstanceConnectedForUser(usuarioId);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("connected", connected);
+        body.put("instanceName", evolutionPairingService.resolvedInstanceDisplayName(usuarioId));
+        return ResponseEntity.ok(body);
     }
 
     @PostMapping("/whatsapp/desvincular")
