@@ -21,6 +21,16 @@ public class SchemaAutoPatchService {
 
     private final JdbcTemplate jdbcTemplate;
 
+    /** Extensão {@code vector} (pgvector) instalada nesta base. */
+    private boolean isPgVectorExtensionInstalled() {
+        try {
+            return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector')", Boolean.class));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /**
      * Com {@code spring.datasource.hikari.auto-commit=false}, DDL via {@link JdbcTemplate#execute(String)}
      * pode ficar dentro de transação e ser revertida ao devolver a conexão ao pool. DDL deve usar autocommit.
@@ -651,6 +661,13 @@ public class SchemaAutoPatchService {
                 log.warn("Schema patch: 'usuarios' inexistente; memoria_semantica_jarvis não criada.");
                 return;
             }
+            boolean vectorReady = isPgVectorExtensionInstalled();
+            String embeddingCol = vectorReady ? "embedding vector(1536)" : "embedding BYTEA";
+            if (!vectorReady) {
+                log.warn(
+                    "Schema patch: pgvector não disponível nesta imagem Postgres — criando memoria_semantica_jarvis com embedding BYTEA "
+                        + "(consultas só texto funcionam; busca por similaridade vetorial usa imagem pgvector/pgvector ou CREATE EXTENSION).");
+            }
             for (String rawSchema : schemas) {
                 String schema = rawSchema.replace("\"", "");
                 String qualifiedUsuarios = schema + ".usuarios";
@@ -661,7 +678,7 @@ public class SchemaAutoPatchService {
                             + "id BIGSERIAL PRIMARY KEY,"
                             + "usuario_id BIGINT NOT NULL REFERENCES " + qualifiedUsuarios + "(id) ON DELETE CASCADE,"
                             + "contexto TEXT NOT NULL,"
-                            + "embedding vector(1536),"
+                            + embeddingCol + ","
                             + "data_registro TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),"
                             + "categoria_origem VARCHAR(32) NOT NULL "
                             + "CHECK (categoria_origem IN ('FINANCAS','HABITO','AGENDA'))"
@@ -672,15 +689,13 @@ public class SchemaAutoPatchService {
                             + qualified + " (usuario_id, data_registro DESC)"
                     );
                 } catch (Exception e) {
-                    log.warn(
-                        "Schema patch memoria_semantica_jarvis [{}] falhou: instalar extensao pgvector no Postgres e privilegio CREATE EXTENSION,"
-                        + " ou criar manualmente {}. Mensagem: {}",
-                        schema,
-                        qualified,
-                        e.getMessage());
+                    log.warn("Schema patch memoria_semantica_jarvis [{}] em {} falhou: {}", schema, qualified, e.getMessage());
                 }
             }
-            log.info("Schema patch: memoria_semantica_jarvis processada para {} schema(s); veja WARN se pgvector falhar.", schemas.size());
+            log.info(
+                "Schema patch: memoria_semantica_jarvis processada para {} schema(s); pgvector={}.",
+                schemas.size(),
+                vectorReady);
         } catch (Exception e) {
             log.warn(
                 "Schema patch memória semântica (liste schemas / extensões): {}",
@@ -712,27 +727,41 @@ public class SchemaAutoPatchService {
                 log.warn("Schema patch: 'transacoes' inexistente; transacao_semantica_index não criada.");
                 return;
             }
+            boolean vectorReadyTx = isPgVectorExtensionInstalled();
+            String embeddingColTx = vectorReadyTx ? "embedding vector(1536)" : "embedding BYTEA";
+            if (!vectorReadyTx) {
+                log.warn(
+                    "Schema patch: criando transacao_semantica_index com embedding BYTEA (pgvector ausente;"
+                        + " RAG por similaridade em transações fica indisponível até imagem/pgvector ou CREATE EXTENSION).");
+            }
             for (String rawSchema : schemas) {
                 String schema = rawSchema.replace("\"", "");
                 String qTx = schema + ".transacoes";
                 String qUs = schema + ".usuarios";
                 String qIdx = schema + ".transacao_semantica_index";
-                executeDdlAutocommit(
-                    "CREATE TABLE IF NOT EXISTS " + qIdx + " ("
-                        + "id BIGSERIAL PRIMARY KEY,"
-                        + "transacao_id BIGINT NOT NULL REFERENCES " + qTx + "(id) ON DELETE CASCADE,"
-                        + "usuario_id BIGINT NOT NULL REFERENCES " + qUs + "(id) ON DELETE CASCADE,"
-                        + "texto_indexado TEXT NOT NULL,"
-                        + "embedding vector(1536),"
-                        + "atualizado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),"
-                        + "CONSTRAINT uq_transacao_semantica_tx UNIQUE (transacao_id)"
-                        + ")"
-                );
-                executeDdlAutocommit(
-                    "CREATE INDEX IF NOT EXISTS idx_transacao_semantica_usuario ON " + qIdx + " (usuario_id)"
-                );
+                try {
+                    executeDdlAutocommit(
+                        "CREATE TABLE IF NOT EXISTS " + qIdx + " ("
+                            + "id BIGSERIAL PRIMARY KEY,"
+                            + "transacao_id BIGINT NOT NULL REFERENCES " + qTx + "(id) ON DELETE CASCADE,"
+                            + "usuario_id BIGINT NOT NULL REFERENCES " + qUs + "(id) ON DELETE CASCADE,"
+                            + "texto_indexado TEXT NOT NULL,"
+                            + embeddingColTx + ","
+                            + "atualizado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),"
+                            + "CONSTRAINT uq_transacao_semantica_tx UNIQUE (transacao_id)"
+                            + ")"
+                    );
+                    executeDdlAutocommit(
+                        "CREATE INDEX IF NOT EXISTS idx_transacao_semantica_usuario ON " + qIdx + " (usuario_id)"
+                    );
+                } catch (Exception inner) {
+                    log.warn("Schema patch transacao_semantica_index [{}] falhou em {}: {}", schema, qIdx, inner.getMessage());
+                }
             }
-            log.info("Schema patch: transacao_semantica_index verificada em {} schema(s).", schemas.size());
+            log.info(
+                "Schema patch: transacao_semantica_index verificada em {} schema(s); pgvector={}.",
+                schemas.size(),
+                vectorReadyTx);
         } catch (Exception e) {
             log.warn("Schema patch transacao_semantica_index: {}", e.getMessage());
         }

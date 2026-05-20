@@ -7,6 +7,7 @@ import com.consumoesperto.model.MemoriaCategoriaOrigem;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.util.FinanceTextoUtil;
+import com.consumoesperto.util.PgVectorJdbcHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.postgresql.util.PGobject;
@@ -48,6 +49,25 @@ public class CerebroSemanticoService {
     private final TransacaoRepository transacaoRepository;
 
     private volatile boolean loggedMemoriaUnavailable;
+    /** {@code null} = ainda não lido {@code information_schema}; depois memoiza se existe coluna {@code embedding vector}. */
+    private volatile Boolean cachedMemoriaVectorSimilarityOps;
+
+    private boolean memoriaEmbeddingSupportsPgvectorOperators() {
+        Boolean c = cachedMemoriaVectorSimilarityOps;
+        if (c != null) {
+            return c;
+        }
+        synchronized (this) {
+            c = cachedMemoriaVectorSimilarityOps;
+            if (c != null) {
+                return c;
+            }
+            boolean yes = PgVectorJdbcHelper.isVectorEmbeddingColumn(
+                jdbcTemplate, "public", "memoria_semantica_jarvis", "embedding");
+            cachedMemoriaVectorSimilarityOps = yes;
+            return yes;
+        }
+    }
 
     private static boolean isMemoriaSemanticsUnavailable(DataAccessException e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
@@ -81,7 +101,7 @@ public class CerebroSemanticoService {
         String ctx = contexto.trim();
         PGobject vec = null;
         Optional<float[]> emb = openAiService.tryCreateEmbedding(ctx, usuarioId);
-        if (emb.isPresent()) {
+        if (memoriaEmbeddingSupportsPgvectorOperators() && emb.isPresent()) {
             float[] f = emb.get();
             if (f.length != DIM_VETOR) {
                 log.warn(
@@ -118,6 +138,9 @@ public class CerebroSemanticoService {
         }
         float[] q = query.get();
         if (q.length != DIM_VETOR) {
+            return List.of();
+        }
+        if (!memoriaEmbeddingSupportsPgvectorOperators()) {
             return List.of();
         }
         PGobject probe = pgVector(q);

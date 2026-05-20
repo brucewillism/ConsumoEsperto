@@ -81,7 +81,13 @@ Fluxo no frontend **WhatsApp**:
 
 ### Postgres: memória semântica Jarvis (`memoria_semantica_jarvis`)
 
-O dashboard e projeções podem ler esta tabela. Em arranques sem **pgvector** (`CREATE EXTENSION vector`) ou DDL falhada, antigamente surgia erro 500. O backend tenta criar a tabela no `@PostConstruct` (`SchemaAutoPatchService`); se falhar por falta da extensão, instale pgvector na imagem do Postgres e garanta permissão para `CREATE EXTENSION`, ou crie manualmente a tabela. Enquanto a tabela não existir, o serviço de memória devolve dados vazios em vez de derrubar a API.
+O dashboard e o sentinela leem esta tabela; **sem ela**, podem aparecer erros ao processar WhatsApp/projecções (`relation "memoria_semantica_jarvis" does not exist`). No arranque, `SchemaAutoPatchService` tenta `CREATE EXTENSION vector` e recria DDL idempotente: **se pgvector não estiver instalado** (Postgres Alpine “pelo menos”), criamos a mesma tabela com coluna **`embedding BYTEA`** — memória textual e listagens funcionam; **busca por similaridade com operador `<=>`** fica sem efeito até activar pgvector.
+
+- **Produção (Docker Compose deste repo):** o serviço `postgres` usa **`pgvector/pgvector:pg15`**, suficiente para `CREATE EXTENSION vector` numa primeira subida nova.
+- **Base já criada só com Postgres vanilla:** bastam **pull do novo compose + restart** ou, sem trocar de imagem, deixar o patch criar tabular com BYTEA; para RAG vetorial por transações (`transacao_semantica_index`), preferir Postgres com pgvector.
+
+Enquanto a tabela não existir, alguns métodos (`CerebroSemanticoService`) devolvem listas vazias em vez de derrubar a API inteira.
+
 
 ## Como Subir
 

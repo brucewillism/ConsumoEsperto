@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
+import com.consumoesperto.util.PgVectorJdbcHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.postgresql.util.PGobject;
@@ -31,6 +32,25 @@ public class TransacaoSemanticaIndexService {
     private final TransacaoRepository transacaoRepository;
     private final OpenAiService openAiService;
 
+    private volatile Boolean cachedTransacaoVectorSimilarityOps;
+
+    private boolean transacaoEmbeddingSupportsPgvectorOperators() {
+        Boolean c = cachedTransacaoVectorSimilarityOps;
+        if (c != null) {
+            return c;
+        }
+        synchronized (this) {
+            c = cachedTransacaoVectorSimilarityOps;
+            if (c != null) {
+                return c;
+            }
+            boolean yes = PgVectorJdbcHelper.isVectorEmbeddingColumn(
+                jdbcTemplate, "public", "transacao_semantica_index", "embedding");
+            cachedTransacaoVectorSimilarityOps = yes;
+            return yes;
+        }
+    }
+
     @Async
     public void agendarIndexacao(Long transacaoId) {
         if (transacaoId == null) {
@@ -59,7 +79,7 @@ public class TransacaoSemanticaIndexService {
         Long usuarioId = t.getUsuario().getId();
         Optional<float[]> embOpt = openAiService.tryCreateEmbedding(texto, usuarioId);
         PGobject vec = null;
-        if (embOpt.isPresent()) {
+        if (transacaoEmbeddingSupportsPgvectorOperators() && embOpt.isPresent()) {
             float[] f = embOpt.get();
             if (f.length == DIM_VETOR) {
                 vec = pgVector(f);
@@ -85,6 +105,9 @@ public class TransacaoSemanticaIndexService {
      */
     public String montarContextoParaRag(Long usuarioId, String pergunta, int topK) {
         if (usuarioId == null || pergunta == null || pergunta.isBlank()) {
+            return "";
+        }
+        if (!transacaoEmbeddingSupportsPgvectorOperators()) {
             return "";
         }
         Optional<float[]> query = openAiService.tryCreateEmbedding(pergunta.trim(), usuarioId);

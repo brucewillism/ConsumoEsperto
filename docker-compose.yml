@@ -14,7 +14,9 @@
 
 services:
   postgres:
-    image: postgres:15-alpine
+    # Imagem oficial com pgvector (RAG/memória Jarvis por embedding). Postgres "vanilla" também funciona —
+    # o SchemaAutoPatch cria tabelas com BYTEA até activar CREATE EXTENSION vector.
+    image: pgvector/pgvector:pg15
     container_name: consumo_postgres
     restart: always
     environment:
