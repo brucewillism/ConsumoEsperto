@@ -1,9 +1,14 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { UsuarioService } from '../../services/usuario.service';
+import { MatDialog } from '@angular/material/dialog';
+import { UsuarioService, VincularWhatsappResponse } from '../../services/usuario.service';
 import { ToastService } from '../../services/toast.service';
 import { Usuario } from '../../models/usuario.model';
+import {
+  WhatsappEvolutionQrDialogComponent,
+  WhatsappEvolutionQrDialogData,
+} from '../../shared/whatsapp-evolution-qr-dialog.component';
 
 @Component({
   selector: 'app-whatsapp-config',
@@ -19,7 +24,8 @@ export class WhatsappConfigComponent implements OnInit {
 
   constructor(
     private usuarioService: UsuarioService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private dialog: MatDialog,
   ) {}
 
   ngOnInit(): void {
@@ -49,11 +55,34 @@ export class WhatsappConfigComponent implements OnInit {
 
     this.carregando = true;
     this.usuarioService.vincularWhatsapp(this.numeroWhatsapp.trim()).subscribe({
-      next: (response) => {
+      next: (response: VincularWhatsappResponse) => {
         this.numeroAtual = response?.whatsappNumero || this.numeroWhatsapp.trim();
         this.numeroWhatsapp = this.numeroAtual;
         this.carregando = false;
-        this.toastService.success('WhatsApp vinculado com sucesso.');
+
+        const baseMsg =
+          response?.message || 'WhatsApp vinculado com sucesso.';
+        this.toastService.success(baseMsg);
+
+        if (response?.evolutionWarning) {
+          this.toastService.warning(response.evolutionWarning);
+        }
+
+        const deveMostrarQr =
+          !!response?.evolutionQrCodeDataUri || !!response?.evolutionPairingCode;
+
+        if (deveMostrarQr && !response?.evolutionAlreadyConnected) {
+          const dados: WhatsappEvolutionQrDialogData = {
+            qrDataUri: response.evolutionQrCodeDataUri,
+            pairingCode: response.evolutionPairingCode ?? null,
+            instanceName: response.evolutionInstanceName ?? null,
+          };
+          this.dialog.open(WhatsappEvolutionQrDialogComponent, {
+            width: '480px',
+            maxWidth: '95vw',
+            data: dados,
+          });
+        }
       },
       error: (error) => {
         this.carregando = false;

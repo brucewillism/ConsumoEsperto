@@ -52,6 +52,28 @@ O script `scripts\sincronizar-evolution-env.ps1` alinha o `.env` da Evolution co
 - `DATABASE_CONNECTION_URI` para o banco da Evolution
 - `AUTHENTICATION_API_KEY` compartilhada com o backend
 
+### Backend: URL e API key da Evolution (pareamento pelo app)
+
+Quem faz pedidos `GET /instance/connect/...` e `GET /instance/connectionState/...` ao abrir **WhatsApp → Vincular número** e no modal do QR é o **backend Spring**. O browser do utilizador nunca recebe a chave mestra da Evolution.
+
+- No `.env` (ou variáveis de ambiente Docker), alinhar com as mesmas credenciais que a Evolution espera na header **`apikey`**:
+  - `EVOLUTION_URL` — base HTTP(S) sem barra dupla no path (mapeado para `evolution.url`).
+  - `EVOLUTION_APIKEY` — igual à `AUTHENTICATION_API_KEY` da Evolution (`evolution.apikey` no Spring).
+  - `EVOLUTION_INSTANCE` — nome por defeito da instância (ex.: `ConsumoEsperto`), igual ao criado no Manager/script (`evolution.instance`).
+
+Opcionalmente, por utilizador, na configuracao de IA (`usuario_ai_config` / endpoint `GET/POST /api/config/ia`):
+
+- `evolution_instance_name` — sobrepõe `EVOLUTION_INSTANCE` para esse utilizador ao pedir QR e estado.
+- `evolution_api_key` — sobrepõe `EVOLUTION_APIKEY` se esse utilizador tiver chave dedicada na Evolution.
+
+Fluxo no frontend **WhatsApp**:
+
+1. Grava o número em `POST /api/usuarios/whatsapp/vincular`.
+2. O backend chama a Evolution e devolve `evolutionQrCodeDataUri` e/ou `evolutionPairingCode` quando existirem na resposta.
+3. Um modal faz **polling** a cada 5 s em `GET /api/usuarios/whatsapp/evolution-connection-status`; quando `connected` ficar verdadeiro, considera pareamento feito nesta **instancia** Evolution e fecha o modal.
+
+**Nota:** Se varios utilizadores partilharem **a mesma** instancia Evolution, estado de pareamento (`connected`) e um unico numero WhatsApp Evolution sao globais dessa instancia; o numero **vinculado no perfil** do app continua a servir para identificar o tenant nas mensagens.
+
 ## Como Subir
 
 Para subir a stack completa:

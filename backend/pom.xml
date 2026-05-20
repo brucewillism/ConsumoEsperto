@@ -172,6 +172,13 @@
             <version>3.0.0</version>
         </dependency>
 
+        <!-- QR pairing Evolution: codificar payload Baileys (campo "code") como PNG quando a API não manda PNG pronto -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>3.5.3</version>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
