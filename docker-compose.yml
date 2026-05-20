@@ -94,6 +94,7 @@ services:
         condition: service_healthy
 
   evolution_api:
+    # Imagem em linha com https://github.com/EvolutionAPI/evolution-api (evoapicloud). Variáveis Redis: CACHE_REDIS_* (REDIS_* sozinho costuma falhar silenciosamente / reset na socket).
     image: evoapicloud/evolution-api:latest
     container_name: consumo_evolution
     restart: always
@@ -105,16 +106,22 @@ services:
      - SERVER_URL=${EVOLUTION_SERVER_URL:-${APP_FRONTEND_BASE_URL:-http://localhost:8585}}
      - SERVER_PORT=8585
      - DATABASE_PROVIDER=postgresql
+     # Atenção: caracteres especiais na password Postgres (@ : / #) devem estar URL-encoded no URI ou o contentor pode cair durante arranque.
      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER:-consumo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-consumo_db}?sslmode=disable
+     - DATABASE_CONNECTION_CLIENT_NAME=evolution-ce
      - API_TOKEN=${EVOLUTION_API_KEY:-${EVOLUTION_APIKEY}}
-     - REDIS_ENABLED=true
-     - REDIS_HOST=redis
-     - REDIS_PORT=6379
      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
      - AUTHENTICATION_TYPE=apikey
+     # Alinhado a env oficial da Evolution API v2 (@see evolution-api/env.example)
+     - CACHE_REDIS_ENABLED=${EVOLUTION_CACHE_REDIS_ENABLED:-true}
+     - CACHE_REDIS_URI=redis://${EVOLUTION_CACHE_REDIS_HOST:-redis}:${EVOLUTION_CACHE_REDIS_PORT:-6379}/${EVOLUTION_CACHE_REDIS_DB:-0}
+     - CACHE_REDIS_PREFIX_KEY=${EVOLUTION_CACHE_REDIS_PREFIX_KEY:-evolution-ce}
+     - CACHE_LOCAL_ENABLED=true
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     volumes:
       - evolution_data:/evolution/instances
 
