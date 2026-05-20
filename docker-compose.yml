@@ -99,6 +99,9 @@ services:
     ports:
       - "8585:8585"
     environment:
+     # URL publica onde a Evolution e alcancavel (HTTPS ou host:8585 sem proxy incorrecto).
+     # Sem isto REST /instance/connect costuma responder {"count":0} mesmo com QR no Manager.
+     - SERVER_URL=${EVOLUTION_SERVER_URL:-${APP_FRONTEND_BASE_URL:-http://localhost:8585}}
      - SERVER_PORT=8585
      - DATABASE_PROVIDER=postgresql
      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER:-consumo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-consumo_db}?sslmode=disable

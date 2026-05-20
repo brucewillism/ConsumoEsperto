@@ -189,13 +189,20 @@ public class UsuarioController {
 
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(usuario.getId());
 
+            boolean temQrOuCodigo = (pairing.getQrCodeDataUri() != null && !pairing.getQrCodeDataUri().isBlank())
+                || (pairing.getPairingCode() != null && !pairing.getPairingCode().isBlank());
+            boolean pareamentoJaOk = pairing.isAlreadyConnected() || temQrOuCodigo;
+
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("status", "success");
-            body.put(
-                "message",
-                pairing.isAlreadyConnected()
-                    ? "Numero de WhatsApp vinculado. A Evolution ja estava pareada nesta instancia."
-                    : "Numero de WhatsApp vinculado com sucesso. Escaneie o QR quando aparecer ou use pairingCode.");
+            String message = pairing.isAlreadyConnected()
+                ? "Numero de WhatsApp vinculado. A Evolution ja estava pareada nesta instancia."
+                : pareamentoJaOk
+                    ? "Numero de WhatsApp vinculado com sucesso. Escaneie o QR quando aparecer ou use pairingCode."
+                    : "Numero gravado na app; a Evolution nao devolveu QR pela REST agora "
+                        + "(problema conhecido em algumas versoes v2). Veja QR no Manager da Evolution ou ajuste "
+                        + "EVOLUTION_SERVER_URL e considere atualizar a Evolution API.";
+            body.put("message", message);
             body.put("usuarioId", atualizado.getId());
             body.put("whatsappNumero", atualizado.getWhatsappNumero());
             aplicarCamposEvolutionPairing(body, pairing);
