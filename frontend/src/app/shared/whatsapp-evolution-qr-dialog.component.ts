@@ -6,6 +6,10 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatButtonModule } from '@angular/material/button';
 import { UsuarioService } from '../services/usuario.service';
 import { ToastService } from '../services/toast.service';
+import {
+  coerceEvolutionQrDataUri,
+  coerceEvolutionUserFacingText,
+} from './evolution-response-coerce';
 
 /** Dados para o modal de QR Evolution. */
 export interface WhatsappEvolutionQrDialogData {
@@ -127,9 +131,11 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
     private toastService: ToastService
   ) {
     this.displayInstance = data.instanceName ?? null;
-    this.displayQr = data.qrDataUri ?? undefined;
-    this.displayPairing = data.pairingCode ?? undefined;
-    this.bannerWarning = data.evolutionWarning ?? null;
+    this.displayQr = coerceEvolutionQrDataUri(data.qrDataUri ?? undefined);
+    this.displayPairing =
+      coerceEvolutionUserFacingText(data.pairingCode ?? undefined) ?? undefined;
+    this.bannerWarning =
+      coerceEvolutionUserFacingText(data.evolutionWarning ?? undefined) ?? null;
 
     this.pollSub = timer(0, 5000)
       .pipe(
@@ -163,16 +169,20 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
           this.finishConnected();
           return;
         }
-        if (p?.evolutionQrCodeDataUri) {
-          this.displayQr = p.evolutionQrCodeDataUri;
+        const qrImg = coerceEvolutionQrDataUri(p?.evolutionQrCodeDataUri ?? undefined);
+        if (qrImg) {
+          this.displayQr = qrImg;
         }
-        if (p?.evolutionPairingCode) {
-          this.displayPairing = p.evolutionPairingCode;
+        const pairTxt =
+          coerceEvolutionUserFacingText(p?.evolutionPairingCode ?? undefined);
+        if (pairTxt) {
+          this.displayPairing = pairTxt;
         }
         if (this.displayQr || this.displayPairing) {
           this.bannerWarning = null;
-        } else if (p?.evolutionWarning) {
-          this.bannerWarning = p.evolutionWarning;
+        } else if (p?.evolutionWarning != null) {
+          this.bannerWarning =
+            coerceEvolutionUserFacingText(p.evolutionWarning) ?? null;
         }
       });
   }
