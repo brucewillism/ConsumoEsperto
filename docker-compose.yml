@@ -50,6 +50,7 @@ services:
       SERVER_PORT: 8087
       SERVER_FORWARD_HEADERS_STRATEGY: FRAMEWORK
 
+      # Bloco deve ser sempre chave: valor (estilo mapa). Nunca use "- EVOLUTION_..." aqui — em YAML isso vira item de lista e quebra o bloco environment.
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-consumo_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-consumo}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
