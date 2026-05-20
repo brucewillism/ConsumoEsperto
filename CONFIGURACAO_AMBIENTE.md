@@ -58,7 +58,7 @@ Quem faz pedidos `GET /instance/connect/...` e `GET /instance/connectionState/..
 
 - No `.env` (ou variáveis de ambiente Docker), alinhar com as mesmas credenciais que a Evolution espera na header **`apikey`**:
   - `EVOLUTION_URL` — base HTTP(S) sem barra dupla no path (mapeado para `evolution.url`).
-  - `EVOLUTION_APIKEY` — igual à `AUTHENTICATION_API_KEY` da Evolution (`evolution.apikey` no Spring).
+  - `EVOLUTION_APIKEY` **ou** `EVOLUTION_API_KEY` — igual à `AUTHENTICATION_API_KEY` / `API_TOKEN` da Evolution (`evolution.apikey` no Spring lê uma ou outra; o Compose deste repo usa `EVOLUTION_API_KEY`).
   - `EVOLUTION_INSTANCE` — nome por defeito da instância (ex.: `ConsumoEsperto`), igual ao criado no Manager/script (`evolution.instance`).
 
 Opcionalmente, por utilizador, na configuracao de IA (`usuario_ai_config` / endpoint `GET/POST /api/config/ia`):

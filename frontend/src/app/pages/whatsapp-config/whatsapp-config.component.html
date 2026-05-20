@@ -37,8 +37,9 @@
         <li>Use o mesmo número que envia mensagens para o bot (texto ou voz).</li>
         <li>Formato recomendado: +55 DDD número.</li>
         <li>
-          O servidor chama a Evolution com <code>EVOLUTION_URL</code> e <code>EVOLUTION_APIKEY</code> (.env Docker); na
-          configuração de IA pode definir instância e chave apenas para o seu utilizador.
+          O servidor chama a Evolution com <code>EVOLUTION_URL</code> e a mesma chave que a Evolution usa
+          (<code>EVOLUTION_APIKEY</code> ou <code>EVOLUTION_API_KEY</code> no Docker / <code>.env</code> — no Spring vira
+          <code>evolution.apikey</code>).
         </li>
         <li>
           Depois de vincular, se aparecer o QR: mantenha o modal aberto — a app verifica a cada 5 s se a instância ficou ligada e
