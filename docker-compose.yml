@@ -56,7 +56,7 @@ services:
 
       JWT_SECRET: ${JWT_SECRET}
 
-      EVOLUTION_URL: http://evolution_api:8585
+      EVOLUTION_URL: http://consumo_evolution:8585
       EVOLUTION_APIKEY: ${EVOLUTION_API_KEY:-${EVOLUTION_APIKEY}}
       EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-ConsumoEsperto}
 
@@ -102,6 +102,9 @@ services:
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER:-consumo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-consumo_db}?sslmode=disable
       - API_TOKEN=${EVOLUTION_API_KEY:-${EVOLUTION_APIKEY}}
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_HOST=consumo_redis
+      - CACHE_REDIS_PORT=6379
     depends_on:
       postgres:
         condition: service_healthy

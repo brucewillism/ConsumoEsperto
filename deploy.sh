@@ -1,11 +1,35 @@
 #!/bin/bash
-
 # =========================================================
 #         🚀 CONSUMOESPERTO AUTO DEPLOY SYSTEM 🚀
 # =========================================================
 #         Deploy automático FULL STACK - Versão Ultra Safe
 #         Angular + Spring Boot + Docker + PostgreSQL
 # =========================================================
+
+echo "========================================="
+echo "🧹 LIMPANDO PORTAS E PROCESSOS PRESOS..."
+echo "========================================="
+
+# 1. Derruba o Docker limpando volumes órfãos e containers antigos
+docker compose down --remove-orphans
+
+# 2. Força a liberação das portas matando qualquer processo zumbi (Java/Node/Nginx) no host
+# Porta 8087 (Backend), 8181 (Frontend) e 8585 (Evolution API)
+for port in 8087 8181 8585; do
+    PID=$(sudo lsof -t -i:$port)
+    if [ ! -z "$PID" ]; then
+        echo "🚨 Encontrado processo zumbi $PID na porta $port. Eliminando..."
+        sudo kill -9 $PID
+    fi
+done
+
+echo "✅ Portas limpas! Iniciando build do ambiente..."
+
+# 3. O restante do seu script original continua daqui para baixo...
+# Exemplo:
+# git pull
+# docker compose up -d --build
+
 
 set -e
 
