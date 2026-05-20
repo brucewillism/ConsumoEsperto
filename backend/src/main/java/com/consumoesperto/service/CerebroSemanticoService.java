@@ -10,6 +10,7 @@ import com.consumoesperto.util.FinanceTextoUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.postgresql.util.PGobject;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +47,32 @@ public class CerebroSemanticoService {
     private final OpenAiService openAiService;
     private final TransacaoRepository transacaoRepository;
 
+    private volatile boolean loggedMemoriaUnavailable;
+
+    private static boolean isMemoriaSemanticsUnavailable(DataAccessException e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            String m = t.getMessage();
+            if (m == null) {
+                continue;
+            }
+            if (m.contains("memoria_semantica_jarvis") && m.contains("does not exist")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void logMemoriaUnavailableOnce(Throwable e) {
+        if (loggedMemoriaUnavailable) {
+            return;
+        }
+        loggedMemoriaUnavailable = true;
+        log.warn(
+            "Memória semântica J.A.R.V.I.S. indisponível (tabela ausente ou sem pgvector). "
+                + "Aplique patch de BD ou rode SchemaAutoPatch ao subir — detalhes: {}",
+            e.getMessage() != null ? e.getMessage() : e.toString());
+    }
+
     @Transactional
     public void gravarMemoria(Long usuarioId, String contexto, MemoriaCategoriaOrigem categoria) {
         if (usuarioId == null || contexto == null || contexto.isBlank() || categoria == null) {
@@ -65,12 +92,20 @@ public class CerebroSemanticoService {
                 vec = pgVector(f);
             }
         }
-        jdbcTemplate.update(
-            "INSERT INTO memoria_semantica_jarvis (usuario_id, contexto, embedding, categoria_origem) VALUES (?,?,?,?)",
-            usuarioId,
-            ctx,
-            vec,
-            categoria.name());
+        try {
+            jdbcTemplate.update(
+                "INSERT INTO memoria_semantica_jarvis (usuario_id, contexto, embedding, categoria_origem) VALUES (?,?,?,?)",
+                usuarioId,
+                ctx,
+                vec,
+                categoria.name());
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return;
+            }
+            throw dex;
+        }
     }
 
     public List<MemoriaSemanticaSimilaridadeDTO> buscarTop3Similares(Long usuarioId, String textoConsulta) {
@@ -91,15 +126,23 @@ public class CerebroSemanticoService {
             + "WHERE usuario_id = ? AND embedding IS NOT NULL "
             + "ORDER BY embedding <=> (?::vector) "
             + "LIMIT " + TOP_K;
-        return jdbcTemplate.query(
-            connection -> {
-                var ps = connection.prepareStatement(sql);
-                ps.setObject(1, probe);
-                ps.setLong(2, usuarioId);
-                ps.setObject(3, probe);
-                return ps;
-            },
-            (rs, rowNum) -> mapSimilarRow(rs));
+        try {
+            return jdbcTemplate.query(
+                connection -> {
+                    var ps = connection.prepareStatement(sql);
+                    ps.setObject(1, probe);
+                    ps.setLong(2, usuarioId);
+                    ps.setObject(3, probe);
+                    return ps;
+                },
+                (rs, rowNum) -> mapSimilarRow(rs));
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return List.of();
+            }
+            throw dex;
+        }
     }
 
     public List<String> listarContextosMemoriaNoMesCalendario(Long usuarioId, int mes, int ano) {
@@ -109,7 +152,15 @@ public class CerebroSemanticoService {
         String sql = "SELECT contexto FROM memoria_semantica_jarvis WHERE usuario_id = ? "
             + "AND EXTRACT(MONTH FROM data_registro) = ? AND EXTRACT(YEAR FROM data_registro) = ? "
             + "ORDER BY data_registro DESC LIMIT 80";
-        return jdbcTemplate.query(sql, (rs, rn) -> rs.getString(1), usuarioId, mes, ano);
+        try {
+            return jdbcTemplate.query(sql, (rs, rn) -> rs.getString(1), usuarioId, mes, ano);
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return List.of();
+            }
+            throw dex;
+        }
     }
 
     /**
@@ -126,7 +177,16 @@ public class CerebroSemanticoService {
         }
         String sql = "SELECT contexto FROM memoria_semantica_jarvis WHERE usuario_id = ? AND categoria_origem = 'HABITO' "
             + "ORDER BY data_registro DESC LIMIT 80";
-        List<String> ctxs = jdbcTemplate.query(sql, (rs, i) -> rs.getString(1), usuarioId);
+        List<String> ctxs;
+        try {
+            ctxs = jdbcTemplate.query(sql, (rs, i) -> rs.getString(1), usuarioId);
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return Optional.empty();
+            }
+            throw dex;
+        }
         for (String ctx : ctxs) {
             if (ctx == null || ctx.isBlank()) {
                 continue;
@@ -196,17 +256,25 @@ public class CerebroSemanticoService {
         int cap = Math.min(limite, 120);
         String sql = "SELECT id, contexto, categoria_origem, data_registro, (embedding IS NOT NULL) AS tem_emb "
             + "FROM memoria_semantica_jarvis WHERE usuario_id = ? ORDER BY data_registro DESC LIMIT ?";
-        return jdbcTemplate.query(sql, (rs, rowNum) -> {
-            Timestamp ts = rs.getTimestamp("data_registro");
-            Instant inst = ts != null ? ts.toInstant() : Instant.EPOCH;
-            return MemoriaSemanticaTimelineItemDTO.builder()
-                .id(rs.getLong("id"))
-                .contexto(rs.getString("contexto"))
-                .categoriaOrigem(rs.getString("categoria_origem"))
-                .dataRegistro(inst)
-                .temEmbedding(rs.getBoolean("tem_emb"))
-                .build();
-        }, usuarioId, cap);
+        try {
+            return jdbcTemplate.query(sql, (rs, rowNum) -> {
+                Timestamp ts = rs.getTimestamp("data_registro");
+                Instant inst = ts != null ? ts.toInstant() : Instant.EPOCH;
+                return MemoriaSemanticaTimelineItemDTO.builder()
+                    .id(rs.getLong("id"))
+                    .contexto(rs.getString("contexto"))
+                    .categoriaOrigem(rs.getString("categoria_origem"))
+                    .dataRegistro(inst)
+                    .temEmbedding(rs.getBoolean("tem_emb"))
+                    .build();
+            }, usuarioId, cap);
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return List.of();
+            }
+            throw dex;
+        }
     }
 
     private static MemoriaSemanticaSimilaridadeDTO mapSimilarRow(ResultSet rs) throws SQLException {

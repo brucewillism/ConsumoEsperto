@@ -66,6 +66,8 @@ Opcionalmente, por utilizador, na configuracao de IA (`usuario_ai_config` / endp
 - `evolution_instance_name` — sobrepõe `EVOLUTION_INSTANCE` para esse utilizador ao pedir QR e estado.
 - `evolution_api_key` — sobrepõe `EVOLUTION_APIKEY` se esse utilizador tiver chave dedicada na Evolution.
 
+Opcionalmente, se o QR demorar ou a Evolution devolver `qrcode` vazio nos primeiros segundos, aumente **`EVOLUTION_PAIRING_CONNECT_RETRIES`** e **`EVOLUTION_PAIRING_CONNECT_PAUSE_MS`** (`evolution.pairing.connect.*` em `application.properties`). A Evolution faz internamente espera (~2 s) antes de devolver QR quando o estado está `close`.
+
 Fluxo no frontend **WhatsApp**:
 
 1. Grava o número em `POST /api/usuarios/whatsapp/vincular`.
@@ -73,6 +75,10 @@ Fluxo no frontend **WhatsApp**:
 3. Um modal faz **polling** a cada 5 s em `GET /api/usuarios/whatsapp/evolution-connection-status`; quando `connected` ficar verdadeiro, considera pareamento feito nesta **instancia** Evolution e fecha o modal.
 
 **Nota:** Se varios utilizadores partilharem **a mesma** instancia Evolution, estado de pareamento (`connected`) e um unico numero WhatsApp Evolution sao globais dessa instancia; o numero **vinculado no perfil** do app continua a servir para identificar o tenant nas mensagens.
+
+### Postgres: memória semântica Jarvis (`memoria_semantica_jarvis`)
+
+O dashboard e projeções podem ler esta tabela. Em arranques sem **pgvector** (`CREATE EXTENSION vector`) ou DDL falhada, antigamente surgia erro 500. O backend tenta criar a tabela no `@PostConstruct` (`SchemaAutoPatchService`); se falhar por falta da extensão, instale pgvector na imagem do Postgres e garanta permissão para `CREATE EXTENSION`, ou crie manualmente a tabela. Enquanto a tabela não existir, o serviço de memória devolve dados vazios em vez de derrubar a API.
 
 ## Como Subir
 

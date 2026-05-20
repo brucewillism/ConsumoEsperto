@@ -655,25 +655,36 @@ public class SchemaAutoPatchService {
                 String schema = rawSchema.replace("\"", "");
                 String qualifiedUsuarios = schema + ".usuarios";
                 String qualified = schema + ".memoria_semantica_jarvis";
-                executeDdlAutocommit(
-                    "CREATE TABLE IF NOT EXISTS " + qualified + " ("
-                        + "id BIGSERIAL PRIMARY KEY,"
-                        + "usuario_id BIGINT NOT NULL REFERENCES " + qualifiedUsuarios + "(id) ON DELETE CASCADE,"
-                        + "contexto TEXT NOT NULL,"
-                        + "embedding vector(1536),"
-                        + "data_registro TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),"
-                        + "categoria_origem VARCHAR(32) NOT NULL "
-                        + "CHECK (categoria_origem IN ('FINANCAS','HABITO','AGENDA'))"
-                        + ")"
-                );
-                executeDdlAutocommit(
-                    "CREATE INDEX IF NOT EXISTS idx_mem_sem_jarvis_usuario_registro ON "
-                        + qualified + " (usuario_id, data_registro DESC)"
-                );
+                try {
+                    executeDdlAutocommit(
+                        "CREATE TABLE IF NOT EXISTS " + qualified + " ("
+                            + "id BIGSERIAL PRIMARY KEY,"
+                            + "usuario_id BIGINT NOT NULL REFERENCES " + qualifiedUsuarios + "(id) ON DELETE CASCADE,"
+                            + "contexto TEXT NOT NULL,"
+                            + "embedding vector(1536),"
+                            + "data_registro TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),"
+                            + "categoria_origem VARCHAR(32) NOT NULL "
+                            + "CHECK (categoria_origem IN ('FINANCAS','HABITO','AGENDA'))"
+                            + ")"
+                    );
+                    executeDdlAutocommit(
+                        "CREATE INDEX IF NOT EXISTS idx_mem_sem_jarvis_usuario_registro ON "
+                            + qualified + " (usuario_id, data_registro DESC)"
+                    );
+                } catch (Exception e) {
+                    log.warn(
+                        "Schema patch memoria_semantica_jarvis [{}] falhou: instalar extensao pgvector no Postgres e privilegio CREATE EXTENSION,"
+                        + " ou criar manualmente {}. Mensagem: {}",
+                        schema,
+                        qualified,
+                        e.getMessage());
+                }
             }
-            log.info("Schema patch: memoria_semantica_jarvis verificada em {} schema(s).", schemas.size());
+            log.info("Schema patch: memoria_semantica_jarvis processada para {} schema(s); veja WARN se pgvector falhar.", schemas.size());
         } catch (Exception e) {
-            log.warn("Schema patch memoria_semantica_jarvis: {}", e.getMessage());
+            log.warn(
+                "Schema patch memória semântica (liste schemas / extensões): {}",
+                e.getMessage());
         }
     }
 

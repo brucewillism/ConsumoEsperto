@@ -60,6 +60,15 @@ public class EvolutionPairingService {
     @Value("${evolution.instance:ConsumoEsperto}")
     private String defaultEvolutionInstance;
 
+    /**
+     * Tentativas de GET /instance/connect (a Evolution faz delay fixo ~2 s após connect interno quando state=close — ver {@code InstanceController}). Valor por defeito 6 × 4 s permite ~22 s até desistir.
+     */
+    @Value("${evolution.pairing.connect.retries:6}")
+    private int connectRetries;
+
+    @Value("${evolution.pairing.connect.pauseMs:4000}")
+    private long connectPauseMs;
+
     @PostConstruct
     void initRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -90,15 +99,15 @@ public class EvolutionPairingService {
         try {
             String urlBase = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/connect/" + cred.instanceName);
             String url = appendNumberQueryIfPresent(urlBase, usuarioId);
-
-            for (int attempt = 0; attempt < 3; attempt++) {
-                boolean lastAttempt = attempt == 2;
+            int retries = Math.max(1, Math.min(connectRetries, 12));
+            for (int attempt = 0; attempt < retries; attempt++) {
+                boolean lastAttempt = attempt == retries - 1;
                 String body = evolutionGet(url, cred.apiKeyHeader);
                 if (body == null || body.isBlank()) {
                     if (lastAttempt) {
                         return warnOnly(cred.instanceName, "Resposta vazia de /instance/connect");
                     }
-                    pauseMillis(2000);
+                    pauseMillis(safePause());
                     continue;
                 }
 
@@ -109,14 +118,14 @@ public class EvolutionPairingService {
                 }
                 if (!lastAttempt) {
                     log.debug(
-                        "/instance/connect ainda sem QR pareado (instancia={}); nova tentativa após espera ({}/2)",
-                        cred.instanceName, attempt + 1);
-                    pauseMillis(2000);
+                        "/instance/connect ainda sem QR pareado (instancia={}); nova tentativa após espera ({}/{})",
+                        cred.instanceName, attempt + 1, retries - 1);
+                    pauseMillis(safePause());
                 }
             }
             return warnOnly(
                 cred.instanceName,
-                "Não foi possível obter o QR pela REST da Evolution em três tentativas. Veja o Manager ou o websocket da Evolution.");
+                "Não foi possível obter o QR pela REST da Evolution após várias tentativas. Veja o Manager ou o websocket da Evolution.");
 
         } catch (HttpClientErrorException | HttpServerErrorException e) {
             String msg = summarizeHttpError(e.getRawStatusCode(),
@@ -248,7 +257,7 @@ public class EvolutionPairingService {
         String warn = connectCode.isPresent()
             ? "Evolution não devolveu PNG base64 nem pairingCode utilizável pela REST neste momento "
                 + "(o código interno WhatsApp existe mas não pode ser convertido a QR pelo servidor). Veja o Manager ou websocket."
-            : "Evolution não devolveu dados de pairing por REST nesta chamada após esperas curtas — veja QR no Manager da Evolution.";
+            : "Evolution não devolveu dados de pairing por REST após tentativas repetidas — veja QR no Manager da Evolution.";
         return EvolutionPairingOutcomeDTO.builder()
             .resolvedInstanceName(instanceName)
             .alreadyConnected(false)
@@ -279,6 +288,11 @@ public class EvolutionPairingService {
             .filter(d -> !d.isBlank() && d.length() >= 10 && d.length() <= 17);
     }
 
+    private long safePause() {
+        long ms = Math.max(500L, Math.min(connectPauseMs > 0 ? connectPauseMs : 4000L, 15000L));
+        return ms;
+    }
+
     private static void pauseMillis(long ms) {
         try {
             Thread.sleep(ms);
@@ -296,7 +310,7 @@ public class EvolutionPairingService {
     }
 
     /**
-     * Mantém até 3 GETs espaçados quando ainda não há imagem pairing — comum quando o Node devolve objeto qrcode inicialmente vazio.
+     * Mantém vários GETs espaçados (config: evolution.pairing.connect.*) quando ainda não há imagem pairing — comum quando o Node devolve objeto qrcode inicialmente vazio.
      */
     private boolean evolutionMayStillProduceQr(JsonNode root) {
         if (root.path("error").asBoolean(false)) {
