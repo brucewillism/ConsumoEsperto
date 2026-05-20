@@ -57,7 +57,7 @@ O script `scripts\sincronizar-evolution-env.ps1` alinha o `.env` da Evolution co
 Quem faz pedidos `GET /instance/connect/...` e `GET /instance/connectionState/...` ao abrir **WhatsApp → Vincular número** e no modal do QR é o **backend Spring**. O browser do utilizador nunca recebe a chave mestra da Evolution.
 
 - No `.env` (ou variáveis de ambiente Docker), alinhar com as mesmas credenciais que a Evolution espera na header **`apikey`**:
-  - `EVOLUTION_URL` — base HTTP(S) sem barra dupla no path (mapeado para `evolution.url`).
+  - `EVOLUTION_URL` — base HTTP(S) sem barra dupla no path (`evolution.url`). **No Docker Compose do repo**, o backend deve usar **`http://evolution_api:8585`** para falar diretamente com o contentor da Evolution (não usar a URL pública `/evolution` dentro da rede Docker — evita respostas HTML do proxy/WAF em vez do JSON da API).
   - `EVOLUTION_APIKEY` **ou** `EVOLUTION_API_KEY` — igual à `AUTHENTICATION_API_KEY` / `API_TOKEN` da Evolution (`evolution.apikey` no Spring lê uma ou outra; o Compose deste repo usa `EVOLUTION_API_KEY`).
   - `EVOLUTION_INSTANCE` — nome por defeito da instância (ex.: `ConsumoEsperto`), igual ao criado no Manager/script (`evolution.instance`).
 

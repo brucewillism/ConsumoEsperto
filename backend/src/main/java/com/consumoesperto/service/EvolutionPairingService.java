@@ -210,12 +210,16 @@ public class EvolutionPairingService {
             return lastAttempt ? warnOnly(instanceName, "Resposta JSON invalida da Evolution.") : null;
         }
 
-        if (root.path("error").asBoolean(false)) {
+        if (isEvolutionJsonError(root)) {
             String msg = firstNonBlank(nodeText(root, "message"));
             return warnOnly(instanceName, msg.isBlank() ? "Evolution devolveu erro" : msg);
         }
 
+        JsonNode layered = unwrapDataLayer(root);
         Optional<String> stAfter = extractStateFromPayload(root);
+        if (stAfter.isEmpty()) {
+            stAfter = extractStateFromPayload(layered);
+        }
         if (stAfter.isPresent() && interpretAsWaConnected(stAfter.get())) {
             return EvolutionPairingOutcomeDTO.builder()
                 .resolvedInstanceName(instanceName)
@@ -224,8 +228,8 @@ public class EvolutionPairingService {
                 .build();
         }
 
-        String pairing = extractPairingCode(root);
-        Optional<String> qrUri = resolveQrAsDataUri(root);
+        String pairing = firstNonBlank(extractPairingFields(layered), extractPairingFields(root));
+        Optional<String> qrUri = resolveQrAsDataUri(root, layered);
 
         EvolutionPairingOutcomeDTO.EvolutionPairingOutcomeDTOBuilder b = EvolutionPairingOutcomeDTO.builder()
             .resolvedInstanceName(instanceName)
@@ -242,7 +246,7 @@ public class EvolutionPairingService {
             return b.hasAlternativePairingHints(true).build();
         }
 
-        Optional<String> connectCode = firstMeaningfulCode(root);
+        Optional<String> connectCode = firstMeaningfulCode(root, layered);
         if (connectCode.isPresent()) {
             Optional<String> generated = qrPngFromString(connectCode.get());
             if (generated.isPresent()) {
@@ -250,7 +254,7 @@ public class EvolutionPairingService {
             }
         }
 
-        if (!lastAttempt && evolutionMayStillProduceQr(root)) {
+        if (!lastAttempt && evolutionMayStillProduceQr(root, layered)) {
             return null;
         }
 
@@ -301,28 +305,69 @@ public class EvolutionPairingService {
         }
     }
 
-    private String extractPairingCode(JsonNode root) {
+    private JsonNode unwrapDataLayer(JsonNode root) {
+        if (root != null && root.isObject()) {
+            JsonNode data = root.get("data");
+            if (data != null && !data.isMissingNode()) {
+                return data.isObject() || data.isArray() ? data : root;
+            }
+        }
+        return root;
+    }
+
+    /** Algumas versões usam erro boolean ou string "BadRequestException: …". */
+    private static boolean isEvolutionJsonError(JsonNode root) {
+        JsonNode err = root == null ? null : root.get("error");
+        if (err == null || err.isNull()) {
+            return false;
+        }
+        if (err.isBoolean()) {
+            return err.asBoolean(false);
+        }
+        if (err.isTextual()) {
+            String t = err.asText("").trim();
+            return "true".equalsIgnoreCase(t) || t.toUpperCase(Locale.ROOT).startsWith("BADREQUEST")
+                || t.toUpperCase(Locale.ROOT).startsWith("ERROR");
+        }
+        return false;
+    }
+
+    /** Campos de pairing num único objeto JSON (sem desembrulhar <code>data</code>). */
+    private String extractPairingFields(JsonNode r) {
+        if (r == null || r.isMissingNode()) {
+            return "";
+        }
         return firstNonBlank(
-            nodeText(root, "pairingCode"),
-            nodeText(root.path("qrcode"), "pairingCode"),
-            nodeText(root.path("instance").path("qrcode"), "pairingCode")
+            nodeText(r, "pairingCode"),
+            nodeText(r, "pairing_code"),
+            nestedAsText(r.path("qrCode"), "pairingCode"),
+            nestedAsText(r.path("qr_code"), "pairing_code"),
+            nodeText(r.path("qrcode"), "pairingCode"),
+            nestedAsText(r.path("qrcode"), "pairingCode"),
+            nestedAsText(r.path("qrcode"), "pairing_code"),
+            nodeText(r.path("instance").path("qrcode"), "pairingCode"),
+            nodeText(r.path("instance").path("qrcode"), "pairing_code")
         );
     }
 
     /**
      * Mantém vários GETs espaçados (config: evolution.pairing.connect.*) quando ainda não há imagem pairing — comum quando o Node devolve objeto qrcode inicialmente vazio.
      */
-    private boolean evolutionMayStillProduceQr(JsonNode root) {
-        if (root.path("error").asBoolean(false)) {
+    private boolean evolutionMayStillProduceQr(JsonNode root, JsonNode layered) {
+        if (isEvolutionJsonError(root)) {
             return false;
         }
-        if (!extractPairingCode(root).isBlank()) {
+        if (!firstNonBlank(extractPairingFields(layered), extractPairingFields(root)).isBlank()) {
             return false;
         }
-        if (resolveQrAsDataUri(root).isPresent()) {
+        if (resolveQrAsDataUri(root, layered).isPresent()) {
             return false;
         }
         Optional<String> stOpt = extractStateFromPayload(root);
+        if (stOpt.isPresent() && interpretAsWaConnected(stOpt.get())) {
+            return false;
+        }
+        stOpt = extractStateFromPayload(layered);
         if (stOpt.isPresent() && interpretAsWaConnected(stOpt.get())) {
             return false;
         }
@@ -330,8 +375,12 @@ public class EvolutionPairingService {
     }
 
     private Optional<String> extractStateFromPayload(JsonNode root) {
+        if (root == null || root.isMissingNode()) {
+            return Optional.empty();
+        }
         String s = firstNonBlank(
             nodeText(root.path("instance"), "state"),
+            nodeText(root.path("connection"), "state"),
             nodeText(root, "state"),
             nodeText(root.path("instance"), "status"),
             nodeText(root, "connectionState")
@@ -339,22 +388,30 @@ public class EvolutionPairingService {
         return Optional.ofNullable(trimToNull(s));
     }
 
-    private Optional<String> resolveQrAsDataUri(JsonNode root) {
-        String blob = pickFirstQrBase64Field(root);
-        if (blob == null || blob.isBlank()) {
-            return Optional.empty();
+    private Optional<String> resolveQrAsDataUri(JsonNode... nodes) {
+        for (JsonNode n : nodes) {
+            String blob = pickFirstQrBase64Field(n);
+            if (blob != null && !blob.isBlank()) {
+                return Optional.of(normalizeRasterToDataUri(blob));
+            }
         }
-        return Optional.of(normalizeRasterToDataUri(blob));
+        return Optional.empty();
     }
 
     private String pickFirstQrBase64Field(JsonNode root) {
+        if (root == null || root.isMissingNode()) {
+            return "";
+        }
         /* Nunca usar o campo Baileys "code" como base64 — não é PNG; causa Data URI corrupto ou falha UX. */
         return firstNonBlank(
             nestedAsText(root, "base64"),
+            nestedAsText(root, "pngBase64"),
             nestedAsText(root.path("qrcode"), "base64"),
+            nestedAsText(root.path("qrcode"), "pngBase64"),
             nestedAsText(root.path("qr"), "base64"),
             nodeText(root, "qr"),
             nodeText(root, "qrCode"),
+            nodeText(root, "qr_base64"),
             nodeText(root, "QRCode"),
             nodeText(root.path("data"), "base64"),
             nodeText(root.path("result"), "base64"),
@@ -376,7 +433,14 @@ public class EvolutionPairingService {
         return node.asText("").trim();
     }
 
-    private Optional<String> firstMeaningfulCode(JsonNode root) {
+    private Optional<String> firstMeaningfulCode(JsonNode root, JsonNode layered) {
+        return firstMeaningfulCodeOne(root).or(() -> firstMeaningfulCodeOne(layered));
+    }
+
+    private Optional<String> firstMeaningfulCodeOne(JsonNode root) {
+        if (root == null || root.isMissingNode()) {
+            return Optional.empty();
+        }
         String c = nodeText(root, "code");
         if (!c.isBlank()) {
             return Optional.of(c);

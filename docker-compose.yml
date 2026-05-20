@@ -56,7 +56,8 @@ services:
 
       JWT_SECRET: ${JWT_SECRET}
 
-      EVOLUTION_URL: https://consumoesperto.brucew07.com.br/evolution
+      # Dentro da stack Docker usar o servico direto (sem /evolution no path). URLs publicas com proxy falham ou devolvem HTML.
+      EVOLUTION_URL: ${EVOLUTION_URL:-http://evolution_api:8585}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
       EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-ConsumoEsperto}
 
