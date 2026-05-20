@@ -35,6 +35,7 @@ import java.util.EnumMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Pareamento WhatsApp na Evolution API (QR / código) — usando {@code evolution.url}, {@code evolution.apikey}
@@ -69,6 +70,15 @@ public class EvolutionPairingService {
     @Value("${evolution.pairing.connect.pauseMs:4000}")
     private long connectPauseMs;
 
+    /** TTL do cache credenciais + número WhatsApp (evita avalanche Hibernate no polling / 5s). */
+    @Value("${evolution.pairing.cred-cache-ms:25000}")
+    private long pairingCredCacheMs;
+
+    /** Quando true, regista WARN com corpo JSON sanitizado sempre que não há QR/pairingCode mas há aviso Evolution. */
+    @Value("${evolution.pairing.log-weak-response:false}")
+    private boolean logWeakEvolutionResponses;
+
+    private final ConcurrentHashMap<Long, PairingCredCacheEntry> pairingCredCache = new ConcurrentHashMap<>();
     @PostConstruct
     void initRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -80,8 +90,10 @@ public class EvolutionPairingService {
     /**
      * Chama Evolution {@code GET /instance/connect/:instance}, para exibir QR no cliente.
      */
+    @Transactional(readOnly = true)
     public EvolutionPairingOutcomeDTO invokeInstanceConnect(Long usuarioId) {
-        ResolvedEvolutionCred cred = resolveCredentials(usuarioId);
+        PairingCredCacheEntry cached = pairingCredSnapshot(usuarioId);
+        ResolvedEvolutionCred cred = cached.cred;
         if (cred.apiKeyHeader.isBlank()
             || evolutionUrl == null || evolutionUrl.isBlank()) {
             return warnOnly(cred.instanceName, "Evolution API não configurada (evolution.url / evolution.apikey)");
@@ -98,7 +110,7 @@ public class EvolutionPairingService {
 
         try {
             String urlBase = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/connect/" + cred.instanceName);
-            String url = appendNumberQueryIfPresent(urlBase, usuarioId);
+            String url = appendNumberQueryIfPresent(urlBase, cached.whatsappDigits);
             int retries = Math.max(1, Math.min(connectRetries, 12));
             for (int attempt = 0; attempt < retries; attempt++) {
                 boolean lastAttempt = attempt == retries - 1;
@@ -111,9 +123,10 @@ public class EvolutionPairingService {
                     continue;
                 }
 
-                JsonNode root = objectMapper.readTree(body);
+                JsonNode root = unwrapTopLevelEvolutionEnvelope(objectMapper.readTree(body));
                 EvolutionPairingOutcomeDTO outcome = processConnectBody(root, cred.instanceName, lastAttempt);
                 if (outcome != null) {
+                    maybeLogWeakPairingResponse(cred.instanceName, attempt, retries, body, outcome);
                     return outcome;
                 }
                 if (!lastAttempt) {
@@ -138,19 +151,58 @@ public class EvolutionPairingService {
         }
     }
 
+    @Transactional(readOnly = true)
     public boolean isInstanceConnectedForUser(Long usuarioId) {
-        ResolvedEvolutionCred cred = resolveCredentials(usuarioId);
+        ResolvedEvolutionCred cred = pairingCredSnapshot(usuarioId).cred;
         return fetchConnectionStateRaw(cred)
             .filter(this::interpretAsWaConnected)
             .isPresent();
     }
 
+    @Transactional(readOnly = true)
     public String resolvedInstanceDisplayName(Long usuarioId) {
-        return resolveCredentials(usuarioId).instanceName;
+        return pairingCredSnapshot(usuarioId).cred.instanceName;
+    }
+
+    /** Credenciais + opcional dígitos do WhatsApp para query {@code ?number=} (cache TTL curto contra polling). */
+    private static final class PairingCredCacheEntry {
+        final ResolvedEvolutionCred cred;
+        final Optional<String> whatsappDigits;
+        final long expiresAtEpochMs;
+
+        PairingCredCacheEntry(ResolvedEvolutionCred cred, Optional<String> whatsappDigits, long expiresAtEpochMs) {
+            this.cred = cred;
+            this.whatsappDigits = whatsappDigits;
+            this.expiresAtEpochMs = expiresAtEpochMs;
+        }
+
+        boolean fresh(long nowMs) {
+            return nowMs < expiresAtEpochMs;
+        }
+    }
+
+    private PairingCredCacheEntry pairingCredSnapshot(Long usuarioId) {
+        long now = System.currentTimeMillis();
+        if (usuarioId == null) {
+            return new PairingCredCacheEntry(loadResolvedEvolutionCred(null), loadWhatsappDigits(null), Long.MAX_VALUE);
+        }
+        PairingCredCacheEntry prev = pairingCredCache.get(usuarioId);
+        if (prev != null && prev.fresh(now)) {
+            return prev;
+        }
+        long expiry = now + Math.max(1_000L, pairingCredCacheMs);
+        PairingCredCacheEntry entry = new PairingCredCacheEntry(
+            loadResolvedEvolutionCred(usuarioId), loadWhatsappDigits(usuarioId), expiry);
+        pairingCredCache.put(usuarioId, entry);
+        return entry;
     }
 
     @Transactional(readOnly = true)
     public ResolvedEvolutionCred resolveCredentials(Long usuarioId) {
+        return pairingCredSnapshot(usuarioId).cred;
+    }
+
+    private ResolvedEvolutionCred loadResolvedEvolutionCred(Long usuarioId) {
         String inst = (defaultEvolutionInstance != null && !defaultEvolutionInstance.trim().isEmpty())
             ? defaultEvolutionInstance.trim()
             : "ConsumoEsperto";
@@ -171,6 +223,16 @@ public class EvolutionPairingService {
         return new ResolvedEvolutionCred(inst, api);
     }
 
+    private Optional<String> loadWhatsappDigits(Long usuarioId) {
+        if (usuarioId == null) {
+            return Optional.empty();
+        }
+        return usuarioRepository.findById(usuarioId)
+            .map(Usuario::getWhatsappNumero)
+            .map(raw -> raw == null ? "" : raw.replaceAll("\\D+", ""))
+            .filter(d -> !d.isBlank() && d.length() >= 10 && d.length() <= 17);
+    }
+
     private Optional<String> fetchConnectionStateRaw(ResolvedEvolutionCred cred) {
         if (evolutionUrl == null || evolutionUrl.isBlank() || cred.apiKeyHeader.isBlank()) {
             return Optional.empty();
@@ -181,7 +243,7 @@ public class EvolutionPairingService {
             if (body == null || body.isBlank()) {
                 return Optional.empty();
             }
-            JsonNode root = objectMapper.readTree(body);
+            JsonNode root = unwrapTopLevelEvolutionEnvelope(objectMapper.readTree(body));
             return extractStateFromPayload(root);
         } catch (Exception e) {
             log.debug("connectionState opcional falhou [{}]: {}", cred.instanceName, e.getMessage());
@@ -271,25 +333,71 @@ public class EvolutionPairingService {
     }
 
     /** {@code GET /instance/connect?number=} melhora pairing por número quando a Evolution aceita esse query param. */
-    private String appendNumberQueryIfPresent(String baseUrl, Long usuarioId) {
-        Optional<String> digits = whatsappDigitsForEvolution(usuarioId);
-        if (digits.isEmpty()) {
+    private static String appendNumberQueryIfPresent(String baseUrl, Optional<String> digitsOpt) {
+        if (baseUrl == null || baseUrl.isBlank() || digitsOpt == null || digitsOpt.isEmpty()) {
             return baseUrl;
         }
         return UriComponentsBuilder.fromUriString(baseUrl)
-            .queryParam("number", digits.get())
+            .queryParam("number", digitsOpt.get())
             .build(true)
             .toUriString();
     }
 
-    private Optional<String> whatsappDigitsForEvolution(Long usuarioId) {
-        if (usuarioId == null) {
-            return Optional.empty();
+    /** Evolution às vezes devolve lista de um elemento ou objeto com {@code data} array — normaliza para objeto. */
+    private static JsonNode unwrapTopLevelEvolutionEnvelope(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return node;
         }
-        return usuarioRepository.findById(usuarioId)
-            .map(Usuario::getWhatsappNumero)
-            .map(raw -> raw == null ? "" : raw.replaceAll("\\D+", ""))
-            .filter(d -> !d.isBlank() && d.length() >= 10 && d.length() <= 17);
+        if (node.isArray()) {
+            if (node.size() == 1) {
+                return unwrapTopLevelEvolutionEnvelope(node.get(0));
+            }
+            return node;
+        }
+        if (node.isObject()) {
+            JsonNode data = node.get("data");
+            if (data != null && !data.isNull() && data.isArray() && data.size() >= 1) {
+                JsonNode inner = unwrapTopLevelEvolutionEnvelope(data.get(0));
+                if (inner != null && inner.isObject()) {
+                    return inner;
+                }
+            }
+        }
+        return node;
+    }
+
+    private void maybeLogWeakPairingResponse(String instanceName, int attempt, int retries,
+        String body, EvolutionPairingOutcomeDTO outcome) {
+        if (!logWeakEvolutionResponses || outcome == null) {
+            return;
+        }
+        if (outcome.isAlreadyConnected()) {
+            return;
+        }
+        String qr = outcome.getQrCodeDataUri();
+        String pairing = outcome.getPairingCode();
+        boolean usable = (qr != null && !qr.isBlank()) || (pairing != null && !pairing.isBlank());
+        if (usable) {
+            return;
+        }
+        String warn = outcome.getEvolutionWarning();
+        if (warn == null || warn.isBlank()) {
+            return;
+        }
+        log.warn("Evolution resposta \"fraca\" [{}] tentativa {}/{}: {} :: corpo={}",
+            instanceName, attempt + 1, retries, warn, sanitizeEvolutionRestBodySnippet(body));
+    }
+
+    private static String sanitizeEvolutionRestBodySnippet(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "(vazio)";
+        }
+        String s = raw.replaceAll("[a-zA-Z0-9+/]{120,}=?", "[base64…]");
+        int max = 800;
+        if (s.length() > max) {
+            return s.substring(0, max) + "\u2026";
+        }
+        return s;
     }
 
     private long safePause() {
