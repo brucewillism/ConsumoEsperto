@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.util.EvolutionUrlSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -63,8 +64,7 @@ public class EvolutionApiService {
 
             String instance = resolveInstanceName(evolutionInstanceOverride);
 
-            String base = evolutionUrl.endsWith("/") ? evolutionUrl.substring(0, evolutionUrl.length() - 1) : evolutionUrl;
-            String url = base + "/message/sendText/" + instance;
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "/message/sendText/" + instance);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -117,8 +117,7 @@ public class EvolutionApiService {
                 log.error("[EvolutionApi] Áudio PTT abortado: instância Evolution ausente. [J.A.R.V.I.S. Offline]");
                 return false;
             }
-            String base = evolutionUrl.endsWith("/") ? evolutionUrl.substring(0, evolutionUrl.length() - 1) : evolutionUrl;
-            String url = base + "/message/sendWhatsAppAudio/" + instance;
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "/message/sendWhatsAppAudio/" + instance);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -176,8 +175,7 @@ public class EvolutionApiService {
                 log.error("[EvolutionApi] Envio PDF abortado: instância Evolution ausente. [J.A.R.V.I.S. Offline]");
                 return false;
             }
-            String base = evolutionUrl.endsWith("/") ? evolutionUrl.substring(0, evolutionUrl.length() - 1) : evolutionUrl;
-            String url = base + "/message/sendMedia/" + instance;
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "/message/sendMedia/" + instance);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

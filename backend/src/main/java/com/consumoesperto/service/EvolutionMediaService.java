@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.util.EvolutionUrlSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -69,8 +70,8 @@ public class EvolutionMediaService {
             return null;
         }
         String key = (apiKeyOverride != null && !apiKeyOverride.isBlank()) ? apiKeyOverride.trim() : evolutionApiKey;
-        String base = evolutionUrl.endsWith("/") ? evolutionUrl.substring(0, evolutionUrl.length() - 1) : evolutionUrl;
-        String url = base + "/chat/getBase64FromMediaMessage/" + instanceName.trim();
+        String url = EvolutionUrlSupport.joinEvolutionPath(
+            evolutionUrl, "/chat/getBase64FromMediaMessage/" + instanceName.trim());
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
