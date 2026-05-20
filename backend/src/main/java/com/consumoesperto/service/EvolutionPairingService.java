@@ -1,8 +1,10 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.EvolutionPairingOutcomeDTO;
+import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
+import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.util.EvolutionUrlSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import javax.annotation.PostConstruct;
 import java.io.ByteArrayOutputStream;
@@ -43,6 +46,7 @@ import java.util.Optional;
 public class EvolutionPairingService {
 
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
+    private final UsuarioRepository usuarioRepository;
     private final ObjectMapper objectMapper;
 
     private RestTemplate restTemplate;
@@ -84,53 +88,36 @@ public class EvolutionPairingService {
         }
 
         try {
-            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/connect/" + cred.instanceName);
-            String body = evolutionGet(url, cred.apiKeyHeader);
-            if (body == null || body.isBlank()) {
-                return warnOnly(cred.instanceName, "Resposta vazia de /instance/connect");
-            }
-            JsonNode root = objectMapper.readTree(body);
-            Optional<String> stAfter = extractStateFromPayload(root);
-            if (stAfter.isPresent() && interpretAsWaConnected(stAfter.get())) {
-                return EvolutionPairingOutcomeDTO.builder()
-                    .resolvedInstanceName(cred.instanceName)
-                    .alreadyConnected(true)
-                    .hasAlternativePairingHints(false)
-                    .build();
-            }
+            String urlBase = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/connect/" + cred.instanceName);
+            String url = appendNumberQueryIfPresent(urlBase, usuarioId);
 
-            Optional<String> qrUri = resolveQrAsDataUri(root);
-            String pairing = firstNonBlank(
-                nodeText(root, "pairingCode"),
-                nodeText(root.path("qrcode"), "pairingCode")
-            );
+            for (int attempt = 0; attempt < 3; attempt++) {
+                boolean lastAttempt = attempt == 2;
+                String body = evolutionGet(url, cred.apiKeyHeader);
+                if (body == null || body.isBlank()) {
+                    if (lastAttempt) {
+                        return warnOnly(cred.instanceName, "Resposta vazia de /instance/connect");
+                    }
+                    pauseMillis(2000);
+                    continue;
+                }
 
-            EvolutionPairingOutcomeDTO.EvolutionPairingOutcomeDTOBuilder b = EvolutionPairingOutcomeDTO.builder()
-                .resolvedInstanceName(cred.instanceName)
-                .pairingCode(pairing.isBlank() ? null : pairing)
-                .alreadyConnected(false);
-
-            if (qrUri.isPresent()) {
-                return b.qrCodeDataUri(qrUri.get())
-                    .hasAlternativePairingHints(!pairing.isBlank())
-                    .build();
-            }
-
-            Optional<String> connectCode = firstMeaningfulCode(root);
-            if (connectCode.isPresent()) {
-                Optional<String> generated = qrPngFromString(connectCode.get());
-                if (generated.isPresent()) {
-                    return b.qrCodeDataUri(generated.get())
-                        .hasAlternativePairingHints(!pairing.isBlank())
-                        .build();
+                JsonNode root = objectMapper.readTree(body);
+                EvolutionPairingOutcomeDTO outcome = processConnectBody(root, cred.instanceName, lastAttempt);
+                if (outcome != null) {
+                    return outcome;
+                }
+                if (!lastAttempt) {
+                    log.debug(
+                        "/instance/connect ainda sem QR pareado (instancia={}); nova tentativa após espera ({}/2)",
+                        cred.instanceName, attempt + 1);
+                    pauseMillis(2000);
                 }
             }
+            return warnOnly(
+                cred.instanceName,
+                "Não foi possível obter o QR pela REST da Evolution em três tentativas. Veja o Manager ou o websocket da Evolution.");
 
-            boolean hints = !pairing.isBlank();
-            return b.evolutionWarning(
-                    "Evolution não devolveu QR reconhecível (REST). Veja pairingCode ou o QR no Manager da Evolution.")
-                .hasAlternativePairingHints(hints)
-                .build();
         } catch (HttpClientErrorException | HttpServerErrorException e) {
             String msg = summarizeHttpError(e.getRawStatusCode(),
                 e.getResponseBodyAsString() != null ? e.getResponseBodyAsString() : e.getMessage());
@@ -206,6 +193,128 @@ public class EvolutionPairingService {
         return resp.getBody();
     }
 
+    /**
+     * Interpreta JSON de {@code /instance/connect}. Devolve {@code null} quando convém novo GET após espera curta (QR ainda não preenchido na Evolution).
+     */
+    private EvolutionPairingOutcomeDTO processConnectBody(JsonNode root, String instanceName, boolean lastAttempt) {
+        if (root == null || root.isNull()) {
+            return lastAttempt ? warnOnly(instanceName, "Resposta JSON invalida da Evolution.") : null;
+        }
+
+        if (root.path("error").asBoolean(false)) {
+            String msg = firstNonBlank(nodeText(root, "message"));
+            return warnOnly(instanceName, msg.isBlank() ? "Evolution devolveu erro" : msg);
+        }
+
+        Optional<String> stAfter = extractStateFromPayload(root);
+        if (stAfter.isPresent() && interpretAsWaConnected(stAfter.get())) {
+            return EvolutionPairingOutcomeDTO.builder()
+                .resolvedInstanceName(instanceName)
+                .alreadyConnected(true)
+                .hasAlternativePairingHints(false)
+                .build();
+        }
+
+        String pairing = extractPairingCode(root);
+        Optional<String> qrUri = resolveQrAsDataUri(root);
+
+        EvolutionPairingOutcomeDTO.EvolutionPairingOutcomeDTOBuilder b = EvolutionPairingOutcomeDTO.builder()
+            .resolvedInstanceName(instanceName)
+            .pairingCode(pairing.isBlank() ? null : pairing)
+            .alreadyConnected(false);
+
+        if (qrUri.isPresent()) {
+            return b.qrCodeDataUri(qrUri.get())
+                .hasAlternativePairingHints(!pairing.isBlank())
+                .build();
+        }
+
+        if (!pairing.isBlank()) {
+            return b.hasAlternativePairingHints(true).build();
+        }
+
+        Optional<String> connectCode = firstMeaningfulCode(root);
+        if (connectCode.isPresent()) {
+            Optional<String> generated = qrPngFromString(connectCode.get());
+            if (generated.isPresent()) {
+                return b.qrCodeDataUri(generated.get()).hasAlternativePairingHints(false).build();
+            }
+        }
+
+        if (!lastAttempt && evolutionMayStillProduceQr(root)) {
+            return null;
+        }
+
+        String warn = connectCode.isPresent()
+            ? "Evolution não devolveu PNG base64 nem pairingCode utilizável pela REST neste momento "
+                + "(o código interno WhatsApp existe mas não pode ser convertido a QR pelo servidor). Veja o Manager ou websocket."
+            : "Evolution não devolveu dados de pairing por REST nesta chamada após esperas curtas — veja QR no Manager da Evolution.";
+        return EvolutionPairingOutcomeDTO.builder()
+            .resolvedInstanceName(instanceName)
+            .alreadyConnected(false)
+            .evolutionWarning(warn)
+            .hasAlternativePairingHints(false)
+            .build();
+    }
+
+    /** {@code GET /instance/connect?number=} melhora pairing por número quando a Evolution aceita esse query param. */
+    private String appendNumberQueryIfPresent(String baseUrl, Long usuarioId) {
+        Optional<String> digits = whatsappDigitsForEvolution(usuarioId);
+        if (digits.isEmpty()) {
+            return baseUrl;
+        }
+        return UriComponentsBuilder.fromUriString(baseUrl)
+            .queryParam("number", digits.get())
+            .build(true)
+            .toUriString();
+    }
+
+    private Optional<String> whatsappDigitsForEvolution(Long usuarioId) {
+        if (usuarioId == null) {
+            return Optional.empty();
+        }
+        return usuarioRepository.findById(usuarioId)
+            .map(Usuario::getWhatsappNumero)
+            .map(raw -> raw == null ? "" : raw.replaceAll("\\D+", ""))
+            .filter(d -> !d.isBlank() && d.length() >= 10 && d.length() <= 17);
+    }
+
+    private static void pauseMillis(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private String extractPairingCode(JsonNode root) {
+        return firstNonBlank(
+            nodeText(root, "pairingCode"),
+            nodeText(root.path("qrcode"), "pairingCode"),
+            nodeText(root.path("instance").path("qrcode"), "pairingCode")
+        );
+    }
+
+    /**
+     * Mantém até 3 GETs espaçados quando ainda não há imagem pairing — comum quando o Node devolve objeto qrcode inicialmente vazio.
+     */
+    private boolean evolutionMayStillProduceQr(JsonNode root) {
+        if (root.path("error").asBoolean(false)) {
+            return false;
+        }
+        if (!extractPairingCode(root).isBlank()) {
+            return false;
+        }
+        if (resolveQrAsDataUri(root).isPresent()) {
+            return false;
+        }
+        Optional<String> stOpt = extractStateFromPayload(root);
+        if (stOpt.isPresent() && interpretAsWaConnected(stOpt.get())) {
+            return false;
+        }
+        return true;
+    }
+
     private Optional<String> extractStateFromPayload(JsonNode root) {
         String s = firstNonBlank(
             nodeText(root.path("instance"), "state"),
@@ -225,10 +334,10 @@ public class EvolutionPairingService {
     }
 
     private String pickFirstQrBase64Field(JsonNode root) {
+        /* Nunca usar o campo Baileys "code" como base64 — não é PNG; causa Data URI corrupto ou falha UX. */
         return firstNonBlank(
             nestedAsText(root, "base64"),
             nestedAsText(root.path("qrcode"), "base64"),
-            nestedAsText(root.path("qrcode"), "code"),
             nestedAsText(root.path("qr"), "base64"),
             nodeText(root, "qr"),
             nodeText(root, "qrCode"),
@@ -236,7 +345,6 @@ public class EvolutionPairingService {
             nodeText(root.path("data"), "base64"),
             nodeText(root.path("result"), "base64"),
             nestedAsText(root.path("instance").path("qrcode"), "base64"),
-            nestedAsText(root.path("instance").path("qrcode"), "code"),
             nestedAsText(root.path("response"), "base64"),
             nestedAsText(root.path("response").path("qrcode"), "base64")
         );
@@ -259,7 +367,11 @@ public class EvolutionPairingService {
         if (!c.isBlank()) {
             return Optional.of(c);
         }
-        c = nodeText(root.path("qrcode"), "code");
+        c = nestedAsText(root.path("qrcode"), "code");
+        if (!c.isBlank()) {
+            return Optional.of(c);
+        }
+        c = nestedAsText(root.path("instance").path("qrcode"), "code");
         if (!c.isBlank()) {
             return Optional.of(c);
         }
