@@ -56,8 +56,8 @@ services:
 
       JWT_SECRET: ${JWT_SECRET}
 
-      EVOLUTION_URL: http://consumo_evolution:8585
-      EVOLUTION_APIKEY: ${EVOLUTION_API_KEY:-${EVOLUTION_APIKEY}}
+      EVOLUTION_URL: https://consumoesperto.brucew07.com.br/evolution
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
       EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-ConsumoEsperto}
 
       APP_FRONTEND_BASE_URL: ${APP_FRONTEND_BASE_URL:-https://consumoesperto.brucew07.com.br}
@@ -92,22 +92,24 @@ services:
         condition: service_healthy
 
   evolution_api:
-    image: atendai/evolution-api:latest
+    image: atendai/evolution-api:v2.2.3
     container_name: consumo_evolution
     restart: always
     ports:
       - "8585:8585"
     environment:
-      - SERVER_PORT=8585
-      - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER:-consumo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-consumo_db}?sslmode=disable
-      - API_TOKEN=${EVOLUTION_API_KEY:-${EVOLUTION_APIKEY}}
-      - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_HOST=consumo_redis
-      - CACHE_REDIS_PORT=6379
+     - SERVER_PORT=8585
+     - DATABASE_PROVIDER=postgresql
+     - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER:-consumo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-consumo_db}?sslmode=disable
+     - API_TOKEN=${EVOLUTION_API_KEY:-${EVOLUTION_APIKEY}}
+     - CACHE_REDIS_ENABLED=true
+     - CACHE_REDIS_HOST=consumo_redis
+     - CACHE_REDIS_PORT=6379
+     - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+     - AUTHENTICATION_TYPE=apikey
     depends_on:
-      postgres:
-        condition: service_healthy
+      - redis
+      - postgres
     volumes:
       - evolution_data:/evolution/instances
 
