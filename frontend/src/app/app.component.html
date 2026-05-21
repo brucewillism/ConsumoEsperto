@@ -221,16 +221,4 @@
 <!-- Overlay para fechar dropdowns quando clicar fora -->
 <div class="overlay" *ngIf="(showNotifications || showUserMenu) && !isLoginPage" (click)="closeDropdowns()"></div>
 
-<div class="global-loading-overlay" *ngIf="isLoading$ | async" aria-busy="true" aria-live="polite">
-  <div class="global-loading-fallback" aria-hidden="true">
-    <i class="fas fa-spinner fa-spin"></i>
-    <span>A carregar…</span>
-  </div>
-  <!-- GIF opcional: só se existir asset real no build (evita quadrado preto de placeholder 42B). -->
-  <img
-    *ngIf="!loadingGifFailed"
-    [src]="loadingGifUrl"
-    alt=""
-    class="global-loading-gif global-loading-gif--optional"
-    (error)="onLoadingGifError()" />
-</div>
+<app-loading-indicator *ngIf="isLoading$ | async" mode="overlay" message="A carregar…"></app-loading-indicator>

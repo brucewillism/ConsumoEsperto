@@ -234,8 +234,5 @@
     </mat-card-content>
   </mat-card>
 
-  <div class="loading-container" *ngIf="carregando">
-    <mat-spinner diameter="50"></mat-spinner>
-    <p>Gerando relatório...</p>
-  </div>
+  <app-loading-indicator *ngIf="carregando" mode="panel" message="Gerando relatório..."></app-loading-indicator>
 </div>

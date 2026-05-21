@@ -140,11 +140,5 @@
     </div>
   </div>
 
-  <!-- Loading Overlay -->
-  <div class="loading-overlay" *ngIf="isLoading">
-    <div class="loading-content">
-      <div class="loading-spinner-large"></div>
-      <p>Autenticando...</p>
-    </div>
-  </div>
+  <app-loading-indicator *ngIf="isLoading" mode="overlay" message="Autenticando..."></app-loading-indicator>
 </div>

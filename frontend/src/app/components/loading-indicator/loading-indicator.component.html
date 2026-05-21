@@ -1,0 +1,29 @@
+<div
+  class="loading-indicator"
+  [class.loading-indicator--inline]="mode === 'inline'"
+  [class.loading-indicator--panel]="mode === 'panel'"
+  [class.loading-indicator--overlay]="mode === 'overlay'"
+  [class.loading-indicator--sm]="size === 'sm'"
+  [class.loading-indicator--md]="size === 'md'"
+  [class.loading-indicator--lg]="size === 'lg'"
+  [attr.aria-busy]="true"
+  [attr.aria-live]="mode === 'overlay' ? 'polite' : null">
+  <div class="loading-indicator__backdrop" *ngIf="mode === 'overlay'" aria-hidden="true"></div>
+
+  <div class="loading-indicator__content">
+    <div class="loading-indicator__visual">
+      <img
+        class="loading-indicator__gif"
+        [class.loading-indicator__gif--visible]="gifVisible"
+        [src]="loadingGifUrl"
+        alt=""
+        (load)="onGifLoad($event)"
+        (error)="onGifError()" />
+      <div class="loading-indicator__spinner" *ngIf="!gifVisible" aria-hidden="true">
+        <span class="loading-indicator__ring"></span>
+        <span class="loading-indicator__core"></span>
+      </div>
+    </div>
+    <p class="loading-indicator__message" *ngIf="message">{{ message }}</p>
+  </div>
+</div>

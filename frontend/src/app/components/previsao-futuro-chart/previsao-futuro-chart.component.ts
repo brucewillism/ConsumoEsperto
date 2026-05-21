@@ -5,11 +5,12 @@ import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { ProjecaoDashboardService, PrevisaoFuturoChart, ProvisaoMemoriaHud } from '../../services/projecao-dashboard.service';
 import { catchError, of } from 'rxjs';
+import { LoadingIndicatorComponent } from '../loading-indicator/loading-indicator.component';
 
 @Component({
   selector: 'app-previsao-futuro-chart',
   standalone: true,
-  imports: [CommonModule, BaseChartDirective],
+  imports: [CommonModule, BaseChartDirective, LoadingIndicatorComponent],
   templateUrl: './previsao-futuro-chart.component.html',
   styleUrl: './previsao-futuro-chart.component.scss',
 })

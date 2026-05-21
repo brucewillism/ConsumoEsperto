@@ -1,8 +1,7 @@
 <mat-card>
   <mat-card-content>
     <div class="loading-overlay" *ngIf="loading">
-      <mat-spinner diameter="38"></mat-spinner>
-      <p>Carregando transações...</p>
+      <app-loading-indicator mode="panel" size="md" message="Carregando transações..."></app-loading-indicator>
     </div>
 
     <div class="table-responsive">

@@ -87,7 +87,7 @@
       </div>
       <p class="memoria-tatica-sub">Contextos que o J.A.R.V.I.S. indexou com embeddings — usados para correlacionar padrões ao longo do tempo.</p>
       <div class="memoria-tatica-loading" *ngIf="memoriaCarregando">
-        <mat-spinner diameter="36"></mat-spinner>
+        <app-loading-indicator mode="inline" size="sm"></app-loading-indicator>
       </div>
       <ul class="memoria-tatica-timeline" *ngIf="!memoriaCarregando && itensMemoria.length">
         <li *ngFor="let m of itensMemoria; let i = index" class="memoria-tatica-node" [style.--i]="i">
@@ -106,12 +106,7 @@
   </section>
 
   <!-- Loading State -->
-  <div class="loading-container" *ngIf="isLoading">
-    <div class="loading-spinner">
-      <i class="fas fa-spinner fa-spin"></i>
-    </div>
-    <p>Carregando dados...</p>
-  </div>
+  <app-loading-indicator *ngIf="isLoading" mode="panel" message="Carregando dados..."></app-loading-indicator>
 
   <!-- Lançamento rápido (cartão vs débito/dinheiro) -->
   <section class="quick-lancamento" *ngIf="!errorMessage && !isLoading">

@@ -40,6 +40,7 @@ import { forkJoin, catchError, of, fromEvent, timer, Subscription, filter, final
 import { timeout } from 'rxjs/operators';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { LoadingService } from '../../services/loading.service';
+import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { Categoria } from '../../models/categoria.model';
 import { CartaoCredito } from '../../models/cartao-credito.model';
@@ -117,6 +118,7 @@ interface ChartData {
     MatIconModule,
     MatTooltipModule,
     PrevisaoFuturoChartComponent,
+    LoadingIndicatorComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'

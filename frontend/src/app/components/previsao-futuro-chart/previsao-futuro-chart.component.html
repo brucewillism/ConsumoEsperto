@@ -7,10 +7,12 @@
     </div>
   </div>
 
-  <div class="previsao-loading" *ngIf="carregando || (usarEntradaPai && painelCarregando)">
-    <i class="fas fa-spinner fa-spin"></i>
-    <span>Sincronizando telemetry…</span>
-  </div>
+  <app-loading-indicator
+    *ngIf="carregando || (usarEntradaPai && painelCarregando)"
+    mode="inline"
+    size="sm"
+    message="Sincronizando telemetry…">
+  </app-loading-indicator>
 
   <div class="previsao-erro" *ngIf="!carregando && !(usarEntradaPai && painelCarregando) && erro">
     <p>Não foi possível carregar a projeção. Atualize o painel mais tarde.</p>

@@ -1,6 +1,9 @@
 package com.consumoesperto.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.consumoesperto.util.EvolutionUrlSupport;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -21,7 +24,11 @@ import java.util.Map;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class EvolutionApiService {
+
+    private final EvolutionBotEchoFilterService evolutionBotEchoFilterService;
+    private final ObjectMapper objectMapper;
 
     private RestTemplate restTemplate;
 
@@ -81,6 +88,7 @@ public class EvolutionApiService {
                     response.getStatusCode(), instance, number);
                 return false;
             }
+            registerOutgoingFromResponse(number, response.getBody());
             return true;
         } catch (IllegalStateException cfg) {
             log.error("[EvolutionApi] Configuração Evolution incompleta: {} [J.A.R.V.I.S. Offline]", cfg.getMessage());
@@ -136,6 +144,8 @@ public class EvolutionApiService {
                 return false;
             }
             log.info("[JARVIS-LOG] Evolution áudio PTT enviado instance={} destino={}", instance, number);
+            registerOutgoingFromResponse(number, response.getBody());
+            evolutionBotEchoFilterService.registerOutgoingMedia(number, "audio", audioBytes, null);
             return true;
         } catch (IllegalStateException cfg) {
             log.error("[EvolutionApi] Áudio: configuração incompleta: {} [J.A.R.V.I.S. Offline]", cfg.getMessage());
@@ -195,6 +205,8 @@ public class EvolutionApiService {
                 log.error("[EvolutionApi] Falha HTTP ao enviar PDF: {} instance={} [J.A.R.V.I.S. Offline]", response.getStatusCode(), instance);
                 return false;
             }
+            registerOutgoingFromResponse(number, response.getBody());
+            evolutionBotEchoFilterService.registerOutgoingMedia(number, "document", pdfBytes, fileName);
             return true;
         } catch (IllegalStateException cfg) {
             log.error("[EvolutionApi] PDF: configuração incompleta: {} [J.A.R.V.I.S. Offline]", cfg.getMessage());
@@ -239,5 +251,34 @@ public class EvolutionApiService {
             return evolutionInstanceOverride.trim();
         }
         return evolutionInstance != null ? evolutionInstance.trim() : "";
+    }
+
+    private void registerOutgoingFromResponse(String to, String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            String keyId = firstNonBlank(
+                root.path("key").path("id").asText(""),
+                root.path("data").path("key").path("id").asText(""),
+                root.path("message").path("key").path("id").asText("")
+            );
+            if (!keyId.isBlank()) {
+                evolutionBotEchoFilterService.registerOutgoingMessageKey(keyId);
+            }
+        } catch (Exception e) {
+            log.debug("[EvolutionApi] Resposta de envio sem key.id parseável: {}", e.getMessage());
+        }
+    }
+
+    private static String firstNonBlank(String a, String b, String c) {
+        if (a != null && !a.isBlank()) {
+            return a.trim();
+        }
+        if (b != null && !b.isBlank()) {
+            return b.trim();
+        }
+        return c != null && !c.isBlank() ? c.trim() : "";
     }
 }

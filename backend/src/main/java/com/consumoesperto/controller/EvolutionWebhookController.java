@@ -5,7 +5,7 @@ import com.consumoesperto.model.Usuario;
 import com.consumoesperto.service.AiProvidersConfigService;
 import com.consumoesperto.service.EvolutionWebhookAsyncProcessor;
 import com.consumoesperto.service.EvolutionWebhookDedupService;
-import com.consumoesperto.service.JarvisProtocolService;
+import com.consumoesperto.service.EvolutionBotEchoFilterService;
 import com.consumoesperto.service.WhatsappAccountProvisioner;
 import com.consumoesperto.service.WhatsAppBotAllowlist;
 import com.consumoesperto.service.WhatsAppCommandService;
@@ -35,7 +35,7 @@ public class EvolutionWebhookController {
     private final WhatsAppWebhookPolicyService whatsAppWebhookPolicyService;
     private final EvolutionWebhookAsyncProcessor evolutionWebhookAsyncProcessor;
     private final WhatsAppCommandService whatsAppCommandService;
-    private final JarvisProtocolService jarvisProtocolService;
+    private final EvolutionBotEchoFilterService evolutionBotEchoFilterService;
 
     /**
      * Evolution API v2.3+ também POSTa variantes como {@code /webhook/messages-upsert}; o destino nos logs
@@ -67,7 +67,7 @@ public class EvolutionWebhookController {
         JsonNode key = data.path("key");
         String effectiveRemote = extractEffectiveRemoteJid(key, payload);
         String messageKeyId = key.path("id").asText("");
-        boolean fromMeFlag = key.path("fromMe").asBoolean(false);
+        boolean fromMeFlag = parseFromMe(key);
         String dedupBodySnippet = extractTextPreviewForDedup(data);
         String instance = firstNonBlank(
             payload.path("instance").asText(""),
@@ -174,7 +174,7 @@ public class EvolutionWebhookController {
         JsonNode message = unwrapInnerMessage(data.path("message"));
         JsonNode key = data.path("key");
         String fromJid = extractEffectiveRemoteJid(key, payloadRoot);
-        boolean fromMe = key.path("fromMe").asBoolean(false);
+        boolean fromMe = parseFromMe(key);
         String messageKeyId = key.path("id").asText("");
 
         String text = message.path("conversation").asText("");
@@ -192,6 +192,7 @@ public class EvolutionWebhookController {
         String mime = null;
         byte[] mediaBytes = null;
         String mediaUrl = null;
+        String mediaFileName = null;
 
         if (message.has("audioMessage")) {
             JsonNode audio = message.path("audioMessage");
@@ -218,6 +219,10 @@ public class EvolutionWebhookController {
             JsonNode document = message.path("documentMessage");
             mediaType = "document";
             mime = document.path("mimetype").asText("application/pdf");
+            mediaFileName = firstNonBlank(
+                document.path("fileName").asText(""),
+                document.path("title").asText("")
+            );
             mediaBytes = decodeBase64Safe(firstNonBlank(
                 document.path("base64").asText(""),
                 message.path("base64").asText(""),
@@ -226,7 +231,9 @@ public class EvolutionWebhookController {
             mediaUrl = firstNonBlank(document.path("mediaUrl").asText(""), document.path("url").asText(""));
         }
 
-        return new EvolutionIncomingMessageDTO(fromJid, fromMe, text, mediaBytes, mime, mediaType, mediaUrl, messageKeyId, false);
+        EvolutionIncomingMessageDTO dto = new EvolutionIncomingMessageDTO(
+            fromJid, fromMe, text, mediaBytes, mime, mediaType, mediaUrl, messageKeyId, mediaFileName, false);
+        return dto;
     }
 
     /**
@@ -281,12 +288,9 @@ public class EvolutionWebhookController {
             return "group-or-broadcast";
         }
 
-        String texto = incoming.getText();
-        if (texto != null && !texto.isBlank() && jarvisProtocolService.isProceduralAckEcho(texto)) {
-            return "jarvis-procedural-echo";
-        }
-        if (texto != null && !texto.isBlank() && jarvisProtocolService.isOurSignedStackMessage(texto)) {
-            return "jarvis-signed-stack-message";
+        String botEchoReason = evolutionBotEchoFilterService.reasonToIgnore(incoming);
+        if (botEchoReason != null) {
+            return botEchoReason;
         }
 
         if (!whatsAppBotAllowlist.isEvolutionSelfChatThread(fromJid, userId)) {
@@ -305,6 +309,24 @@ public class EvolutionWebhookController {
             return "no-text-and-no-audio-image";
         }
         return null;
+    }
+
+    private static boolean parseFromMe(JsonNode key) {
+        if (key == null || key.isMissingNode()) {
+            return false;
+        }
+        JsonNode node = key.path("fromMe");
+        if (node.isMissingNode() || node.isNull()) {
+            return false;
+        }
+        if (node.isBoolean()) {
+            return node.asBoolean(false);
+        }
+        if (node.isNumber()) {
+            return node.asInt() != 0;
+        }
+        String s = node.asText("").trim().toLowerCase();
+        return "true".equals(s) || "1".equals(s) || "yes".equals(s);
     }
 
     private static boolean isMessagesUpsertEvent(String event) {

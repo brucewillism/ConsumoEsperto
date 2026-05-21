@@ -35,10 +35,7 @@
   </mat-card>
 
   <!-- Loading -->
-  <div *ngIf="loading" class="loading-container">
-    <mat-spinner diameter="50"></mat-spinner>
-    <p>Carregando faturas...</p>
-  </div>
+  <app-loading-indicator *ngIf="loading" mode="panel" message="Carregando faturas..."></app-loading-indicator>
 
   <!-- Resumo das Faturas -->
   <div class="resumo-grid" *ngIf="!loading">

@@ -18,10 +18,7 @@
   </div>
 
   <!-- Loading -->
-  <div *ngIf="loading" class="loading-container">
-    <mat-spinner diameter="50"></mat-spinner>
-    <p>Carregando cartões...</p>
-  </div>
+  <app-loading-indicator *ngIf="loading" mode="panel" message="Carregando cartões..."></app-loading-indicator>
 
   <!-- Resumo dos Limites -->
   <div class="resumo-grid" *ngIf="!loading">

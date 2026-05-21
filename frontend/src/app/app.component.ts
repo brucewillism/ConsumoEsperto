@@ -8,12 +8,12 @@ import { filter } from 'rxjs/operators';
 import { LoadingService } from './services/loading.service';
 import { InboxNotification, NotificacaoInboxService } from './services/notificacao-inbox.service';
 import { ScoreService, UsuarioScore } from './services/score.service';
-import { environment } from '../environments/environment';
+import { LoadingIndicatorComponent } from './components/loading-indicator/loading-indicator.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, LoadingIndicatorComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
   animations: [hudRouteAnimations],
@@ -43,15 +43,6 @@ export class AppComponent implements OnInit {
 
   notifications: InboxNotification[] = [];
   usuarioScore: UsuarioScore | null = null;
-
-  /** GIF do overlay global de loading. */
-  readonly loadingGifUrl = environment.loadingGifUrl;
-  /** Quando o GIF falha (404 no build antigo), mostra spinner CSS. */
-  loadingGifFailed = false;
-
-  onLoadingGifError(): void {
-    this.loadingGifFailed = true;
-  }
 
   constructor(
     private authService: AuthService,

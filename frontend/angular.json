@@ -99,9 +99,9 @@
                 "input": "public"
               },
               {
-                "glob": "loading.gif",
-                "input": "src/assets/loading",
-                "output": "assets/loading"
+                "glob": "**/*",
+                "input": "src/assets",
+                "output": "assets"
               }
             ],
             

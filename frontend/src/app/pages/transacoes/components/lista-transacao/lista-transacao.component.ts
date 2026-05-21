@@ -16,6 +16,7 @@ import {
   descricaoComIndicadorParcela,
   transacaoMostraBadgeJuros
 } from '../../../../utils/transacao-parcela.util';
+import { LoadingIndicatorComponent } from '../../../../components/loading-indicator/loading-indicator.component';
 
 @Component({
   selector: 'app-lista-transacao',
@@ -30,7 +31,8 @@ import {
     MatIconModule,
     MatChipsModule,
     MatProgressSpinnerModule,
-    MatTooltipModule
+    MatTooltipModule,
+    LoadingIndicatorComponent,
   ],
   templateUrl: './lista-transacao.component.html',
   styleUrls: ['./lista-transacao.component.scss']

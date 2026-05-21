@@ -93,6 +93,7 @@ public class WhatsAppCommandService {
     private final TextToSpeechService textToSpeechService;
 
     private final TransacaoSemanticaIndexService transacaoSemanticaIndexService;
+    private final EvolutionBotEchoFilterService evolutionBotEchoFilterService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -118,7 +119,6 @@ public class WhatsAppCommandService {
     private final Map<Long, Long> awaitingFaturaImportConfirm = new ConcurrentHashMap<>();
     private final Map<Long, Long> awaitingContrachequeImportConfirm = new ConcurrentHashMap<>();
     private final Map<Long, PendingDespesaFixaDraft> awaitingDespesaFixaDia = new ConcurrentHashMap<>();
-    private final Map<String, LocalDateTime> recentOutgoingTexts = new ConcurrentHashMap<>();
 
     /** “Jarvis, anote isso: …” — grava memória semântica financeira. */
     private static final Pattern JARVIS_ANOTE_ISSO = Pattern.compile(
@@ -317,6 +317,12 @@ public class WhatsAppCommandService {
                 userId, from, fromMe);
             return;
         }
+        String botEchoReason = evolutionBotEchoFilterService.reasonToIgnore(incoming);
+        if (botEchoReason != null) {
+            log.info("[WhatsAppFilter] Evolution async: eco do bot ignorado ({}) userId={} fromMe={} mediaType={} msgKey={}",
+                botEchoReason, userId, fromMe, incoming.getMediaType(), incoming.getMessageKeyId());
+            return;
+        }
         final String webhookEvolutionInstanceHint = evolutionInstanceName == null || evolutionInstanceName.isBlank()
             ? null
             : evolutionInstanceName.trim();
@@ -350,19 +356,10 @@ public class WhatsAppCommandService {
             }
 
             String response;
-            // Eco do ACK/processo pode vir com fromMe=false no webhook Evolution.
             if ("text".equalsIgnoreCase(resolveEffectiveMediaType(mediaType, incoming.getText()))
                 && isSystemResponse(incoming.getText())) {
                 log.debug("Ignorando auto-resposta do sistema");
-                log.debug("Conteúdo identificado como resposta do robô. Abortando loop.");
                 return;
-            }
-            if (fromMe && isRecentOutgoingEcho(from, incoming.getText())) {
-                log.debug("Ignorando eco recente da mensagem enviada pelo próprio bot.");
-                return;
-            }
-            if (fromMe) {
-                log.debug("Conteúdo identificado como input do usuário. Seguindo...");
             }
             if ("document".equalsIgnoreCase(mediaType)) {
                 if (mediaBytes == null || mediaBytes.length == 0) {
@@ -1794,36 +1791,10 @@ public class WhatsAppCommandService {
     }
 
     private void rememberOutgoingText(String to, String message) {
-        String key = outgoingEchoKey(to, message);
-        if (!key.isBlank()) {
-            recentOutgoingTexts.put(key, LocalDateTime.now());
-        }
-        pruneRecentOutgoingTexts();
-    }
-
-    private boolean isRecentOutgoingEcho(String from, String text) {
-        String key = outgoingEchoKey(from, text);
-        if (key.isBlank()) {
-            return false;
-        }
-        pruneRecentOutgoingTexts();
-        LocalDateTime sentAt = recentOutgoingTexts.get(key);
-        return sentAt != null && sentAt.isAfter(LocalDateTime.now().minusMinutes(5));
-    }
-
-    private String outgoingEchoKey(String jidOrNumber, String text) {
-        if (jidOrNumber == null || jidOrNumber.isBlank() || text == null || text.isBlank()) {
-            return "";
-        }
-        return evolutionApiService.normalizeToNumber(jidOrNumber) + "|" + normalize(text).replaceAll("\\s+", " ").trim();
-    }
-
-    private void pruneRecentOutgoingTexts() {
-        if (recentOutgoingTexts.size() <= 100) {
+        if (message == null || message.isBlank()) {
             return;
         }
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(10);
-        recentOutgoingTexts.entrySet().removeIf(e -> e.getValue().isBefore(cutoff));
+        evolutionBotEchoFilterService.registerOutgoingText(to, normalize(message).replaceAll("\\s+", " ").trim());
     }
 
     private String normalize(String text) {

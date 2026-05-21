@@ -29,6 +29,7 @@ import {
   transacaoMostraBadgeJuros
 } from '../../utils/transacao-parcela.util';
 import { CartaoCredito } from '../../models/cartao-credito.model';
+import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 
 @Component({
   selector: 'app-relatorios',
@@ -49,7 +50,8 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
     MatProgressSpinnerModule,
     MatChipsModule,
     MatSnackBarModule,
-    MatTooltipModule
+    MatTooltipModule,
+    LoadingIndicatorComponent
   ],
   templateUrl: './relatorios.component.html',
   styleUrl: './relatorios.component.scss',
