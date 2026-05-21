@@ -285,7 +285,7 @@
 
     <section
       class="hud-bottom-deck hud-animate"
-      *ngIf="!errorMessage && (insightsFeed.length || sugestoesContencaoJarvis.length || categoriaRanking.length)"
+      *ngIf="!errorMessage && (insightsFeed.length || sugestoesContencaoJarvis.length || categoriaRanking.length || rendaConfig)"
       [style.--stagger]="6">
       <div class="hud-bottom-grid">
         <div class="hud-bottom-col">
@@ -374,57 +374,56 @@
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="hud-card hud-glass hud-ranking" *ngIf="categoriaRanking.length">
-          <h3 class="hud-panel-title">Ranking de categorias · Hábitos</h3>
-          <p class="hud-panel-sub">Comparativo ao mês anterior, quando disponível.</p>
-          <div class="hud-rank-row" *ngFor="let row of categoriaRanking">
-            <div class="hud-rank-top">
-              <span class="hud-rank-name">{{ row.categoria }}</span>
-              <span class="hud-rank-money">{{ formatCurrency(row.valor) }}</span>
+          <div class="renda-config-card hud-glass" *ngIf="rendaConfig">
+            <div class="renda-config-head">
+              <h3><i class="fas fa-money-bill-wave"></i> Configuração de Renda</h3>
+              <p class="renda-meta" *ngIf="rendaConfig.diaPagamento">
+                Dia de pagamento: <strong>{{ rendaConfig.diaPagamento }}</strong>
+                <span *ngIf="rendaConfig.receitaAutomaticaAtiva" class="renda-badge">Receita automática</span>
+              </p>
             </div>
-            <div class="hud-dual-track">
-              <div class="hud-dual-bg"></div>
-              <div class="hud-dual-fill" [style.width.%]="row.pctOfMax"></div>
-            </div>
-            <div class="hud-rank-var" *ngIf="row.variacaoPct != null" [class.hud-rank-excesso]="row.excesso">
-              <i class="fas fa-fire" *ngIf="row.excesso" aria-hidden="true"></i>
-              {{ row.variacaoPct >= 0 ? '+' : '' }}{{ row.variacaoPct | number:'1.0-1' }}%
-              <span class="hud-vs">vs mês ant.</span>
+            <div class="renda-config-body">
+              <div class="renda-chart-box">
+                <canvas
+                  baseChart
+                  type="doughnut"
+                  [data]="rendaDoughnutChartData"
+                  [options]="rendaDoughnutChartOptions"
+                  aria-label="Salário líquido versus descontos">
+                </canvas>
+              </div>
+              <ul class="renda-legend-list">
+                <li><span class="swatch emerald"></span> Líquido {{ formatCurrency(rendaConfig.salarioLiquido || 0) }}</li>
+                <li><span class="swatch amber"></span> Descontos {{ formatCurrency(rendaConfig.totalDescontos || 0) }}</li>
+                <li *ngIf="rendaConfig.percentualDescontosSobreBruto != null && rendaConfig.salarioBruto">
+                  Descontos ≈ {{ (rendaConfig.percentualDescontosSobreBruto | number:'1.0-1') }}% do bruto
+                </li>
+              </ul>
             </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- Configuração de Renda (dark) -->
-    <section class="renda-config-wrap" *ngIf="!errorMessage && rendaConfig">
-      <div class="renda-config-card hud-glass">
-        <div class="renda-config-head">
-          <h3><i class="fas fa-money-bill-wave"></i> Configuração de Renda</h3>
-          <p class="renda-meta" *ngIf="rendaConfig.diaPagamento">
-            Dia de pagamento: <strong>{{ rendaConfig.diaPagamento }}</strong>
-            <span *ngIf="rendaConfig.receitaAutomaticaAtiva" class="renda-badge">Receita automática</span>
-          </p>
-        </div>
-        <div class="renda-config-body">
-          <div class="renda-chart-box">
-            <canvas
-              baseChart
-              type="doughnut"
-              [data]="rendaDoughnutChartData"
-              [options]="rendaDoughnutChartOptions"
-              aria-label="Salário líquido versus descontos">
-            </canvas>
+        <div class="hud-bottom-col">
+          <div class="hud-card hud-glass hud-ranking" *ngIf="categoriaRanking.length">
+            <h3 class="hud-panel-title">Ranking de categorias · Hábitos</h3>
+            <p class="hud-panel-sub">Comparativo ao mês anterior, quando disponível.</p>
+            <div class="hud-rank-row" *ngFor="let row of categoriaRanking">
+              <div class="hud-rank-top">
+                <span class="hud-rank-name">{{ row.categoria }}</span>
+                <span class="hud-rank-money">{{ formatCurrency(row.valor) }}</span>
+              </div>
+              <div class="hud-dual-track">
+                <div class="hud-dual-bg"></div>
+                <div class="hud-dual-fill" [style.width.%]="row.pctOfMax"></div>
+              </div>
+              <div class="hud-rank-var" *ngIf="row.variacaoPct != null" [class.hud-rank-excesso]="row.excesso">
+                <i class="fas fa-fire" *ngIf="row.excesso" aria-hidden="true"></i>
+                {{ row.variacaoPct >= 0 ? '+' : '' }}{{ row.variacaoPct | number:'1.0-1' }}%
+                <span class="hud-vs">vs mês ant.</span>
+              </div>
+            </div>
           </div>
-          <ul class="renda-legend-list">
-            <li><span class="swatch emerald"></span> Líquido {{ formatCurrency(rendaConfig.salarioLiquido || 0) }}</li>
-            <li><span class="swatch amber"></span> Descontos {{ formatCurrency(rendaConfig.totalDescontos || 0) }}</li>
-            <li *ngIf="rendaConfig.percentualDescontosSobreBruto != null && rendaConfig.salarioBruto">
-              Descontos ≈ {{ (rendaConfig.percentualDescontosSobreBruto | number:'1.0-1') }}% do bruto
-            </li>
-          </ul>
         </div>
       </div>
     </section>
