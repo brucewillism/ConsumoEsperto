@@ -5,6 +5,8 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideNativeDateAdapter } from '@angular/material/core';
 
+import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
+
 import { routes } from './app.routes';
 import { AuthInterceptor } from './interceptors/auth.interceptor';
 import { ErrorInterceptor } from './interceptors/error.interceptor';
@@ -46,6 +48,9 @@ export const appConfig: ApplicationConfig = {
     provideAnimationsAsync(),
     
     // Fornece adaptador de data nativo para Angular Material
-    provideNativeDateAdapter()
+    provideNativeDateAdapter(),
+
+    // Chart.js (ng2-charts v8) — registra controllers/plugins (line, doughnut, filler…)
+    provideCharts(withDefaultRegisterables())
   ]
 };

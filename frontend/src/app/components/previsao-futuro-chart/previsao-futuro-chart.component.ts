@@ -1,4 +1,4 @@
-import { Component, DestroyRef, Input, OnChanges, OnInit, SimpleChanges, inject } from '@angular/core';
+import { Component, DestroyRef, Input, OnChanges, OnInit, SimpleChanges, ViewChild, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { BaseChartDirective } from 'ng2-charts';
@@ -16,6 +16,8 @@ import { LoadingIndicatorComponent } from '../loading-indicator/loading-indicato
 })
 export class PrevisaoFuturoChartComponent implements OnInit, OnChanges {
   private readonly destroyRef = inject(DestroyRef);
+
+  @ViewChild(BaseChartDirective) private chart?: BaseChartDirective;
 
   /** Quando true, dados vêm do painel (evita GET duplicado). */
   @Input() usarEntradaPai = false;
@@ -84,6 +86,9 @@ export class PrevisaoFuturoChartComponent implements OnInit, OnChanges {
   ngOnInit(): void {
     if (this.usarEntradaPai) {
       this.carregando = this.painelCarregando;
+      if (!this.painelCarregando) {
+        this.aplicarEntradaPai();
+      }
       return;
     }
     this.carregarInterno();
@@ -98,6 +103,10 @@ export class PrevisaoFuturoChartComponent implements OnInit, OnChanges {
       this.erro = false;
       return;
     }
+    this.aplicarEntradaPai();
+  }
+
+  private aplicarEntradaPai(): void {
     this.carregando = false;
     if (this.chartInput?.pontos?.length) {
       this.montarGrafico(this.chartInput);
@@ -132,9 +141,10 @@ export class PrevisaoFuturoChartComponent implements OnInit, OnChanges {
     const negativaVisual = !!dto.projecaoNegativa && !this.novoFuturoCiano;
     this.negativa = negativaVisual;
     const labels = dto.pontos.map((p) => `Dia ${p.dia}`);
-    const real: (number | null)[] = dto.pontos.map((p) => (p.serie === 'REAL' ? p.saldo : null));
+    const saldoNum = (p: { saldo: number }) => Number(p.saldo);
+    const real: (number | null)[] = dto.pontos.map((p) => (p.serie === 'REAL' ? saldoNum(p) : null));
     const proj: (number | null)[] = dto.pontos.map((p) =>
-      p.serie === 'PROJETADO' || p.serie === 'REAL' ? p.saldo : null
+      p.serie === 'PROJETADO' || p.serie === 'REAL' ? saldoNum(p) : null
     );
 
     const marcos = new Set(dto.diasVencimentoDespesasFixas ?? []);
@@ -272,5 +282,12 @@ export class PrevisaoFuturoChartComponent implements OnInit, OnChanges {
     };
 
     this.resumoFimMes = brl.format(dto.saldoProjetadoFimMes ?? 0);
+    this.agendarAtualizacaoGrafico();
+  }
+
+  /** Canvas nasce após *ngIf — força redraw quando os dados chegam async. */
+  private agendarAtualizacaoGrafico(): void {
+    queueMicrotask(() => this.chart?.update());
+    setTimeout(() => this.chart?.update(), 0);
   }
 }

@@ -113,11 +113,11 @@
       <form [formGroup]="quickTransacaoForm" (ngSubmit)="salvarLancamentoRapido()" class="quick-lancamento-form">
         <mat-form-field appearance="outline" class="exec-field exec-field-grow">
           <mat-label>Descrição</mat-label>
-          <input matInput formControlName="descricao" placeholder="Ex.: Supermercado" autocomplete="off" />
+          <input matInput formControlName="descricao" autocomplete="off" />
         </mat-form-field>
         <mat-form-field appearance="outline" class="exec-field">
           <mat-label>Valor (R$)</mat-label>
-          <input matInput type="text" inputmode="decimal" formControlName="valor" placeholder="0,00" />
+          <input matInput type="text" inputmode="decimal" formControlName="valor" />
         </mat-form-field>
         <mat-form-field appearance="outline" class="exec-field">
           <mat-label>Tipo</mat-label>

@@ -644,6 +644,12 @@ a {
   --mdc-outlined-text-field-label-text-color: var(--text-secondary);
 }
 
+/* Sem foco: só o rótulo (mat-label) — placeholder não sobrepõe o label */
+.mat-mdc-form-field:not(.mat-focused) .mat-mdc-input-element::placeholder {
+  opacity: 0;
+  color: transparent;
+}
+
 /* Print styles */
 @media print {
   .no-print {

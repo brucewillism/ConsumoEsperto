@@ -56,6 +56,12 @@
   background: rgba(13, 14, 18, 0.45);
   padding: 0.35rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
+
+  canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
 }
 
 .previsao-chart-box.alerta-negativa {
