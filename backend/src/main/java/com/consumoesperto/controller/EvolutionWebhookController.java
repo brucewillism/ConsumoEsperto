@@ -37,8 +37,16 @@ public class EvolutionWebhookController {
     private final WhatsAppCommandService whatsAppCommandService;
     private final JarvisProtocolService jarvisProtocolService;
 
-    @PostMapping("/webhook")
-    public ResponseEntity<Map<String, String>> receiveEvolutionWebhook(@RequestBody JsonNode payload) {
+    /**
+     * Evolution API v2.3+ também POSTa variantes como {@code /webhook/messages-upsert}; o destino nos logs
+     * mostra suffix path. Sem {@code /**} respondíamos 404 e a Evolution retentava (log "Sucesso após N tentativas").
+     */
+    @PostMapping({"/webhook", "/webhook/**"})
+    public ResponseEntity<Map<String, String>> receiveEvolutionWebhook(@RequestBody(required = false) JsonNode payload) {
+        if (payload == null || payload.isNull()) {
+            log.debug("Evolution webhook POST sem corpo JSON — ignorado (path evento apenas).");
+            return ResponseEntity.ok(Map.of("status", "ignored", "reason", "empty-body"));
+        }
         String event = firstNonBlank(
             payload.path("event").asText(""),
             payload.path("body").path("event").asText(""),
