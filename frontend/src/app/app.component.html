@@ -221,4 +221,4 @@
 <!-- Overlay para fechar dropdowns quando clicar fora -->
 <div class="overlay" *ngIf="(showNotifications || showUserMenu) && !isLoginPage" (click)="closeDropdowns()"></div>
 
-<app-loading-indicator *ngIf="isLoading$ | async" mode="overlay" message="A carregar…"></app-loading-indicator>
+<app-loading-indicator *ngIf="isLoading$ | async" mode="overlay" size="lg" message="Carregando…"></app-loading-indicator>

@@ -234,5 +234,5 @@
     </mat-card-content>
   </mat-card>
 
-  <app-loading-indicator *ngIf="carregando" mode="panel" message="Gerando relatório..."></app-loading-indicator>
+  <div *ngIf="carregando" class="loading-placeholder" aria-hidden="true"></div>
 </div>

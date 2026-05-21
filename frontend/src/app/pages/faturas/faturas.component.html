@@ -34,8 +34,8 @@
     </mat-card-content>
   </mat-card>
 
-  <!-- Loading -->
-  <app-loading-indicator *ngIf="loading" mode="panel" message="Carregando faturas..."></app-loading-indicator>
+  <!-- Loading: overlay global via HTTP interceptor -->
+  <div *ngIf="loading" class="loading-placeholder" aria-hidden="true"></div>
 
   <!-- Resumo das Faturas -->
   <div class="resumo-grid" *ngIf="!loading">

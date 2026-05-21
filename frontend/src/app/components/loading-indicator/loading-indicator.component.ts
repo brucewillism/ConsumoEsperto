@@ -23,15 +23,23 @@ export class LoadingIndicatorComponent {
 
   readonly loadingGifUrl = environment.loadingGifUrl;
 
-  /** GIF só aparece se o ficheiro existir e tiver dimensões reais (não placeholder 1×1). */
+  /** Spinner até o GIF carregar; placeholder 1×1 mantém só o spinner. */
   gifVisible = false;
+  gifFailed = false;
 
   onGifLoad(event: Event): void {
     const img = event.target as HTMLImageElement;
-    this.gifVisible = img.naturalWidth > 4 && img.naturalHeight > 4;
+    if (img.naturalWidth <= 4 || img.naturalHeight <= 4) {
+      this.gifVisible = false;
+      this.gifFailed = true;
+      return;
+    }
+    this.gifVisible = true;
+    this.gifFailed = false;
   }
 
   onGifError(): void {
     this.gifVisible = false;
+    this.gifFailed = true;
   }
 }

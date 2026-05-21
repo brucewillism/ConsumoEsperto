@@ -21,7 +21,6 @@ import { FaturaService } from '../../services/fatura.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { OrcamentoService, Orcamento } from '../../services/orcamento.service';
 import { FaturaMesGrupo } from './faturas-mes-grupo.model';
-import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 
 @Component({
   selector: 'app-faturas',
@@ -41,8 +40,7 @@ import { LoadingIndicatorComponent } from '../../components/loading-indicator/lo
     MatSnackBarModule,
     MatDialogModule,
     ReactiveFormsModule,
-    FormsModule,
-    LoadingIndicatorComponent
+    FormsModule
   ],
   templateUrl: './faturas.component.html',
   styleUrls: ['./faturas.component.scss']

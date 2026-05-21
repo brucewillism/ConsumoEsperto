@@ -5,7 +5,7 @@
   [class.loading-indicator--overlay]="mode === 'overlay'"
   [class.loading-indicator--sm]="size === 'sm'"
   [class.loading-indicator--md]="size === 'md'"
-  [class.loading-indicator--lg]="size === 'lg'"
+  [class.loading-indicator--lg]="size === 'lg' || mode === 'overlay'"
   [attr.aria-busy]="true"
   [attr.aria-live]="mode === 'overlay' ? 'polite' : null">
   <div class="loading-indicator__backdrop" *ngIf="mode === 'overlay'" aria-hidden="true"></div>
@@ -13,6 +13,7 @@
   <div class="loading-indicator__content">
     <div class="loading-indicator__visual">
       <img
+        *ngIf="!gifFailed"
         class="loading-indicator__gif"
         [class.loading-indicator__gif--visible]="gifVisible"
         [src]="loadingGifUrl"

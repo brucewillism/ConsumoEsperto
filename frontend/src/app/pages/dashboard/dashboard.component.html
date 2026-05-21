@@ -105,10 +105,7 @@
     </div>
   </section>
 
-  <!-- Loading State -->
-  <app-loading-indicator *ngIf="isLoading" mode="panel" message="Carregando dados..."></app-loading-indicator>
-
-  <!-- Lançamento rápido (cartão vs débito/dinheiro) -->
+  <!-- Conteúdo oculto enquanto carrega; overlay global (LoadingInterceptor) trata o indicador visual. -->
   <section class="quick-lancamento" *ngIf="!errorMessage && !isLoading">
     <div class="quick-lancamento-card">
       <h3 class="quick-lancamento-title">Novo lançamento</h3>

@@ -63,22 +63,30 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 4.5rem;
+  min-height: 4.5rem;
 }
 
 .loading-indicator__gif {
-  display: none;
-  max-width: min(90vw, 440px);
-  max-height: min(72vh, 440px);
+  position: absolute;
+  display: block;
+  opacity: 0;
+  max-width: min(90vw, 320px);
+  max-height: min(72vh, 320px);
   width: auto;
   height: auto;
   object-fit: contain;
   pointer-events: none;
-  mix-blend-mode: screen;
-  filter: brightness(1.12) contrast(1.04);
+  transition: opacity 0.2s ease;
 }
 
 .loading-indicator__gif--visible {
-  display: block;
+  opacity: 1;
+}
+
+.loading-indicator--overlay .loading-indicator__gif {
+  max-width: min(88vw, 280px);
+  max-height: min(60vh, 280px);
 }
 
 .loading-indicator__spinner {
@@ -98,7 +106,8 @@
   height: 3.25rem;
 }
 
-.loading-indicator--lg .loading-indicator__spinner {
+.loading-indicator--lg .loading-indicator__spinner,
+.loading-indicator--overlay .loading-indicator__spinner {
   width: 4.5rem;
   height: 4.5rem;
 }

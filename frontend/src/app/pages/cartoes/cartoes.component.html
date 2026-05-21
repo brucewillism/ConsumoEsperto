@@ -17,8 +17,8 @@
     </div>
   </div>
 
-  <!-- Loading -->
-  <app-loading-indicator *ngIf="loading" mode="panel" message="Carregando cartões..."></app-loading-indicator>
+  <!-- Loading: overlay global via HTTP interceptor -->
+  <div *ngIf="loading" class="loading-placeholder" aria-hidden="true"></div>
 
   <!-- Resumo dos Limites -->
   <div class="resumo-grid" *ngIf="!loading">

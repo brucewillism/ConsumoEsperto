@@ -17,7 +17,6 @@ import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { CartaoCredito, TipoCartao } from '../../models/cartao-credito.model';
-import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 
 @Component({
   selector: 'app-cartoes',
@@ -37,8 +36,7 @@ import { LoadingIndicatorComponent } from '../../components/loading-indicator/lo
     MatSelectModule,
     MatSnackBarModule,
     MatDialogModule,
-    FormsModule,
-    LoadingIndicatorComponent
+    FormsModule
   ],
   templateUrl: './cartoes.component.html',
   styleUrls: ['./cartoes.component.scss']
