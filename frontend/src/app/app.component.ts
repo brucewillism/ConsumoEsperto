@@ -44,8 +44,14 @@ export class AppComponent implements OnInit {
   notifications: InboxNotification[] = [];
   usuarioScore: UsuarioScore | null = null;
 
-  /** GIF do overlay global de loading (tools/img/loading.gif via angular.json). */
+  /** GIF do overlay global de loading. */
   readonly loadingGifUrl = environment.loadingGifUrl;
+  /** Quando o GIF falha (404 no build antigo), mostra spinner CSS. */
+  loadingGifFailed = false;
+
+  onLoadingGifError(): void {
+    this.loadingGifFailed = true;
+  }
 
   constructor(
     private authService: AuthService,

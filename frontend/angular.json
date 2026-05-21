@@ -95,12 +95,12 @@
             // Arquivos estáticos (imagens, fontes, etc.)
             "assets": [
               {
-                "glob": "**/*",        // Todos os arquivos
-                "input": "public"      // Do diretório public
+                "glob": "**/*",
+                "input": "public"
               },
               {
                 "glob": "loading.gif",
-                "input": "../tools/img",
+                "input": "src/assets/loading",
                 "output": "assets/loading"
               }
             ],

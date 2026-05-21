@@ -695,8 +695,7 @@ body {
   min-height: 100dvh;
   margin: 0;
   box-sizing: border-box;
-  /* Véu leve — o GIF funde com o dashboard por baixo */
-  background: rgba(15, 23, 42, 0.22);
+  background: rgba(15, 23, 42, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -755,6 +754,33 @@ body {
   mix-blend-mode: screen;
   /* Levanta ligeiramente os tons escuros do GIF (o halo costuma ser cinza‑quase‑preto). */
   filter: brightness(1.14) contrast(1.04);
+}
+
+.global-loading-fallback {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5002;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: #e2e8f0;
+  font-size: 1rem;
+  font-weight: 500;
+  pointer-events: none;
+
+  i {
+    font-size: 2.75rem;
+    color: #38bdf8;
+  }
+}
+
+/* GIF real (se substituir o placeholder) fica atrás do spinner */
+.global-loading-gif--optional {
+  opacity: 0.35;
+  z-index: 5001;
 }
 
 // Responsividade
