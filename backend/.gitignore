@@ -178,8 +178,8 @@ coverage/
 *.dump
 *.backup
 
-# Configuration files with secrets
-config/
+# Configuration files with secrets (raiz do módulo backend — não ignora src/.../config/*.java)
+/config/
 secrets/
 credentials/
 *.key
