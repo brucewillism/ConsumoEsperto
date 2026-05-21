@@ -15,6 +15,7 @@
       <img
         *ngIf="!assetFailed"
         class="loading-indicator__art"
+        [class.loading-indicator__art--gif]="isGifAsset"
         [src]="currentAssetUrl"
         alt=""
         (error)="onAssetError()" />

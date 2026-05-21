@@ -2,8 +2,8 @@
 
 | Ficheiro | Uso |
 |----------|-----|
-| **`loading.gif`** | **Principal** — animação [loading-1](https://usagif.com/gif/loading-1/) (USAGIF, uso livre). |
-| `loading.svg` | Fallback estático se o GIF não carregar. |
+| **`loading.svg`** | **Principal** — fundo transparente, animação SMIL (anel + LOADING). |
+| `loading.gif` | Fallback — [loading-1](https://usagif.com/gif/loading-1/) (USAGIF); fundo teal opaco, tratado com `mix-blend-mode: screen` se carregar. |
 
 Origem do GIF: https://usagif.com/wp-content/uploads/loading-1.gif
 

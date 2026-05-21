@@ -106,8 +106,32 @@
 }
 
 .loading-indicator--overlay .loading-indicator__visual {
-  min-width: min(88vw, 480px);
-  min-height: min(50vh, 280px);
+  min-width: 12rem;
+  min-height: 12rem;
+}
+
+/* loading-1.gif (USAGIF): fundo teal embutido — screen + máscara radial simulam transparência */
+.loading-indicator__art--gif {
+  mix-blend-mode: screen;
+  filter: brightness(1.2) contrast(1.08) saturate(1.05);
+  -webkit-mask-image: radial-gradient(
+    ellipse 80% 80% at 50% 50%,
+    #000 0%,
+    #000 34%,
+    rgba(0, 0, 0, 0.45) 46%,
+    transparent 60%
+  );
+  mask-image: radial-gradient(
+    ellipse 80% 80% at 50% 50%,
+    #000 0%,
+    #000 34%,
+    rgba(0, 0, 0, 0.45) 46%,
+    transparent 60%
+  );
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 .loading-indicator__spinner {

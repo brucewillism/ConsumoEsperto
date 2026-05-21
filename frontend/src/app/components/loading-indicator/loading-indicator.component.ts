@@ -17,7 +17,7 @@ export class LoadingIndicatorComponent {
   @Input() mode: LoadingIndicatorMode = 'panel';
   @Input() size: LoadingIndicatorSize = 'md';
 
-  /** GIF animado (preferido). SVG estático se o GIF falhar. */
+  /** SVG transparente (preferido). GIF opaco (USAGIF) só se o SVG falhar — blend CSS no GIF. */
   readonly loadingAssetUrl = environment.loadingAssetUrl;
   readonly loadingFallbackUrl = environment.loadingFallbackUrl;
 
@@ -34,5 +34,10 @@ export class LoadingIndicatorComponent {
 
   get currentAssetUrl(): string {
     return this.useFallback ? this.loadingFallbackUrl : this.loadingAssetUrl;
+  }
+
+  /** GIF do USAGIF (loading-1) traz fundo teal opaco — tratado via blend CSS. */
+  get isGifAsset(): boolean {
+    return !this.assetFailed && this.currentAssetUrl.toLowerCase().endsWith('.gif');
   }
 }

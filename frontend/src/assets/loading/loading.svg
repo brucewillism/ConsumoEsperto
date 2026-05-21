@@ -70,8 +70,11 @@
   </g>
 
   <g filter="url(#jarvisGlow)">
-    <circle cx="100" cy="100" r="88" stroke="#67e8f9" stroke-width="2.5" stroke-dasharray="40 520" stroke-linecap="round" opacity="0.85">
-      <animateTransform attributeName="transform" type="rotate" from="0 100 100" to="360 100 100" dur="2.4s" repeatCount="indefinite"/>
+    <circle cx="100" cy="100" r="88" stroke="#67e8f9" stroke-width="3" stroke-dasharray="55 500" stroke-linecap="round" opacity="0.9">
+      <animateTransform attributeName="transform" type="rotate" from="0 100 100" to="360 100 100" dur="1.6s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="100" cy="100" r="88" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="20 520" stroke-linecap="round" opacity="0.45">
+      <animateTransform attributeName="transform" type="rotate" from="360 100 100" to="0 100 100" dur="2.8s" repeatCount="indefinite"/>
     </circle>
   </g>
 </svg>

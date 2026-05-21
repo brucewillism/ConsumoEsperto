@@ -24,9 +24,9 @@ export const environment = {
    */
   googleClientID: '593452038228-47k24odoa6f18c78e3ssp9bhu56gugnm.apps.googleusercontent.com',
 
-  /** Overlay global — GIF animado (USAGIF loading-1); SVG estático como fallback. */
-  loadingAssetUrl: 'assets/loading/loading.gif',
-  loadingFallbackUrl: 'assets/loading/loading.svg',
+  /** Overlay global — SVG transparente e animado; GIF (opaco) só se o SVG falhar. */
+  loadingAssetUrl: 'assets/loading/loading.svg',
+  loadingFallbackUrl: 'assets/loading/loading.gif',
 
   /** Tempo extra (ms) após o fim do último pedido antes de ocultar o overlay (ex.: 200 = ⅕ s). */
   loadingOverlayTailMs: 200
