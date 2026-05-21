@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { LoadingService } from '../../services/loading.service';
 
 /**
  * Componente responsável pela autenticação de usuários
@@ -50,7 +51,8 @@ export class LoginComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private loadingService: LoadingService
   ) {
     // Inicializa o formulário com validações
     this.loginForm = this.fb.group({
@@ -81,6 +83,7 @@ export class LoginComponent implements OnInit {
     if (this.loginForm.valid) {
       this.isLoading = true;
       this.clearAlert();
+      this.loadingService.beginAuthFlow('Entrando…');
 
       const credentials = {
         username: this.loginForm.value.email,
@@ -88,31 +91,18 @@ export class LoginComponent implements OnInit {
         password: this.loginForm.value.password
       };
 
-      console.log('[LoginComponent] Enviando credenciais para login:', credentials);
-
       this.authService.login(credentials).subscribe({
-        next: (response) => {
-          console.log('[LoginComponent] Login bem-sucedido, resposta:', response);
-          this.isLoading = false;
-          this.showAlert('Login realizado com sucesso!', 'success');
-          
-          // Salvar preferência "lembrar de mim"
+        next: () => {
           if (this.loginForm.value.rememberMe) {
             localStorage.setItem('rememberMe', 'true');
           }
-
-          // Redirecionar para o dashboard após um breve delay
-          setTimeout(() => {
-            console.log('[LoginComponent] Redirecionando para dashboard...');
-            this.router.navigate(['/dashboard']);
-          }, 1000);
+          this.loadingService.updateAuthFlowMessage('Entrando…');
+          this.router.navigate(['/dashboard']);
         },
         error: (error) => {
-          console.error('[LoginComponent] Erro no login:', error);
           this.isLoading = false;
-          
+          this.loadingService.endAuthFlow();
           let errorMessage = 'Erro ao fazer login. Tente novamente.';
-          
           if (error.status === 401) {
             errorMessage = 'E-mail ou senha incorretos.';
           } else if (error.status === 0) {
@@ -120,7 +110,6 @@ export class LoginComponent implements OnInit {
           } else if (error.error?.message) {
             errorMessage = error.error.message;
           }
-          
           this.showAlert(errorMessage, 'error');
         }
       });
@@ -136,30 +125,30 @@ export class LoginComponent implements OnInit {
    * a resposta para autenticar o usuário.
    */
   loginWithGoogle(): void {
+    if (this.isLoading) {
+      return;
+    }
     this.isLoading = true;
     this.clearAlert();
+    this.loadingService.beginAuthFlow('Conectando com Google…');
 
     this.authService.loginWithGoogle().subscribe({
-      next: (response) => {
-        this.isLoading = false;
-        this.showAlert('Login com Google realizado com sucesso!', 'success');
-        
-        setTimeout(() => {
-          this.router.navigate(['/dashboard']);
-        }, 1000);
+      next: () => {
+        this.loadingService.updateAuthFlowMessage('Entrando…');
+        this.router.navigate(['/dashboard']);
       },
       error: (error) => {
         this.isLoading = false;
+        this.loadingService.endAuthFlow();
         console.error('Erro no login com Google:', error);
-        
+
         let errorMessage = 'Erro ao fazer login com Google. Tente novamente.';
-        
         if (error.status === 0) {
           errorMessage = 'Erro de conexão. Verifique sua internet.';
         } else if (error.error?.message) {
           errorMessage = error.error.message;
         }
-        
+
         this.showAlert(errorMessage, 'error');
       }
     });

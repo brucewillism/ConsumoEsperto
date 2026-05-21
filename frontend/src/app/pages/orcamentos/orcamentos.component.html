@@ -36,15 +36,17 @@
         <input matInput type="number" min="2000" max="2100" [(ngModel)]="ano">
       </mat-form-field>
 
-      <mat-checkbox [(ngModel)]="compartilhado">
-        <i class="fas" [class.fa-users]="compartilhado" [class.fa-lock]="!compartilhado"></i>
-        {{ compartilhado ? 'Compartilhado com família/casal' : 'Privado' }}
-      </mat-checkbox>
+      <div class="form-actions">
+        <mat-checkbox [(ngModel)]="compartilhado">
+          <i class="fas" [class.fa-users]="compartilhado" [class.fa-lock]="!compartilhado"></i>
+          {{ compartilhado ? 'Compartilhado com família/casal' : 'Privado' }}
+        </mat-checkbox>
 
-      <button mat-raised-button color="primary" (click)="salvar()" [disabled]="salvando">
-        <mat-icon>save</mat-icon>
-        Salvar
-      </button>
+        <button mat-raised-button color="primary" type="button" class="btn-salvar" (click)="salvar()" [disabled]="salvando">
+          <mat-icon>save</mat-icon>
+          Salvar
+        </button>
+      </div>
     </div>
   </mat-card>
 

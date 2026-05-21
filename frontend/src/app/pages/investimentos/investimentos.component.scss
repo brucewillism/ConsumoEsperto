@@ -166,6 +166,9 @@
 
 .chart-panel {
   padding: 1.25rem;
+  position: relative;
+  z-index: 2;
+  overflow: visible;
 }
 
 .panel-title {
@@ -185,14 +188,7 @@
 
 .chart-host {
   min-height: 300px;
-  height: 320px;
-}
-
-.chart-host ::ng-deep .previsao-futuro-wrap {
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  padding: 0;
+  overflow: visible;
 }
 
 .chart-host ::ng-deep .previsao-chart-box {
@@ -238,6 +234,9 @@
 .simulator {
   padding: 1.25rem;
   color: #e5e7eb;
+  position: relative;
+  z-index: 1;
+  margin-top: 0;
 
   h2 {
     margin: 0 0 8px;

@@ -27,6 +27,8 @@ export class PrevisaoFuturoChartComponent implements OnInit, OnChanges {
   @Input() radarAtivo = false;
   /** Trajetória “novo futuro” em ciano (pós-protocolo). */
   @Input() novoFuturoCiano = false;
+  /** Sem cabeçalho/card próprio — usado dentro de painéis (ex.: investimentos). */
+  @Input() embutido = false;
 
   carregando = true;
   erro = false;

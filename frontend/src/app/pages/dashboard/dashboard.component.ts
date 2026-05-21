@@ -733,6 +733,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       mesList
     );
     this.atualizarDoughnutComRelatorio(relatorioCategoria);
+    if (!this.doughnutChartData.labels?.length && this.categoryChartData) {
+      this.aplicarDoughnutDeChartData(this.categoryChartData);
+    }
     this.syncCategoriaRankingHud(relatorioCategoria, data.relatorioCategoriaMesPassado);
     
     console.log('✅ Dados processados:', {
@@ -745,9 +748,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  private atualizarDoughnutComRelatorio(relatorio: any) {
+  private atualizarDoughnutComRelatorio(relatorio: RelatorioCategoriaMesAtual) {
     const itens = Array.isArray(relatorio?.itens) ? relatorio.itens : [];
     if (itens.length === 0) {
+      if (this.categoryChartData?.labels?.length && this.categoryChartData.datasets?.[0]?.data?.length) {
+        this.aplicarDoughnutDeChartData(this.categoryChartData);
+        return;
+      }
       this.doughnutColors = [];
       this.doughnutChartData = {
         labels: [],
@@ -756,8 +763,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const labels = itens.map((item: any) => item.categoria || 'Sem categoria');
-    const valores = itens.map((item: any) => Number(item.valor || 0));
+    const labels = itens.map((item) => item.categoria || 'Sem categoria');
+    const valores = itens.map((item) => this.coercerValorMonetario(item.valor));
     const bg = this.gerarCores(labels.length);
     const border = this.gerarCores(labels.length, false);
     this.doughnutColors = bg;
@@ -771,6 +778,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
         borderWidth: 1
       }]
     };
+  }
+
+  private aplicarDoughnutDeChartData(chart: ChartData): void {
+    const labels = [...(chart.labels ?? [])].map(String);
+    const raw = chart.datasets?.[0]?.data ?? [];
+    const valores = raw.map((v) => this.coercerValorMonetario(v));
+    const bg = this.gerarCores(labels.length);
+    const border = this.gerarCores(labels.length, false);
+    this.doughnutColors = bg;
+    this.doughnutChartData = {
+      labels,
+      datasets: [{
+        data: valores,
+        backgroundColor: bg,
+        borderColor: border,
+        borderWidth: 1
+      }]
+    };
+  }
+
+  private coercerValorMonetario(valor: unknown): number {
+    const n = Number(valor);
+    return Number.isFinite(n) ? n : 0;
   }
 
   getDoughnutColor(index: number): string {
@@ -1005,10 +1035,58 @@ export class DashboardComponent implements OnInit, OnDestroy {
     api: RelatorioCategoriaMesAtual | null | undefined,
     transacoes: Transacao[]
   ): RelatorioCategoriaMesAtual {
-    if (Array.isArray(api?.itens) && api!.itens.length > 0) {
-      return api!;
+    const fromApi = this.normalizarRelatorioCategoria(api);
+    const fromTx = this.montarRelatorioCategoriaDeTransacoes(transacoes);
+    if (fromApi.itens.length === 0) {
+      return fromTx;
     }
-    return this.montarRelatorioCategoriaDeTransacoes(transacoes);
+    if (fromTx.itens.length > fromApi.itens.length) {
+      return fromTx;
+    }
+    return fromApi;
+  }
+
+  private normalizarRelatorioCategoria(raw: RelatorioCategoriaMesAtual | null | undefined): RelatorioCategoriaMesAtual {
+    const now = new Date();
+    const base: RelatorioCategoriaMesAtual = {
+      ano: now.getFullYear(),
+      mes: now.getMonth() + 1,
+      totalDespesas: 0,
+      itens: [],
+    };
+    if (!raw || typeof raw !== 'object') {
+      return base;
+    }
+
+    const itensBrutos = (raw as { itens?: unknown; transacoesPorCategoria?: unknown }).itens
+      ?? (raw as { transacoesPorCategoria?: unknown }).transacoesPorCategoria
+      ?? [];
+
+    const itens = (Array.isArray(itensBrutos) ? itensBrutos : [])
+      .map((item: unknown) => {
+        if (Array.isArray(item)) {
+          return {
+            categoria: String(item[0] ?? 'Sem categoria'),
+            valor: this.coercerValorMonetario(item[1]),
+            percentual: 0,
+          };
+        }
+        const row = item as { categoria?: string; valor?: unknown; percentual?: unknown };
+        return {
+          categoria: String(row.categoria ?? 'Sem categoria'),
+          valor: this.coercerValorMonetario(row.valor),
+          percentual: this.coercerValorMonetario(row.percentual),
+        };
+      })
+      .filter((item) => item.valor > 0);
+
+    const totalDespesas = itens.reduce((sum, item) => sum + item.valor, 0);
+    return {
+      ano: Number((raw as RelatorioCategoriaMesAtual).ano) || base.ano,
+      mes: Number((raw as RelatorioCategoriaMesAtual).mes) || base.mes,
+      totalDespesas: this.coercerValorMonetario((raw as RelatorioCategoriaMesAtual).totalDespesas) || totalDespesas,
+      itens,
+    };
   }
 
   private montarRelatorioCategoriaDeTransacoes(transacoes: Transacao[]): RelatorioCategoriaMesAtual {
@@ -1016,11 +1094,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const map = new Map<string, number>();
 
     for (const t of transacoes) {
-      if (t.tipoTransacao !== 'DESPESA') {
+      if (!this.isTransacaoDespesa(t)) {
         continue;
       }
-      const valor = Number(t.valor);
-      if (!Number.isFinite(valor) || valor <= 0) {
+      const valor = this.coercerValorMonetario(t.valor);
+      if (valor <= 0) {
         continue;
       }
       const categoria = this.nomeCategoriaTransacao(t);
@@ -1042,6 +1120,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       totalDespesas,
       itens,
     };
+  }
+
+  private isTransacaoDespesa(t: Transacao): boolean {
+    const tipo = String(t.tipoTransacao ?? t.tipo ?? '').toUpperCase();
+    return tipo === 'DESPESA';
   }
 
   private nomeCategoriaTransacao(t: Transacao): string {

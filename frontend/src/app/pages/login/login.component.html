@@ -109,14 +109,8 @@
         (click)="loginWithGoogle()"
         [disabled]="isLoading"
       >
-        <span *ngIf="!isLoading">
-          <i class="fab fa-google"></i>
-          Continuar com Google
-        </span>
-        <span *ngIf="isLoading" class="loading-spinner">
-          <i class="fas fa-spinner fa-spin"></i>
-          Autenticando...
-        </span>
+        <i class="fab fa-google"></i>
+        Continuar com Google
       </button>
 
       <div class="register-link">

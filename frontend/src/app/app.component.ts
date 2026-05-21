@@ -5,7 +5,7 @@ import { hudRouteAnimations } from './app.animations';
 import { AuthService } from './services/auth.service';
 import { Usuario } from './models/usuario.model';
 import { filter } from 'rxjs/operators';
-import { LoadingService } from './services/loading.service';
+import { LoadingService, AuthFlowOverlayState } from './services/loading.service';
 import { InboxNotification, NotificacaoInboxService } from './services/notificacao-inbox.service';
 import { ScoreService, UsuarioScore } from './services/score.service';
 import { LoadingIndicatorComponent } from './components/loading-indicator/loading-indicator.component';
@@ -43,6 +43,7 @@ export class AppComponent implements OnInit {
 
   notifications: InboxNotification[] = [];
   usuarioScore: UsuarioScore | null = null;
+  authFlowOverlay: AuthFlowOverlayState = { active: false, message: '' };
 
   constructor(
     private authService: AuthService,
@@ -83,6 +84,11 @@ export class AppComponent implements OnInit {
     });
 
     this.routeAnimationState = this.router.url;
+    this.isLoginPage = this.router.url === '/login' || this.router.url === '/register';
+
+    this.loadingService.authFlowOverlay$.subscribe((state) => {
+      this.authFlowOverlay = state;
+    });
 
     this.router.events
       .pipe(filter((e: RouterEvent): e is NavigationEnd => e instanceof NavigationEnd))
@@ -91,6 +97,19 @@ export class AppComponent implements OnInit {
         this.isLoginPage = path === '/login' || path === '/register';
         this.currentPage = this.tituloRota(path);
         this.routeAnimationState = path;
+        if (!this.isLoginPage && this.loadingService.isAuthFlowActive()) {
+          this.loadingService.updateAuthFlowMessage('Carregando…');
+          if (!this.loadingService.isLoadingSnapshot()) {
+            this.loadingService.endAuthFlow();
+          } else {
+            const sub = this.loadingService.isLoading$.subscribe((loading) => {
+              if (!loading) {
+                this.loadingService.endAuthFlow();
+                sub.unsubscribe();
+              }
+            });
+          }
+        }
       });
   }
 

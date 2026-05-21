@@ -1,5 +1,8 @@
-<section class="previsao-futuro-wrap hud-glass" aria-label="Futuro provável — saldo projetado">
-  <div class="previsao-head">
+<section
+  class="previsao-futuro-wrap hud-glass"
+  [class.embutido]="embutido"
+  aria-label="Futuro provável — saldo projetado">
+  <div class="previsao-head" *ngIf="!embutido">
     <div>
       <p class="eyebrow">Nível 2 · Projeção de fluxo</p>
       <h3 class="hud-section-title">Trajetória de caixa</h3>

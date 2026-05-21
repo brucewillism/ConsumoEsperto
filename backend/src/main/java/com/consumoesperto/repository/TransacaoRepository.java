@@ -46,6 +46,13 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     
     // Método de compatibilidade para código existente
     List<Transacao> findByUsuarioIdAndDataTransacaoBetween(Long usuarioId, LocalDateTime dataInicio, LocalDateTime dataFim);
+
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId " +
+           "AND COALESCE(t.dataTransacao, t.dataCriacao) BETWEEN :dataInicio AND :dataFim " +
+           "ORDER BY COALESCE(t.dataTransacao, t.dataCriacao) DESC")
+    List<Transacao> findByUsuarioIdAndPeriodoEfetivoOrderByDataDesc(@Param("usuarioId") Long usuarioId,
+                                                                     @Param("dataInicio") LocalDateTime dataInicio,
+                                                                     @Param("dataFim") LocalDateTime dataFim);
     
     @Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
     BigDecimal sumByUsuarioIdAndTipoAndPeriodo(@Param("usuarioId") Long usuarioId, 
@@ -87,7 +94,7 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
            "WHERE t.usuario.id = :usuarioId " +
            "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA " +
            "AND COALESCE(t.dataTransacao, t.dataCriacao) BETWEEN :dataInicio AND :dataFim " +
-           "GROUP BY t.categoria.nome " +
+           "GROUP BY COALESCE(t.categoria.nome, 'Sem categoria') " +
            "ORDER BY SUM(t.valor) DESC")
     List<Object[]> findDespesasDashboardByUsuarioIdAndPeriodoGroupByCategoria(@Param("usuarioId") Long usuarioId,
                                                                                @Param("dataInicio") LocalDateTime dataInicio,

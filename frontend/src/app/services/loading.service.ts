@@ -2,6 +2,11 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { environment } from '../../environments/environment';
 
+export interface AuthFlowOverlayState {
+  active: boolean;
+  message: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -12,10 +17,40 @@ export class LoadingService {
   private readonly loadingSubject = new BehaviorSubject<boolean>(false);
   readonly isLoading$ = this.loadingSubject.asObservable();
 
+  /** Overlay único durante login Google/e-mail — evita segundo loading por cima. */
+  private readonly authFlowSubject = new BehaviorSubject<AuthFlowOverlayState>({
+    active: false,
+    message: '',
+  });
+  readonly authFlowOverlay$ = this.authFlowSubject.asObservable();
+
   /** Margem fixa após o último pedido terminar, antes de ocultar (evita flicker). */
   private tailAfterRequestsMs(): number {
     const t = environment.loadingOverlayTailMs;
     return typeof t === 'number' && t >= 0 ? t : 200;
+  }
+
+  isAuthFlowActive(): boolean {
+    return this.authFlowSubject.value.active;
+  }
+
+  isLoadingSnapshot(): boolean {
+    return this.loadingSubject.value;
+  }
+
+  beginAuthFlow(message = 'Autenticando…'): void {
+    this.authFlowSubject.next({ active: true, message });
+  }
+
+  updateAuthFlowMessage(message: string): void {
+    if (!this.isAuthFlowActive()) {
+      return;
+    }
+    this.authFlowSubject.next({ active: true, message });
+  }
+
+  endAuthFlow(): void {
+    this.authFlowSubject.next({ active: false, message: '' });
   }
 
   show(): void {
@@ -63,5 +98,6 @@ export class LoadingService {
     }
     this.activeRequests = 0;
     this.loadingSubject.next(false);
+    this.endAuthFlow();
   }
 }

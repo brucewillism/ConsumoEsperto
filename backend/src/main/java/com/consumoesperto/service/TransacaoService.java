@@ -393,9 +393,9 @@ public class TransacaoService {
      * @return Lista de TransacaoDTO com transações no período especificado
      */
     public List<TransacaoDTO> buscarPorPeriodo(Long usuarioId, LocalDateTime dataInicio, LocalDateTime dataFim) {
-        // Busca transações do usuário no período especificado
-        List<Transacao> transacoes = transacaoRepository.findByUsuarioIdAndDataTransacaoBetweenOrderByDataTransacaoDesc(usuarioId, dataInicio, dataFim);
-        
+        List<Transacao> transacoes = transacaoRepository.findByUsuarioIdAndPeriodoEfetivoOrderByDataDesc(
+            usuarioId, dataInicio, dataFim);
+
         return transacoes.stream()
             .map(this::converterParaDTO)
             .collect(Collectors.toList());

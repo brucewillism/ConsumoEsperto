@@ -52,9 +52,26 @@
 
 .form-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr .7fr .7fr auto;
+  grid-template-columns: minmax(140px, 2fr) minmax(100px, 1fr) 72px 88px auto;
   gap: 12px;
   align-items: center;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-self: end;
+
+  .btn-salvar {
+    width: auto;
+    min-width: 0;
+    flex-shrink: 0;
+    height: 40px;
+    padding: 0 18px;
+    white-space: nowrap;
+  }
 }
 
 .forecast-grid {
@@ -118,10 +135,22 @@
 }
 
 @media (max-width: 900px) {
-  .hero,
-  .form-grid {
-    grid-template-columns: 1fr;
+  .hero {
     flex-direction: column;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .form-grid mat-form-field:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .form-actions {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    justify-content: space-between;
   }
 
   .forecast-grid {

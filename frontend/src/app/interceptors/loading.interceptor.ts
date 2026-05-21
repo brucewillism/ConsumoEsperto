@@ -9,11 +9,12 @@ function skipLoadingOverlay(url: string): boolean {
 }
 
 export const LoadingInterceptor: HttpInterceptorFn = (request, next) => {
+  const loadingService = inject(LoadingService);
+
   if (skipLoadingOverlay(request.url)) {
     return next(request);
   }
 
-  const loadingService = inject(LoadingService);
   loadingService.show();
 
   let downstream;

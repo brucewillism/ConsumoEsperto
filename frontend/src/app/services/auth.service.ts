@@ -4,6 +4,7 @@ import { BehaviorSubject, Observable, tap, map } from 'rxjs';
 import { Usuario, LoginRequest, LoginResponse, GoogleLoginRequest, GoogleLoginResponse } from '../models/usuario.model';
 import { environment } from '../../environments/environment';
 import { Router } from '@angular/router';
+import { LoadingService } from './loading.service';
 
 /**
  * Serviço responsável por gerenciar autenticação de usuários
@@ -43,7 +44,8 @@ export class AuthService {
    */
   constructor(
     private http: HttpClient, 
-    private router: Router
+    private router: Router,
+    private loadingService: LoadingService
   ) {
     // Carrega usuário armazenado no localStorage (se existir)
     this.loadStoredUser();
@@ -131,7 +133,6 @@ export class AuthService {
    */
   loginWithGoogle(): Observable<GoogleLoginResponse> {
     return new Observable<GoogleLoginResponse>((observer: any) => {
-      // Verifica se o Google OAuth está configurado corretamente
       if (!this.isGoogleOAuthConfigured()) {
         observer.error({
           status: 400,
@@ -140,8 +141,7 @@ export class AuthService {
         return;
       }
 
-      // Aguarda um pouco para garantir que a API Google esteja carregada
-      setTimeout(() => {
+      const launch = () => {
         if (typeof window !== 'undefined' && (window as any).google) {
           this.authenticateWithGoogle(observer);
         } else {
@@ -150,7 +150,13 @@ export class AuthService {
             error: { message: 'Google API não disponível. Verifique se o script foi carregado.' }
           });
         }
-      }, 500);
+      };
+
+      if (typeof window !== 'undefined' && (window as any).google) {
+        launch();
+      } else {
+        setTimeout(launch, 150);
+      }
     });
   }
 
@@ -179,10 +185,9 @@ export class AuthService {
           client_id: this.GOOGLE_CLIENT_ID,
           scope: 'openid profile email',
           
-          // Callback de sucesso
           callback: (response: any) => {
             if (response.access_token) {
-              // Busca informações do usuário com o token de acesso
+              this.loadingService.updateAuthFlowMessage('Autenticando…');
               this.getGoogleUserInfo(response.access_token, observer);
             } else {
               observer.error({
@@ -202,7 +207,7 @@ export class AuthService {
           }
         });
 
-        // Solicita o token de acesso
+        this.loadingService.updateAuthFlowMessage('Escolha a conta Google…');
         client.requestAccessToken();
       } else {
         observer.error({
