@@ -42,6 +42,7 @@ public class SentinelaProtocolService {
     private final OpenAiService openAiService;
     private final JarvisProtocolService jarvisProtocolService;
     private final UsuarioRepository usuarioRepository;
+    private final PlanejamentoFiscalService planejamentoFiscalService;
 
     @Transactional(readOnly = true)
     public SentinelaMargemDTO calcularMargemSentinela(Transacao novaDespesa) {
@@ -58,6 +59,10 @@ public class SentinelaProtocolService {
             .filter(v -> v.compareTo(BigDecimal.ZERO) > 0)
             .orElseGet(() -> nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fimMes)));
+
+        BigDecimal receitasFiscaisPrevistas =
+            planejamentoFiscalService.somarReceitasPrevistasNoMes(usuarioId, ym);
+        receitas = receitas.add(receitasFiscaisPrevistas).setScale(2, RoundingMode.HALF_UP);
 
         List<RecurringExpenseDetectionService.RecurringExpense> padroes =
             recurringExpenseDetectionService.detectar(usuarioId);

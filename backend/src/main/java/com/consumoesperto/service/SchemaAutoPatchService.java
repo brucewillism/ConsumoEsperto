@@ -60,6 +60,8 @@ public class SchemaAutoPatchService {
         ensureImportacoesFaturaCartaoTable();
         ensureSugestoesContencaoJarvisTable();
         ensureContrachequesScoreTables();
+        ensureUsuarioConfiguracaoFiscalTable();
+        ensureTransacaoOrigemFiscalColumn();
         ensureUsuarioGeneroColumns();
         ensureUsuarioJarvisPerfilColumns();
         ensureUsuarioFotoUrlTextColumn();
@@ -95,6 +97,7 @@ public class SchemaAutoPatchService {
                 executeDdlAutocommit("ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS excluido BOOLEAN NOT NULL DEFAULT FALSE");
                 executeDdlAutocommit("ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS status_conferencia VARCHAR(255) NOT NULL DEFAULT 'CONFIRMADA'");
                 executeDdlAutocommit("ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS cnpj VARCHAR(18)");
+                executeDdlAutocommit("ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS origem_fiscal VARCHAR(40)");
                 executeDdlAutocommit("ALTER TABLE " + qualifiedTable + " ALTER COLUMN tipo_transacao TYPE VARCHAR(32)");
                 log.info("Schema patch aplicado em {}: colunas de recorrência/conferência/CNPJ verificadas.", qualifiedTable);
             }
@@ -205,6 +208,67 @@ public class SchemaAutoPatchService {
             }
         } catch (Exception e) {
             log.warn("Falha ao CREATE usuario_renda_config: {}", e.getMessage());
+        }
+    }
+
+    private void ensureUsuarioConfiguracaoFiscalTable() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                log.warn("Schema patch: tabela 'usuarios' não encontrada; usuario_configuracao_fiscal não criada.");
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedTable = schema + ".usuario_configuracao_fiscal";
+                String qualifiedUsuarios = schema + ".usuarios";
+                executeDdlAutocommit(
+                    "CREATE TABLE IF NOT EXISTS " + qualifiedTable + " ("
+                        + "id BIGSERIAL PRIMARY KEY,"
+                        + "usuario_id BIGINT NOT NULL UNIQUE REFERENCES " + qualifiedUsuarios + "(id) ON DELETE CASCADE,"
+                        + "mes_restituicao_ir INTEGER,"
+                        + "valor_restituicao NUMERIC(19,2),"
+                        + "tipo_recebimento_13 VARCHAR(32),"
+                        + "mes_parcela_unica INTEGER,"
+                        + "mes_primeira_parcela INTEGER,"
+                        + "provisionamento_ativo BOOLEAN NOT NULL DEFAULT TRUE,"
+                        + "data_atualizacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                        + ")"
+                );
+                log.info("Schema patch: tabela {} verificada.", qualifiedTable);
+            }
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE usuario_configuracao_fiscal: {}", e.getMessage());
+        }
+    }
+
+    /** Garante coluna origem_fiscal em todos os schemas (redundante com loop transacoes, idempotente). */
+    private void ensureTransacaoOrigemFiscalColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema FROM information_schema.tables "
+                    + "WHERE table_name = 'transacoes' AND table_type = 'BASE TABLE' "
+                    + "AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + schema + ".transacoes ADD COLUMN IF NOT EXISTS origem_fiscal VARCHAR(40)"
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Falha ao ADD origem_fiscal em transacoes: {}", e.getMessage());
         }
     }
 

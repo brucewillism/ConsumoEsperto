@@ -15,6 +15,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ContrachequeImportService {
 
     private static final ZoneId ZONA_BR = ZoneId.of("America/Sao_Paulo");
@@ -52,6 +54,7 @@ public class ContrachequeImportService {
     private final TransacaoService transacaoService;
     private final ScoreService scoreService;
     private final WhatsAppNotificationService whatsAppNotificationService;
+    private final PlanejamentoFiscalService planejamentoFiscalService;
 
     @Transactional
     public ContrachequeDTO processarPdf(Long usuarioId, byte[] pdfBytes) {
@@ -178,7 +181,13 @@ public class ContrachequeImportService {
         scoreService.registrarEvento(usuarioId, ScoreService.EventoScore.IMPORTACAO_CONSISTENTE, "Contracheque importado em dia");
         whatsAppNotificationService.enviarParaUsuario(usuarioId,
             "Confirmei seu contracheque pelo app, atualizei sua renda e lancei a receita de salário.");
-        return toDto(contrachequeRepository.save(c));
+        ContrachequeImportado salvo = contrachequeRepository.save(c);
+        try {
+            planejamentoFiscalService.sincronizarProvisoes(usuarioId);
+        } catch (Exception e) {
+            log.warn("Falha ao sincronizar planejamento fiscal após contracheque userId={}: {}", usuarioId, e.getMessage());
+        }
+        return toDto(salvo);
     }
 
     private Long resolveCategoriaSalario(Long usuarioId) {

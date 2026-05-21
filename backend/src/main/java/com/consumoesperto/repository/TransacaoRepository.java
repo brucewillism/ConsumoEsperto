@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -79,6 +80,18 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     List<Object[]> findDespesasByUsuarioIdAndPeriodoGroupByCategoria(@Param("usuarioId") Long usuarioId,
                                                                       @Param("dataInicio") LocalDateTime dataInicio,
                                                                       @Param("dataFim") LocalDateTime dataFim);
+
+    /** Dashboard — todas as despesas do período (confirmadas ou pendentes), agrupadas por categoria. */
+    @Query("SELECT COALESCE(t.categoria.nome, 'Sem categoria'), SUM(t.valor) " +
+           "FROM Transacao t " +
+           "WHERE t.usuario.id = :usuarioId " +
+           "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA " +
+           "AND COALESCE(t.dataTransacao, t.dataCriacao) BETWEEN :dataInicio AND :dataFim " +
+           "GROUP BY t.categoria.nome " +
+           "ORDER BY SUM(t.valor) DESC")
+    List<Object[]> findDespesasDashboardByUsuarioIdAndPeriodoGroupByCategoria(@Param("usuarioId") Long usuarioId,
+                                                                               @Param("dataInicio") LocalDateTime dataInicio,
+                                                                               @Param("dataFim") LocalDateTime dataFim);
     
     List<Transacao> findByUsuarioIdAndDescricaoAndDataTransacaoAndValor(Long usuarioId, String descricao, LocalDateTime dataTransacao, BigDecimal valor);
     
@@ -269,6 +282,23 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
         + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim ORDER BY t.usuario.id, t.dataTransacao ASC")
     List<Transacao> findDespesasConfirmadasNoPeriodoComUsuarioCategoria(
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Transacao t SET t.excluido = true WHERE t.usuario.id = :usuarioId "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.origemFiscal IS NOT NULL AND t.excluido = false")
+    int softDeleteProvisionamentosFiscaisPrevistos(@Param("usuarioId") Long usuarioId);
+
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.origemFiscal IS NOT NULL "
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim")
+    BigDecimal sumReceitaFiscalPrevistaPeriodo(
+        @Param("usuarioId") Long usuarioId,
         @Param("inicio") LocalDateTime inicio,
         @Param("fim") LocalDateTime fim
     );

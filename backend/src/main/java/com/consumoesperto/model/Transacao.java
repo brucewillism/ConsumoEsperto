@@ -120,6 +120,11 @@ public class Transacao {
     @Column(name = "status_conferencia", nullable = false)
     private StatusConferencia statusConferencia;
 
+    /** Receita provisionada pelo planejamento fiscal (IR, 13º). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "origem_fiscal", length = 40)
+    private OrigemProvisionamentoFiscal origemFiscal;
+
     /** CNPJ do estabelecimento (OCR / enriquecimento), até 18 caracteres */
     @Column(name = "cnpj", length = 18)
     private String cnpj;
@@ -203,6 +208,9 @@ public class Transacao {
     public BigDecimal getValorComJuros() { return valorComJuros; }
     public void setValorComJuros(BigDecimal valorComJuros) { this.valorComJuros = valorComJuros; }
 
+    public OrigemProvisionamentoFiscal getOrigemFiscal() { return origemFiscal; }
+    public void setOrigemFiscal(OrigemProvisionamentoFiscal origemFiscal) { this.origemFiscal = origemFiscal; }
+
     /**
      * Método executado automaticamente antes de persistir a entidade
      * Define a data de criação e, se não informada, a data da transação
@@ -238,6 +246,8 @@ public class Transacao {
 
     public enum StatusConferencia {
         CONFIRMADA,
-        PENDENTE
+        PENDENTE,
+        /** Receita/despesa provisionada — ainda não materializada em conta. */
+        PREVISTO
     }
 }

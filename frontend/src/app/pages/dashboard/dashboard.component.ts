@@ -728,8 +728,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.dashboardProjection = data.dashboardProjection || null;
     this.timelineImpacto = this.dashboardProjection?.timelineImpacto || [];
     this.syncSpendingLineChart();
-    this.atualizarDoughnutComRelatorio(data.despesasCategoriaMesAtual);
-    this.syncCategoriaRankingHud(data.despesasCategoriaMesAtual, data.relatorioCategoriaMesPassado);
+    const relatorioCategoria = this.resolverRelatorioCategoria(
+      data.despesasCategoriaMesAtual,
+      mesList
+    );
+    this.atualizarDoughnutComRelatorio(relatorioCategoria);
+    this.syncCategoriaRankingHud(relatorioCategoria, data.relatorioCategoriaMesPassado);
     
     console.log('✅ Dados processados:', {
       totalSpent: this.totalSpent,
@@ -974,41 +978,76 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /**
    * Gera dados para gráfico de gastos por categoria
    */
-  private gerarGraficoGastosPorCategoria(transacoes: any[]): ChartData | null {
-    if (!transacoes || transacoes.length === 0) {
-      console.log('📊 Nenhuma transação encontrada para gráfico de categorias');
+  private gerarGraficoGastosPorCategoria(transacoes: Transacao[]): ChartData | null {
+    const relatorio = this.montarRelatorioCategoriaDeTransacoes(transacoes);
+    if (!relatorio.itens.length) {
+      console.log('📊 Nenhum gasto por categoria encontrado nas transações do mês');
       return null;
     }
-    
-    const gastosPorCategoria = new Map<string, number>();
-    
-    transacoes
-      .filter(t => t.tipoTransacao === 'DESPESA' && t.valor > 0)
-      .forEach(t => {
-        const categoria = t.categoriaNome || 'Sem categoria';
-        const valorAtual = gastosPorCategoria.get(categoria) || 0;
-        gastosPorCategoria.set(categoria, valorAtual + (t.valor || 0));
-      });
-    
-    const categorias = Array.from(gastosPorCategoria.keys());
-    const valores = Array.from(gastosPorCategoria.values());
-    
-    // Verifica se há dados para exibir
-    if (categorias.length === 0) {
-      console.log('📊 Nenhum gasto por categoria encontrado');
-      return null;
-    }
-    
+
+    const labels = relatorio.itens.map((i) => i.categoria);
+    const valores = relatorio.itens.map((i) => i.valor);
+
     return {
-      labels: categorias,
+      labels,
       datasets: [{
         label: 'Gastos por Categoria',
         data: valores,
-        backgroundColor: this.gerarCores(categorias.length),
-        borderColor: this.gerarCores(categorias.length, false),
+        backgroundColor: this.gerarCores(labels.length),
+        borderColor: this.gerarCores(labels.length, false),
         borderWidth: 1
       }]
     };
+  }
+
+  /** API de relatório pode falhar ou filtrar só confirmadas — extrai do mês carregado. */
+  private resolverRelatorioCategoria(
+    api: RelatorioCategoriaMesAtual | null | undefined,
+    transacoes: Transacao[]
+  ): RelatorioCategoriaMesAtual {
+    if (Array.isArray(api?.itens) && api!.itens.length > 0) {
+      return api!;
+    }
+    return this.montarRelatorioCategoriaDeTransacoes(transacoes);
+  }
+
+  private montarRelatorioCategoriaDeTransacoes(transacoes: Transacao[]): RelatorioCategoriaMesAtual {
+    const now = new Date();
+    const map = new Map<string, number>();
+
+    for (const t of transacoes) {
+      if (t.tipoTransacao !== 'DESPESA') {
+        continue;
+      }
+      const valor = Number(t.valor);
+      if (!Number.isFinite(valor) || valor <= 0) {
+        continue;
+      }
+      const categoria = this.nomeCategoriaTransacao(t);
+      map.set(categoria, (map.get(categoria) ?? 0) + valor);
+    }
+
+    const totalDespesas = Array.from(map.values()).reduce((sum, v) => sum + v, 0);
+    const itens = Array.from(map.entries())
+      .map(([categoria, valor]) => ({
+        categoria,
+        valor,
+        percentual: totalDespesas > 0 ? Math.round((valor / totalDespesas) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+
+    return {
+      ano: now.getFullYear(),
+      mes: now.getMonth() + 1,
+      totalDespesas,
+      itens,
+    };
+  }
+
+  private nomeCategoriaTransacao(t: Transacao): string {
+    const nested = (t.categoria as { nome?: string } | undefined)?.nome;
+    const nome = (nested ?? t.categoriaNome ?? '').trim();
+    return nome || 'Sem categoria';
   }
   
   /**

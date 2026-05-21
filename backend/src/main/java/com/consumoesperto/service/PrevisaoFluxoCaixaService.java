@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.DisponibilidadeRealDTO;
 import com.consumoesperto.dto.MarketIndicatorsDTO;
+import com.consumoesperto.dto.ParcelaReceitaFiscalDTO;
 import com.consumoesperto.dto.PrevisaoFuturoChartDTO;
 import com.consumoesperto.dto.ProvisaoMemoriaDTO;
 import com.consumoesperto.model.Transacao;
@@ -40,6 +41,7 @@ public class PrevisaoFluxoCaixaService {
     private final DespesaFixaService despesaFixaService;
     private final MarketDataService marketDataService;
     private final ProvisaoMemoriaSentinelaService provisaoMemoriaSentinelaService;
+    private final PlanejamentoFiscalService planejamentoFiscalService;
 
     @Transactional(readOnly = true)
     public DisponibilidadeRealDTO calcularDisponibilidadeReal(Long usuarioId) {
@@ -164,6 +166,8 @@ public class PrevisaoFluxoCaixaService {
         List<ProvisaoMemoriaDTO> provisoes = provisaoMemoriaSentinelaService.calcularProvisoesParaMesAtual(usuarioId).stream()
             .filter(p -> p.getDiaAlvo() > diaHoje)
             .collect(Collectors.toList());
+        List<ParcelaReceitaFiscalDTO> receitasFiscais =
+            planejamentoFiscalService.listarReceitasProjetadasMesAtual(usuarioId);
         List<Integer> diasProv = provisoes.stream()
             .map(ProvisaoMemoriaDTO::getDiaAlvo)
             .filter(d -> d > diaHoje && d <= ultimo)
@@ -185,6 +189,11 @@ public class PrevisaoFluxoCaixaService {
             for (ProvisaoMemoriaDTO pm : provisoes) {
                 if (pm.getDiaAlvo() == d && pm.getValor() != null) {
                     saldoLinha = saldoLinha.subtract(pm.getValor());
+                }
+            }
+            for (ParcelaReceitaFiscalDTO rf : receitasFiscais) {
+                if (rf.getDia() == d && rf.getValor() != null) {
+                    saldoLinha = saldoLinha.add(rf.getValor());
                 }
             }
             if (saldoLinha.compareTo(BigDecimal.ZERO) < 0) {

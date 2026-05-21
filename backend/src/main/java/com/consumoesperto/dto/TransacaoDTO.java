@@ -67,6 +67,6 @@ public class TransacaoDTO {
     }
 
     public enum StatusConferencia {
-        CONFIRMADA, PENDENTE
+        CONFIRMADA, PENDENTE, PREVISTO
     }
 }

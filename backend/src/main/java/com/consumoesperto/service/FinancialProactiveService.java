@@ -45,6 +45,7 @@ public class FinancialProactiveService {
     private final ComportamentoService comportamentoService;
     private final HabitDominoService habitDominoService;
     private final SentinelaProtocolService sentinelaProtocolService;
+    private final PlanejamentoFiscalService planejamentoFiscalService;
 
     @Transactional(readOnly = true)
     public Optional<Categoria> sugerirCategoria(Long usuarioId, String descricao) {
@@ -101,6 +102,21 @@ public class FinancialProactiveService {
             habitDominoService.avaliarEfeitoDominioPosDespesa(transacao);
         } catch (Exception e) {
             log.warn("Falha efeito dominó após despesa {}: {}", id(transacao), e.getMessage());
+        }
+    }
+
+    /**
+     * Recalcula provisões fiscais (IR / 13º) após alteração de renda ou configuração.
+     * Chamado pelo fluxo de configuração fiscal; o Sentinela já pondera receitas PREVISTO na margem.
+     */
+    public void sincronizarPlanejamentoFiscal(Long usuarioId) {
+        if (usuarioId == null) {
+            return;
+        }
+        try {
+            planejamentoFiscalService.sincronizarProvisoes(usuarioId);
+        } catch (Exception e) {
+            log.warn("Falha ao sincronizar planejamento fiscal userId={}: {}", usuarioId, e.getMessage());
         }
     }
 

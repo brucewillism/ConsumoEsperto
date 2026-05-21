@@ -250,7 +250,7 @@ public class RelatorioFinanceiroService {
         LocalDateTime inicio = mesAtual.atDay(1).atStartOfDay();
         LocalDateTime fim = mesAtual.atEndOfMonth().atTime(23, 59, 59);
 
-        List<Object[]> resultados = transacaoRepository.findDespesasByUsuarioIdAndPeriodoGroupByCategoria(usuarioId, inicio, fim);
+        List<Object[]> resultados = transacaoRepository.findDespesasDashboardByUsuarioIdAndPeriodoGroupByCategoria(usuarioId, inicio, fim);
         List<Map<String, Object>> itens = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
 
