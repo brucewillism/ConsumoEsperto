@@ -17,7 +17,7 @@ export class LoadingIndicatorComponent {
   @Input() mode: LoadingIndicatorMode = 'panel';
   @Input() size: LoadingIndicatorSize = 'md';
 
-  /** SVG transparente (preferido). GIF legado só se o SVG falhar. */
+  /** GIF animado (preferido). SVG estático se o GIF falhar. */
   readonly loadingAssetUrl = environment.loadingAssetUrl;
   readonly loadingFallbackUrl = environment.loadingFallbackUrl;
 

@@ -14,7 +14,7 @@ export const environment = {
   /** Cliente OAuth Web no Google Cloud; URIs autorizadas devem incluir este domínio (sem path no cliente). */
   googleClientID: '593452038228-47k24odoa6f18c78e3ssp9bhu56gugnm.apps.googleusercontent.com',
 
-  loadingAssetUrl: 'assets/loading/loading.svg',
-  loadingFallbackUrl: 'assets/loading/loading.gif',
+  loadingAssetUrl: 'assets/loading/loading.gif',
+  loadingFallbackUrl: 'assets/loading/loading.svg',
   loadingOverlayTailMs: 200
 };

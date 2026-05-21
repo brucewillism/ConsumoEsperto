@@ -1,10 +1,10 @@
-# Assets de loading (versionados no Git)
+# Assets de loading
 
 | Ficheiro | Uso |
 |----------|-----|
-| **`loading.svg`** | **Principal** — anel LOADING, fundo **transparente**, animação SMIL. |
-| `loading.gif` | Fallback opcional (se existir). Preferir GIF com fundo transparente. |
+| **`loading.gif`** | **Principal** — animação [loading-1](https://usagif.com/gif/loading-1/) (USAGIF, uso livre). |
+| `loading.svg` | Fallback estático se o GIF não carregar. |
 
-Coloque ficheiros em `frontend/src/assets/loading/`. Não use a pasta `tools/` — ela não vai para o Git/Docker.
+Origem do GIF: https://usagif.com/wp-content/uploads/loading-1.gif
 
-Para substituir o visual: edite `loading.svg` ou troque por outro SVG/PNG/WebP transparente e atualize `loadingAssetUrl` em `environment*.ts`.
+Para trocar o visual, substitua `loading.gif` e mantenha `loadingAssetUrl` em `environment*.ts`.

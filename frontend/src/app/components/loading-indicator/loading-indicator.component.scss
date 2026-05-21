@@ -63,8 +63,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 5rem;
-  min-height: 5rem;
+  min-width: 8rem;
+  min-height: 8rem;
   background: transparent;
 }
 
@@ -72,32 +72,42 @@
   display: block;
   width: auto;
   height: auto;
-  max-width: min(90vw, 220px);
-  max-height: min(72vh, 220px);
+  max-width: min(92vw, 420px);
+  max-height: min(78vh, 420px);
   object-fit: contain;
   pointer-events: none;
   background: transparent;
+  image-rendering: auto;
 }
 
 .loading-indicator--overlay .loading-indicator__art {
-  max-width: min(88vw, 200px);
-  max-height: min(60vh, 200px);
+  width: min(88vw, 480px);
+  max-width: min(88vw, 480px);
+  max-height: min(72vh, 360px);
+  height: auto;
 }
 
 .loading-indicator--sm .loading-indicator__art {
-  max-width: 2.5rem;
-  max-height: 2.5rem;
+  width: 3rem;
+  max-width: 3rem;
+  max-height: 3rem;
 }
 
 .loading-indicator--md .loading-indicator__art {
-  max-width: 4.5rem;
-  max-height: 4.5rem;
+  width: min(40vw, 220px);
+  max-width: min(40vw, 220px);
+  max-height: min(40vw, 220px);
 }
 
-.loading-indicator--lg .loading-indicator__art,
-.loading-indicator--overlay .loading-indicator__art {
-  max-width: min(88vw, 200px);
-  max-height: min(60vh, 200px);
+.loading-indicator--lg .loading-indicator__art {
+  width: min(75vw, 380px);
+  max-width: min(75vw, 380px);
+  max-height: min(65vh, 320px);
+}
+
+.loading-indicator--overlay .loading-indicator__visual {
+  min-width: min(88vw, 480px);
+  min-height: min(50vh, 280px);
 }
 
 .loading-indicator__spinner {
