@@ -45,6 +45,10 @@ export interface Transacao {
   
   /** Objeto da categoria completo (opcional) */
   categoria?: any;
+
+  /** Conta bancária / carteira movimentada */
+  contaBancariaId?: number;
+  contaBancariaNome?: string;
   
   /** ID do cartão de crédito associado (opcional) */
   cartaoCreditoId?: number;

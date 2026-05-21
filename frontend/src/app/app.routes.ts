@@ -83,6 +83,18 @@ export const routes: Routes = [
   },
 
   {
+    path: 'contas',
+    loadComponent: () => import('./pages/contas-bancarias/contas-bancarias.component').then(m => m.ContasBancariasComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
+    path: 'categorias',
+    loadComponent: () => import('./pages/categorias/categorias.component').then(m => m.CategoriasComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
     path: 'metas',
     loadComponent: () => import('./pages/metas/metas.component').then(m => m.MetasComponent),
     canActivate: [AuthGuard]

@@ -84,6 +84,16 @@
           </mat-select>
         </mat-form-field>
       </div>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Conta / carteira</mat-label>
+        <mat-select formControlName="contaBancariaId">
+          <mat-option value="">Sem conta (ou padrão automático)</mat-option>
+          <mat-option *ngFor="let conta of contas" [value]="conta.id">
+            {{ conta.nome }} — {{ conta.saldoAtual | currency:'BRL':'symbol':'1.2-2':'pt' }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">

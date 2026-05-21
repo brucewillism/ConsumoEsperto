@@ -62,6 +62,8 @@ public class SchemaAutoPatchService {
         ensureContrachequesScoreTables();
         ensureUsuarioConfiguracaoFiscalTable();
         ensureTransacaoOrigemFiscalColumn();
+        ensureContasBancariasTable();
+        ensureTransacaoContaBancariaColumn();
         ensureUsuarioGeneroColumns();
         ensureUsuarioJarvisPerfilColumns();
         ensureUsuarioFotoUrlTextColumn();
@@ -269,6 +271,59 @@ public class SchemaAutoPatchService {
             }
         } catch (Exception e) {
             log.warn("Falha ao ADD origem_fiscal em transacoes: {}", e.getMessage());
+        }
+    }
+
+    private void ensureContasBancariasTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.contas_bancarias ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "nome VARCHAR(100) NOT NULL,"
+                    + "tipo VARCHAR(20) NOT NULL,"
+                    + "saldo_atual NUMERIC(19,2) NOT NULL DEFAULT 0,"
+                    + "ativa BOOLEAN NOT NULL DEFAULT TRUE,"
+                    + "padrao BOOLEAN NOT NULL DEFAULT FALSE,"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_atualizacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_contas_bancarias_usuario ON public.contas_bancarias(usuario_id)"
+            );
+            log.info("Schema patch: tabela public.contas_bancarias verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE contas_bancarias: {}", e.getMessage());
+        }
+    }
+
+    private void ensureTransacaoContaBancariaColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema FROM information_schema.tables "
+                    + "WHERE table_name = 'transacoes' AND table_type = 'BASE TABLE' "
+                    + "AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + schema + ".transacoes ADD COLUMN IF NOT EXISTS conta_bancaria_id BIGINT"
+                );
+                executeDdlAutocommit(
+                    "DO $$ BEGIN "
+                        + "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_transacoes_conta_bancaria') THEN "
+                        + "ALTER TABLE " + schema + ".transacoes ADD CONSTRAINT fk_transacoes_conta_bancaria "
+                        + "FOREIGN KEY (conta_bancaria_id) REFERENCES public.contas_bancarias(id) ON DELETE SET NULL; "
+                        + "END IF; END $$"
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Falha ao ADD conta_bancaria_id em transacoes: {}", e.getMessage());
         }
     }
 

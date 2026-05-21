@@ -121,6 +121,8 @@ export class AppComponent implements OnInit {
     const path = (url || '').split('?')[0];
     if (path.startsWith('/transacoes')) return 'Transações';
     if (path.startsWith('/cartoes')) return 'Cartões';
+    if (path.startsWith('/contas')) return 'Contas';
+    if (path.startsWith('/categorias')) return 'Categorias';
     if (path.startsWith('/faturas')) return 'Faturas';
     if (path.startsWith('/relatorios')) return 'Relatórios';
     if (path.startsWith('/simulacoes')) return 'Simulações';

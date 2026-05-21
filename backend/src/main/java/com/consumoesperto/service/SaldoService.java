@@ -28,16 +28,27 @@ public class SaldoService {
     private final TransacaoRepository transacaoRepository;
     private final FaturaRepository faturaRepository;
     private final OpenAiService openAiService;
+    private final ContaBancariaService contaBancariaService;
 
     /**
-     * Saldo = soma RECEITA confirmada − soma DESPESA confirmada.
+     * Saldo exibido no dashboard: soma das carteiras ativas ou, sem multicarteira, receitas − despesas confirmadas.
      */
     public BigDecimal saldoContaCorrente(Long usuarioId) {
+        return patrimonioLiquido(usuarioId);
+    }
+
+    /**
+     * Patrimônio líquido em contas (multicarteira) ou saldo derivado de transações (legado).
+     */
+    public BigDecimal patrimonioLiquido(Long usuarioId) {
+        if (contaBancariaService.possuiContasAtivas(usuarioId)) {
+            return contaBancariaService.somarSaldosAtivos(usuarioId);
+        }
         return saldoConfirmado(usuarioId);
     }
 
     /**
-     * Alias explícito (receitas − despesas confirmadas).
+     * Alias explícito (receitas − despesas confirmadas — legado sem carteiras cadastradas).
      */
     public BigDecimal saldoConfirmado(Long usuarioId) {
         BigDecimal r = transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(
@@ -56,8 +67,8 @@ public class SaldoService {
         if (usuarioId == null) {
             return;
         }
-        BigDecimal s = saldoContaCorrente(usuarioId);
-        log.debug("[SALDO] Utilizador {} — saldo (receitas − despesas confirmadas): {}", usuarioId, s);
+        BigDecimal s = patrimonioLiquido(usuarioId);
+        log.debug("[SALDO] Utilizador {} — patrimônio líquido: {}", usuarioId, s);
     }
 
     public Optional<AuditoriaLiquidez> analisarDinheiroParado(Long usuarioId) {

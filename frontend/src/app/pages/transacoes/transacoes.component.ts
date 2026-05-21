@@ -19,6 +19,8 @@ import { Sort } from '@angular/material/sort';
 import { Categoria } from '../../models/categoria.model';
 import { ModoParcelamentoDelete, StatusConferencia, TipoTransacao, Transacao } from '../../models/transacao.model';
 import { CategoriaService } from '../../services/categoria.service';
+import { ContaBancariaService } from '../../services/conta-bancaria.service';
+import { ContaBancaria } from '../../models/conta-bancaria.model';
 import {
   OrdenacaoTransacao,
   TransacaoFiltros,
@@ -55,6 +57,7 @@ export class TransacoesComponent implements OnInit {
   transacoes: Transacao[] = [];
   transacoesFiltradas: Transacao[] = [];
   categorias: Categoria[] = [];
+  contas: ContaBancaria[] = [];
   transacaoForm: FormGroup;
   transacaoEditando: Transacao | null = null;
 
@@ -66,7 +69,7 @@ export class TransacoesComponent implements OnInit {
   totalTransacoes = 0;
   tamanhoPagina = 10;
   paginaAtual = 0;
-  colunasExibidas = ['descricao', 'valor', 'tipo', 'categoria', 'data', 'acoes'];
+  colunasExibidas = ['descricao', 'valor', 'tipo', 'categoria', 'conta', 'data', 'acoes'];
 
   loadingTransacoes = false;
   carregandoCategorias = false;
@@ -80,6 +83,7 @@ export class TransacoesComponent implements OnInit {
     private readonly fb: FormBuilder,
     private readonly transacaoService: TransacaoService,
     private readonly categoriaService: CategoriaService,
+    private readonly contaBancariaService: ContaBancariaService,
     private readonly dialog: MatDialog,
     private readonly snackBar: MatSnackBar,
     private readonly financaAlteracao: FinancaAlteracaoService
@@ -89,7 +93,8 @@ export class TransacoesComponent implements OnInit {
       valor: ['', [Validators.required, Validators.min(0.01)]],
       tipoTransacao: [TipoTransacao.DESPESA, Validators.required],
       dataTransacao: [new Date(), Validators.required],
-      categoriaId: ['']
+      categoriaId: [''],
+      contaBancariaId: ['']
     });
   }
 
@@ -97,6 +102,7 @@ export class TransacoesComponent implements OnInit {
     this.definirDatasPadraoMesAtual();
     this.carregarTransacoes();
     this.carregarCategorias();
+    this.carregarContas();
   }
 
   abrirDialogoTransacao(transacao?: Transacao): void {
@@ -108,13 +114,15 @@ export class TransacoesComponent implements OnInit {
         valor: transacao.valor,
         tipoTransacao: transacao.tipoTransacao,
         dataTransacao: transacao.dataTransacao ? new Date(transacao.dataTransacao) : new Date(),
-        categoriaId: transacao.categoriaId ?? ''
+        categoriaId: transacao.categoriaId ?? '',
+        contaBancariaId: transacao.contaBancariaId ?? ''
       });
     } else {
       this.transacaoForm.reset({
         tipoTransacao: TipoTransacao.DESPESA,
         dataTransacao: new Date(),
-        categoriaId: ''
+        categoriaId: '',
+        contaBancariaId: this.contas.find((c) => c.padrao)?.id ?? ''
       });
     }
 
@@ -124,8 +132,16 @@ export class TransacoesComponent implements OnInit {
       this.transacaoForm.reset({
         tipoTransacao: TipoTransacao.DESPESA,
         dataTransacao: new Date(),
-        categoriaId: ''
+        categoriaId: '',
+        contaBancariaId: ''
       });
+    });
+  }
+
+  private carregarContas(): void {
+    this.contaBancariaService.listar(true).subscribe({
+      next: (contas) => (this.contas = contas ?? []),
+      error: () => (this.contas = []),
     });
   }
 

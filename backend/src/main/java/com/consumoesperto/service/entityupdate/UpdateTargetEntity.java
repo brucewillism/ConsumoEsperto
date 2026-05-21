@@ -7,8 +7,10 @@ import com.consumoesperto.util.ApelidoNormalizador;
  */
 public enum UpdateTargetEntity {
     AUTO,
+    /** Cartão de crédito (legado: targetEntity {@code CONTA}). */
     CONTA,
     CARTAO,
+    CONTA_BANCARIA,
     META,
     CATEGORIA,
     DESPESA_FIXA;
@@ -19,7 +21,8 @@ public enum UpdateTargetEntity {
         }
         String u = ApelidoNormalizador.normalizar(raw).replace(' ', '_').replace('-', '_');
         return switch (u) {
-            case "conta", "conta_corrente", "banco" -> CONTA;
+            case "conta_bancaria", "contabancaria", "carteira", "poupanca", "dinheiro" -> CONTA_BANCARIA;
+            case "conta", "banco" -> CONTA;
             case "cartao", "card" -> CARTAO;
             case "meta", "metas", "goal" -> META;
             case "categoria", "categorias", "category" -> CATEGORIA;

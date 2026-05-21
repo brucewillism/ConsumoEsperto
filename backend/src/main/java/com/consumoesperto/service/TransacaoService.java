@@ -3,6 +3,7 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
@@ -68,6 +69,10 @@ public class TransacaoService {
     private final ScoreService scoreService;
 
     private final TransacaoSemanticaIndexService transacaoSemanticaIndexService;
+
+    private final ContaBancariaService contaBancariaService;
+
+    private final SaldoMovimentacaoService saldoMovimentacaoService;
 
     /**
      * Cria uma nova transação financeira no sistema
@@ -139,9 +144,11 @@ public class TransacaoService {
         transacao.setUsuario(usuario);
 
         aplicarVinculoFatura(transacao, transacaoDTO, usuarioId, true);
+        aplicarVinculoConta(transacao, transacaoDTO, usuarioId, true);
 
         // Persiste a transação no banco de dados
         Transacao transacaoSalva = transacaoRepository.save(transacao);
+        saldoMovimentacaoService.aplicarCriacao(transacaoSalva);
         transacaoSemanticaIndexService.agendarIndexacao(transacaoSalva.getId());
         if (transacaoSalva.getFatura() != null) {
             faturaService.sincronizarValorFaturaComTransacoes(transacaoSalva.getFatura().getId());
@@ -226,6 +233,7 @@ public class TransacaoService {
         }
 
         Long faturaIdAntes = transacao.getFatura() != null ? transacao.getFatura().getId() : null;
+        SaldoMovimentacaoService.MovimentacaoSnapshot snap = saldoMovimentacaoService.capturarSnapshot(transacao);
 
         // Atualiza os campos da transação com os novos valores
         transacao.setDescricao(transacaoDTO.getDescricao());
@@ -248,9 +256,11 @@ public class TransacaoService {
         }
 
         aplicarVinculoFatura(transacao, transacaoDTO, usuarioId, false);
+        aplicarVinculoConta(transacao, transacaoDTO, usuarioId, false);
 
         // Persiste as alterações no banco de dados
         Transacao transacaoAtualizada = transacaoRepository.save(transacao);
+        saldoMovimentacaoService.sincronizarMovimentacao(snap, transacaoAtualizada);
         transacaoSemanticaIndexService.agendarIndexacao(transacaoAtualizada.getId());
         Long faturaIdDepois = transacaoAtualizada.getFatura() != null ? transacaoAtualizada.getFatura().getId() : null;
         if (faturaIdAntes != null && !Objects.equals(faturaIdAntes, faturaIdDepois)) {
@@ -274,8 +284,10 @@ public class TransacaoService {
             throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
         }
 
+        SaldoMovimentacaoService.MovimentacaoSnapshot snap = saldoMovimentacaoService.capturarSnapshot(transacao);
         transacao.setStatusConferencia(Transacao.StatusConferencia.valueOf(status.name()));
         Transacao atualizada = transacaoRepository.save(transacao);
+        saldoMovimentacaoService.sincronizarMovimentacao(snap, atualizada);
         transacaoSemanticaIndexService.agendarIndexacao(atualizada.getId());
         if (atualizada.getFatura() != null) {
             faturaService.sincronizarValorFaturaComTransacoes(atualizada.getFatura().getId());
@@ -308,6 +320,8 @@ public class TransacaoService {
         }
         
         Long faturaId = transacao.getFatura() != null ? transacao.getFatura().getId() : null;
+
+        saldoMovimentacaoService.aplicarExclusao(transacao);
 
         // Soft delete para manter histórico e auditoria
         transacao.setExcluido(true);
@@ -591,6 +605,10 @@ public class TransacaoService {
                 dto.setCartaoCreditoId(transacao.getFatura().getCartaoCredito().getId());
             }
         }
+        if (transacao.getContaBancaria() != null) {
+            dto.setContaBancariaId(transacao.getContaBancaria().getId());
+            dto.setContaBancariaNome(transacao.getContaBancaria().getNome());
+        }
         dto.setGrupoParcelaId(transacao.getGrupoParcelaId());
         dto.setParcelaAtual(transacao.getParcelaAtual());
         dto.setTotalParcelas(transacao.getTotalParcelas());
@@ -625,6 +643,26 @@ public class TransacaoService {
             return;
         }
         transacao.setFatura(null);
+    }
+
+    /**
+     * Associa transação à carteira bancária. Despesas de cartão (fatura) não movimentam conta.
+     */
+    private void aplicarVinculoConta(Transacao transacao, TransacaoDTO dto, Long usuarioId, boolean criacaoNova) {
+        if (transacao.getFatura() != null) {
+            if (criacaoNova || dto.getContaBancariaId() != null) {
+                transacao.setContaBancaria(null);
+            }
+            return;
+        }
+        if (dto.getContaBancariaId() != null) {
+            ContaBancaria conta = contaBancariaService.resolverContaParaTransacao(usuarioId, dto.getContaBancariaId());
+            transacao.setContaBancaria(conta);
+            return;
+        }
+        if (criacaoNova) {
+            transacao.setContaBancaria(contaBancariaService.resolverContaParaTransacao(usuarioId, null));
+        }
     }
 
     private String normalizarCnpjOpcional(String raw) {
@@ -668,6 +706,7 @@ public class TransacaoService {
         if (t.getTipoTransacao() != Transacao.TipoTransacao.DESPESA) {
             throw new RuntimeException("Apenas despesas podem ser editadas como despesa fixa");
         }
+        SaldoMovimentacaoService.MovimentacaoSnapshot snap = saldoMovimentacaoService.capturarSnapshot(t);
         boolean changed = false;
         if (novaDescricao != null && !novaDescricao.isBlank()) {
             t.setDescricao(novaDescricao.trim());
@@ -681,6 +720,7 @@ public class TransacaoService {
             throw new RuntimeException("Nenhuma alteração válida na despesa fixa");
         }
         Transacao salva = transacaoRepository.save(t);
+        saldoMovimentacaoService.sincronizarMovimentacao(snap, salva);
         if (salva.getFatura() != null) {
             faturaService.sincronizarValorFaturaComTransacoes(salva.getFatura().getId());
         }

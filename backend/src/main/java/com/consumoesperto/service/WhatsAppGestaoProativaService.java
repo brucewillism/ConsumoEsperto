@@ -2,12 +2,17 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.CartaoCreditoDTO;
 import com.consumoesperto.dto.MetaFinanceiraRequest;
+import com.consumoesperto.dto.OrcamentoRequest;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.CartaoCredito;
+import com.consumoesperto.model.Categoria;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.MetaFinanceira;
+import com.consumoesperto.model.Orcamento;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.MetaFinanceiraRepository;
+import com.consumoesperto.repository.OrcamentoRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.util.StringFuzzy;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -48,9 +53,13 @@ public class WhatsAppGestaoProativaService {
     private final TransacaoRepository transacaoRepository;
     private final MetaFinanceiraRepository metaFinanceiraRepository;
     private final CartaoCreditoRepository cartaoCreditoRepository;
+    private final OrcamentoRepository orcamentoRepository;
     private final TransacaoService transacaoService;
     private final MetaFinanceiraService metaFinanceiraService;
     private final CartaoCreditoService cartaoCreditoService;
+    private final ContaBancariaService contaBancariaService;
+    private final CategoriaService categoriaService;
+    private final OrcamentoService orcamentoService;
     private final SaldoService saldoService;
 
     private final Map<Long, SessaoGestao> sessoes = new ConcurrentHashMap<>();
@@ -82,6 +91,9 @@ public class WhatsAppGestaoProativaService {
             case PEDIR_NOVO_VALOR_TRANSACAO -> consumirNovoValorTransacao(usuarioId, s, t);
             case PEDIR_NOVO_VALOR_META -> consumirNovoValorMeta(usuarioId, s, t);
             case PEDIR_NOVO_LIMITE_CARTAO -> consumirNovoLimiteCartao(usuarioId, s, t);
+            case PEDIR_NOVO_NOME_CATEGORIA -> consumirNovoNomeCategoria(usuarioId, s, t);
+            case PEDIR_NOVO_NOME_CONTA -> consumirNovoNomeConta(usuarioId, s, t);
+            case PEDIR_NOVO_LIMITE_ORCAMENTO -> consumirNovoLimiteOrcamento(usuarioId, s, t);
             case CARTAO_FATURA_DECISAO -> consumirDecisaoFatura(usuarioId, s, t);
             case CARTAO_ESCOLHER_DESTINO -> consumirDestinoFatura(usuarioId, s, t);
         };
@@ -122,6 +134,10 @@ public class WhatsAppGestaoProativaService {
         String targetLc = target.toLowerCase(Locale.ROOT);
         boolean explicitMeta = targetLc.contains("meta") && !targetLc.contains("cart");
         boolean explicitCartao = targetLc.contains("cartao") || targetLc.contains("cartão") || targetLc.contains("card");
+        boolean explicitContaBancaria = targetLc.contains("conta_bancaria") || targetLc.contains("conta bancaria")
+            || targetLc.contains("carteira") || (targetLc.contains("conta") && !targetLc.contains("cart"));
+        boolean explicitCategoria = targetLc.contains("categoria");
+        boolean explicitOrcamento = targetLc.contains("orcamento") || targetLc.contains("orçamento");
         boolean explicitTransacao = targetLc.contains("transacao") || targetLc.contains("transação")
             || targetLc.contains("lancamento") || targetLc.contains("lançamento")
             || targetLc.contains("despesa") || targetLc.contains("receita") || targetLc.contains("gasto");
@@ -131,6 +147,15 @@ public class WhatsAppGestaoProativaService {
         }
         if (explicitCartao) {
             return iniciarCartoes(userId, phrase, edit, del);
+        }
+        if (explicitContaBancaria) {
+            return iniciarContasBancarias(userId, phrase, edit, del);
+        }
+        if (explicitCategoria) {
+            return iniciarCategorias(userId, phrase, edit, del);
+        }
+        if (explicitOrcamento) {
+            return iniciarOrcamentos(userId, phrase, edit, del, cmd, sourceText);
         }
         if (explicitTransacao) {
             return iniciarTransacoes(userId, phrase, edit, del, filtroTipo, cmd, sourceText);
@@ -142,6 +167,12 @@ public class WhatsAppGestaoProativaService {
         }
         if (pl.contains("cartão") || pl.contains("cartao")) {
             return iniciarCartoes(userId, phrase, edit, del);
+        }
+        if (pl.contains("orçamento") || pl.contains("orcamento")) {
+            return iniciarOrcamentos(userId, phrase, edit, del, cmd, sourceText);
+        }
+        if (pl.contains("categoria")) {
+            return iniciarCategorias(userId, phrase, edit, del);
         }
         return iniciarTransacoes(userId, phrase, edit, del, filtroTipo, cmd, sourceText);
     }
@@ -297,6 +328,114 @@ public class WhatsAppGestaoProativaService {
         return sb.toString();
     }
 
+    private String iniciarContasBancarias(Long userId, String phrase, boolean edit, boolean del) {
+        String frag = phrase.replaceAll("(?i)^(minha|meu|a|o)\\s+", "")
+            .replaceAll("(?i)\\s+conta\\s*", " ").trim();
+        List<ContaBancaria> found = contaBancariaService.encontrarAtivasPorApelidoNormalizado(userId, frag);
+        if (found.isEmpty()) {
+            return msgErro("Contas", "Não encontrei conta ativa com *" + frag + "*.");
+        }
+        List<ItemRef> itens = found.stream()
+            .map(c -> new ItemRef(c.getId(), c.getNome() + " — " + BRL.format(c.getSaldoAtual())))
+            .collect(Collectors.toList());
+        return montarSessaoSimples(userId, TipoAlvo.CONTA_BANCARIA, edit, del, itens, "conta", "Envia o *novo nome* da conta.");
+    }
+
+    private String iniciarCategorias(Long userId, String phrase, boolean edit, boolean del) {
+        String frag = phrase.replaceAll("(?i)^categoria\\s+", "").trim();
+        List<Categoria> found = categoriaService.encontrarAtivasPorApelidoNormalizado(userId, frag);
+        if (found.isEmpty()) {
+            return msgErro("Categorias", "Não encontrei categoria com *" + frag + "*.");
+        }
+        List<ItemRef> itens = found.stream()
+            .map(c -> new ItemRef(c.getId(), c.getNome()))
+            .collect(Collectors.toList());
+        return montarSessaoSimples(userId, TipoAlvo.CATEGORIA, edit, del, itens, "categoria", "Envia o *novo nome* da categoria.");
+    }
+
+    private String iniciarOrcamentos(Long userId, String phrase, boolean edit, boolean del, JsonNode cmd, String sourceText) {
+        YearMonth ym = resolveMes(cmd, sourceText);
+        String frag = phrase.replaceAll("(?i)^(orcamento|orçamento)\\s+(de|para|em)?\\s*", "").trim();
+        List<Orcamento> todos = orcamentoRepository.findByUsuarioIdAndMesAndAno(userId, ym.getMonthValue(), ym.getYear());
+        List<Orcamento> found = todos.stream()
+            .filter(o -> o.getCategoria() != null && o.getCategoria().getNome() != null
+                && StringFuzzy.descricaoContemTermoFuzzy(o.getCategoria().getNome(), frag))
+            .collect(Collectors.toList());
+        if (found.isEmpty() && !frag.isBlank()) {
+            found = todos.stream()
+                .filter(o -> o.getCategoria() != null && o.getCategoria().getNome() != null
+                    && o.getCategoria().getNome().toLowerCase(Locale.ROOT).contains(frag.toLowerCase(Locale.ROOT)))
+                .collect(Collectors.toList());
+        }
+        if (found.isEmpty()) {
+            return msgErro("Orçamentos", "Não encontrei orçamento com *" + frag + "* em *" + labelMes(ym) + "*.");
+        }
+        List<ItemRef> itens = found.stream()
+            .map(o -> new ItemRef(o.getId(), o.getCategoria().getNome() + " — limite " + BRL.format(o.getValorLimite())))
+            .collect(Collectors.toList());
+        SessaoGestao s = new SessaoGestao();
+        s.tipoAlvo = TipoAlvo.ORCAMENTO;
+        s.operacao = edit ? Operacao.EDIT : Operacao.DELETE;
+        s.itens = itens;
+        s.mesRef = ym;
+        if (itens.size() == 1) {
+            s.selecionadoId = itens.get(0).id;
+            if (s.operacao == Operacao.DELETE) {
+                s.passo = Passo.CONFIRMAR_DELETE_UNICO;
+                sessoes.put(userId, s);
+                return "Encontrei *1* orçamento em *" + labelMes(ym) + "*:\n\n1. " + itens.get(0).linha
+                    + "\n\nResponde *sim* para apagar ou *não* para cancelar.";
+            }
+            s.passo = Passo.PEDIR_NOVO_LIMITE_ORCAMENTO;
+            sessoes.put(userId, s);
+            return "Encontrei *1* orçamento:\n\n1. " + itens.get(0).linha + "\n\nEnvia o *novo limite* (número).";
+        }
+        s.passo = Passo.ESCOLHER_INDICE;
+        sessoes.put(userId, s);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Encontrei esses orçamentos em *").append(labelMes(ym)).append(":*\n\n");
+        for (int i = 0; i < itens.size(); i++) {
+            sb.append(i + 1).append(". ").append(itens.get(i).linha).append("\n");
+        }
+        sb.append("\nQual deles? Responde só com o *número*.");
+        return sb.toString();
+    }
+
+    private String montarSessaoSimples(
+        Long userId,
+        TipoAlvo tipo,
+        boolean edit,
+        boolean del,
+        List<ItemRef> itens,
+        String rotulo,
+        String promptEdit
+    ) {
+        SessaoGestao s = new SessaoGestao();
+        s.tipoAlvo = tipo;
+        s.operacao = edit ? Operacao.EDIT : Operacao.DELETE;
+        s.itens = itens;
+        if (itens.size() == 1) {
+            s.selecionadoId = itens.get(0).id;
+            if (s.operacao == Operacao.DELETE) {
+                s.passo = Passo.CONFIRMAR_DELETE_UNICO;
+                sessoes.put(userId, s);
+                return "Encontrei *1* " + rotulo + ":\n\n1. " + itens.get(0).linha + "\n\nResponde *sim* para apagar ou *não* para cancelar.";
+            }
+            s.passo = tipo == TipoAlvo.CATEGORIA ? Passo.PEDIR_NOVO_NOME_CATEGORIA : Passo.PEDIR_NOVO_NOME_CONTA;
+            sessoes.put(userId, s);
+            return "Encontrei *1* " + rotulo + ":\n\n1. " + itens.get(0).linha + "\n\n" + promptEdit;
+        }
+        s.passo = Passo.ESCOLHER_INDICE;
+        sessoes.put(userId, s);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Encontrei esses itens:\n\n");
+        for (int i = 0; i < itens.size(); i++) {
+            sb.append(i + 1).append(". ").append(itens.get(i).linha).append("\n");
+        }
+        sb.append("\nQual deles? Responde só com o *número*.");
+        return sb.toString();
+    }
+
     private static boolean cartaoCorrespondeFraseFuzzy(CartaoCredito c, String phrase) {
         if (phrase == null || phrase.isBlank()) {
             return false;
@@ -365,6 +504,37 @@ public class WhatsAppGestaoProativaService {
             sessoes.put(userId, s);
             return Optional.of("Cartão *" + idx + "* selecionado.\n\nEnvia o *novo limite total* (número).");
         }
+        if (s.tipoAlvo == TipoAlvo.CONTA_BANCARIA) {
+            if (s.operacao == Operacao.DELETE) {
+                contaBancariaService.inativar(s.selecionadoId, userId);
+                saldoService.notificarAlteracaoSaldo(userId);
+                sessoes.remove(userId);
+                return Optional.of(msgOk("Conta", "Conta inativada."));
+            }
+            s.passo = Passo.PEDIR_NOVO_NOME_CONTA;
+            sessoes.put(userId, s);
+            return Optional.of("Conta *" + idx + "* selecionada.\n\nEnvia o *novo nome*.");
+        }
+        if (s.tipoAlvo == TipoAlvo.CATEGORIA) {
+            if (s.operacao == Operacao.DELETE) {
+                categoriaService.deletar(userId, s.selecionadoId);
+                sessoes.remove(userId);
+                return Optional.of(msgOk("Categoria", "Categoria removida."));
+            }
+            s.passo = Passo.PEDIR_NOVO_NOME_CATEGORIA;
+            sessoes.put(userId, s);
+            return Optional.of("Categoria *" + idx + "* selecionada.\n\nEnvia o *novo nome*.");
+        }
+        if (s.tipoAlvo == TipoAlvo.ORCAMENTO) {
+            if (s.operacao == Operacao.DELETE) {
+                orcamentoService.excluir(userId, s.selecionadoId);
+                sessoes.remove(userId);
+                return Optional.of(msgOk("Orçamento", "Orçamento removido."));
+            }
+            s.passo = Passo.PEDIR_NOVO_LIMITE_ORCAMENTO;
+            sessoes.put(userId, s);
+            return Optional.of("Orçamento *" + idx + "* selecionado.\n\nEnvia o *novo limite* (número).");
+        }
         sessoes.remove(userId);
         return Optional.empty();
     }
@@ -403,24 +573,51 @@ public class WhatsAppGestaoProativaService {
             return Optional.of(msgInfo("Cancelado", "Não apaguei nada."));
         }
         if (n.equals("sim") || n.equals("s") || n.startsWith("sim ") || n.contains("confirmo")) {
-            if (s.tipoAlvo != TipoAlvo.TRANSACAO) {
-                sessoes.remove(userId);
-                return Optional.of(msgErro("Fluxo", "Estado inválido; recomeça o pedido."));
-            }
-            TransacaoDTO td = transacaoService.buscarPorId(s.selecionadoId, userId);
-            if (td.getGrupoParcelaId() != null && !td.getGrupoParcelaId().isBlank()) {
-                s.passo = Passo.PARCEL_DELETE_OPCAO;
-                sessoes.put(userId, s);
-                return Optional.of(msgInfo("Parcelamento",
-                    "Este lançamento faz parte de um *parcelamento*. Como queres apagar?\n"
-                        + "• *1* — só esta parcela\n• *2* — esta e as seguintes\n• *3* — todo o parcelamento\n• *não* — cancelar"));
-            }
-            transacaoService.deletarTransacao(s.selecionadoId, userId);
-            saldoService.notificarAlteracaoSaldo(userId);
-            sessoes.remove(userId);
-            return Optional.of(msgOk("Transação", "Transação apagada."));
+            return switch (s.tipoAlvo) {
+                case TRANSACAO -> confirmarDeleteTransacao(userId, s);
+                case META -> {
+                    metaFinanceiraService.excluir(s.selecionadoId, userId);
+                    sessoes.remove(userId);
+                    yield Optional.of(msgOk("Meta", "Meta removida."));
+                }
+                case CONTA_BANCARIA -> {
+                    contaBancariaService.inativar(s.selecionadoId, userId);
+                    saldoService.notificarAlteracaoSaldo(userId);
+                    sessoes.remove(userId);
+                    yield Optional.of(msgOk("Conta", "Conta inativada."));
+                }
+                case CATEGORIA -> {
+                    categoriaService.deletar(userId, s.selecionadoId);
+                    sessoes.remove(userId);
+                    yield Optional.of(msgOk("Categoria", "Categoria removida."));
+                }
+                case ORCAMENTO -> {
+                    orcamentoService.excluir(userId, s.selecionadoId);
+                    sessoes.remove(userId);
+                    yield Optional.of(msgOk("Orçamento", "Orçamento removido."));
+                }
+                default -> {
+                    sessoes.remove(userId);
+                    yield Optional.of(msgErro("Fluxo", "Estado inválido; recomeça o pedido."));
+                }
+            };
         }
         return Optional.of(msgInfo("Confirmação", "Responde *sim* para apagar ou *não* para cancelar."));
+    }
+
+    private Optional<String> confirmarDeleteTransacao(Long userId, SessaoGestao s) {
+        TransacaoDTO td = transacaoService.buscarPorId(s.selecionadoId, userId);
+        if (td.getGrupoParcelaId() != null && !td.getGrupoParcelaId().isBlank()) {
+            s.passo = Passo.PARCEL_DELETE_OPCAO;
+            sessoes.put(userId, s);
+            return Optional.of(msgInfo("Parcelamento",
+                "Este lançamento faz parte de um *parcelamento*. Como queres apagar?\n"
+                    + "• *1* — só esta parcela\n• *2* — esta e as seguintes\n• *3* — todo o parcelamento\n• *não* — cancelar"));
+        }
+        transacaoService.deletarTransacao(s.selecionadoId, userId);
+        saldoService.notificarAlteracaoSaldo(userId);
+        sessoes.remove(userId);
+        return Optional.of(msgOk("Transação", "Transação apagada."));
     }
 
     private Optional<String> consumirNovoValorTransacao(Long userId, SessaoGestao s, String t) {
@@ -470,6 +667,50 @@ public class WhatsAppGestaoProativaService {
         cartaoCreditoService.atualizarCartaoCredito(s.selecionadoId, dto, userId);
         sessoes.remove(userId);
         return Optional.of(msgOk("Cartão", "Limite atualizado para *" + BRL.format(v) + "*."));
+    }
+
+    private Optional<String> consumirNovoNomeCategoria(Long userId, SessaoGestao s, String t) {
+        String nome = t != null ? t.trim() : "";
+        if (nome.length() < 2) {
+            return Optional.of(msgErro("Nome", "Envia um nome válido para a categoria."));
+        }
+        var existente = categoriaService.listarPorUsuario(userId).stream()
+            .filter(c -> c.getId().equals(s.selecionadoId))
+            .findFirst()
+            .orElseThrow();
+        existente.setNome(nome);
+        categoriaService.atualizar(userId, s.selecionadoId, existente);
+        sessoes.remove(userId);
+        return Optional.of(msgOk("Categoria", "Nome atualizado para *" + nome + "*."));
+    }
+
+    private Optional<String> consumirNovoNomeConta(Long userId, SessaoGestao s, String t) {
+        String nome = t != null ? t.trim() : "";
+        if (nome.length() < 2) {
+            return Optional.of(msgErro("Nome", "Envia um nome válido para a conta."));
+        }
+        var dto = contaBancariaService.buscarPorId(s.selecionadoId, userId);
+        dto.setNome(nome);
+        contaBancariaService.atualizar(s.selecionadoId, dto, userId);
+        sessoes.remove(userId);
+        return Optional.of(msgOk("Conta", "Nome atualizado para *" + nome + "*."));
+    }
+
+    private Optional<String> consumirNovoLimiteOrcamento(Long userId, SessaoGestao s, String t) {
+        BigDecimal v = parseMoney(t);
+        if (v == null || v.compareTo(BigDecimal.ZERO) <= 0) {
+            return Optional.of(msgErro("Limite", "Envia o novo limite (número maior que zero)."));
+        }
+        Orcamento o = orcamentoRepository.findByIdAndUsuarioId(s.selecionadoId, userId).orElseThrow();
+        OrcamentoRequest req = new OrcamentoRequest();
+        req.setCategoriaId(o.getCategoria().getId());
+        req.setValorLimite(v);
+        req.setMes(o.getMes());
+        req.setAno(o.getAno());
+        req.setCompartilhado(o.isCompartilhado());
+        orcamentoService.salvar(userId, req);
+        sessoes.remove(userId);
+        return Optional.of(msgOk("Orçamento", "Limite atualizado para *" + BRL.format(v) + "*."));
     }
 
     private Optional<String> consumirDecisaoFatura(Long userId, SessaoGestao s, String t) {
@@ -619,7 +860,7 @@ public class WhatsAppGestaoProativaService {
         return "ℹ️ *" + titulo + "*\n" + corpo;
     }
 
-    private enum TipoAlvo { TRANSACAO, META, CARTAO }
+    private enum TipoAlvo { TRANSACAO, META, CARTAO, CONTA_BANCARIA, CATEGORIA, ORCAMENTO }
     private enum Operacao { DELETE, EDIT }
     private enum Passo {
         ESCOLHER_INDICE,
@@ -628,6 +869,9 @@ public class WhatsAppGestaoProativaService {
         PEDIR_NOVO_VALOR_TRANSACAO,
         PEDIR_NOVO_VALOR_META,
         PEDIR_NOVO_LIMITE_CARTAO,
+        PEDIR_NOVO_NOME_CATEGORIA,
+        PEDIR_NOVO_NOME_CONTA,
+        PEDIR_NOVO_LIMITE_ORCAMENTO,
         CARTAO_FATURA_DECISAO,
         CARTAO_ESCOLHER_DESTINO
     }

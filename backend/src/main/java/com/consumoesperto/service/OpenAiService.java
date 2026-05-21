@@ -69,14 +69,16 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
             "description, amount, bank, cardName, cardNumber, dueDay, creditLimit (limite total do cartão, opcional), " +
+            "accountName (nome da conta bancária/carteira), accountType (CORRENTE|POUPANCA|DINHEIRO), initialBalance (saldo inicial da conta), " +
+            "categoryName (nome da categoria), budgetLimit (limite do orçamento mensal), " +
             "installmentCount (N parcelas, inteiro ≥2), installmentAmount (valor de cada parcela quando citado), " +
             "interestFree (true se 'sem juros'/'s/juros'), withInterest (true se 'com juros'), purchasePrice (preço à vista do bem quando citado), " +
             "newAvailableLimit (opcional), percentualComprometimento (0-100 quando for meta), " +
-            "manageOperation (delete|edit), manageTarget (transacao|meta|cartao), searchPhrase (termo de busca), " +
-            "targetEntity (AUTO|CONTA|CARTAO|META|CATEGORIA|DESPESA_FIXA), identifier (apelido/nome do cadastro), " +
+            "manageOperation (delete|edit), manageTarget (transacao|meta|cartao|conta_bancaria|categoria|orcamento), searchPhrase (termo de busca), " +
+            "targetEntity (AUTO|CONTA|CARTAO|CONTA_BANCARIA|META|CATEGORIA|DESPESA_FIXA), identifier (apelido/nome do cadastro), " +
             "updates (objeto JSON com campos a alterar, ex.: {\"limite\":5000,\"apelido\":\"Nubank Ultra\",\"icone\":\"shopping-cart\"}), " +
             "legado cartão: newLimit, newAvailableLimit, newCardName — use UPDATE_ACCOUNT_CONFIG ou UPDATE_ENTITY_CONFIG com updates.\n" +
             "confianca (0-1), errorMessage. " +
@@ -95,15 +97,23 @@ public class OpenAiService {
             "- Se for receita: action CREATE_INCOME e preencher description + amount.\n" +
             "- Se for cadastro de cartão: action CREATE_CARD e preencher cardName, bank, cardNumber (últimos 4 dígitos) e dueDay (1-31); " +
             "se a frase citar limite (ex.: 'limite 7800'), preencher creditLimit com o número; newAvailableLimit só se disser limite disponível separado.\n" +
+            "- Se for cadastro de conta bancária/carteira (ex.: 'cria conta Nubank corrente saldo 1500', 'cadastra carteira dinheiro'): " +
+            "action CREATE_BANK_ACCOUNT; accountName = nome; accountType = CORRENTE|POUPANCA|DINHEIRO; initialBalance ou amount = saldo inicial.\n" +
+            "- Se for cadastro de categoria (ex.: 'cria categoria Pets', 'nova categoria Viagem'): action CREATE_CATEGORY; categoryName = nome.\n" +
+            "- Se for cadastro de orçamento mensal (ex.: 'orçamento 800 em Alimentação', 'limite 500 para Lazer este mês'): " +
+            "action CREATE_BUDGET; categoryName = categoria citada; budgetLimit ou amount = valor limite; reportMonth/reportYear se citar mês.\n" +
             "- Prioridade MANAGE_ENTITY: se a frase citar explicitamente *meta* (objetivo financeiro), preencha manageTarget=meta; " +
-            "se citar *cartão/cartao/card*, manageTarget=cartao; caso contrário manageTarget=transacao. " +
+            "se citar *cartão/cartao/card*, manageTarget=cartao; se citar *conta bancária/carteira/poupança* (não cartão), manageTarget=conta_bancaria; " +
+            "se citar *categoria*, manageTarget=categoria; se citar *orçamento/orcamento*, manageTarget=orcamento; " +
+            "caso contrário manageTarget=transacao. " +
             "Não confundir 'meta' de simulação de compra com meta financeira — só use manageTarget=meta quando for cadastro de meta.\n" +
             "- Se houver mais de um item candidato a editar/apagar, o bot no WhatsApp deve listar numerado e pedir o número; " +
             "no JSON, preencha searchPhrase com o termo original (mesmo com erro de digitação; o backend corrige por similaridade).\n" +
             "- Se for editar cadastro existente (categoria, meta, despesa fixa, cartão/conta), use UPDATE_ENTITY_CONFIG: " +
-            "targetEntity = AUTO se o usuário não especificar tipo (o sistema busca primeiro categoria, depois meta, despesa fixa, cartão); " +
+            "targetEntity = AUTO se o usuário não especificar tipo (o sistema busca categoria, meta, despesa fixa, conta bancária, cartão); " +
             "identifier = nome citado; updates = mapa com chaves canônicas: " +
-            "cartão/conta: apelido, banco, limite, limiteDisponivel, cor, icone; " +
+            "cartão: apelido, banco, limite, limiteDisponivel, cor, icone; " +
+            "conta bancária (targetEntity CONTA_BANCARIA): nome, tipo, saldo, padrao; " +
             "categoria: nome, cor, icone (limiteMensal pode ser pedido mas o app pode ignorar); " +
             "meta: nome ou descricao, valorObjetivo ou valorTotal, percentual, prioridade, dataPrazo (yyyy-MM-dd); " +
             "despesa fixa: descricao, valor.\n" +
@@ -123,8 +133,9 @@ public class OpenAiService {
             "- Se pedir relatório ou PDF mensal (ex: 'gera um PDF do mês', 'relatório de maio', 'quero o resumo em PDF'): " +
             "action GENERATE_REPORT; preencher reportMonth e reportYear quando a frase citar mês/ano (ex: maio 2026 → 5 e 2026).\n" +
             "- Sinónimo: 'gerar relatorio', 'GERAR_RELATORIO', 'manda o pdf' → action GERAR_RELATORIO (mesmos campos que GENERATE_REPORT).\n" +
-            "- Apagar ou editar algo pelo nome (ex: 'apague a gasolina deste mês', 'edite minha meta de Lazer', 'apague meu cartão Inter'): " +
-            "action MANAGE_ENTITY; manageOperation = delete ou edit; manageTarget = transacao | meta | cartao (obrigatório conforme prioridade acima); " +
+            "- Apagar ou editar algo pelo nome (ex: 'apague a gasolina deste mês', 'edite minha meta de Lazer', 'apague meu cartão Inter', " +
+            "'inativa conta Nubank', 'apaga categoria Pets', 'remove orçamento de Alimentação'): " +
+            "action MANAGE_ENTITY; manageOperation = delete ou edit; manageTarget = transacao | meta | cartao | conta_bancaria | categoria | orcamento; " +
             "searchPhrase = termo principal (ex.: gasolina, Lazer, Inter); para transações no mês corrente use reportMonth/reportYear ou deixe vazio para mês atual; " +
             "tipoTransacao DESPESA ou RECEITA quando for transação (default DESPESA se for gasto).\n" +
             "- Se configurar salário / renda com descontos (ex: 'salário bruto 8000, 600 INSS, 400 plano, 500 IRRF, pagamento dia 5'): " +

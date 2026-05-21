@@ -31,6 +31,7 @@ public class ForecastFinanceiroService {
     private final RendaConfigService rendaConfigService;
     private final OpenAiService openAiService;
     private final JarvisProtocolService jarvisProtocolService;
+    private final SaldoService saldoService;
 
     @Transactional(readOnly = true)
     public ForecastFinanceiroDTO calcular(Long usuarioId) {
@@ -51,7 +52,15 @@ public class ForecastFinanceiroService {
             .filter(v -> v.compareTo(BigDecimal.ZERO) > 0)
             .orElseGet(() -> nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fimMes)));
-        BigDecimal saldoProjetado = rendaLiquida.subtract(gastoProjetado).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal receitasConfirmadas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+            usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fimMes));
+        BigDecimal receitasPrevistas = rendaLiquida.subtract(receitasConfirmadas).max(BigDecimal.ZERO)
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal despesasPrevistas = gastoProjetado.subtract(gastoAtual).max(BigDecimal.ZERO)
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal patrimonioLiquido = nz(saldoService.patrimonioLiquido(usuarioId));
+        BigDecimal saldoProjetado = patrimonioLiquido.add(receitasPrevistas).subtract(despesasPrevistas)
+            .setScale(2, RoundingMode.HALF_UP);
 
         ForecastFinanceiroDTO dto = new ForecastFinanceiroDTO();
         dto.setDiaAtual(diaAtual);
@@ -60,6 +69,9 @@ public class ForecastFinanceiroService {
         dto.setGastoAtual(gastoAtual);
         dto.setMediaDiaria(mediaDiaria);
         dto.setGastoProjetado(gastoProjetado);
+        dto.setPatrimonioLiquido(patrimonioLiquido);
+        dto.setReceitasPrevistas(receitasPrevistas);
+        dto.setDespesasPrevistas(despesasPrevistas);
         dto.setSaldoProjetado(saldoProjetado);
         dto.setMaioresCategorias(maioresCategorias(usuarioId, inicio, fimHoje));
         aplicarAnaliseIa(usuarioId, dto);

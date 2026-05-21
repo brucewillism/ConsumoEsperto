@@ -10,6 +10,9 @@ public class ForecastFinanceiroDTO {
     private BigDecimal gastoAtual;
     private BigDecimal mediaDiaria;
     private BigDecimal gastoProjetado;
+    private BigDecimal patrimonioLiquido;
+    private BigDecimal receitasPrevistas;
+    private BigDecimal despesasPrevistas;
     private BigDecimal saldoProjetado;
     private BigDecimal probabilidadeVermelho;
     private String nivelRisco;
@@ -33,6 +36,15 @@ public class ForecastFinanceiroDTO {
 
     public BigDecimal getGastoProjetado() { return gastoProjetado; }
     public void setGastoProjetado(BigDecimal gastoProjetado) { this.gastoProjetado = gastoProjetado; }
+
+    public BigDecimal getPatrimonioLiquido() { return patrimonioLiquido; }
+    public void setPatrimonioLiquido(BigDecimal patrimonioLiquido) { this.patrimonioLiquido = patrimonioLiquido; }
+
+    public BigDecimal getReceitasPrevistas() { return receitasPrevistas; }
+    public void setReceitasPrevistas(BigDecimal receitasPrevistas) { this.receitasPrevistas = receitasPrevistas; }
+
+    public BigDecimal getDespesasPrevistas() { return despesasPrevistas; }
+    public void setDespesasPrevistas(BigDecimal despesasPrevistas) { this.despesasPrevistas = despesasPrevistas; }
 
     public BigDecimal getSaldoProjetado() { return saldoProjetado; }
     public void setSaldoProjetado(BigDecimal saldoProjetado) { this.saldoProjetado = saldoProjetado; }

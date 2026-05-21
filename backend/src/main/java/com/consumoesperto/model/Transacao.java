@@ -89,6 +89,12 @@ public class Transacao {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "cartaoCredito", "usuario"})
     private Fatura fatura;
 
+    /** Carteira bancária movimentada (multicarteira). Opcional; nulo em despesas só de cartão/fatura. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conta_bancaria_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "usuario"})
+    private ContaBancaria contaBancaria;
+
     /**
      * Data e hora em que a transação ocorreu
      * Pode ser diferente da data de criação (ex: transação de ontem registrada hoje)
@@ -192,6 +198,9 @@ public class Transacao {
 
     public Fatura getFatura() { return fatura; }
     public void setFatura(Fatura fatura) { this.fatura = fatura; }
+
+    public ContaBancaria getContaBancaria() { return contaBancaria; }
+    public void setContaBancaria(ContaBancaria contaBancaria) { this.contaBancaria = contaBancaria; }
 
     public String getGrupoParcelaId() { return grupoParcelaId; }
     public void setGrupoParcelaId(String grupoParcelaId) { this.grupoParcelaId = grupoParcelaId; }

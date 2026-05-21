@@ -1,9 +1,12 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.CartaoCreditoDTO;
+import com.consumoesperto.dto.CategoriaDTO;
+import com.consumoesperto.dto.ContaBancariaDTO;
 import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.dto.ImportacaoFaturaDTO;
+import com.consumoesperto.dto.OrcamentoRequest;
 import com.consumoesperto.dto.SugestaoContencaoJarvisDTO;
 import com.consumoesperto.dto.MetaFinanceiraDTO;
 import com.consumoesperto.dto.MetaFinanceiraRequest;
@@ -11,6 +14,7 @@ import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.dto.DespesaFixaRequest;
 import com.consumoesperto.model.CartaoCredito;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.MemoriaCategoriaOrigem;
@@ -94,6 +98,9 @@ public class WhatsAppCommandService {
 
     private final TransacaoSemanticaIndexService transacaoSemanticaIndexService;
     private final EvolutionBotEchoFilterService evolutionBotEchoFilterService;
+    private final ContaBancariaService contaBancariaService;
+    private final CategoriaService categoriaService;
+    private final OrcamentoService orcamentoService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -599,6 +606,9 @@ public class WhatsAppCommandService {
             case "CREATE_EXPENSE" -> handleExpense(cmd, userId, sourceText);
             case "CREATE_INCOME" -> handleIncome(cmd, userId, sourceText);
             case "CREATE_CARD" -> handleCard(cmd, userId, sourceText);
+            case "CREATE_BANK_ACCOUNT" -> handleCreateBankAccount(cmd, userId, sourceText);
+            case "CREATE_CATEGORY" -> handleCreateCategory(cmd, userId, sourceText);
+            case "CREATE_BUDGET" -> handleCreateBudget(cmd, userId, sourceText);
             case "UPDATE_ENTITY_CONFIG" -> formatarRespostaEntidade(whatsAppEntityConfigUpdateService.executar(userId, normalizarUpdateEntityConfig(cmd, sourceText)), userId);
             case "UPDATE_ACCOUNT_CONFIG" -> handleUpdateAccountConfig(cmd, userId, sourceText);
             case "SIMULATE_PURCHASE_GOAL" -> handleSimulatePurchaseGoal(cmd, userId, sourceText);
@@ -1321,6 +1331,8 @@ public class WhatsAppCommandService {
             if (matchResult.card != null) {
                 Fatura faturaAlvo = faturaService.resolverFaturaAbertaParaCartao(userId, matchResult.card);
                 dto.setFaturaId(faturaAlvo.getId());
+            } else {
+                aplicarContaBancariaSeInformada(cmd, sourceText, userId, dto);
             }
 
             TransacaoDTO created = transacaoService.criarTransacao(dto, userId);
@@ -1334,8 +1346,11 @@ public class WhatsAppCommandService {
                 }
                 return msgOk("Despesa registada", detalhe);
             }
+            String contaInfo = created.getContaBancariaNome() != null && !created.getContaBancariaNome().isBlank()
+                ? " na conta *" + created.getContaBancariaNome() + "*"
+                : "";
             return msgOk("Despesa registada",
-                jarvisLinha + "\n\n*" + created.getDescricao() + "* (sem cartão associado).\n" + invoiceMessage.trim());
+                jarvisLinha + "\n\n*" + created.getDescricao() + "*" + contaInfo + " (sem cartão associado).\n" + invoiceMessage.trim());
         } catch (RuntimeException e) {
             log.info("WhatsApp despesa: {}", e.getMessage());
             return msgErro(userId, "Despesa", humanizarErroComando(e.getMessage()));
@@ -1368,14 +1383,197 @@ public class WhatsAppCommandService {
             dto.setValor(amount);
             dto.setTipoTransacao(TransacaoDTO.TipoTransacao.RECEITA);
             dto.setDataTransacao(LocalDateTime.now());
+            aplicarContaBancariaSeInformada(cmd, sourceText, userId, dto);
 
             TransacaoDTO created = transacaoService.criarTransacao(dto, userId);
+            String contaInfo = created.getContaBancariaNome() != null && !created.getContaBancariaNome().isBlank()
+                ? " na conta *" + created.getContaBancariaNome() + "*"
+                : "";
             return msgOk("Receita registada",
-                BRL.format(created.getValor()) + " em *" + created.getDescricao() + "*.");
+                BRL.format(created.getValor()) + " em *" + created.getDescricao() + "*" + contaInfo + ".");
         } catch (RuntimeException e) {
             log.info("WhatsApp receita: {}", e.getMessage());
             return msgErro(userId, "Receita", humanizarErroComando(e.getMessage()));
         }
+    }
+
+    private String handleCreateBankAccount(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            String nome = whatsAppFirstNonBlank(
+                cmd.path("accountName").asText(""),
+                cmd.path("identifier").asText(""),
+                cmd.path("description").asText("")
+            );
+            if (nome.isBlank()) {
+                return msgErro(userId, "Conta bancária", "Informe o nome da conta (ex.: *Nubank*, *Carteira*).");
+            }
+            BigDecimal saldo = readOptionalBigDecimal(cmd, "initialBalance");
+            if (saldo == null) {
+                saldo = readOptionalBigDecimal(cmd, "saldoInicial");
+            }
+            if (saldo == null) {
+                try {
+                    saldo = readAmount(cmd, sourceText);
+                } catch (RuntimeException ignored) {
+                    saldo = BigDecimal.ZERO;
+                }
+            }
+            ContaBancariaDTO dto = new ContaBancariaDTO();
+            dto.setUsuarioId(userId);
+            dto.setNome(sanitizeName(nome));
+            dto.setTipo(parseTipoContaWhatsapp(cmd.path("accountType").asText(""), sourceText));
+            dto.setSaldoAtual(saldo != null ? saldo : BigDecimal.ZERO);
+            dto.setAtiva(true);
+            dto.setPadrao(!contaBancariaService.possuiContasAtivas(userId));
+            ContaBancariaDTO criada = contaBancariaService.criar(dto);
+            saldoService.notificarAlteracaoSaldo(userId);
+            return msgOk("Conta criada",
+                "Conta *" + criada.getNome() + "* (" + criada.getTipo().name() + ") com saldo *"
+                    + BRL.format(criada.getSaldoAtual()) + "*.");
+        } catch (RuntimeException e) {
+            return msgErro(userId, "Conta bancária", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private String handleCreateCategory(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            String nome = whatsAppFirstNonBlank(
+                cmd.path("categoryName").asText(""),
+                cmd.path("description").asText(""),
+                cmd.path("identifier").asText("")
+            );
+            if (nome.isBlank()) {
+                return msgErro(userId, "Categoria", "Informe o nome da categoria (ex.: *Pets*, *Viagem*).");
+            }
+            CategoriaDTO dto = new CategoriaDTO();
+            dto.setNome(sanitizeName(nome));
+            String cor = cmd.path("cor").asText("");
+            if (!cor.isBlank()) {
+                dto.setCor(cor.trim());
+            }
+            String icone = cmd.path("icone").asText("");
+            if (!icone.isBlank()) {
+                dto.setIcone(icone.trim());
+            }
+            CategoriaDTO criada = categoriaService.criar(userId, dto);
+            return msgOk("Categoria criada", "Categoria *" + criada.getNome() + "* cadastrada.");
+        } catch (RuntimeException e) {
+            return msgErro(userId, "Categoria", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private String handleCreateBudget(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            String catNome = whatsAppFirstNonBlank(
+                cmd.path("categoryName").asText(""),
+                cmd.path("description").asText(""),
+                cmd.path("identifier").asText("")
+            );
+            BigDecimal limite = readOptionalBigDecimal(cmd, "budgetLimit");
+            if (limite == null) {
+                limite = readAmount(cmd, sourceText);
+            }
+            if (catNome.isBlank()) {
+                return msgErro(userId, "Orçamento", "Informe a categoria (ex.: *orçamento 800 em Alimentação*).");
+            }
+            Long categoriaId = resolveCategoriaId(userId, catNome);
+            if (categoriaId == null) {
+                return msgErro(userId, "Orçamento",
+                    "Não encontrei a categoria *" + catNome + "*. Crie a categoria primeiro ou ajuste o nome.");
+            }
+            OrcamentoRequest req = new OrcamentoRequest();
+            req.setCategoriaId(categoriaId);
+            req.setValorLimite(limite);
+            int mes = cmd.path("reportMonth").asInt(0);
+            int ano = cmd.path("reportYear").asInt(0);
+            if (mes >= 1 && mes <= 12) {
+                req.setMes(mes);
+            }
+            if (ano >= 2000) {
+                req.setAno(ano);
+            }
+            var salvo = orcamentoService.salvar(userId, req);
+            return msgOk("Orçamento",
+                "Limite *" + BRL.format(salvo.getValorLimite()) + "* para *" + salvo.getCategoriaNome()
+                    + "* em *" + salvo.getMes() + "/" + salvo.getAno() + "*.");
+        } catch (RuntimeException e) {
+            return msgErro(userId, "Orçamento", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private ContaBancariaDTO.TipoConta parseTipoContaWhatsapp(String accountType, String sourceText) {
+        String raw = accountType != null && !accountType.isBlank() ? accountType : (sourceText != null ? sourceText : "");
+        String u = normalize(raw);
+        if (u.contains("poup")) {
+            return ContaBancariaDTO.TipoConta.POUPANCA;
+        }
+        if (u.contains("dinheiro") || u.contains("carteira") || u.contains("cash")) {
+            return ContaBancariaDTO.TipoConta.DINHEIRO;
+        }
+        return ContaBancariaDTO.TipoConta.CORRENTE;
+    }
+
+    private void aplicarContaBancariaSeInformada(JsonNode cmd, String sourceText, Long userId, TransacaoDTO dto) {
+        String token = resolveAccountToken(cmd, sourceText);
+        if (token.isBlank()) {
+            return;
+        }
+        BankAccountMatch match = findBestBankAccount(userId, token);
+        if (match.conta != null) {
+            dto.setContaBancariaId(match.conta.getId());
+        }
+    }
+
+    private String resolveAccountToken(JsonNode cmd, String sourceText) {
+        String accountName = cmd.path("accountName").asText("");
+        if (!accountName.isBlank()) {
+            return accountName;
+        }
+        String cardName = cmd.path("cardName").asText("");
+        String bank = cmd.path("bank").asText("");
+        if (!cardName.isBlank() && bank.isBlank()) {
+            return cardName;
+        }
+        if (!bank.isBlank() && cardName.isBlank()) {
+            return bank;
+        }
+        if (sourceText != null) {
+            String lower = normalize(sourceText);
+            if (lower.contains("na conta") || lower.contains("conta ")) {
+                for (String token : new String[]{"nubank", "itau", "inter", "santander", "bradesco", "caixa", "bb", "picpay", "carteira"}) {
+                    if (lower.contains(token)) {
+                        return token;
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    private BankAccountMatch findBestBankAccount(Long userId, String token) {
+        if (token == null || token.isBlank()) {
+            return new BankAccountMatch(null, false);
+        }
+        List<ContaBancaria> candidatos = contaBancariaService.encontrarAtivasPorApelidoNormalizado(userId, token);
+        if (candidatos.isEmpty()) {
+            return new BankAccountMatch(null, false);
+        }
+        if (candidatos.size() == 1) {
+            return new BankAccountMatch(candidatos.get(0), false);
+        }
+        return new BankAccountMatch(candidatos.get(0), candidatos.size() > 1);
+    }
+
+    private static String whatsAppFirstNonBlank(String... parts) {
+        if (parts == null) {
+            return "";
+        }
+        for (String p : parts) {
+            if (p != null && !p.isBlank()) {
+                return p.trim();
+            }
+        }
+        return "";
     }
 
     private String handleSetSalaryConfig(JsonNode cmd, Long userId, String sourceText) {
@@ -2470,6 +2668,16 @@ public class WhatsAppCommandService {
 
         private CardMatchResult(CartaoCredito card, boolean pendingReview) {
             this.card = card;
+            this.pendingReview = pendingReview;
+        }
+    }
+
+    private static class BankAccountMatch {
+        private final ContaBancaria conta;
+        private final boolean pendingReview;
+
+        private BankAccountMatch(ContaBancaria conta, boolean pendingReview) {
+            this.conta = conta;
             this.pendingReview = pendingReview;
         }
     }

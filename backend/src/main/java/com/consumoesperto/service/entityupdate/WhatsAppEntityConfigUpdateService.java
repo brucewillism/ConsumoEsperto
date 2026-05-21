@@ -2,13 +2,16 @@ package com.consumoesperto.service.entityupdate;
 
 import com.consumoesperto.dto.CartaoCreditoDTO;
 import com.consumoesperto.dto.CategoriaDTO;
+import com.consumoesperto.dto.ContaBancariaDTO;
 import com.consumoesperto.dto.MetaFinanceiraDTO;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.MetaFinanceira;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.service.CartaoCreditoService;
 import com.consumoesperto.service.CategoriaService;
+import com.consumoesperto.service.ContaBancariaService;
 import com.consumoesperto.service.MetaFinanceiraService;
 import com.consumoesperto.service.TransacaoService;
 import com.consumoesperto.util.ApelidoNormalizador;
@@ -39,6 +42,7 @@ public class WhatsAppEntityConfigUpdateService {
     private final CategoriaService categoriaService;
     private final MetaFinanceiraService metaFinanceiraService;
     private final CartaoCreditoService cartaoCreditoService;
+    private final ContaBancariaService contaBancariaService;
     private final TransacaoService transacaoService;
 
     public String executar(Long usuarioId, JsonNode cmd) {
@@ -68,6 +72,7 @@ public class WhatsAppEntityConfigUpdateService {
                 case CATEGORIA -> aplicarCategoria(usuarioId, match, updates);
                 case META -> aplicarMeta(usuarioId, match, updates);
                 case DESPESA_FIXA -> aplicarDespesaFixa(usuarioId, match, updates);
+                case CONTA_BANCARIA -> aplicarContaBancaria(usuarioId, match, updates);
                 case CARTAO, CONTA -> aplicarCartao(usuarioId, match, updates);
                 default -> "Tipo de cadastro não suportado.";
             };
@@ -87,10 +92,13 @@ public class WhatsAppEntityConfigUpdateService {
         if (hint == UpdateTargetEntity.DESPESA_FIXA) {
             return resolveDespesaFixa(usuarioId, identifier);
         }
+        if (hint == UpdateTargetEntity.CONTA_BANCARIA) {
+            return resolveContaBancaria(usuarioId, identifier);
+        }
         if (hint.isCartaoOuConta()) {
             return resolveCartao(usuarioId, identifier);
         }
-        // AUTO: categoria → meta → despesa fixa → cartão
+        // AUTO: categoria → meta → despesa fixa → conta bancária → cartão
         ResolveOutcome c = resolveCategoria(usuarioId, identifier);
         if (c.error != null) {
             return c;
@@ -111,6 +119,13 @@ public class WhatsAppEntityConfigUpdateService {
         }
         if (d.match != null) {
             return d;
+        }
+        ResolveOutcome cb = resolveContaBancaria(usuarioId, identifier);
+        if (cb.error != null) {
+            return cb;
+        }
+        if (cb.match != null) {
+            return cb;
         }
         return resolveCartao(usuarioId, identifier);
     }
@@ -159,6 +174,78 @@ public class WhatsAppEntityConfigUpdateService {
             return ResolveOutcome.err("Encontrei mais de um cartão parecido com \"" + identifier + "\". Diga o apelido exato.");
         }
         return ResolveOutcome.ok(new EntityMatch(UpdateTargetEntity.CARTAO, found.get(0).getId(), found.get(0).getNome()));
+    }
+
+    private ResolveOutcome resolveContaBancaria(Long usuarioId, String identifier) {
+        List<ContaBancaria> found = contaBancariaService.encontrarAtivasPorApelidoNormalizado(usuarioId, identifier);
+        if (found.isEmpty()) {
+            return ResolveOutcome.notFound();
+        }
+        if (found.size() > 1) {
+            return ResolveOutcome.err("Encontrei mais de uma conta parecida com \"" + identifier + "\". Diga o nome exato ou use targetEntity conta_bancaria.");
+        }
+        return ResolveOutcome.ok(new EntityMatch(UpdateTargetEntity.CONTA_BANCARIA, found.get(0).getId(), found.get(0).getNome()));
+    }
+
+    private String aplicarContaBancaria(Long usuarioId, EntityMatch match, JsonNode updates) {
+        ContaBancariaDTO dto = contaBancariaService.buscarPorId(match.id(), usuarioId);
+        BigDecimal novoSaldo = null;
+        List<String> ignorados = new ArrayList<>();
+        Iterator<Map.Entry<String, JsonNode>> it = updates.fields();
+        while (it.hasNext()) {
+            Map.Entry<String, JsonNode> e = it.next();
+            String key = ApelidoNormalizador.normalizar(e.getKey()).replace(' ', '_');
+            JsonNode v = e.getValue();
+            switch (key) {
+                case "apelido", "nome", "nickname", "account_name", "accountname" -> {
+                    if (v != null && !v.isNull() && !v.asText().isBlank()) {
+                        dto.setNome(v.asText().trim());
+                    }
+                }
+                case "tipo", "account_type", "accounttype" -> {
+                    if (v != null && !v.isNull() && !v.asText().isBlank()) {
+                        dto.setTipo(parseTipoConta(v.asText()));
+                    }
+                }
+                case "padrao", "default", "principal" -> {
+                    if (v != null && !v.isNull()) {
+                        dto.setPadrao(v.asBoolean(false));
+                    }
+                }
+                case "saldo", "saldo_atual", "saldoatual", "initial_balance", "initialbalance" -> {
+                    BigDecimal nv = readBd(v);
+                    if (nv != null && nv.compareTo(BigDecimal.ZERO) >= 0) {
+                        novoSaldo = nv;
+                    }
+                }
+                case "limite", "limite_credito", "banco", "bank" -> ignorados.add(e.getKey() + " (campo de cartão, não de conta bancária)");
+                default -> ignorados.add(e.getKey());
+            }
+        }
+        ContaBancariaDTO salvo = contaBancariaService.atualizar(match.id(), dto, usuarioId);
+        if (novoSaldo != null) {
+            salvo = contaBancariaService.ajustarSaldo(match.id(), usuarioId, novoSaldo);
+        }
+        String base = "✅ Alterado! Conta \"" + salvo.getNome() + "\" atualizada"
+            + (novoSaldo != null ? " — saldo " + BRL.format(salvo.getSaldoAtual().doubleValue()) : "") + ".";
+        if (!ignorados.isEmpty()) {
+            base += " Ignorados: " + String.join(", ", ignorados) + ".";
+        }
+        return base;
+    }
+
+    private static ContaBancariaDTO.TipoConta parseTipoConta(String raw) {
+        if (raw == null) {
+            return ContaBancariaDTO.TipoConta.CORRENTE;
+        }
+        String u = ApelidoNormalizador.normalizar(raw);
+        if (u.contains("poup")) {
+            return ContaBancariaDTO.TipoConta.POUPANCA;
+        }
+        if (u.contains("dinheiro") || u.contains("carteira") || u.contains("cash")) {
+            return ContaBancariaDTO.TipoConta.DINHEIRO;
+        }
+        return ContaBancariaDTO.TipoConta.CORRENTE;
     }
 
     private String aplicarCategoria(Long usuarioId, EntityMatch match, JsonNode updates) {

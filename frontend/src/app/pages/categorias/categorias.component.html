@@ -1,0 +1,70 @@
+<div class="categorias-page">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Organização</p>
+      <h1>Categorias</h1>
+      <p>Cadastre, edite e exclua categorias usadas em transações, orçamentos e relatórios.</p>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <button mat-raised-button color="primary" (click)="abrirForm()" [disabled]="loading || salvando">
+      <mat-icon>add</mat-icon>
+      Nova categoria
+    </button>
+  </div>
+
+  <div class="empty" *ngIf="!loading && categorias.length === 0">
+    Nenhuma categoria cadastrada. Crie a primeira para classificar seus lançamentos.
+  </div>
+
+  <div class="grid" *ngIf="categorias.length">
+    <mat-card class="cat-card" *ngFor="let c of categorias">
+      <div class="cat-head">
+        <span class="cor" *ngIf="c.cor" [style.background]="c.cor"></span>
+        <div>
+          <h3>{{ c.nome }}</h3>
+          <p *ngIf="c.descricao">{{ c.descricao }}</p>
+        </div>
+      </div>
+      <div class="cat-actions">
+        <button mat-button (click)="abrirForm(c)">
+          <mat-icon>edit</mat-icon>
+          Editar
+        </button>
+        <button mat-button color="warn" (click)="excluir(c)">
+          <mat-icon>delete</mat-icon>
+          Excluir
+        </button>
+      </div>
+    </mat-card>
+  </div>
+</div>
+
+<ng-template #formTpl>
+  <h2 mat-dialog-title>{{ editando ? 'Editar categoria' : 'Nova categoria' }}</h2>
+  <form [formGroup]="form" (ngSubmit)="salvar()">
+    <mat-dialog-content class="form-body">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Nome</mat-label>
+        <input matInput formControlName="nome" placeholder="Ex.: Alimentação, Lazer">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Descrição</mat-label>
+        <textarea matInput formControlName="descricao" rows="2"></textarea>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Cor (hex)</mat-label>
+        <input matInput formControlName="cor" placeholder="#4CAF50">
+      </mat-form-field>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
+      <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || salvando">
+        {{ salvando ? 'Salvando…' : 'Salvar' }}
+      </button>
+    </mat-dialog-actions>
+  </form>
+</ng-template>
