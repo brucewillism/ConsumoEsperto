@@ -70,6 +70,13 @@ services:
       # Igual ao cliente OAuth "Web" do Google Cloud (mesmo valor que no Angular). O fluxo atual chama UserInfo só com Bearer, mas definir mantém parity e flujos codificados.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-disabled}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-disabled}
+
+      # Provedores IA — chaves opcionais; Ollama na rede Docker (servico ollama:11434).
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
     depends_on:
       postgres:
         condition: service_healthy

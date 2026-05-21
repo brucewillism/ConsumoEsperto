@@ -681,6 +681,7 @@ public class OpenAiService {
         AiProvidersConfig cfg = aiProvidersConfigService.load(userId);
         aiProvidersConfigService.applyGroqMasterFallback(cfg);
         aiProvidersConfigService.applyOpenaiMasterFallback(cfg);
+        aiProvidersConfigService.applyOllamaMasterFallback(cfg);
         return cfg;
     }
 }

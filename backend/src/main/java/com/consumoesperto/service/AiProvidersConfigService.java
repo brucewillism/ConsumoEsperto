@@ -39,6 +39,14 @@ public class AiProvidersConfigService {
     @Value("${consumoesperto.ai.platform-openai-api-key:}")
     private String platformOpenaiApiKey;
 
+    /** URL Ollama mestra (servidor Docker). Usada só quando o utilizador não tem base URL na BD. */
+    @Value("${consumoesperto.ai.platform-ollama-base-url:}")
+    private String platformOllamaBaseUrl;
+
+    /** Modelo Ollama mestre (servidor). Usado só quando o utilizador não tem modelo na BD. */
+    @Value("${consumoesperto.ai.platform-ollama-model:llama3.2}")
+    private String platformOllamaModel;
+
     /**
      * Preenche a chave Groq em memória: prioridade à chave do utilizador; se vazia, usa a mestra do servidor.
      */
@@ -85,6 +93,27 @@ public class AiProvidersConfigService {
             return;
         }
         o.setApiKey(platformOpenaiApiKey.trim());
+    }
+
+    /**
+     * Preenche URL/modelo Ollama em memória: prioridade à config do utilizador;
+     * se vazia, usa a mestra do servidor (ex.: {@code http://ollama:11434} no Compose).
+     */
+    public void applyOllamaMasterFallback(AiProvidersConfig cfg) {
+        if (cfg == null) {
+            return;
+        }
+        OllamaSection l = cfg.getOllama();
+        if (l == null) {
+            l = defaultOllama();
+            cfg.setOllama(l);
+        }
+        if (!meaningful(l.getBaseUrl()) && platformOllamaBaseUrl != null && !platformOllamaBaseUrl.isBlank()) {
+            l.setBaseUrl(platformOllamaBaseUrl.trim());
+        }
+        if (!meaningful(l.getModel()) && platformOllamaModel != null && !platformOllamaModel.isBlank()) {
+            l.setModel(platformOllamaModel.trim());
+        }
     }
 
     @Transactional(readOnly = true)
