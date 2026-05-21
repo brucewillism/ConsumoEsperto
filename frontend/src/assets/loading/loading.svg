@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+  <defs>
+    <filter id="jarvisGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="55%" stop-color="#67e8f9" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.75"/>
+    </linearGradient>
+  </defs>
+
+  <g filter="url(#jarvisGlow)">
+    <circle cx="100" cy="100" r="88" stroke="url(#ringGrad)" stroke-width="5" opacity="0.92"/>
+    <circle cx="100" cy="100" r="88" stroke="#ffffff" stroke-width="1.5" opacity="0.35"/>
+  </g>
+
+  <circle cx="100" cy="100" r="72" stroke="#ffffff" stroke-width="0.75" opacity="0.22"/>
+
+  <g opacity="0.55" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round">
+    <polygon points="100,58 132,118 68,118" fill="rgba(255,255,255,0.04)"/>
+    <polygon points="100,142 56,92 144,92" fill="rgba(255,255,255,0.03)"/>
+    <line x1="100" y1="58" x2="132" y2="118"/>
+    <line x1="132" y1="118" x2="68" y2="118"/>
+    <line x1="68" y1="118" x2="100" y2="58"/>
+    <line x1="100" y1="142" x2="56" y2="92"/>
+    <line x1="56" y1="92" x2="144" y2="92"/>
+    <line x1="144" y1="92" x2="100" y2="142"/>
+    <line x1="100" y1="58" x2="56" y2="92"/>
+    <line x1="100" y1="58" x2="144" y2="92"/>
+    <line x1="68" y1="118" x2="100" y2="142"/>
+    <line x1="132" y1="118" x2="100" y2="142"/>
+  </g>
+
+  <g fill="#ffffff">
+    <circle cx="100" cy="58" r="3.2" opacity="0.95"/>
+    <circle cx="132" cy="118" r="3.2" opacity="0.9"/>
+    <circle cx="68" cy="118" r="3.2" opacity="0.9"/>
+    <circle cx="56" cy="92" r="2.8" opacity="0.75"/>
+    <circle cx="144" cy="92" r="2.8" opacity="0.75"/>
+    <circle cx="100" cy="142" r="2.8" opacity="0.75"/>
+  </g>
+
+  <text
+    x="100"
+    y="108"
+    text-anchor="middle"
+    fill="#ffffff"
+    font-family="Inter, Segoe UI, sans-serif"
+    font-size="15"
+    font-weight="600"
+    letter-spacing="0.35em"
+    opacity="0.95">LOADING</text>
+
+  <g opacity="0.18">
+    <text
+      x="100"
+      y="124"
+      text-anchor="middle"
+      fill="#ffffff"
+      font-family="Inter, Segoe UI, sans-serif"
+      font-size="15"
+      font-weight="600"
+      letter-spacing="0.35em"
+      transform="scale(1,-1) translate(0,-228)">LOADING</text>
+  </g>
+
+  <g filter="url(#jarvisGlow)">
+    <circle cx="100" cy="100" r="88" stroke="#67e8f9" stroke-width="2.5" stroke-dasharray="40 520" stroke-linecap="round" opacity="0.85">
+      <animateTransform attributeName="transform" type="rotate" from="0 100 100" to="360 100 100" dur="2.4s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+</svg>

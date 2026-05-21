@@ -13,33 +13,26 @@ export type LoadingIndicatorSize = 'sm' | 'md' | 'lg';
   styleUrl: './loading-indicator.component.scss',
 })
 export class LoadingIndicatorComponent {
-  /** Texto opcional abaixo do indicador. */
   @Input() message = '';
-
-  /** inline = compacto; panel = bloco centrado na página; overlay = ecrã inteiro. */
   @Input() mode: LoadingIndicatorMode = 'panel';
-
   @Input() size: LoadingIndicatorSize = 'md';
 
-  readonly loadingGifUrl = environment.loadingGifUrl;
+  /** SVG transparente (preferido). GIF legado só se o SVG falhar. */
+  readonly loadingAssetUrl = environment.loadingAssetUrl;
+  readonly loadingFallbackUrl = environment.loadingFallbackUrl;
 
-  /** Spinner até o GIF carregar; placeholder 1×1 mantém só o spinner. */
-  gifVisible = false;
-  gifFailed = false;
+  assetFailed = false;
+  useFallback = false;
 
-  onGifLoad(event: Event): void {
-    const img = event.target as HTMLImageElement;
-    if (img.naturalWidth <= 4 || img.naturalHeight <= 4) {
-      this.gifVisible = false;
-      this.gifFailed = true;
+  onAssetError(): void {
+    if (!this.useFallback && this.loadingFallbackUrl) {
+      this.useFallback = true;
       return;
     }
-    this.gifVisible = true;
-    this.gifFailed = false;
+    this.assetFailed = true;
   }
 
-  onGifError(): void {
-    this.gifVisible = false;
-    this.gifFailed = true;
+  get currentAssetUrl(): string {
+    return this.useFallback ? this.loadingFallbackUrl : this.loadingAssetUrl;
   }
 }

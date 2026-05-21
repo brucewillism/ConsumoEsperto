@@ -13,14 +13,12 @@
   <div class="loading-indicator__content">
     <div class="loading-indicator__visual">
       <img
-        *ngIf="!gifFailed"
-        class="loading-indicator__gif"
-        [class.loading-indicator__gif--visible]="gifVisible"
-        [src]="loadingGifUrl"
+        *ngIf="!assetFailed"
+        class="loading-indicator__art"
+        [src]="currentAssetUrl"
         alt=""
-        (load)="onGifLoad($event)"
-        (error)="onGifError()" />
-      <div class="loading-indicator__spinner" *ngIf="!gifVisible" aria-hidden="true">
+        (error)="onAssetError()" />
+      <div class="loading-indicator__spinner" *ngIf="assetFailed" aria-hidden="true">
         <span class="loading-indicator__ring"></span>
         <span class="loading-indicator__core"></span>
       </div>

@@ -1,9 +1,10 @@
 # Assets de loading (versionados no Git)
 
-Coloque aqui o GIF animado do Jarvis:
+| Ficheiro | Uso |
+|----------|-----|
+| **`loading.svg`** | **Principal** — anel LOADING, fundo **transparente**, animação SMIL. |
+| `loading.gif` | Fallback opcional (se existir). Preferir GIF com fundo transparente. |
 
-- `loading.gif` — usado pelo overlay global e pelos ecrãs com `<app-loading-indicator>`.
+Coloque ficheiros em `frontend/src/assets/loading/`. Não use a pasta `tools/` — ela não vai para o Git/Docker.
 
-**Importante:** o ficheiro deve ter dimensões reais (não placeholder 1×1). Se o GIF for inválido ou estiver ausente, a app usa o spinner CSS automaticamente.
-
-No Docker Compose, estes ficheiros entram no build via `src/assets/loading/` (não use a pasta `tools/` — ela não vai para o Git).
+Para substituir o visual: edite `loading.svg` ou troque por outro SVG/PNG/WebP transparente e atualize `loadingAssetUrl` em `environment*.ts`.
