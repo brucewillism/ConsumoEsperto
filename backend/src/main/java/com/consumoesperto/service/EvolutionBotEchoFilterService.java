@@ -1,7 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -20,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * por isso não basta filtrar {@code fromMe} — registamos IDs/chaves e fingerprints de saída.
  */
 @Service
-@RequiredArgsConstructor
 public class EvolutionBotEchoFilterService {
 
     private static final int ECHO_TTL_MINUTES = 10;
@@ -29,6 +28,14 @@ public class EvolutionBotEchoFilterService {
 
     private final JarvisProtocolService jarvisProtocolService;
     private final EvolutionApiService evolutionApiService;
+
+    public EvolutionBotEchoFilterService(
+        JarvisProtocolService jarvisProtocolService,
+        @Lazy EvolutionApiService evolutionApiService
+    ) {
+        this.jarvisProtocolService = jarvisProtocolService;
+        this.evolutionApiService = evolutionApiService;
+    }
 
     private final Map<String, LocalDateTime> outgoingMessageKeys = new ConcurrentHashMap<>();
     private final Map<String, LocalDateTime> outgoingTexts = new ConcurrentHashMap<>();
