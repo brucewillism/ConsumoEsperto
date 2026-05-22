@@ -1,0 +1,69 @@
+<h2 mat-dialog-title class="modal-title">
+  <mat-icon>swap_horiz</mat-icon>
+  Transferência entre contas
+</h2>
+
+<mat-dialog-content class="modal-body">
+  <p class="modal-subtitle">Mova valores entre suas contas (TED/PIX interno).</p>
+
+  <div class="loading-contas" *ngIf="carregandoContas">
+    <mat-spinner diameter="32"></mat-spinner>
+    <span>Carregando contas…</span>
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="confirmar()" *ngIf="!carregandoContas">
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Conta de origem</mat-label>
+      <mat-select formControlName="contaOrigemId" required>
+        <mat-option *ngFor="let c of contas" [value]="c.id">
+          {{ c.nome }} — {{ brl(c.saldoAtual) }}
+        </mat-option>
+      </mat-select>
+      <mat-error *ngIf="form.get('contaOrigemId')?.hasError('required')">Selecione a conta de origem</mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Conta de destino</mat-label>
+      <mat-select formControlName="contaDestinoId" required>
+        <mat-option *ngFor="let c of contas" [value]="c.id">
+          {{ c.nome }} — {{ brl(c.saldoAtual) }}
+        </mat-option>
+      </mat-select>
+      <mat-error *ngIf="form.get('contaDestinoId')?.hasError('required')">Selecione a conta de destino</mat-error>
+    </mat-form-field>
+
+    <p class="alerta-erro" *ngIf="contasIguais">
+      <mat-icon>error_outline</mat-icon>
+      A conta de destino deve ser diferente da conta de origem.
+    </p>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Valor da transferência</mat-label>
+      <span matTextPrefix>R$&nbsp;</span>
+      <input matInput type="number" formControlName="valor" step="0.01" min="0.01" inputmode="decimal">
+      <mat-hint *ngIf="form.get('contaOrigemId')?.value">
+        Saldo disponível: {{ brl(saldoConta(form.get('contaOrigemId')?.value)) }}
+      </mat-hint>
+      <mat-error *ngIf="form.get('valor')?.hasError('required')">Informe o valor</mat-error>
+      <mat-error *ngIf="form.get('valor')?.hasError('min')">O valor deve ser maior que zero</mat-error>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Descrição (opcional)</mat-label>
+      <input matInput formControlName="descricao" maxlength="200" placeholder="Ex.: Mover para poupança">
+    </mat-form-field>
+  </form>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end" class="modal-actions">
+  <button mat-button type="button" (click)="fechar()" [disabled]="enviando">Cancelar</button>
+  <button
+    mat-raised-button
+    color="primary"
+    type="button"
+    (click)="confirmar()"
+    [disabled]="form.invalid || enviando || carregandoContas || contas.length < 2">
+    <mat-spinner *ngIf="enviando" diameter="18" class="btn-spinner"></mat-spinner>
+    <span>{{ enviando ? 'Transferindo…' : 'Confirmar transferência' }}</span>
+  </button>
+</mat-dialog-actions>

@@ -342,12 +342,12 @@
               <mat-icon>list</mat-icon>
               Transações
             </button>
-            <button *ngIf="fatura.status === 'PENDING'"
+            <button *ngIf="fatura.status === 'PENDING' || fatura.status === 'OVERDUE'"
                     mat-button color="accent" 
-                    (click)="marcarComoPaga(fatura)"
+                    (click)="abrirPagamentoFatura(fatura)"
                     [disabled]="acaoEmAndamento">
-              <mat-icon>check</mat-icon>
-              {{ faturaEstaProcessando(fatura) ? 'Processando...' : 'Marcar Paga' }}
+              <mat-icon>payments</mat-icon>
+              Pagar com conta
             </button>
             <button mat-button color="warn" (click)="editarFatura(fatura)" [disabled]="acaoEmAndamento">
               <mat-icon>edit</mat-icon>

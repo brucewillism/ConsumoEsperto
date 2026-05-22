@@ -12,6 +12,10 @@
   </section>
 
   <div class="toolbar">
+    <button mat-stroked-button color="accent" (click)="abrirTransferencia()" [disabled]="loading || salvando || contas.length < 2">
+      <mat-icon>swap_horiz</mat-icon>
+      Transferir entre contas
+    </button>
     <button mat-raised-button color="primary" (click)="abrirForm()" [disabled]="loading || salvando">
       <mat-icon>add</mat-icon>
       Nova conta
@@ -44,6 +48,30 @@
       </div>
     </mat-card>
   </div>
+
+  <section class="historico-transferencias" *ngIf="historicoTransferencias.length || loadingHistorico">
+    <h2>Histórico de transferências</h2>
+    <div class="historico-loading" *ngIf="loadingHistorico">
+      <mat-spinner diameter="28"></mat-spinner>
+      <span>Carregando histórico…</span>
+    </div>
+    <div class="historico-lista" *ngIf="!loadingHistorico && historicoTransferencias.length">
+      <mat-card class="historico-item" *ngFor="let t of historicoTransferencias">
+        <div class="historico-linha">
+          <div>
+            <strong>{{ t.contaOrigemNome }}</strong>
+            <mat-icon class="seta">arrow_forward</mat-icon>
+            <strong>{{ t.contaDestinoNome }}</strong>
+          </div>
+          <span class="valor">{{ brl(t.valor) }}</span>
+        </div>
+        <p class="meta">
+          {{ formatarDataTransferencia(t.dataTransferencia) }}
+          <span *ngIf="t.descricao"> · {{ t.descricao }}</span>
+        </p>
+      </mat-card>
+    </div>
+  </section>
 </div>
 
 <ng-template #formTpl>

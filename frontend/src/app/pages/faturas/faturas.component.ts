@@ -21,6 +21,8 @@ import { FaturaService } from '../../services/fatura.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { OrcamentoService, Orcamento } from '../../services/orcamento.service';
 import { FaturaMesGrupo } from './faturas-mes-grupo.model';
+import { PagamentoFaturaModalComponent } from '../../shared/pagamento-fatura-modal/pagamento-fatura-modal.component';
+import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 
 @Component({
   selector: 'app-faturas',
@@ -84,7 +86,8 @@ export class FaturasComponent implements OnInit, OnDestroy {
     private orcamentoService: OrcamentoService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
-    private fb: FormBuilder
+    private fb: FormBuilder,
+    private financaAlteracao: FinancaAlteracaoService
   ) {
     this.novaFaturaForm = this.fb.group({
       banco: ['', Validators.required],
@@ -253,35 +256,26 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   marcarComoPaga(fatura: CreditCardInvoice): void {
-    this.acaoEmAndamento = true;
-    this.faturaProcessandoId = fatura.id;
-    const faturaAtualizada = { ...fatura, status: 'PAID' as const };
+    this.abrirPagamentoFatura(fatura);
+  }
 
-    // Tenta atualizar no backend primeiro
-    this.faturaService.atualizarFaturaCartao(faturaAtualizada)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (resp) => {
-          this.snackBar.open('Fatura marcada como paga!', 'Fechar', {
-            duration: 3000,
-            panelClass: ['success-snackbar']
-          });
-          this.acaoEmAndamento = false;
-          this.faturaProcessandoId = null;
-          const idx = this.faturas.findIndex((item) => String(item.id) === String(resp.id));
-          if (idx !== -1) {
-            this.faturas[idx] = resp;
-          }
-          this.loadData();
-        },
-        error: (error) => {
-          console.error('Erro ao marcar fatura como paga:', error);
-          this.acaoEmAndamento = false;
-          this.faturaProcessandoId = null;
-          this.snackBar.open('Erro ao atualizar fatura. Tente novamente.', 'Fechar', {
-            duration: 3000,
-            panelClass: ['error-snackbar']
-          });
+  abrirPagamentoFatura(fatura: CreditCardInvoice): void {
+    if (fatura.status === 'PAID' || fatura.status === 'PREVISTA') {
+      return;
+    }
+    this.dialog
+      .open(PagamentoFaturaModalComponent, {
+        width: '500px',
+        maxWidth: '96vw',
+        disableClose: true,
+        data: { fatura },
+        panelClass: 'pagamento-fatura-dialog',
+      })
+      .afterClosed()
+      .subscribe((ok) => {
+        if (ok) {
+          this.financaAlteracao.notificar();
+          this.carregarFaturas();
         }
       });
   }

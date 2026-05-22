@@ -1,0 +1,70 @@
+<h2 mat-dialog-title class="modal-title">
+  <mat-icon>credit_card</mat-icon>
+  Pagar fatura — {{ getBancoNome(fatura.bankName) }}
+</h2>
+
+<mat-dialog-content class="modal-body">
+  <p class="mes-ref">Mês de referência: <strong>{{ mesReferencia() }}</strong></p>
+
+  <div class="valor-destaque">
+    <span>Valor total devido</span>
+    <strong>{{ brl(fatura.amount) }}</strong>
+  </div>
+
+  <div class="loading-contas" *ngIf="carregandoContas">
+    <mat-spinner diameter="32"></mat-spinner>
+    <span>Carregando contas…</span>
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="confirmar()" *ngIf="!carregandoContas">
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Escolha a conta de débito</mat-label>
+      <mat-select formControlName="contaBancariaId" required>
+        <mat-option *ngFor="let c of contas" [value]="c.id">
+          {{ c.nome }} — saldo {{ brl(c.saldoAtual) }}
+        </mat-option>
+      </mat-select>
+      <mat-hint *ngIf="contaSelecionada && !saldoInsuficiente && saldoContaPosDebito() != null">
+        Saldo da conta após débito:
+        <strong>{{ brl(saldoContaPosDebito()) }}</strong>
+        <ng-container *ngIf="mesmoProvedor && patrimonioProjetadoPosDebito() != null">
+          · Patrimônio projetado (fim do mês):
+          <strong>{{ brl(patrimonioProjetadoPosDebito()) }}</strong>
+        </ng-container>
+      </mat-hint>
+      <mat-error *ngIf="form.get('contaBancariaId')?.hasError('required')">Selecione a conta de débito</mat-error>
+      <mat-error *ngIf="saldoInsuficiente">Saldo insuficiente na conta selecionada</mat-error>
+    </mat-form-field>
+
+    <p class="aviso-provedor" *ngIf="mesmoProvedor && contaSelecionada">
+      <mat-icon>info</mat-icon>
+      <span>
+        Conta e cartão do mesmo provedor ({{ getBancoNome(fatura.bankName) }}).
+        A projeção considera a conciliação consolidada — gastos do cartão não são duplicados no patrimônio.
+        <span *ngIf="carregandoProjecao"> Atualizando projeção…</span>
+      </span>
+    </p>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Valor do pagamento</mat-label>
+      <span matTextPrefix>R$&nbsp;</span>
+      <input matInput type="number" formControlName="valor" step="0.01" min="0.01" inputmode="decimal">
+      <mat-hint>Edite para pagamento parcial, se necessário</mat-hint>
+      <mat-error *ngIf="form.get('valor')?.hasError('required')">Informe o valor</mat-error>
+      <mat-error *ngIf="form.get('valor')?.hasError('min')">O valor deve ser maior que zero</mat-error>
+    </mat-form-field>
+  </form>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end" class="modal-actions">
+  <button mat-button type="button" (click)="fechar()" [disabled]="enviando">Cancelar</button>
+  <button
+    mat-raised-button
+    color="primary"
+    type="button"
+    (click)="confirmar()"
+    [disabled]="form.invalid || enviando || carregandoContas || contas.length === 0 || saldoInsuficiente">
+    <mat-spinner *ngIf="enviando" diameter="18" class="btn-spinner"></mat-spinner>
+    <span>{{ enviando ? 'Processando…' : 'Confirmar pagamento e conciliar' }}</span>
+  </button>
+</mat-dialog-actions>

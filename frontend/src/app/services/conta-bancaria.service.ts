@@ -27,6 +27,11 @@ export class ContaBancariaService {
     return this.http.get<ContaBancaria[]>(this.API_URL, { headers: this.getHeaders(), params });
   }
 
+  /** Alias explícito para seletores de transferência e pagamento de fatura. */
+  listarContasAtivas(): Observable<ContaBancaria[]> {
+    return this.listar(true);
+  }
+
   buscarPorId(id: number): Observable<ContaBancaria> {
     return this.http.get<ContaBancaria>(`${this.API_URL}/${id}`, { headers: this.getHeaders() });
   }

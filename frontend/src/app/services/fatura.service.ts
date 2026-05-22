@@ -106,6 +106,11 @@ export class FaturaService {
     return this.deletarFatura(Number(fatura.id));
   }
 
+  /** Conciliação: debita conta bancária e marca fatura como PAGA no backend. */
+  pagarFatura(dados: { faturaId: number; contaBancariaId: number; valor: number }): Observable<any> {
+    return this.http.post(`${this.API_URL}/pagar`, dados, { headers: this.getHeaders() });
+  }
+
   // Métodos auxiliares de conversão
   private converterParaDTO(fatura: Fatura): FaturaDTO {
     const cartaoId =

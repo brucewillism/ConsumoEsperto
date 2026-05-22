@@ -10,10 +10,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ContaBancaria, TIPOS_CONTA } from '../../models/conta-bancaria.model';
+import { TransferenciaConta } from '../../models/transferencia.model';
 import { ContaBancariaService } from '../../services/conta-bancaria.service';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
+import { TransferenciaService } from '../../services/transferencia.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { TransferenciaModalComponent } from '../../shared/transferencia-modal/transferencia-modal.component';
 
 @Component({
   selector: 'app-contas-bancarias',
@@ -30,6 +34,7 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
     MatCheckboxModule,
     MatSnackBarModule,
     MatDialogModule,
+    MatProgressSpinnerModule,
   ],
   templateUrl: './contas-bancarias.component.html',
   styleUrl: './contas-bancarias.component.scss',
@@ -38,8 +43,10 @@ export class ContasBancariasComponent implements OnInit {
   @ViewChild('formTpl') formTpl!: TemplateRef<unknown>;
 
   contas: ContaBancaria[] = [];
+  historicoTransferencias: TransferenciaConta[] = [];
   patrimonio = 0;
   loading = false;
+  loadingHistorico = false;
   salvando = false;
   tipos = TIPOS_CONTA;
   form!: FormGroup;
@@ -50,7 +57,8 @@ export class ContasBancariasComponent implements OnInit {
     private contaService: ContaBancariaService,
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
-    private financaAlteracao: FinancaAlteracaoService
+    private financaAlteracao: FinancaAlteracaoService,
+    private transferenciaService: TransferenciaService
   ) {
     this.form = this.fb.group({
       nome: ['', [Validators.required, Validators.maxLength(100)]],
@@ -62,6 +70,46 @@ export class ContasBancariasComponent implements OnInit {
 
   ngOnInit(): void {
     this.carregar();
+    this.carregarHistorico();
+  }
+
+  carregarHistorico(): void {
+    this.loadingHistorico = true;
+    this.transferenciaService.listarHistorico().subscribe({
+      next: (lista) => {
+        this.historicoTransferencias = lista ?? [];
+        this.loadingHistorico = false;
+      },
+      error: () => {
+        this.loadingHistorico = false;
+        this.historicoTransferencias = [];
+      },
+    });
+  }
+
+  abrirTransferencia(): void {
+    this.dialog
+      .open(TransferenciaModalComponent, {
+        width: '480px',
+        maxWidth: '96vw',
+        disableClose: true,
+        panelClass: 'transferencia-dialog',
+      })
+      .afterClosed()
+      .subscribe((ok) => {
+        if (ok) {
+          this.carregar();
+          this.carregarHistorico();
+        }
+      });
+  }
+
+  formatarDataTransferencia(iso: string): string {
+    if (!iso) {
+      return '—';
+    }
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('pt-BR');
   }
 
   carregar(): void {
