@@ -10,8 +10,8 @@ import com.consumoesperto.repository.UsuarioRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +25,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class RendaConfigService {
 
@@ -35,6 +34,18 @@ public class RendaConfigService {
     private final UsuarioRepository usuarioRepository;
     private final ObjectMapper objectMapper;
     private final SalarioAutomaticoService salarioAutomaticoService;
+
+    public RendaConfigService(
+        RendaConfigRepository rendaConfigRepository,
+        UsuarioRepository usuarioRepository,
+        ObjectMapper objectMapper,
+        @Lazy SalarioAutomaticoService salarioAutomaticoService
+    ) {
+        this.rendaConfigRepository = rendaConfigRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.objectMapper = objectMapper;
+        this.salarioAutomaticoService = salarioAutomaticoService;
+    }
 
     @Transactional(readOnly = true)
     public Optional<RendaConfigDTO> obterDto(Long usuarioId) {
