@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ParcelaReceitaFiscalDTO;
 import com.consumoesperto.dto.PlanejamentoFiscalResumoDTO;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.CompraParcelada;
 import com.consumoesperto.repository.CompraParceladaRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,8 @@ public class AmortizacaoSazonalService {
 
     private final CompraParceladaRepository compraParceladaRepository;
     private final PlanejamentoFiscalService planejamentoFiscalService;
+    private final SaldoService saldoService;
+    private final ContaBancariaService contaBancariaService;
 
     public record SimulacaoAntecipacao(
         Long compraParceladaId,
@@ -49,6 +52,19 @@ public class AmortizacaoSazonalService {
 
     @Transactional(readOnly = true)
     public List<SimulacaoAntecipacao> simularOportunidades(Long usuarioId) {
+        return simularOportunidades(usuarioId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SimulacaoAntecipacao> recalcularOportunidades(Long usuarioId, Long contaDestinoId) {
+        BigDecimal patrimonio = saldoService.patrimonioLiquido(usuarioId);
+        log.debug("[AMORTIZACAO] Recálculo sazonal userId={} patrimonio={} contaDestino={}",
+            usuarioId, patrimonio, contaDestinoId);
+        return simularOportunidades(usuarioId, contaDestinoId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SimulacaoAntecipacao> simularOportunidades(Long usuarioId, Long contaDestinoId) {
         List<CompraParcelada> ativas = compraParceladaRepository.findActiveInstallmentsByUsuarioId(usuarioId);
         if (ativas.isEmpty()) {
             return List.of();
@@ -62,6 +78,7 @@ public class AmortizacaoSazonalService {
 
         LocalDate hoje = LocalDate.now();
         int ano = hoje.getYear();
+        BigDecimal patrimonioDisponivel = resolverPatrimonioParaAmortizacao(usuarioId, contaDestinoId);
         List<SimulacaoAntecipacao> out = new ArrayList<>();
 
         for (CompraParcelada cp : ativas) {
@@ -85,7 +102,14 @@ public class AmortizacaoSazonalService {
             }
 
             BigDecimal jurosEst = calcularJurosEconomizados(valorRestante, restantes);
-            BigDecimal sugerido = valorRestante.min(melhorParcela.getValor()).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal sugerido = valorRestante.min(melhorParcela.getValor());
+            if (patrimonioDisponivel.compareTo(BigDecimal.ZERO) > 0) {
+                sugerido = sugerido.min(patrimonioDisponivel);
+            }
+            sugerido = sugerido.setScale(2, RoundingMode.HALF_UP);
+            if (sugerido.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
 
             LocalDate dataReceita = LocalDate.of(ano, melhorParcela.getMes(), melhorParcela.getDia());
             out.add(new SimulacaoAntecipacao(
@@ -119,6 +143,20 @@ public class AmortizacaoSazonalService {
                 return dias >= 0 && dias <= janelaDias && s.jurosEconomizadosEstimados().compareTo(BigDecimal.TEN) > 0;
             })
             .toList();
+    }
+
+    private BigDecimal resolverPatrimonioParaAmortizacao(Long usuarioId, Long contaDestinoId) {
+        if (contaDestinoId != null) {
+            try {
+                ContaBancaria conta = contaBancariaService.buscarEntidade(contaDestinoId, usuarioId);
+                return conta.getSaldoAtual() != null
+                    ? conta.getSaldoAtual().setScale(2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            } catch (Exception e) {
+                log.warn("[AMORTIZACAO] Conta {} indisponível; usando patrimônio agregado.", contaDestinoId);
+            }
+        }
+        return saldoService.patrimonioLiquido(usuarioId);
     }
 
     private BigDecimal calcularJurosEconomizados(BigDecimal valorRestante, int parcelasRestantes) {

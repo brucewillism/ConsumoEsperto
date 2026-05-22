@@ -63,6 +63,7 @@ public class SchemaAutoPatchService {
         ensureUsuarioConfiguracaoFiscalTable();
         ensureTransacaoOrigemFiscalColumn();
         ensureContasBancariasTable();
+        ensureRendasTable();
         ensureTransferenciasContasTable();
         ensureTransacaoContaBancariaColumn();
         ensureUsuarioGeneroColumns();
@@ -297,6 +298,34 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: tabela public.contas_bancarias verificada.");
         } catch (Exception e) {
             log.warn("Falha ao CREATE contas_bancarias: {}", e.getMessage());
+        }
+    }
+
+    private void ensureRendasTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.rendas ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "descricao VARCHAR(200) NOT NULL,"
+                    + "valor NUMERIC(19,2) NOT NULL,"
+                    + "dia_pagamento INTEGER NOT NULL,"
+                    + "conta_destino_id BIGINT NOT NULL REFERENCES public.contas_bancarias(id),"
+                    + "ativa BOOLEAN NOT NULL DEFAULT TRUE,"
+                    + "ultimo_mes_credito INTEGER,"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_atualizacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_rendas_usuario ON public.rendas(usuario_id)"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_rendas_conta_destino ON public.rendas(conta_destino_id)"
+            );
+            log.info("Schema patch: tabela public.rendas verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE rendas: {}", e.getMessage());
         }
     }
 

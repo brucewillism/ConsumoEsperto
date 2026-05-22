@@ -2,7 +2,9 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ParcelaReceitaFiscalDTO;
 import com.consumoesperto.dto.PlanejamentoFiscalResumoDTO;
+import com.consumoesperto.model.ContaBancaria;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,15 +15,19 @@ import java.time.temporal.ChronoUnit;
 
 /**
  * Colchão virtual do Sentinela — flexibiliza alertas quando há receita fiscal (13º/IR) nos próximos 60 dias.
+ * Lê patrimônio dinamicamente das contas bancárias via {@link SaldoService}.
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SentinelaBufferSazonalService {
 
     private static final int JANELA_DIAS = 60;
     private static final BigDecimal FRACAO_COLCHAO = new BigDecimal("0.50");
 
     private final PlanejamentoFiscalService planejamentoFiscalService;
+    private final SaldoService saldoService;
+    private final ContaBancariaService contaBancariaService;
 
     public record ColchaoSazonal(
         BigDecimal valorTotal,
@@ -29,14 +35,45 @@ public class SentinelaBufferSazonalService {
         String descricaoProxima
     ) {}
 
+    public record ColchaoComPatrimonio(
+        ColchaoSazonal colchao,
+        BigDecimal patrimonioLiquido,
+        BigDecimal saldoContaReferencia
+    ) {}
+
     @Transactional(readOnly = true)
     public ColchaoSazonal calcularColchao(Long usuarioId) {
+        return calcularColchaoInterno(usuarioId).colchao();
+    }
+
+    /**
+     * Recalcula colchão sazonal lendo saldos atualizados das contas (pós-crédito de renda).
+     */
+    @Transactional(readOnly = true)
+    public ColchaoSazonal recalcularColchao(Long usuarioId, Long contaReferenciaId) {
+        ColchaoComPatrimonio ctx = calcularColchaoInterno(usuarioId, contaReferenciaId);
+        log.debug("[SENTINELA] Recálculo colchão userId={} patrimonio={} saldoConta={} colchao={}",
+            usuarioId, ctx.patrimonioLiquido(), ctx.saldoContaReferencia(), ctx.colchao().valorTotal());
+        return ctx.colchao();
+    }
+
+    private ColchaoComPatrimonio calcularColchaoInterno(Long usuarioId) {
+        return calcularColchaoInterno(usuarioId, null);
+    }
+
+    private ColchaoComPatrimonio calcularColchaoInterno(Long usuarioId, Long contaReferenciaId) {
+        BigDecimal patrimonio = saldoService.patrimonioLiquido(usuarioId);
+        BigDecimal saldoConta = resolverSaldoConta(usuarioId, contaReferenciaId, patrimonio);
+
         if (usuarioId == null) {
-            return new ColchaoSazonal(BigDecimal.ZERO, -1, null);
+            return new ColchaoComPatrimonio(
+                new ColchaoSazonal(BigDecimal.ZERO, -1, null), patrimonio, saldoConta);
         }
+
         PlanejamentoFiscalResumoDTO resumo = planejamentoFiscalService.simular(usuarioId);
         if (resumo.getParcelas() == null || resumo.getParcelas().isEmpty()) {
-            return new ColchaoSazonal(BigDecimal.ZERO, -1, null);
+            return new ColchaoComPatrimonio(
+                new ColchaoSazonal(BigDecimal.ZERO, -1, null), patrimonio, saldoConta);
         }
 
         LocalDate hoje = LocalDate.now();
@@ -70,13 +107,30 @@ public class SentinelaBufferSazonalService {
             }
         }
 
+        ColchaoSazonal resultado;
         if (menorDias == Integer.MAX_VALUE) {
-            return new ColchaoSazonal(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), -1, null);
+            resultado = new ColchaoSazonal(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), -1, null);
+        } else {
+            resultado = new ColchaoSazonal(
+                colchao.setScale(2, RoundingMode.HALF_UP),
+                menorDias,
+                descProxima
+            );
         }
-        return new ColchaoSazonal(
-            colchao.setScale(2, RoundingMode.HALF_UP),
-            menorDias,
-            descProxima
-        );
+        return new ColchaoComPatrimonio(resultado, patrimonio, saldoConta);
+    }
+
+    private BigDecimal resolverSaldoConta(Long usuarioId, Long contaReferenciaId, BigDecimal patrimonioFallback) {
+        if (contaReferenciaId == null) {
+            return patrimonioFallback;
+        }
+        try {
+            ContaBancaria conta = contaBancariaService.buscarEntidade(contaReferenciaId, usuarioId);
+            return conta.getSaldoAtual() != null
+                ? conta.getSaldoAtual().setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+        } catch (Exception e) {
+            return patrimonioFallback;
+        }
     }
 }

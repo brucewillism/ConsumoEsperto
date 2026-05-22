@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ContaBancariaDTO;
+import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
@@ -136,6 +137,21 @@ public class ContaBancariaService {
         return converterParaDTO(contaBancariaRepository.save(conta));
     }
 
+    /**
+     * Credita valor na conta (entrada de renda/salário) — atualiza {@code saldoAtual} diretamente.
+     */
+    public ContaBancaria creditarValor(Long contaId, Long usuarioId, BigDecimal valor) {
+        if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Valor a creditar deve ser positivo.");
+        }
+        ContaBancaria conta = buscarEntidadeInterno(contaId, usuarioId);
+        if (!conta.isAtiva()) {
+            throw new IllegalStateException("Conta bancária inativa não pode receber crédito.");
+        }
+        conta.setSaldoAtual(escala(conta.getSaldoAtual()).add(escala(valor)));
+        return contaBancariaRepository.save(conta);
+    }
+
     /** Entidade para serviços internos (transferência, conciliação). */
     @Transactional(readOnly = true)
     public ContaBancaria buscarEntidade(Long id, Long usuarioId) {
@@ -144,7 +160,7 @@ public class ContaBancariaService {
 
     private ContaBancaria buscarEntidadeInterno(Long id, Long usuarioId) {
         return contaBancariaRepository.findByIdAndUsuarioId(id, usuarioId)
-            .orElseThrow(() -> new RuntimeException("Conta bancária não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Conta bancária não encontrada"));
     }
 
     private void desmarcarOutrasPadrao(Long usuarioId, Long excetoId) {
