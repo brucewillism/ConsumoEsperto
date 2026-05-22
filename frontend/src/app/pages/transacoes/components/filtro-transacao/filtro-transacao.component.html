@@ -1,7 +1,7 @@
 <mat-card class="filtros-card">
   <mat-card-content>
     <div class="filtros-row">
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Tipo</mat-label>
         <mat-select
           [ngModel]="filtroTipo"
@@ -13,7 +13,7 @@
         </mat-select>
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Data Início</mat-label>
         <input
           matInput
@@ -25,7 +25,7 @@
         <mat-datepicker #dataInicioPicker></mat-datepicker>
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Data Fim</mat-label>
         <input
           matInput

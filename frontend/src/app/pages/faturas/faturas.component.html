@@ -180,7 +180,7 @@
     </mat-card-header>
     <mat-card-content>
       <div class="filtros-grid">
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Status</mat-label>
           <mat-select [(ngModel)]="filtroStatus" (ngModelChange)="onFiltrosSecundariosChange()">
             <mat-option value="">Todos</mat-option>
@@ -191,7 +191,7 @@
           </mat-select>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Banco</mat-label>
           <mat-select [(ngModel)]="filtroBanco" (ngModelChange)="onFiltrosSecundariosChange()">
             <mat-option value="">Todos</mat-option>
@@ -201,7 +201,7 @@
           </mat-select>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Mês/Ano</mat-label>
           <input matInput type="month" [(ngModel)]="filtroMes" (ngModelChange)="onFiltrosSecundariosChange()">
         </mat-form-field>

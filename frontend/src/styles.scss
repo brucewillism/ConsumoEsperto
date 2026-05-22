@@ -669,8 +669,8 @@ a {
   --mdc-outlined-text-field-label-text-color: var(--text-secondary);
   --mdc-outlined-text-field-focus-label-text-color: var(--exec-emerald);
 
-  /* Evita linha vertical no recorte do label (bordas laterais do notch) */
-  .mdc-notched-outline__notch {
+  /* Evita linha vertical no recorte do label quando flutuando */
+  &.mat-form-field-should-float .mdc-notched-outline__notch {
     border-left: none !important;
     border-right: none !important;
   }
@@ -696,7 +696,34 @@ a {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0 1rem;
-  align-items: start;
+  align-items: end;
+}
+
+/* Campos Material + botões na mesma linha (filtros, formulários inline) */
+.filtros-row,
+.filtros-grid,
+.form-grid:has(> mat-form-field),
+.form-row:has(> mat-form-field) {
+  align-items: end;
+}
+
+.ce-form-row > button,
+.ce-form-row > .mat-mdc-button-base,
+.filtros-row > button,
+.filtros-row > .mat-mdc-button-base,
+.filtros-grid > button,
+.filtros-grid > .mat-mdc-button-base,
+.filtros-grid > .filtros-actions,
+.form-row:has(> mat-form-field) > button,
+.form-row:has(> mat-form-field) > .mat-mdc-button-base {
+  align-self: end;
+  white-space: nowrap;
+}
+
+.filtros-actions {
+  display: flex;
+  align-items: flex-end;
+  align-self: end;
 }
 
 .ce-field-error {

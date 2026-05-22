@@ -231,8 +231,8 @@
 
   .filtros-actions {
     display: flex;
-    align-items: center;
-    min-height: 56px;
+    align-items: flex-end;
+    align-self: end;
   }
 
   .top-bar-cartoes {
