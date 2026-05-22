@@ -203,7 +203,7 @@ export class MetasComponent implements OnInit {
     this.editValor = m.valorTotal;
     this.editPercentual = m.percentualComprometimento;
     this.editPrioridade = m.prioridade;
-    this.dialog.open(this.editMetaTpl, { width: '460px' });
+    this.dialog.open(this.editMetaTpl, { width: '460px', panelClass: 'ce-form-dialog' });
   }
 
   confirmarEdicaoMeta(): void {

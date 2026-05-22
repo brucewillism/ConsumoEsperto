@@ -621,9 +621,17 @@ a {
   }
 }
 
-.mat-mdc-card,
+.mat-mdc-dialog-container {
+  --mdc-dialog-container-color: var(--exec-surface);
+  --mdc-dialog-subhead-color: var(--text-primary);
+  --mdc-dialog-supporting-text-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
 .mat-mdc-dialog-surface {
   border: 1px solid var(--hud-cyan-border) !important;
+  background: var(--exec-surface) !important;
+  color: var(--text-primary) !important;
 }
 
 /* Diálogos — evita título/valores cortados (ex.: "Editar conta" → "tal conta", R$ → $) */
@@ -637,10 +645,46 @@ a {
   margin: 0 0 8px !important;
   overflow: visible !important;
   white-space: normal !important;
+  color: var(--text-primary) !important;
 }
 
 .mat-mdc-dialog-container .mat-mdc-dialog-content {
   overflow: visible !important;
+  color: var(--text-secondary);
+}
+
+.mat-mdc-dialog-container .mat-mdc-dialog-actions {
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--exec-border);
+}
+
+.mat-mdc-dialog-container .mat-mdc-button:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.mat-mdc-dialog-container .mat-mdc-input-element,
+.mat-mdc-dialog-container .mat-mdc-select-value-text {
+  color: var(--text-primary);
+}
+
+.mat-mdc-dialog-container .mat-datepicker-toggle-default-icon,
+.mat-mdc-dialog-container .mat-mdc-icon-button.mat-mdc-button-base {
+  color: var(--text-secondary);
+}
+
+.ce-form-dialog .mat-mdc-dialog-surface {
+  padding: 20px 24px 16px;
+}
+
+.ce-form-dialog .mat-mdc-dialog-content {
+  padding-top: 4px !important;
+  max-height: none !important;
+}
+
+.ce-form-dialog .mat-mdc-dialog-actions {
+  padding: 12px 0 0;
+  margin: 0;
 }
 
 .mat-mdc-table {

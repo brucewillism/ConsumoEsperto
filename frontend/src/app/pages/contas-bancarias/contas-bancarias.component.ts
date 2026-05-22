@@ -145,7 +145,7 @@ export class ContasBancariasComponent implements OnInit {
     this.dialog.open(this.formTpl, {
       width: '480px',
       maxWidth: '96vw',
-      panelClass: 'conta-form-dialog',
+      panelClass: ['conta-form-dialog', 'ce-form-dialog'],
       autoFocus: 'first-titled-element',
     });
   }

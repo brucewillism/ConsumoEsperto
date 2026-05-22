@@ -234,7 +234,7 @@ export class CartoesComponent implements OnInit {
     }
     this.cartaoEmEdicao = { ...cartao };
     this.editLimite = cartao.limiteCredito ?? 0;
-    this.dialog.open(this.editCartaoTpl, { width: '400px' });
+    this.dialog.open(this.editCartaoTpl, { width: '400px', panelClass: 'ce-form-dialog' });
   }
 
   salvarEdicaoCartao(): void {

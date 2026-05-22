@@ -127,7 +127,12 @@ export class TransacoesComponent implements OnInit {
       });
     }
 
-    const ref = this.dialog.open(this.dialogoTransacao as any, { width: '520px' });
+    const ref = this.dialog.open(this.dialogoTransacao as any, {
+      width: '560px',
+      maxWidth: '96vw',
+      panelClass: 'ce-form-dialog',
+      autoFocus: 'first-titled-element'
+    });
     ref.afterClosed().subscribe(() => {
       this.transacaoEditando = null;
       this.transacaoForm.reset({

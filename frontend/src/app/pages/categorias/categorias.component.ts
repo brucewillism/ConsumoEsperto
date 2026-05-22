@@ -81,7 +81,7 @@ export class CategoriasComponent implements OnInit {
     } else {
       this.form.reset({ nome: '', descricao: '', cor: '' });
     }
-    this.dialog.open(this.formTpl, { width: '460px' });
+    this.dialog.open(this.formTpl, { width: '460px', panelClass: 'ce-form-dialog' });
   }
 
   salvar(): void {
