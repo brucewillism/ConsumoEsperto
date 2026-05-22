@@ -723,15 +723,19 @@ a {
   }
 
   &.mat-form-field-should-float .mdc-floating-label,
-  &.mat-form-field-should-float .mat-mdc-floating-label {
+  &.mat-form-field-should-float .mat-mdc-floating-label,
+  &.mat-mdc-form-field-label-always-float .mdc-floating-label,
+  &.mat-mdc-form-field-label-always-float .mat-mdc-floating-label {
     background-color: var(--exec-surface);
   }
 
   .mat-mdc-input-element,
+  .mdc-text-field__input,
   .mat-mdc-select-value,
   .mat-mdc-select-value-text,
   .mat-mdc-select-min-line {
     color: var(--text-primary) !important;
+    background-color: transparent !important;
   }
 
   .mat-mdc-floating-label,
@@ -742,7 +746,9 @@ a {
   &.mat-focused .mat-mdc-floating-label,
   &.mat-focused .mdc-floating-label,
   &.mat-form-field-should-float .mat-mdc-floating-label,
-  &.mat-form-field-should-float .mdc-floating-label {
+  &.mat-form-field-should-float .mdc-floating-label,
+  &.mat-mdc-form-field-label-always-float .mat-mdc-floating-label,
+  &.mat-mdc-form-field-label-always-float .mdc-floating-label {
     color: var(--exec-emerald) !important;
   }
 
@@ -765,7 +771,8 @@ a {
   }
 
   /* Evita linha vertical no recorte do label quando flutuando */
-  &.mat-form-field-should-float .mdc-notched-outline__notch {
+  &.mat-form-field-should-float .mdc-notched-outline__notch,
+  &.mat-mdc-form-field-label-always-float .mdc-notched-outline__notch {
     border-left: none !important;
     border-right: none !important;
   }

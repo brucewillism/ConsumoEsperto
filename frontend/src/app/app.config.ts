@@ -4,6 +4,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideNativeDateAdapter } from '@angular/material/core';
+import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 
 import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 
@@ -49,6 +50,16 @@ export const appConfig: ApplicationConfig = {
     
     // Fornece adaptador de data nativo para Angular Material
     provideNativeDateAdapter(),
+
+    // Labels sempre no notch (evita estado quebrado ao abrir modais)
+    {
+      provide: MAT_FORM_FIELD_DEFAULT_OPTIONS,
+      useValue: {
+        appearance: 'outline',
+        floatLabel: 'always',
+        subscriptSizing: 'dynamic'
+      }
+    },
 
     // Chart.js (ng2-charts v8) — registra controllers/plugins (line, doughnut, filler…)
     provideCharts(withDefaultRegisterables())
