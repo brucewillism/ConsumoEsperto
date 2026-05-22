@@ -736,10 +736,10 @@ a {
   }
 }
 
-/* Sem foco: só o rótulo (mat-label) — placeholder não sobrepõe o label */
-.mat-mdc-form-field:not(.mat-focused) .mat-mdc-input-element::placeholder {
-  opacity: 0;
-  color: transparent;
+/* mat-label já descreve o campo — placeholder não deve aparecer por cima do rótulo */
+.mat-mdc-form-field:has(mat-label) .mat-mdc-input-element::placeholder {
+  opacity: 0 !important;
+  color: transparent !important;
 }
 
 /* Print styles */
