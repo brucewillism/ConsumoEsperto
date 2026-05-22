@@ -25,6 +25,7 @@ public class DashboardProjectionService {
     private final TransacaoRepository transacaoRepository;
     private final SimulacaoImpactoService simulacaoImpactoService;
     private final MetaFinanceiraRepository metaFinanceiraRepository;
+    private final SaldoService saldoService;
 
     @Transactional(readOnly = true)
     public DashboardProjectionDTO projetar(Long usuarioId) {
@@ -63,6 +64,22 @@ public class DashboardProjectionService {
         BigDecimal gastoMedioDiario = gastoAteHoje.divide(BigDecimal.valueOf(diasDecorridos), 2, RoundingMode.HALF_UP);
         BigDecimal impactoSimuladoDiario = simulacaoImpactoService.impactoMensalAtivo(usuarioId)
             .divide(BigDecimal.valueOf(ym.lengthOfMonth()), 2, RoundingMode.HALF_UP);
+
+        // Ancora a série "real" ao patrimônio líquido multicarteira (ou legado) na data de hoje
+        BigDecimal patrimonioHoje = saldoService.patrimonioLiquido(usuarioId);
+        int idxHoje = Math.min(hoje.getDayOfMonth(), real.size()) - 1;
+        BigDecimal acumuladoMesAteHoje = idxHoje >= 0 && real.get(idxHoje) != null
+            ? real.get(idxHoje) : BigDecimal.ZERO;
+        BigDecimal offsetPatrimonio = patrimonioHoje.subtract(acumuladoMesAteHoje);
+        for (int i = 0; i < hoje.getDayOfMonth() && i < real.size(); i++) {
+            if (real.get(i) != null) {
+                BigDecimal ancorado = real.get(i).add(offsetPatrimonio).setScale(2, RoundingMode.HALF_UP);
+                real.set(i, ancorado);
+                projetado.set(i, ancorado);
+                simulado.set(i, ancorado);
+            }
+        }
+
         BigDecimal saldoProjetado = projetado.get(Math.min(hoje.getDayOfMonth(), projetado.size()) - 1);
         BigDecimal saldoSimulado = simulado.get(Math.min(hoje.getDayOfMonth(), simulado.size()) - 1);
         for (int i = hoje.getDayOfMonth(); i < ym.lengthOfMonth(); i++) {
@@ -79,6 +96,7 @@ public class DashboardProjectionService {
         dto.setSimulado(simulado);
         dto.setSimulacoesAtivas(simulacaoImpactoService.listarAtivas(usuarioId));
         dto.setTimelineImpacto(timeline(usuarioId));
+        dto.setSafraPatrimonio(saldoService.calcularProjecaoSafraDto(usuarioId, 2));
         return dto;
     }
 

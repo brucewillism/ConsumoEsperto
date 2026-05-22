@@ -1,8 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ForecastFinanceiroDTO;
-import com.consumoesperto.dto.RendaConfigDTO;
-import com.consumoesperto.model.Transacao;
+import com.consumoesperto.dto.ProjecaoMesResumoDTO;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
@@ -28,52 +27,34 @@ public class ForecastFinanceiroService {
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
     private final TransacaoRepository transacaoRepository;
-    private final RendaConfigService rendaConfigService;
     private final OpenAiService openAiService;
     private final JarvisProtocolService jarvisProtocolService;
     private final SaldoService saldoService;
 
     @Transactional(readOnly = true)
     public ForecastFinanceiroDTO calcular(Long usuarioId) {
+        SaldoService.ProjecaoMesCaixa p = saldoService.calcularProjecaoMes(usuarioId);
         YearMonth ym = YearMonth.now();
         LocalDate hoje = LocalDate.now();
         LocalDateTime inicio = ym.atDay(1).atStartOfDay();
         LocalDateTime fimHoje = hoje.atTime(23, 59, 59);
-        LocalDateTime fimMes = ym.atEndOfMonth().atTime(23, 59, 59);
 
-        BigDecimal gastoAtual = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-            usuarioId, Transacao.TipoTransacao.DESPESA, inicio, fimHoje));
-        int diaAtual = Math.max(1, hoje.getDayOfMonth());
-        int diasNoMes = ym.lengthOfMonth();
-        BigDecimal mediaDiaria = gastoAtual.divide(BigDecimal.valueOf(diaAtual), 2, RoundingMode.HALF_UP);
-        BigDecimal gastoProjetado = mediaDiaria.multiply(BigDecimal.valueOf(diasNoMes)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal rendaLiquida = rendaConfigService.obterDto(usuarioId)
-            .map(RendaConfigDTO::getSalarioLiquido)
-            .filter(v -> v.compareTo(BigDecimal.ZERO) > 0)
-            .orElseGet(() -> nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fimMes)));
-        BigDecimal receitasConfirmadas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-            usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fimMes));
-        BigDecimal receitasPrevistas = rendaLiquida.subtract(receitasConfirmadas).max(BigDecimal.ZERO)
-            .setScale(2, RoundingMode.HALF_UP);
-        BigDecimal despesasPrevistas = gastoProjetado.subtract(gastoAtual).max(BigDecimal.ZERO)
-            .setScale(2, RoundingMode.HALF_UP);
-        BigDecimal patrimonioLiquido = nz(saldoService.patrimonioLiquido(usuarioId));
-        BigDecimal saldoProjetado = patrimonioLiquido.add(receitasPrevistas).subtract(despesasPrevistas)
-            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal mediaDiaria = p.gastoAtual().divide(BigDecimal.valueOf(Math.max(1, p.diaAtual())), 2, RoundingMode.HALF_UP);
 
         ForecastFinanceiroDTO dto = new ForecastFinanceiroDTO();
-        dto.setDiaAtual(diaAtual);
-        dto.setDiasNoMes(diasNoMes);
-        dto.setRendaLiquida(rendaLiquida);
-        dto.setGastoAtual(gastoAtual);
+        dto.setDiaAtual(p.diaAtual());
+        dto.setDiasNoMes(p.diasNoMes());
+        dto.setRendaLiquida(p.rendaLiquida());
+        dto.setGastoAtual(p.gastoAtual());
         dto.setMediaDiaria(mediaDiaria);
-        dto.setGastoProjetado(gastoProjetado);
-        dto.setPatrimonioLiquido(patrimonioLiquido);
-        dto.setReceitasPrevistas(receitasPrevistas);
-        dto.setDespesasPrevistas(despesasPrevistas);
-        dto.setSaldoProjetado(saldoProjetado);
+        dto.setGastoProjetado(p.gastoProjetado());
+        dto.setPatrimonioLiquido(p.patrimonioLiquido());
+        dto.setReceitasPrevistas(p.receitasPrevistas());
+        dto.setReceitasFiscaisPrevistas(p.receitasFiscaisPrevistas());
+        dto.setDespesasPrevistas(p.despesasPrevistas());
+        dto.setSaldoProjetado(p.saldoProjetadoFimMes());
         dto.setMaioresCategorias(maioresCategorias(usuarioId, inicio, fimHoje));
+        dto.setSafraPatrimonio(saldoService.calcularProjecaoSafraDto(usuarioId, 2));
         aplicarAnaliseIa(usuarioId, dto);
         return dto;
     }
@@ -81,17 +62,41 @@ public class ForecastFinanceiroService {
     public String montarRespostaWhatsapp(Long usuarioId) {
         ForecastFinanceiroDTO f = calcular(usuarioId);
         String intro = jarvisProtocolService.introducaoProjecaoRotasCapital();
+        String linhaFiscal = f.getReceitasFiscaisPrevistas() != null
+            && f.getReceitasFiscaisPrevistas().compareTo(BigDecimal.ZERO) > 0
+            ? "Receitas sazonais (13º/IR previsto): *" + BRL.format(f.getReceitasFiscaisPrevistas()) + "*\n"
+            : "";
         String corpo = "*📊 Previsão de fechamento do mês*\n"
             + "Dia " + f.getDiaAtual() + " de " + f.getDiasNoMes() + "\n"
+            + "Patrimônio em contas: *" + BRL.format(f.getPatrimonioLiquido()) + "*\n"
             + "Gasto até agora: *" + BRL.format(f.getGastoAtual()) + "*\n"
             + "Média diária: *" + BRL.format(f.getMediaDiaria()) + "*\n"
             + "Projeção de gasto: *" + BRL.format(f.getGastoProjetado()) + "*\n"
             + "Renda considerada: *" + BRL.format(f.getRendaLiquida()) + "*\n"
+            + linhaFiscal
             + "Saldo projetado: *" + BRL.format(f.getSaldoProjetado()) + "*\n"
+            + formatarSafraWhatsapp(f)
             + "Risco: *" + f.getNivelRisco() + "* (" + f.getProbabilidadeVermelho() + "%)\n\n"
             + f.getMensagemIa();
         return intro + corpo;
     }
+
+    private String formatarSafraWhatsapp(ForecastFinanceiroDTO f) {
+        if (f.getSafraPatrimonio() == null || f.getSafraPatrimonio().getMeses() == null
+            || f.getSafraPatrimonio().getMeses().size() <= 1) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("\n*Curva de patrimônio (safra):*\n");
+        for (ProjecaoMesResumoDTO m : f.getSafraPatrimonio().getMeses()) {
+            sb.append("• ").append(m.getRotuloMes()).append(": *")
+                .append(BRL.format(m.getSaldoProjetadoFimMes())).append("*");
+            if (m.getReceitasFiscaisPrevistas() != null
+                && m.getReceitasFiscaisPrevistas().compareTo(BigDecimal.ZERO) > 0) {
+                sb.append(" _(+").append(BRL.format(m.getReceitasFiscaisPrevistas())).append(" fiscal)_");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
 
     public String gerarDicaSemanal(Long usuarioId, String resumo) {
         String fallback = "Priorize reduzir a categoria que mais cresceu nesta semana e revise compras pequenas recorrentes antes de novos lançamentos.";
@@ -115,7 +120,10 @@ public class ForecastFinanceiroService {
                 "Você é um analista financeiro. Retorne apenas JSON: {\"probabilidadeVermelho\":0-100,\"nivelRisco\":\"BAIXO|MEDIO|ALTO|CRITICO\",\"mensagem\":\"texto curto\"}.",
                 "Dia atual do mês: " + dto.getDiaAtual()
                     + "\nDias no mês: " + dto.getDiasNoMes()
+                    + "\nPatrimônio líquido: " + dto.getPatrimonioLiquido()
                     + "\nRenda líquida: " + dto.getRendaLiquida()
+                    + "\nReceitas previstas (salário): " + dto.getReceitasPrevistas()
+                    + "\nReceitas fiscais previstas (13º/IR): " + dto.getReceitasFiscaisPrevistas()
                     + "\nGasto atual: " + dto.getGastoAtual()
                     + "\nMédia diária: " + dto.getMediaDiaria()
                     + "\nGasto projetado: " + dto.getGastoProjetado()

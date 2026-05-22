@@ -10,6 +10,7 @@ public class DashboardProjectionDTO {
     private List<BigDecimal> simulado;
     private List<TimelineImpactoDTO> timelineImpacto;
     private List<SimulacaoImpactoDTO> simulacoesAtivas;
+    private SerieProjecaoSafraDTO safraPatrimonio;
 
     public List<String> getLabels() { return labels; }
     public void setLabels(List<String> labels) { this.labels = labels; }
@@ -28,4 +29,7 @@ public class DashboardProjectionDTO {
 
     public List<SimulacaoImpactoDTO> getSimulacoesAtivas() { return simulacoesAtivas; }
     public void setSimulacoesAtivas(List<SimulacaoImpactoDTO> simulacoesAtivas) { this.simulacoesAtivas = simulacoesAtivas; }
+
+    public SerieProjecaoSafraDTO getSafraPatrimonio() { return safraPatrimonio; }
+    public void setSafraPatrimonio(SerieProjecaoSafraDTO safraPatrimonio) { this.safraPatrimonio = safraPatrimonio; }
 }

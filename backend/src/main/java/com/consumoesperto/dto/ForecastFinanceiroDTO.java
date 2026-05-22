@@ -12,12 +12,16 @@ public class ForecastFinanceiroDTO {
     private BigDecimal gastoProjetado;
     private BigDecimal patrimonioLiquido;
     private BigDecimal receitasPrevistas;
+    private BigDecimal receitasFiscaisPrevistas;
     private BigDecimal despesasPrevistas;
     private BigDecimal saldoProjetado;
     private BigDecimal probabilidadeVermelho;
     private String nivelRisco;
     private String mensagemIa;
     private List<String> maioresCategorias;
+
+    /** Safra cascata: mês corrente + próximos meses (patrimônio encadeado). */
+    private SerieProjecaoSafraDTO safraPatrimonio;
 
     public int getDiaAtual() { return diaAtual; }
     public void setDiaAtual(int diaAtual) { this.diaAtual = diaAtual; }
@@ -43,6 +47,9 @@ public class ForecastFinanceiroDTO {
     public BigDecimal getReceitasPrevistas() { return receitasPrevistas; }
     public void setReceitasPrevistas(BigDecimal receitasPrevistas) { this.receitasPrevistas = receitasPrevistas; }
 
+    public BigDecimal getReceitasFiscaisPrevistas() { return receitasFiscaisPrevistas; }
+    public void setReceitasFiscaisPrevistas(BigDecimal receitasFiscaisPrevistas) { this.receitasFiscaisPrevistas = receitasFiscaisPrevistas; }
+
     public BigDecimal getDespesasPrevistas() { return despesasPrevistas; }
     public void setDespesasPrevistas(BigDecimal despesasPrevistas) { this.despesasPrevistas = despesasPrevistas; }
 
@@ -60,4 +67,7 @@ public class ForecastFinanceiroDTO {
 
     public List<String> getMaioresCategorias() { return maioresCategorias; }
     public void setMaioresCategorias(List<String> maioresCategorias) { this.maioresCategorias = maioresCategorias; }
+
+    public SerieProjecaoSafraDTO getSafraPatrimonio() { return safraPatrimonio; }
+    public void setSafraPatrimonio(SerieProjecaoSafraDTO safraPatrimonio) { this.safraPatrimonio = safraPatrimonio; }
 }

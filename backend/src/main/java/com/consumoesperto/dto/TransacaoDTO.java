@@ -62,7 +62,7 @@ public class TransacaoDTO {
     private BigDecimal valorComJuros;
 
     public enum TipoTransacao {
-        RECEITA, DESPESA, INVESTIMENTO
+        RECEITA, DESPESA, INVESTIMENTO, PAGAMENTO_FATURA
     }
 
     public enum FrequenciaRecorrencia {
@@ -70,6 +70,6 @@ public class TransacaoDTO {
     }
 
     public enum StatusConferencia {
-        CONFIRMADA, PENDENTE, PREVISTO
+        CONFIRMADA, PENDENTE, PREVISTO, AUDITORIA
     }
 }

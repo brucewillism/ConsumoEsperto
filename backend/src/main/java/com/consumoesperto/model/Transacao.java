@@ -245,7 +245,9 @@ public class Transacao {
     public enum TipoTransacao {
         RECEITA, // Entrada de dinheiro
         DESPESA, // Saída de dinheiro
-        INVESTIMENTO // Aplicação: reduz caixa, mas não é despesa de consumo
+        INVESTIMENTO, // Aplicação: reduz caixa, mas não é despesa de consumo
+        /** Pagamento consolidado de fatura — debita conta, não duplica despesas do cartão. */
+        PAGAMENTO_FATURA
     }
 
     public enum FrequenciaRecorrencia {
@@ -257,6 +259,8 @@ public class Transacao {
         CONFIRMADA,
         PENDENTE,
         /** Receita/despesa provisionada — ainda não materializada em conta. */
-        PREVISTO
+        PREVISTO,
+        /** Provisão vencida não materializada — aguardando conciliação manual. */
+        AUDITORIA
     }
 }
