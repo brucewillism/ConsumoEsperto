@@ -97,6 +97,7 @@ public class ForecastFinanceiroService {
             sb.append("\n");
         }
         return sb.toString();
+    }
 
     public String gerarDicaSemanal(Long usuarioId, String resumo) {
         String fallback = "Priorize reduzir a categoria que mais cresceu nesta semana e revise compras pequenas recorrentes antes de novos lançamentos.";
