@@ -2,6 +2,10 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { ForecastFinanceiro } from '../models/forecast.model';
+
+export type { ForecastFinanceiro } from '../models/forecast.model';
+export { safraDoForecast } from '../models/forecast.model';
 
 export interface Orcamento {
   id: number;
@@ -24,20 +28,6 @@ export interface OrcamentoRequest {
   mes?: number;
   ano?: number;
   compartilhado?: boolean;
-}
-
-export interface ForecastFinanceiro {
-  diaAtual: number;
-  diasNoMes: number;
-  rendaLiquida: number;
-  gastoAtual: number;
-  mediaDiaria: number;
-  gastoProjetado: number;
-  saldoProjetado: number;
-  probabilidadeVermelho: number;
-  nivelRisco: string;
-  mensagemIa: string;
-  maioresCategorias: string[];
 }
 
 @Injectable({ providedIn: 'root' })

@@ -22,8 +22,11 @@ import {
   DashboardProjection,
   OportunidadeInvestimento,
   PrevisaoFuturoChart,
+  SerieProjecaoSafraDTO,
   TimelineImpacto,
+  normalizarSafra,
 } from '../../services/projecao-dashboard.service';
+import { buildSafraCascadeChart, toLineChartDatasets } from '../../utils/safra-cascata-chart.util';
 import { PrevisaoFuturoChartComponent } from '../../components/previsao-futuro-chart/previsao-futuro-chart.component';
 import { ScoreService, UsuarioScore } from '../../services/score.service';
 import { InboxNotification, NotificacaoInboxService } from '../../services/notificacao-inbox.service';
@@ -190,16 +193,38 @@ export class DashboardComponent implements OnInit, OnDestroy {
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: {
+        display: false,
         labels: { color: '#e2e8f0', font: { family: 'Inter', size: 11 } }
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const v = ctx.parsed.y;
+            if (v == null || Number.isNaN(v)) {
+              return `${ctx.dataset.label}: —`;
+            }
+            return `${ctx.dataset.label}: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)}`;
+          }
+        }
       }
     },
     scales: {
       x: {
-        ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 0 },
+        ticks: {
+          color: '#94a3b8',
+          maxRotation: 55,
+          minRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 18,
+        },
         grid: { color: 'rgba(51, 65, 85, 0.45)' }
       },
       y: {
-        ticks: { color: '#94a3b8' },
+        ticks: {
+          color: '#94a3b8',
+          callback: (value) =>
+            new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(value)),
+        },
         grid: { color: 'rgba(51, 65, 85, 0.45)' }
       }
     }
@@ -248,6 +273,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   protocoloOtimizacaoEmAndamento = false;
   categoriaRanking: CategoriaRankingRow[] = [];
   dashboardProjection: DashboardProjection | null = null;
+  mesesSafra: SerieProjecaoSafraDTO[] = [];
   timelineImpacto: TimelineImpacto[] = [];
   usuarioScore: UsuarioScore | null = null;
   oportunidadeInvestimento: OportunidadeInvestimento | null = null;
@@ -726,6 +752,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Atualiza gráficos com dados reais
     this.atualizarGraficosComDadosReais(transacoesMes);
     this.dashboardProjection = data.dashboardProjection || null;
+    this.mesesSafra = normalizarSafra(this.dashboardProjection?.safraPatrimonio);
     this.timelineImpacto = this.dashboardProjection?.timelineImpacto || [];
     this.syncSpendingLineChart();
     const relatorioCategoria = this.resolverRelatorioCategoria(
@@ -898,47 +925,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private syncSpendingLineChart(): void {
     if (this.dashboardProjection?.labels?.length) {
-      const datasets: ChartConfiguration<'line'>['data']['datasets'] = [
-        {
-          label: 'Real',
-          data: this.dashboardProjection.real,
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16, 185, 129, 0.12)',
-          fill: false,
-          tension: 0.35,
-          pointBackgroundColor: '#10b981',
-          borderWidth: 2
-        },
-        {
-          label: 'Projetado',
-          data: this.dashboardProjection.projetado,
-          borderColor: '#38bdf8',
-          backgroundColor: 'rgba(56, 189, 248, 0.10)',
-          fill: false,
-          tension: 0.35,
-          pointBackgroundColor: '#38bdf8',
-          borderWidth: 2,
-          borderDash: [6, 4]
-        }
-      ];
-      if (this.modoSimulacao && (this.dashboardProjection.simulacoesAtivas?.length || 0) > 0) {
-        datasets.push({
-          label: 'Simulado',
-          data: this.dashboardProjection.simulado,
-          borderColor: '#f59e0b',
-          backgroundColor: 'rgba(245, 158, 11, 0.10)',
-          fill: false,
-          tension: 0.35,
-          pointBackgroundColor: '#f59e0b',
-          borderWidth: 2,
-          borderDash: [2, 5]
-        });
+      const cascade = buildSafraCascadeChart(this.dashboardProjection);
+      if (cascade) {
+        this.spendingLineChartData = {
+          labels: cascade.labels,
+          datasets: toLineChartDatasets(
+            cascade,
+            this.modoSimulacao,
+            this.dashboardProjection.simulacoesAtivas?.length ?? 0
+          ),
+        };
+        return;
       }
-      this.spendingLineChartData = {
-        labels: [...this.dashboardProjection.labels],
-        datasets
-      };
-      return;
     }
     const sc = this.spendingChartData;
     if (!sc?.labels?.length || !sc.datasets?.[0]?.data?.length) {
@@ -1386,13 +1384,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   alternarModoSimulacao(): void {
     this.dashboardService.definirSimulacoesAtivas(this.modoSimulacao).subscribe({
-      next: () => {
-        this.dashboardService.projection().subscribe((p) => {
-          this.dashboardProjection = p;
-          this.timelineImpacto = p.timelineImpacto || [];
-          this.syncSpendingLineChart();
-        });
-      },
+        next: () => {
+          this.dashboardService.projection().subscribe((p) => {
+            this.dashboardProjection = p;
+            this.mesesSafra = normalizarSafra(p.safraPatrimonio);
+            this.timelineImpacto = p.timelineImpacto || [];
+            this.syncSpendingLineChart();
+          });
+        },
       error: () => {
         this.modoSimulacao = !this.modoSimulacao;
         this.snackBar.open('Não foi possível atualizar o modo simulação.', 'Fechar', { duration: 3000 });

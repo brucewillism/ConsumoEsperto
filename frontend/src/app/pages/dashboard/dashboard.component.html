@@ -470,10 +470,15 @@
 
     <!-- Gráficos e Estatísticas -->
     <div class="dashboard-charts" *ngIf="!errorMessage">
-      <!-- Gráfico de Saldo Real x Projetado -->
-      <div class="chart-card">
+      <!-- Gráfico de Patrimônio — Safra Cascata -->
+      <div class="chart-card chart-card--safra">
         <div class="chart-header">
-          <h3>Saldo Real x Projetado</h3>
+          <div>
+            <h3>Patrimônio — Safra Cascata</h3>
+            <p class="chart-subtitle" *ngIf="mesesSafra.length > 1">
+              Curva cumulativa M → M+1 → M+2 (efeito cascata do backend)
+            </p>
+          </div>
           <div class="chart-legend" *ngIf="spendingLineChartData.labels?.length">
             <span class="legend-item">
               <span class="legend-color" style="background-color: #10b981"></span>
@@ -481,7 +486,11 @@
             </span>
             <span class="legend-item">
               <span class="legend-color" style="background-color: #38bdf8"></span>
-              Projetado
+              Projetado (mês)
+            </span>
+            <span class="legend-item" *ngIf="mesesSafra.length > 1">
+              <span class="legend-color" style="background-color: #a78bfa"></span>
+              Safra M+1 · M+2
             </span>
             <span class="legend-item" *ngIf="modoSimulacao && (dashboardProjection?.simulacoesAtivas?.length || 0) > 0">
               <span class="legend-color" style="background-color: #f59e0b"></span>
@@ -489,13 +498,24 @@
             </span>
           </div>
         </div>
+
+        <div class="safra-resumo" *ngIf="mesesSafra.length">
+          <div class="safra-chip" *ngFor="let m of mesesSafra; let i = index">
+            <span class="safra-chip-label">{{ i === 0 ? 'M' : 'M+' + i }}</span>
+            <strong>{{ formatCurrency(m.saldoFinalProjetado) }}</strong>
+            <small *ngIf="m.receitasFiscaisPrevistas > 0">
+              +{{ formatCurrency(m.receitasFiscaisPrevistas) }} fiscal
+            </small>
+          </div>
+        </div>
+
         <div class="chart-container">
           <div class="chart-placeholder" *ngIf="!spendingLineChartData.labels?.length">
             <i class="fas fa-chart-line"></i>
             <p>Nenhuma projeção disponível</p>
-            <small>Adicione transações para ver saldo real e projetado</small>
+            <small>Adicione transações para ver patrimônio real e safra cascata</small>
           </div>
-          <div class="chart-content" *ngIf="spendingLineChartData.labels?.length">
+          <div class="chart-content chart-content--safra" *ngIf="spendingLineChartData.labels?.length">
             <canvas
               baseChart
               [type]="'line'"

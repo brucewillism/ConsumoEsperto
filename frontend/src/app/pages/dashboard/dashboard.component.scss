@@ -1492,6 +1492,64 @@ $neon-amber: #ffc107;
   padding: 1.5rem;
   margin-left: 0;
 
+  &.chart-card--safra {
+    grid-column: 1 / -1;
+    border-color: rgba(167, 139, 250, 0.22);
+  }
+
+  .chart-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .chart-subtitle {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: #94a3b8;
+  }
+
+  .safra-resumo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .safra-chip {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 120px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(167, 139, 250, 0.08);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+
+    .safra-chip-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #c4b5fd;
+    }
+
+    strong {
+      font-size: 1rem;
+      color: #ede9fe;
+    }
+
+    small {
+      font-size: 0.72rem;
+      color: #a78bfa;
+    }
+  }
+
+  .chart-content--safra {
+    height: 340px;
+  }
+
   .chart-container {
     position: relative;
     min-height: 280px;
