@@ -96,6 +96,10 @@ export class AppComponent implements OnInit {
         if (!this.isLoginPage && this.loadingService.isAuthFlowActive()) {
           this.loadingService.endAuthFlow();
         }
+        this.closeDropdowns();
+        if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+          this.sidebarCollapsed = false;
+        }
       });
   }
 
@@ -177,6 +181,17 @@ export class AppComponent implements OnInit {
   closeDropdowns() {
     this.showNotifications = false;
     this.showUserMenu = false;
+  }
+
+  /** Garante navegação mesmo se o clique for interceptado por overlay da sidebar. */
+  navigateSidebar(path: string, event: MouseEvent): void {
+    event.preventDefault();
+    this.closeDropdowns();
+    const destino = path.split('?')[0];
+    const atual = this.router.url.split('?')[0];
+    if (atual !== destino) {
+      void this.router.navigateByUrl(destino);
+    }
   }
 
   trackNotif(_i: number, n: InboxNotification): string {

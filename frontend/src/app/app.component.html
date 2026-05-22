@@ -12,97 +12,104 @@
     <nav class="sidebar-nav">
       <ul class="nav-list">
         <li class="nav-item">
-          <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link" title="Dashboard">
+          <a
+            routerLink="/dashboard"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: true }"
+            class="nav-link"
+            title="Dashboard"
+            (click)="navigateSidebar('/dashboard', $event)"
+          >
             <i class="fas fa-tachometer-alt"></i>
             <span class="nav-label">Dashboard</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/transacoes" routerLinkActive="active" class="nav-link" title="Transações">
+          <a routerLink="/transacoes" routerLinkActive="active" class="nav-link" title="Transações" (click)="navigateSidebar('/transacoes', $event)">
             <i class="fas fa-exchange-alt"></i>
             <span class="nav-label">Transações</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/contas" routerLinkActive="active" class="nav-link" title="Contas">
+          <a routerLink="/contas" routerLinkActive="active" class="nav-link" title="Contas" (click)="navigateSidebar('/contas', $event)">
             <i class="fas fa-university"></i>
             <span class="nav-label">Contas</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/categorias" routerLinkActive="active" class="nav-link" title="Categorias">
+          <a routerLink="/categorias" routerLinkActive="active" class="nav-link" title="Categorias" (click)="navigateSidebar('/categorias', $event)">
             <i class="fas fa-tags"></i>
             <span class="nav-label">Categorias</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/cartoes" routerLinkActive="active" class="nav-link" title="Cartões">
+          <a routerLink="/cartoes" routerLinkActive="active" class="nav-link" title="Cartões" (click)="navigateSidebar('/cartoes', $event)">
             <i class="fas fa-credit-card"></i>
             <span class="nav-label">Cartões</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/faturas" routerLinkActive="active" class="nav-link" title="Faturas">
+          <a routerLink="/faturas" routerLinkActive="active" class="nav-link" title="Faturas" (click)="navigateSidebar('/faturas', $event)">
             <i class="fas fa-file-invoice-dollar"></i>
             <span class="nav-label">Faturas</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/relatorios" routerLinkActive="active" class="nav-link" title="Relatórios">
+          <a routerLink="/relatorios" routerLinkActive="active" class="nav-link" title="Relatórios" (click)="navigateSidebar('/relatorios', $event)">
             <i class="fas fa-chart-bar"></i>
             <span class="nav-label">Relatórios</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/simulacoes" routerLinkActive="active" class="nav-link" title="Simulações">
+          <a routerLink="/simulacoes" routerLinkActive="active" class="nav-link" title="Simulações" (click)="navigateSidebar('/simulacoes', $event)">
             <i class="fas fa-calculator"></i>
             <span class="nav-label">Simulações</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/metas" routerLinkActive="active" class="nav-link" title="Metas">
+          <a routerLink="/metas" routerLinkActive="active" class="nav-link" title="Metas" (click)="navigateSidebar('/metas', $event)">
             <i class="fas fa-bullseye"></i>
             <span class="nav-label">Metas</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/orcamentos" routerLinkActive="active" class="nav-link" title="Orçamentos">
+          <a routerLink="/orcamentos" routerLinkActive="active" class="nav-link" title="Orçamentos" (click)="navigateSidebar('/orcamentos', $event)">
             <i class="fas fa-thermometer-half"></i>
             <span class="nav-label">Orçamentos</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/renda" routerLinkActive="active" class="nav-link" title="Renda">
+          <a routerLink="/renda" routerLinkActive="active" class="nav-link" title="Renda" (click)="navigateSidebar('/renda', $event)">
             <i class="fas fa-money-bill-wave"></i>
             <span class="nav-label">Renda</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/familia" routerLinkActive="active" class="nav-link" title="Família">
+          <a routerLink="/familia" routerLinkActive="active" class="nav-link" title="Família" (click)="navigateSidebar('/familia', $event)">
             <i class="fas fa-users"></i>
             <span class="nav-label">Família</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/investimentos" routerLinkActive="active" class="nav-link" title="Investimentos">
+          <a routerLink="/investimentos" routerLinkActive="active" class="nav-link" title="Investimentos" (click)="navigateSidebar('/investimentos', $event)">
             <i class="fas fa-seedling"></i>
             <span class="nav-label">Investimentos</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/score" routerLinkActive="active" class="nav-link" title="Score">
+          <a routerLink="/score" routerLinkActive="active" class="nav-link" title="Score" (click)="navigateSidebar('/score', $event)">
             <i class="fas fa-trophy"></i>
             <span class="nav-label">Score</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/importacoes-pendentes" routerLinkActive="active" class="nav-link" title="Importações Pendentes">
+          <a routerLink="/importacoes-pendentes" routerLinkActive="active" class="nav-link" title="Importações Pendentes" (click)="navigateSidebar('/importacoes-pendentes', $event)">
             <i class="fas fa-file-invoice-dollar"></i>
             <span class="nav-label">Importações</span>
           </a>
         </li>
         <li class="nav-item">
-          <a routerLink="/whatsapp-config" routerLinkActive="active" class="nav-link" title="WhatsApp">
+          <a routerLink="/whatsapp-config" routerLinkActive="active" class="nav-link" title="WhatsApp" (click)="navigateSidebar('/whatsapp-config', $event)">
             <i class="fab fa-whatsapp"></i>
             <span class="nav-label">WhatsApp</span>
           </a>
