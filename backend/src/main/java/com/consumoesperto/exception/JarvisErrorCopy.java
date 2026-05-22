@@ -15,6 +15,11 @@ public final class JarvisErrorCopy {
     public static final String AUTH_DENIED_INSTRUCAO =
         "Por favor, revalide suas credenciais — faça login novamente se necessário.";
 
+    public static final String LOGIN_INVALID_MESSAGE =
+        "E-mail/usuário ou senha incorretos.";
+    public static final String LOGIN_INVALID_INSTRUCAO =
+        "Verifique os dados digitados e tente novamente.";
+
     public static final String SERVER_INSTABILITY_MESSAGE =
         "Detectei uma instabilidade nos meus sub-processos. Já registrei a falha para reparo.";
     public static final String SERVER_INSTABILITY_INSTRUCAO =

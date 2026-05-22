@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, ActivatedRoute } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
 import { LoadingService } from '../../services/loading.service';
 
@@ -52,6 +53,7 @@ export class LoginComponent implements OnInit {
     private fb: FormBuilder,
     private authService: AuthService,
     private router: Router,
+    private route: ActivatedRoute,
     private loadingService: LoadingService
   ) {
     // Inicializa o formulário com validações
@@ -67,9 +69,12 @@ export class LoginComponent implements OnInit {
    * Verifica se o usuário já está autenticado e redireciona se necessário
    */
   ngOnInit(): void {
-    // Verificar se já está logado
     if (this.authService.isAuthenticated()) {
       this.router.navigate(['/dashboard']);
+      return;
+    }
+    if (this.route.snapshot.queryParamMap.get('registered') === '1') {
+      this.showAlert('Conta criada com sucesso. Faça login com seu e-mail/usuário e senha.', 'success');
     }
   }
 
@@ -99,18 +104,10 @@ export class LoginComponent implements OnInit {
           this.loadingService.updateAuthFlowMessage('Entrando…');
           this.router.navigate(['/dashboard']);
         },
-        error: (error) => {
+        error: (error: HttpErrorResponse) => {
           this.isLoading = false;
           this.loadingService.endAuthFlow();
-          let errorMessage = 'Erro ao fazer login. Tente novamente.';
-          if (error.status === 401) {
-            errorMessage = 'E-mail ou senha incorretos.';
-          } else if (error.status === 0) {
-            errorMessage = 'Erro de conexão. Verifique sua internet.';
-          } else if (error.error?.message) {
-            errorMessage = error.error.message;
-          }
-          this.showAlert(errorMessage, 'error');
+          this.showAlert(this.resolveLoginError(error), 'error');
         }
       });
     } else {
@@ -227,6 +224,29 @@ export class LoginComponent implements OnInit {
    */
   private clearAlert(): void {
     this.alertMessage = '';
+  }
+
+  private resolveLoginError(error: HttpErrorResponse): string {
+    if (error.status === 0) {
+      return 'Erro de conexão. Verifique sua internet e tente novamente.';
+    }
+    const isLoginRequest = (error.url || '').includes('/auth/login')
+      || (error.error?.path || '').includes('/auth/login');
+
+    if (error.status === 401 && isLoginRequest) {
+      return 'E-mail/usuário ou senha incorretos. Verifique os dados digitados e tente novamente.';
+    }
+    if (error.status === 401) {
+      return 'Sessão expirada ou acesso não autorizado. Faça login novamente.';
+    }
+    const apiMessage = error.error?.message;
+    if (typeof apiMessage === 'string' && apiMessage.trim()) {
+      if (error.status === 401 && isLoginRequest) {
+        return 'E-mail/usuário ou senha incorretos. Verifique os dados digitados e tente novamente.';
+      }
+      return apiMessage;
+    }
+    return 'Não foi possível entrar. Tente novamente em instantes.';
   }
 
   /**

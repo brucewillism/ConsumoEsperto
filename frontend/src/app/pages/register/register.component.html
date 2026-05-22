@@ -1,0 +1,136 @@
+<div class="register-container">
+  <div class="register-card">
+    <div class="register-header">
+      <div class="logo">
+        <i class="fas fa-user-plus"></i>
+        <h1>Criar conta</h1>
+      </div>
+      <p class="subtitle">Registre-se no ConsumoEsperto</p>
+    </div>
+
+    <div class="register-form">
+      <div class="auth-error" *ngIf="alertMessage && alertType === 'error'" role="alert">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>{{ alertMessage }}</span>
+      </div>
+
+      <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+        <div class="form-group">
+          <label for="nome" class="form-label">Nome completo</label>
+          <div class="input-group">
+            <div class="input-icon">
+              <i class="fas fa-user"></i>
+            </div>
+            <input
+              type="text"
+              id="nome"
+              formControlName="nome"
+              class="form-control"
+              placeholder="Seu nome"
+              autocomplete="name"
+              [class.is-invalid]="isFieldInvalid('nome')"
+            />
+          </div>
+          <div class="invalid-feedback" *ngIf="isFieldInvalid('nome')">
+            Nome é obrigatório
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="username" class="form-label">Usuário</label>
+          <div class="input-group">
+            <div class="input-icon">
+              <i class="fas fa-at"></i>
+            </div>
+            <input
+              type="text"
+              id="username"
+              formControlName="username"
+              class="form-control"
+              placeholder="Nome de usuário"
+              autocomplete="username"
+              [class.is-invalid]="isFieldInvalid('username')"
+            />
+          </div>
+          <div class="invalid-feedback" *ngIf="isFieldInvalid('username')">
+            Usuário é obrigatório
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="email" class="form-label">E-mail</label>
+          <div class="input-group">
+            <div class="input-icon">
+              <i class="fas fa-envelope"></i>
+            </div>
+            <input
+              type="email"
+              id="email"
+              formControlName="email"
+              class="form-control"
+              placeholder="seu@email.com"
+              autocomplete="email"
+              [class.is-invalid]="isFieldInvalid('email')"
+            />
+          </div>
+          <div class="invalid-feedback" *ngIf="isFieldInvalid('email')">
+            <span *ngIf="registerForm.get('email')?.errors?.['required']">E-mail é obrigatório</span>
+            <span *ngIf="registerForm.get('email')?.errors?.['email']">Digite um e-mail válido</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password" class="form-label">Senha</label>
+          <div class="input-group">
+            <div class="input-icon">
+              <i class="fas fa-lock"></i>
+            </div>
+            <input
+              [type]="showPassword ? 'text' : 'password'"
+              id="password"
+              formControlName="password"
+              class="form-control"
+              placeholder="Mínimo 6 caracteres"
+              autocomplete="new-password"
+              [class.is-invalid]="isFieldInvalid('password')"
+            />
+            <button
+              type="button"
+              class="password-toggle"
+              (click)="togglePassword()"
+              [attr.aria-label]="showPassword ? 'Ocultar senha' : 'Mostrar senha'"
+            >
+              <i [class]="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+            </button>
+          </div>
+          <div class="invalid-feedback" *ngIf="isFieldInvalid('password')">
+            <span *ngIf="registerForm.get('password')?.errors?.['required']">Senha é obrigatória</span>
+            <span *ngIf="registerForm.get('password')?.errors?.['minlength']">Senha deve ter pelo menos 6 caracteres</span>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          class="btn btn-primary btn-block register-btn"
+          [disabled]="registerForm.invalid || isLoading"
+        >
+          <span *ngIf="!isLoading">
+            <i class="fas fa-user-check"></i>
+            Criar conta
+          </span>
+          <span *ngIf="isLoading" class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            Registrando...
+          </span>
+        </button>
+      </form>
+
+      <div class="login-link">
+        <p>
+          Já tem uma conta?
+          <a routerLink="/login">Faça login</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

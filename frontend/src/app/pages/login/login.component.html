@@ -9,6 +9,11 @@
     </div>
 
     <div class="login-form">
+      <div class="auth-error" *ngIf="alertMessage && alertType === 'error'" role="alert">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>{{ alertMessage }}</span>
+      </div>
+
       <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
         <div class="form-group">
           <label for="email" class="form-label">E-mail</label>
@@ -122,8 +127,8 @@
     </div>
   </div>
 
-  <!-- Alert Messages -->
-  <div class="alert-container" *ngIf="alertMessage">
+  <!-- Alert Messages (sucesso / info — erros ficam inline no card) -->
+  <div class="alert-container" *ngIf="alertMessage && alertType !== 'error'">
     <div class="alert" [class]="'alert-' + alertType">
       <div class="alert-content">
         <i [class]="getAlertIcon()"></i>

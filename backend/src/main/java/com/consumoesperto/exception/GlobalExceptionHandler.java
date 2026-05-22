@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.security.authentication.BadCredentialsException;
 
 import javax.validation.ConstraintViolation;
 import javax.validation.ConstraintViolationException;
@@ -127,6 +128,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             details
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ApiError> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
+        log.warn("Credenciais inválidas: {}", ex.getMessage());
+        String path = pathFrom(request);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiError(
+            "INVALID_CREDENTIALS",
+            JarvisErrorCopy.LOGIN_INVALID_MESSAGE,
+            JarvisErrorCopy.LOGIN_INVALID_INSTRUCAO,
+            HttpStatus.UNAUTHORIZED.value(),
+            path
+        ));
     }
 
     @ExceptionHandler(AuthenticationException.class)
