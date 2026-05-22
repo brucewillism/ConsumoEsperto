@@ -132,7 +132,7 @@ public class AmortizacaoSazonalService {
     }
 
     private static int diasAteParcela(LocalDate hoje, int ano, ParcelaReceitaFiscalDTO p) {
-        if (p.getMes() == null || p.getDia() == null) {
+        if (p.getMes() <= 0 || p.getDia() <= 0) {
             return Integer.MAX_VALUE;
         }
         try {

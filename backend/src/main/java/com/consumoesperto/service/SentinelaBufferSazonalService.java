@@ -47,7 +47,7 @@ public class SentinelaBufferSazonalService {
 
         for (ParcelaReceitaFiscalDTO parcela : resumo.getParcelas()) {
             if (parcela.getValor() == null || parcela.getValor().compareTo(BigDecimal.ZERO) <= 0
-                || parcela.getMes() == null || parcela.getDia() == null) {
+                || parcela.getMes() <= 0 || parcela.getDia() <= 0) {
                 continue;
             }
             LocalDate dataParcela;
