@@ -24,17 +24,41 @@
 
       <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Limite mensal</mat-label>
-        <input matInput type="number" min="0.01" step="0.01" [(ngModel)]="valorLimite" placeholder="0,00">
+        <input
+          matInput
+          type="text"
+          inputmode="decimal"
+          [ngModel]="valorLimiteInput"
+          (ngModelChange)="onValorLimiteInput($event)"
+          placeholder="0,00"
+          autocomplete="off"
+        />
       </mat-form-field>
 
       <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Mês</mat-label>
-        <input matInput type="number" min="1" max="12" [(ngModel)]="mes">
+        <input
+          matInput
+          type="text"
+          inputmode="numeric"
+          maxlength="2"
+          [ngModel]="mesInput"
+          (ngModelChange)="onMesInput($event)"
+          autocomplete="off"
+        />
       </mat-form-field>
 
       <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Ano</mat-label>
-        <input matInput type="number" min="2000" max="2100" [(ngModel)]="ano">
+        <input
+          matInput
+          type="text"
+          inputmode="numeric"
+          maxlength="4"
+          [ngModel]="anoInput"
+          (ngModelChange)="onAnoInput($event)"
+          autocomplete="off"
+        />
       </mat-form-field>
 
       <div class="form-actions">

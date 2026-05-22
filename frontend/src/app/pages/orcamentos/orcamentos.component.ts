@@ -14,7 +14,7 @@ import { Categoria } from '../../models/categoria.model';
 import { CategoriaService } from '../../services/categoria.service';
 import { ForecastFinanceiro, Orcamento, OrcamentoService } from '../../services/orcamento.service';
 import { ToastService } from '../../services/toast.service';
-import { resolveHttpError } from '../../shared/utils/form.utils';
+import { resolveHttpError, parseValorBrasileiro, sanitizeDecimalInput, sanitizeIntegerInput } from '../../shared/utils/form.utils';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 
 @Component({
@@ -44,7 +44,9 @@ export class OrcamentosComponent implements OnInit {
   salvando = false;
 
   categoriaId: number | null = null;
-  valorLimite: number | null = null;
+  valorLimiteInput = '';
+  mesInput = String(new Date().getMonth() + 1);
+  anoInput = String(new Date().getFullYear());
   mes = new Date().getMonth() + 1;
   ano = new Date().getFullYear();
   compartilhado = false;
@@ -86,22 +88,27 @@ export class OrcamentosComponent implements OnInit {
       this.formAlerta = 'Selecione uma categoria.';
       return;
     }
-    if (!this.valorLimite || this.valorLimite <= 0) {
-      this.formAlerta = 'Informe um limite mensal maior que zero.';
+    const valorLimite = parseValorBrasileiro(this.valorLimiteInput);
+    if (valorLimite == null || valorLimite <= 0) {
+      this.formAlerta = 'Informe um limite mensal maior que zero (somente números).';
       return;
     }
-    if (!this.mes || this.mes < 1 || this.mes > 12) {
+    const mes = parseInt(this.mesInput, 10);
+    const ano = parseInt(this.anoInput, 10);
+    if (!this.mesInput || !Number.isFinite(mes) || mes < 1 || mes > 12) {
       this.formAlerta = 'Informe um mês válido (1 a 12).';
       return;
     }
-    if (!this.ano || this.ano < 2000 || this.ano > 2100) {
-      this.formAlerta = 'Informe um ano válido.';
+    if (!this.anoInput || !Number.isFinite(ano) || ano < 2000 || ano > 2100) {
+      this.formAlerta = 'Informe um ano válido (2000 a 2100).';
       return;
     }
+    this.mes = mes;
+    this.ano = ano;
     this.salvando = true;
     this.orcamentoService.salvar({
       categoriaId: this.categoriaId,
-      valorLimite: this.valorLimite,
+      valorLimite,
       mes: this.mes,
       ano: this.ano,
       compartilhado: this.compartilhado
@@ -109,7 +116,7 @@ export class OrcamentosComponent implements OnInit {
       next: () => {
         this.toast.success('Orçamento salvo.');
         this.categoriaId = null;
-        this.valorLimite = null;
+        this.valorLimiteInput = '';
         this.compartilhado = false;
         this.salvando = false;
         this.carregar();
@@ -143,5 +150,17 @@ export class OrcamentosComponent implements OnInit {
 
   brl(v: number | null | undefined): string {
     return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  onValorLimiteInput(raw: string): void {
+    this.valorLimiteInput = sanitizeDecimalInput(raw);
+  }
+
+  onMesInput(raw: string): void {
+    this.mesInput = sanitizeIntegerInput(raw, 2);
+  }
+
+  onAnoInput(raw: string): void {
+    this.anoInput = sanitizeIntegerInput(raw, 4);
   }
 }

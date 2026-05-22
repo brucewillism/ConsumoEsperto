@@ -63,3 +63,27 @@ export function resolveHttpError(error: unknown, fallback: string): string {
 export function isEmailValido(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
+
+/** Apenas dígitos; limita tamanho opcionalmente. */
+export function sanitizeIntegerInput(value: string, maxLength?: number): string {
+  const digits = value.replace(/\D/g, '');
+  return maxLength != null ? digits.slice(0, maxLength) : digits;
+}
+
+/** Dígitos com no máximo um separador decimal (, ou .). */
+export function sanitizeDecimalInput(value: string): string {
+  if (!value) {
+    return '';
+  }
+  let result = '';
+  let sepUsed = false;
+  for (const ch of value) {
+    if (ch >= '0' && ch <= '9') {
+      result += ch;
+    } else if ((ch === ',' || ch === '.') && !sepUsed) {
+      result += ch;
+      sepUsed = true;
+    }
+  }
+  return result;
+}
