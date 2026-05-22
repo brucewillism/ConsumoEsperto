@@ -34,6 +34,7 @@ public class RendaConfigService {
     private final RendaConfigRepository rendaConfigRepository;
     private final UsuarioRepository usuarioRepository;
     private final ObjectMapper objectMapper;
+    private final SalarioAutomaticoService salarioAutomaticoService;
 
     @Transactional(readOnly = true)
     public Optional<RendaConfigDTO> obterDto(Long usuarioId) {
@@ -99,6 +100,13 @@ public class RendaConfigService {
             cfg.setReceitaAutomaticaAtiva(true);
         }
         rendaConfigRepository.save(cfg);
+        if (cfg.isReceitaAutomaticaAtiva()) {
+            try {
+                salarioAutomaticoService.tentarLancarSalarioMesAtual(cfg);
+            } catch (Exception e) {
+                log.warn("Catch-up salário automático após salvar renda userId={}: {}", usuarioId, e.getMessage());
+            }
+        }
         return toDto(cfg);
     }
 
@@ -134,6 +142,13 @@ public class RendaConfigService {
             cfg.setUltimoMesLancamentoAuto(null);
         }
         rendaConfigRepository.save(cfg);
+        if (ativa) {
+            try {
+                salarioAutomaticoService.tentarLancarSalarioMesAtual(cfg);
+            } catch (Exception e) {
+                log.warn("Catch-up salário automático userId={}: {}", usuarioId, e.getMessage());
+            }
+        }
     }
 
     private static final Pattern DIA_PAGAMENTO_NO_TEXTO = Pattern.compile(

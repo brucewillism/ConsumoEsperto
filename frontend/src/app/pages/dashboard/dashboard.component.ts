@@ -233,8 +233,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   };
   
   // Estatísticas financeiras principais
-  totalSpent = 0;        // Total gasto no mês
-  totalIncome = 0;       // Total recebido no mês
+  totalSpent = 0;        // Total gasto no mês (confirmado — alinhado ao resumo da API)
+  totalIncome = 0;       // Total recebido no mês (confirmado — alinhado ao resumo da API)
+  receitasPrevistasMes = 0; // Gap salarial previsto (renda config − já confirmado)
   balance = 0;           // Saldo atual (receitas - despesas)
   creditCardLimit = 0;   // Limite total do cartão de crédito
   creditCardUsed = 0;    // Valor usado do cartão de crédito
@@ -688,12 +689,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const transacoesMes = data.transacoesMes || [];
     console.log('📊 Transações do mês:', transacoesMes.length, 'transações encontradas');
     
-    // Calcula totais do mês
-    this.totalSpent = this.calcularTotalPorTipo(transacoesMes, 'DESPESA');
-    this.totalIncome = this.calcularTotalPorTipo(transacoesMes, 'RECEITA');
+    // Totais mensais: mesma base do endpoint /transacoes/resumo-mes-atual (apenas confirmadas).
+    const resumoMes = data.resumoMes as {
+      saldo?: number;
+      totalReceitas?: number;
+      totalDespesas?: number;
+      receitasPrevistas?: number;
+    } | undefined;
+    const receitasConfirmadas = this.coercerValorMonetario(resumoMes?.totalReceitas);
+    const despesasConfirmadas = this.coercerValorMonetario(resumoMes?.totalDespesas);
+    this.totalIncome = resumoMes?.totalReceitas != null && !Number.isNaN(receitasConfirmadas)
+      ? receitasConfirmadas
+      : this.calcularTotalPorTipo(transacoesMes, 'RECEITA', true);
+    this.totalSpent = resumoMes?.totalDespesas != null && !Number.isNaN(despesasConfirmadas)
+      ? despesasConfirmadas
+      : this.calcularTotalPorTipo(transacoesMes, 'DESPESA', true);
+    this.receitasPrevistasMes = Math.max(0, this.coercerValorMonetario(resumoMes?.receitasPrevistas));
     // Saldo do mês corrente (alinhado a "Receitas/Gastos do mês"). O endpoint /transacoes/resumo
     // usa saldo acumulado histórico (todas as confirmações) e distorce o card junto aos totais mensais.
-    const resumoMes = data.resumoMes as { saldo?: number } | undefined;
     if (resumoMes != null && resumoMes.saldo != null && !Number.isNaN(Number(resumoMes.saldo))) {
       this.balance = Number(resumoMes.saldo);
     } else {
@@ -837,11 +850,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
   
   /**
-   * Calcula o total de transações por tipo
+   * Calcula o total de transações por tipo.
+   * Por omissão considera apenas lançamentos confirmados (mesma base do resumo mensal da API).
    */
-  private calcularTotalPorTipo(transacoes: any[], tipo: string): number {
+  private calcularTotalPorTipo(transacoes: any[], tipo: string, apenasConfirmadas = false): number {
     return transacoes
-      .filter(t => t.tipoTransacao === tipo)
+      .filter(t => t.tipoTransacao === tipo && (!apenasConfirmadas || t.statusConferencia === 'CONFIRMADA'))
       .reduce((total, t) => total + (t.valor || 0), 0);
   }
   
@@ -871,7 +885,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         title: 'Receitas do Mês',
         value: this.formatCurrency(this.totalIncome),
-        change: this.totalIncome > 0 ? 'Dados do mês atual' : 'Nenhuma receita registrada',
+        change: this.totalIncome > 0
+          ? 'Dados do mês atual'
+          : this.receitasPrevistasMes > 0
+            ? `Salário previsto (${this.formatCurrency(this.receitasPrevistasMes)}) — aguardando lançamento`
+            : 'Nenhuma receita registrada',
         changeType: this.totalIncome > 0 ? 'positive' : 'neutral',
         icon: 'fas fa-arrow-down',
         color: '#1c3238'
@@ -1180,6 +1198,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private initializeEmptyData() {
     this.totalSpent = 0;
     this.totalIncome = 0;
+    this.receitasPrevistasMes = 0;
     this.balance = 0;
     this.creditCardLimit = 0;
     this.creditCardUsed = 0;

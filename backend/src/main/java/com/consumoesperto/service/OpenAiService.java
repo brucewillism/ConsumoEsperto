@@ -69,7 +69,7 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
             "description, amount, bank, cardName, cardNumber, dueDay, creditLimit (limite total do cartão, opcional), " +
             "accountName (nome da conta bancária/carteira), accountType (CORRENTE|POUPANCA|DINHEIRO), initialBalance (saldo inicial da conta), " +
@@ -102,11 +102,14 @@ public class OpenAiService {
             "- Se for cadastro de categoria (ex.: 'cria categoria Pets', 'nova categoria Viagem'): action CREATE_CATEGORY; categoryName = nome.\n" +
             "- Se for cadastro de orçamento mensal (ex.: 'orçamento 800 em Alimentação', 'limite 500 para Lazer este mês'): " +
             "action CREATE_BUDGET; categoryName = categoria citada; budgetLimit ou amount = valor limite; reportMonth/reportYear se citar mês.\n" +
-            "- Prioridade MANAGE_ENTITY: se a frase citar explicitamente *meta* (objetivo financeiro), preencha manageTarget=meta; " +
+            "- Se for cadastrar/criar/registrar/adicionar *nova meta financeira* (objetivo de poupança), ex.: " +
+            "'cadastra meta geladeira', 'criar uma meta chamada viagem', 'registrar meta notebook 5000 12%': " +
+            "action CREATE_META; description = nome da meta; amount = valor total se citado; percentualComprometimento se citado. " +
+            "NÃO use MANAGE_ENTITY para criar meta — MANAGE_ENTITY é só apagar/editar meta *existente*.\n" +
+            "- Prioridade MANAGE_ENTITY: se a frase citar explicitamente *meta* (objetivo financeiro) para apagar/editar, preencha manageTarget=meta; " +
             "se citar *cartão/cartao/card*, manageTarget=cartao; se citar *conta bancária/carteira/poupança* (não cartão), manageTarget=conta_bancaria; " +
             "se citar *categoria*, manageTarget=categoria; se citar *orçamento/orcamento*, manageTarget=orcamento; " +
-            "caso contrário manageTarget=transacao. " +
-            "Não confundir 'meta' de simulação de compra com meta financeira — só use manageTarget=meta quando for cadastro de meta.\n" +
+            "caso contrário manageTarget=transacao.\n" +
             "- Se houver mais de um item candidato a editar/apagar, o bot no WhatsApp deve listar numerado e pedir o número; " +
             "no JSON, preencha searchPhrase com o termo original (mesmo com erro de digitação; o backend corrige por similaridade).\n" +
             "- Se for editar cadastro existente (categoria, meta, despesa fixa, cartão/conta), use UPDATE_ENTITY_CONFIG: " +
@@ -118,8 +121,8 @@ public class OpenAiService {
             "meta: nome ou descricao, valorObjetivo ou valorTotal, percentual, prioridade, dataPrazo (yyyy-MM-dd); " +
             "despesa fixa: descricao, valor.\n" +
             "- Atalho legado só para cartão: UPDATE_ACCOUNT_CONFIG com cardName, newLimit, newAvailableLimit, newCardName.\n" +
-            "- Se o usuário quiser simular compra/meta (ex: 'quero comprar uma TV de 2000 usando 10% da minha renda', " +
-            "'geladeira 3500 comprometendo 15% do salário'): action SIMULATE_PURCHASE_GOAL, description = item, " +
+            "- Se o usuário quiser *simular prazo* de compra/meta (ex: 'quero comprar uma TV de 2000 usando 10% da minha renda', " +
+            "'quanto tempo para geladeira 3500 comprometendo 15% do salário'): action SIMULATE_PURCHASE_GOAL, description = item, " +
             "amount = valor total do bem, percentualComprometimento = percentual informado (número, ex: 10 para 10%).\n" +
             "- Se perguntar sobre recorrência, assinaturas repetidas, gastos fixos mensais (ex: 'tenho recorrência?', 'o que repete?'): action GET_INSIGHTS.\n" +
             "- Se perguntar quanto gastou no cartão, resumo de fatura, limite disponível (ex: 'quanto gastei no Nubank?', 'resumo da fatura do Inter'): " +

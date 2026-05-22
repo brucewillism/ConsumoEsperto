@@ -121,6 +121,10 @@ public class WhatsAppCommandService {
     private final Map<Long, MetaDraft> awaitingIncome = new ConcurrentHashMap<>();
     /** Simulação concluída; aguardando confirmação para persistir meta. */
     private final Map<Long, MetaDraft> awaitingSaveConfirm = new ConcurrentHashMap<>();
+    /** Cadastro de meta: aguardando valor total. */
+    private final Map<Long, MetaDraft> awaitingMetaValor = new ConcurrentHashMap<>();
+    /** Cadastro de meta: aguardando percentual da renda. */
+    private final Map<Long, MetaDraft> awaitingMetaPercentual = new ConcurrentHashMap<>();
     /** OCR de cupom aguardando confirmação (sim/não) antes de gravar transação. */
     private final Map<Long, PendingCupomDraft> awaitingCupomConfirm = new ConcurrentHashMap<>();
     /** Após SET_SALARY_CONFIG: pergunta se activa lançamento automático no dia de pagamento. */
@@ -132,6 +136,15 @@ public class WhatsAppCommandService {
     /** “Jarvis, anote isso: …” — grava memória semântica financeira. */
     private static final Pattern JARVIS_ANOTE_ISSO = Pattern.compile(
         "(?i)\\bjarvis\\b\\s*,?\\s*anote\\s+isso\\s*[:\\-–]\\s*(.+)$");
+
+    private static final Pattern CREATE_META_INTENT = Pattern.compile(
+        "(?is)\\b(?:cadastr(?:ar|a)|cri(?:ar|e)|registr(?:ar|a)|adicion(?:ar|a))\\b.*\\b(?:uma\\s+)?(?:nova\\s+)?meta\\b|\\bnova\\s+meta\\b");
+
+    private static final Pattern META_NOME_EXPLICITO = Pattern.compile(
+        "(?is)\\bnome\\s+([\\p{L}0-9][\\p{L}0-9'\\- ]{0,60}?)(?:\\s+chamada|\\.|,|$)");
+
+    private static final Pattern META_CHAMADA = Pattern.compile(
+        "(?is)\\bchamada\\s+([\\p{L}0-9][\\p{L}0-9'\\- ]{0,60}?)(?:\\.|,|$)");
 
     public void processIncomingMessage(String from, String body, String mediaUrl, String mediaContentType) {
         Long userId = null;
@@ -183,6 +196,11 @@ public class WhatsAppCommandService {
             Optional<String> despesaFixa = tryIniciarDespesaFixaPorTextoLivre(userId, sourceText);
             if (despesaFixa.isPresent()) {
                 sendOutgoingMessage(from, despesaFixa.get(), userId);
+                return;
+            }
+            Optional<String> metaCreate = tryIniciarCriacaoMetaPorTexto(userId, sourceText);
+            if (metaCreate.isPresent()) {
+                sendOutgoingMessage(from, metaCreate.get(), userId);
                 return;
             }
             Optional<String> jarvisNota = tryJarvisAnoteIsso(userId, sourceText);
@@ -611,6 +629,7 @@ public class WhatsAppCommandService {
             case "CREATE_BANK_ACCOUNT" -> handleCreateBankAccount(cmd, userId, sourceText);
             case "CREATE_CATEGORY" -> handleCreateCategory(cmd, userId, sourceText);
             case "CREATE_BUDGET" -> handleCreateBudget(cmd, userId, sourceText);
+            case "CREATE_META" -> handleCreateMeta(cmd, userId, sourceText);
             case "UPDATE_ENTITY_CONFIG" -> formatarRespostaEntidade(whatsAppEntityConfigUpdateService.executar(userId, normalizarUpdateEntityConfig(cmd, sourceText)), userId);
             case "UPDATE_ACCOUNT_CONFIG" -> handleUpdateAccountConfig(cmd, userId, sourceText);
             case "SIMULATE_PURCHASE_GOAL" -> handleSimulatePurchaseGoal(cmd, userId, sourceText);
@@ -625,7 +644,12 @@ public class WhatsAppCommandService {
             case "SUGERIR_INVESTIMENTO" -> respostaInvestimento(userId);
             case "CHECK_CARD_STATUS" -> handleCheckCardStatus(cmd, userId, sourceText);
             case "SET_SALARY_CONFIG" -> handleSetSalaryConfig(cmd, userId, sourceText);
-            case "MANAGE_ENTITY" -> whatsAppGestaoProativaService.iniciarGestao(cmd, userId, sourceText);
+            case "MANAGE_ENTITY" -> {
+                if (parecePedidoCriarMeta(sourceText) || parecePedidoCriarMeta(cmd)) {
+                    yield handleCreateMeta(cmd, userId, sourceText);
+                }
+                yield whatsAppGestaoProativaService.iniciarGestao(cmd, userId, sourceText);
+            }
             case "GENERATE_REPORT" -> msgInfo("Relatório PDF",
                 "Para receber o PDF aqui no WhatsApp, usa a Evolution ligada a este número. No app: *Relatórios → PDF*.");
             default -> {
@@ -2273,6 +2297,40 @@ public class WhatsAppCommandService {
             }
             return Optional.of(msgInfo("Meta", "Responde *sim* para guardar esta meta no app ou *não* para cancelar."));
         }
+        if (awaitingMetaPercentual.containsKey(userId)) {
+            MetaDraft draft = awaitingMetaPercentual.get(userId);
+            BigDecimal pct = parsePercentualFromText(text);
+            if (pct == null) {
+                return Optional.of(msgErro(userId, "Nova meta",
+                    "Não percebi o percentual. Envia um número entre *1* e *100* (ex.: *10* para 10%)."));
+            }
+            awaitingMetaPercentual.remove(userId);
+            draft.percentualComprometimento = pct;
+            return Optional.of(iniciarFluxoMetaFromDraft(userId, draft));
+        }
+        if (awaitingMetaValor.containsKey(userId)) {
+            MetaDraft draft = awaitingMetaValor.remove(userId);
+            String[] parts = text.split("\\s+");
+            if (parts.length >= 2) {
+                BigDecimal valor = parseSingleMoneyValue(parts[0]);
+                BigDecimal pct = parsePercentualFromText(parts[1]);
+                if (valor != null && valor.compareTo(BigDecimal.ZERO) > 0 && pct != null) {
+                    draft.valorTotal = valor;
+                    draft.percentualComprometimento = pct;
+                    return Optional.of(iniciarFluxoMetaFromDraft(userId, draft));
+                }
+            }
+            BigDecimal valor = parseSingleMoneyValue(text);
+            if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+                awaitingMetaValor.put(userId, draft);
+                return Optional.of(msgErro(userId, "Nova meta",
+                    "Não percebi o valor. Envia só o número (ex.: *3500* ou *3500 10* para valor e percentual)."));
+            }
+            draft.valorTotal = valor;
+            awaitingMetaPercentual.put(userId, draft);
+            return Optional.of(msgInfo("Nova meta",
+                "Qual *percentual da tua renda* queres destinar à meta *" + draft.descricao + "*? (ex.: *10* para 10%)"));
+        }
         if (awaitingIncome.containsKey(userId)) {
             BigDecimal informada = parseSingleMoneyValue(text);
             if (informada == null || informada.compareTo(BigDecimal.ZERO) <= 0) {
@@ -2307,9 +2365,211 @@ public class WhatsAppCommandService {
         return null;
     }
 
-    private String handleSimulatePurchaseGoal(JsonNode cmd, Long userId, String sourceText) {
+    private String handleCreateMeta(JsonNode cmd, Long userId, String sourceText) {
+        limparEstadosMetaPendentes(userId);
+        whatsAppGestaoProativaService.cancelarSessao(userId);
+
+        String description = primeiroTextoNaoVazio(
+            cmd.path("description").asText(""),
+            cmd.path("searchPhrase").asText(""),
+            cmd.path("identifier").asText(""),
+            extrairNomeMeta(sourceText)
+        );
+        MetaDraft draft = new MetaDraft();
+        draft.descricao = sanitizeDescription(description);
+        if (draft.descricao.isBlank()) {
+            return msgErro(userId, "Nova meta", "Indica o *nome* da meta (ex.: *geladeira*, *viagem*).");
+        }
+
+        BigDecimal amount = readAmount(cmd, sourceText);
+        BigDecimal pct = readPercentualMeta(cmd);
+        if (amount != null && amount.compareTo(BigDecimal.ZERO) > 0) {
+            draft.valorTotal = amount;
+        }
+        if (pct != null && pct.compareTo(BigDecimal.ZERO) > 0 && pct.compareTo(new BigDecimal("100")) <= 0) {
+            draft.percentualComprometimento = pct;
+        }
+
+        if (draft.valorTotal == null) {
+            awaitingMetaValor.put(userId, draft);
+            return msgInfo("Nova meta",
+                "Vou cadastrar a meta *" + draft.descricao + "*. Qual o *valor total*? (ex.: *3500* ou *3500 10* com percentual).");
+        }
+        if (draft.percentualComprometimento == null) {
+            awaitingMetaPercentual.put(userId, draft);
+            return msgInfo("Nova meta",
+                "Qual *percentual da tua renda* queres destinar à meta *" + draft.descricao + "*? (ex.: *10* para 10%)");
+        }
+        return iniciarFluxoMetaFromDraft(userId, draft);
+    }
+
+    private Optional<String> tryIniciarCriacaoMetaPorTexto(Long userId, String sourceText) {
+        if (sourceText == null || sourceText.isBlank() || !parecePedidoCriarMeta(sourceText)) {
+            return Optional.empty();
+        }
+        if (awaitingMetaValor.containsKey(userId) || awaitingMetaPercentual.containsKey(userId)
+            || awaitingSaveConfirm.containsKey(userId) || awaitingIncome.containsKey(userId)) {
+            return Optional.empty();
+        }
+        limparEstadosMetaPendentes(userId);
+        whatsAppGestaoProativaService.cancelarSessao(userId);
+
+        MetaDraft draft = new MetaDraft();
+        draft.descricao = sanitizeDescription(extrairNomeMeta(sourceText));
+        if (draft.descricao.isBlank()) {
+            draft.descricao = "Nova meta";
+        }
+
+        BigDecimal amount = extractAmountFromText(sourceText);
+        BigDecimal pct = extrairPercentualMetaDoTexto(sourceText);
+        if (amount != null && amount.compareTo(BigDecimal.ZERO) > 0) {
+            draft.valorTotal = amount;
+        }
+        if (pct != null) {
+            draft.percentualComprometimento = pct;
+        }
+
+        if (draft.valorTotal != null && draft.percentualComprometimento != null) {
+            return Optional.of(iniciarFluxoMetaFromDraft(userId, draft));
+        }
+        if (draft.valorTotal != null) {
+            awaitingMetaPercentual.put(userId, draft);
+            return Optional.of(msgInfo("Nova meta",
+                "Qual *percentual da tua renda* queres destinar à meta *" + draft.descricao + "*? (ex.: *10* para 10%)"));
+        }
+        awaitingMetaValor.put(userId, draft);
+        return Optional.of(msgInfo("Nova meta",
+            "Vou cadastrar a meta *" + draft.descricao + "*. Qual o *valor total*? (ex.: *3500* ou *3500 10* com percentual)."));
+    }
+
+    private String iniciarFluxoMetaFromDraft(Long userId, MetaDraft draft) {
+        if (draft.percentualComprometimento == null
+            || draft.percentualComprometimento.compareTo(BigDecimal.ZERO) <= 0
+            || draft.percentualComprometimento.compareTo(new BigDecimal("100")) > 0) {
+            awaitingMetaPercentual.put(userId, draft);
+            return msgErro(userId, "Nova meta", "Indica o *percentual da renda* (entre 1 e 100). Ex.: *10* para 10%.");
+        }
+        if (draft.valorTotal == null || draft.valorTotal.compareTo(BigDecimal.ZERO) <= 0) {
+            awaitingMetaValor.put(userId, draft);
+            return msgErro(userId, "Nova meta", "Indica o *valor total* da meta (ex.: *3500*).");
+        }
+        log.info("[META-LOG] Calculando viabilidade para meta '{}' (usuario {})...", draft.descricao, userId);
+
+        Optional<BigDecimal> rendaOpt = metaFinanceiraService.calcularRendaMensalMediaUltimosTresMeses(userId);
+        if (rendaOpt.isEmpty()) {
+            awaitingIncome.put(userId, draft);
+            return msgInfo("Simulação de meta",
+                "Para calcular, preciso da tua *renda mensal média*. Envia só o valor (ex.: *5000*).");
+        }
+        draft.rendaUsada = rendaOpt.get();
+        draft.rendaFromLancamentos = true;
+        String msg = buildMetaSimulationMessage(userId, draft);
+        awaitingSaveConfirm.put(userId, draft);
+        return msg;
+    }
+
+    private void limparEstadosMetaPendentes(Long userId) {
         awaitingIncome.remove(userId);
         awaitingSaveConfirm.remove(userId);
+        awaitingMetaValor.remove(userId);
+        awaitingMetaPercentual.remove(userId);
+    }
+
+    private static boolean parecePedidoCriarMeta(String text) {
+        return text != null && !text.isBlank() && CREATE_META_INTENT.matcher(text).find();
+    }
+
+    private static boolean parecePedidoCriarMeta(JsonNode cmd) {
+        if (cmd == null) {
+            return false;
+        }
+        String op = cmd.path("manageOperation").asText("").trim().toLowerCase(Locale.ROOT);
+        if (op.contains("edit") || op.contains("del") || op.contains("apag")) {
+            return false;
+        }
+        return parecePedidoCriarMeta(cmd.path("description").asText(""))
+            || parecePedidoCriarMeta(cmd.path("searchPhrase").asText(""))
+            || parecePedidoCriarMeta(cmd.path("identifier").asText(""));
+    }
+
+    private String extrairNomeMeta(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        Matcher m = META_NOME_EXPLICITO.matcher(text);
+        if (m.find()) {
+            return limparNomeMeta(m.group(1));
+        }
+        m = META_CHAMADA.matcher(text);
+        if (m.find()) {
+            return limparNomeMeta(m.group(1));
+        }
+        m = Pattern.compile("(?is)\\b(?:nova\\s+)?meta\\s+([\\p{L}0-9][\\p{L}0-9'\\- ]{1,60})").matcher(text);
+        if (m.find()) {
+            return limparNomeMeta(m.group(1));
+        }
+        return "";
+    }
+
+    private String limparNomeMeta(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String s = raw.trim();
+        s = s.replaceAll("(?i)\\s+(chamada|com\\s+o\\s+nome).*$", "").trim();
+        s = s.replaceAll("(?i)^(com\\s+o\\s+nome|chamada)\\s+", "").trim();
+        String[] parts = s.split("\\s+");
+        if (parts.length >= 3 && parts[0].equalsIgnoreCase(parts[parts.length - 1])) {
+            return parts[0];
+        }
+        return s;
+    }
+
+    private BigDecimal extrairPercentualMetaDoTexto(String text) {
+        if (text == null) {
+            return null;
+        }
+        Matcher m = Pattern.compile("(?i)(\\d{1,2}(?:[.,]\\d+)?)\\s*(?:%|por\\s*cento|da\\s+renda|do\\s+sal[aá]rio)").matcher(text);
+        if (m.find()) {
+            return parsePercentualFromText(m.group(1));
+        }
+        return null;
+    }
+
+    private BigDecimal parsePercentualFromText(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String t = text.replace("%", "").replace(",", ".").trim();
+        Matcher m = Pattern.compile("(\\d{1,2}(?:\\.\\d+)?)").matcher(t);
+        if (!m.find()) {
+            return null;
+        }
+        try {
+            BigDecimal v = new BigDecimal(m.group(1)).setScale(2, RoundingMode.HALF_UP);
+            if (v.compareTo(BigDecimal.ZERO) > 0 && v.compareTo(new BigDecimal("100")) <= 0) {
+                return v;
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
+        return null;
+    }
+
+    private static String primeiroTextoNaoVazio(String... parts) {
+        if (parts == null) {
+            return "";
+        }
+        for (String p : parts) {
+            if (p != null && !p.isBlank()) {
+                return p.trim();
+            }
+        }
+        return "";
+    }
+
+    private String handleSimulatePurchaseGoal(JsonNode cmd, Long userId, String sourceText) {
+        limparEstadosMetaPendentes(userId);
         awaitingCupomConfirm.remove(userId);
         awaitingSalaryAutoConfirm.remove(userId);
         awaitingDespesaFixaDia.remove(userId);
@@ -2324,19 +2584,7 @@ public class WhatsAppCommandService {
         draft.descricao = sanitizeDescription(description);
         draft.valorTotal = amount;
         draft.percentualComprometimento = pct;
-        log.info("[META-LOG] Calculando viabilidade para meta '{}' (usuario {})...", draft.descricao, userId);
-
-        Optional<BigDecimal> rendaOpt = metaFinanceiraService.calcularRendaMensalMediaUltimosTresMeses(userId);
-        if (rendaOpt.isEmpty()) {
-            awaitingIncome.put(userId, draft);
-            return msgInfo("Simulação de meta",
-                "Para calcular, preciso da tua *renda mensal média*. Envia só o valor (ex.: *5000*).");
-        }
-        draft.rendaUsada = rendaOpt.get();
-        draft.rendaFromLancamentos = true;
-        String msg = buildMetaSimulationMessage(userId, draft);
-        awaitingSaveConfirm.put(userId, draft);
-        return msg;
+        return iniciarFluxoMetaFromDraft(userId, draft);
     }
 
     private String buildMetaSimulationMessage(Long userId, MetaDraft d) {

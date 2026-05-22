@@ -246,6 +246,15 @@ public class WhatsAppGestaoProativaService {
             found = metaFinanceiraRepository.findByUsuarioIdAndDescricaoContainingIgnoreCase(userId, termoMeta);
         }
         if (found.isEmpty()) {
+            if (parecePedidoCriarMeta(phrase)) {
+                String nome = extrairNomeMetaGestao(phrase);
+                if (nome.isBlank()) {
+                    nome = termoMeta;
+                }
+                return msgInfo("Nova meta",
+                    "Para *criar* a meta *" + nome + "*, envia o *valor total* e o *percentual da renda* "
+                        + "(ex.: *3500 10*), ou repete: *cadastrar meta " + nome + " 3500 com 10% da renda*.");
+            }
             return msgErro("Metas", "Não encontrei metas com *" + termoMeta + "*.");
         }
         List<ItemRef> itens = found.stream()
@@ -887,5 +896,33 @@ public class WhatsAppGestaoProativaService {
     }
 
     private record ItemRef(Long id, String linha) {
+    }
+
+    private static final Pattern CREATE_META_INTENT_GESTAO = Pattern.compile(
+        "(?is)\\b(?:cadastr(?:ar|a)|cri(?:ar|e)|registr(?:ar|a)|adicion(?:ar|a))\\b.*\\b(?:uma\\s+)?(?:nova\\s+)?meta\\b|\\bnova\\s+meta\\b");
+
+    private static boolean parecePedidoCriarMeta(String text) {
+        return text != null && !text.isBlank() && CREATE_META_INTENT_GESTAO.matcher(text).find();
+    }
+
+    private static String extrairNomeMetaGestao(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        Matcher m = Pattern.compile("(?is)\\bnome\\s+([\\p{L}0-9][\\p{L}0-9'\\- ]{0,60}?)(?:\\s+chamada|\\.|,|$)").matcher(text);
+        if (m.find()) {
+            return m.group(1).trim().replaceAll("(?i)\\s+chamada.*$", "").trim();
+        }
+        m = Pattern.compile("(?is)\\bchamada\\s+([\\p{L}0-9][\\p{L}0-9'\\- ]{0,60}?)(?:\\.|,|$)").matcher(text);
+        if (m.find()) {
+            return m.group(1).trim();
+        }
+        m = Pattern.compile("(?is)\\b(?:nova\\s+)?meta\\s+([\\p{L}0-9][\\p{L}0-9'\\- ]{1,60})").matcher(text);
+        if (m.find()) {
+            String s = m.group(1).trim();
+            s = s.replaceAll("(?i)\\s+(com\\s+o\\s+nome|chamada).*$", "").trim();
+            return s;
+        }
+        return "";
     }
 }
