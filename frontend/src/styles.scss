@@ -564,11 +564,18 @@ a {
   }
 }
 
-/* Foco visível — glow esmeralda (botões e links) */
-*:focus-visible {
+/* Foco visível — glow esmeralda (botões e links; campos Material já têm outline próprio) */
+*:focus-visible:not(.mat-mdc-input-element):not(.mat-mdc-select-trigger) {
   outline: 2px solid var(--exec-emerald);
   outline-offset: 2px;
   box-shadow: var(--exec-glow-emerald);
+}
+
+.mat-mdc-form-field input:focus-visible,
+.mat-mdc-form-field textarea:focus-visible,
+.mat-mdc-form-field .mat-mdc-select-trigger:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .mat-mdc-raised-button.mat-primary,
@@ -658,7 +665,19 @@ a {
 .mat-mdc-form-field {
   --mdc-outlined-text-field-outline-color: var(--exec-border);
   --mdc-outlined-text-field-hover-outline-color: var(--exec-emerald);
+  --mdc-outlined-text-field-focus-outline-color: var(--exec-emerald);
   --mdc-outlined-text-field-label-text-color: var(--text-secondary);
+  --mdc-outlined-text-field-focus-label-text-color: var(--exec-emerald);
+
+  /* Evita linha vertical no recorte do label (bordas laterais do notch) */
+  .mdc-notched-outline__notch {
+    border-left: none !important;
+    border-right: none !important;
+  }
+
+  &.mat-focused:not(.mat-form-field-invalid) .mat-mdc-form-field-focus-overlay {
+    background: rgba(45, 212, 191, 0.06);
+  }
 }
 
 /* Layout padrão para formulários Material */
