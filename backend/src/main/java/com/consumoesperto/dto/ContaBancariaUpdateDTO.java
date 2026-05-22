@@ -7,34 +7,22 @@ import lombok.NoArgsConstructor;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
+/**
+ * Atualização de conta — saldo não é editável via API (movimentado por transações).
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ContaBancariaDTO {
-
-    private Long id;
+public class ContaBancariaUpdateDTO {
 
     @NotBlank(message = "Nome da conta é obrigatório")
     @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
     private String nome;
 
     @NotNull(message = "Tipo da conta é obrigatório")
-    private TipoConta tipo;
+    private ContaBancariaDTO.TipoConta tipo;
 
-    /** Saldo inicial no cadastro; após criação reflete movimentações (pode ser negativo — cheque especial). */
-    @NotNull(message = "Saldo é obrigatório")
-    private BigDecimal saldoAtual;
-
-    private Long usuarioId;
     private boolean ativa = true;
     private boolean padrao = false;
-    private LocalDateTime dataCriacao;
-    private LocalDateTime dataAtualizacao;
-
-    public enum TipoConta {
-        CORRENTE, POUPANCA, DINHEIRO
-    }
 }

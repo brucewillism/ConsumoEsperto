@@ -75,9 +75,10 @@
 </div>
 
 <ng-template #formTpl>
-  <h2 mat-dialog-title>{{ editando ? 'Editar conta' : 'Nova conta' }}</h2>
-  <form [formGroup]="form" (ngSubmit)="salvar()">
-    <mat-dialog-content class="form-body">
+  <div class="conta-dialog-wrap">
+    <h2 mat-dialog-title>{{ editando ? 'Editar conta' : 'Nova conta' }}</h2>
+    <form [formGroup]="form" (ngSubmit)="salvar()">
+      <mat-dialog-content class="form-body">
       <mat-form-field appearance="outline" class="full">
         <mat-label>Nome</mat-label>
         <input matInput formControlName="nome" placeholder="Ex.: Nubank, Itaú, Carteira">
@@ -105,5 +106,6 @@
         {{ salvando ? 'Salvando…' : 'Salvar' }}
       </button>
     </mat-dialog-actions>
-  </form>
+    </form>
+  </div>
 </ng-template>

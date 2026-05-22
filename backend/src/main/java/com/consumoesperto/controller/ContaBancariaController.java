@@ -1,6 +1,7 @@
 package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.ContaBancariaDTO;
+import com.consumoesperto.dto.ContaBancariaUpdateDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.ContaBancariaService;
 import com.consumoesperto.service.SaldoService;
@@ -60,7 +61,7 @@ public class ContaBancariaController {
     @Operation(summary = "Atualizar conta bancária")
     public ResponseEntity<ContaBancariaDTO> atualizar(
             @PathVariable Long id,
-            @Valid @RequestBody ContaBancariaDTO dto,
+            @Valid @RequestBody ContaBancariaUpdateDTO dto,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         return ResponseEntity.ok(contaBancariaService.atualizar(id, dto, currentUser.getId()));
     }

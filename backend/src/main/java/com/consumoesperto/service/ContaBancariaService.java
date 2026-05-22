@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ContaBancariaDTO;
+import com.consumoesperto.dto.ContaBancariaUpdateDTO;
 import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Usuario;
@@ -59,7 +60,7 @@ public class ContaBancariaService {
         return converterParaDTO(buscarEntidadeInterno(id, usuarioId));
     }
 
-    public ContaBancariaDTO atualizar(Long id, ContaBancariaDTO dto, Long usuarioId) {
+    public ContaBancariaDTO atualizar(Long id, ContaBancariaUpdateDTO dto, Long usuarioId) {
         ContaBancaria conta = buscarEntidadeInterno(id, usuarioId);
         conta.setNome(dto.getNome().trim());
         conta.setTipo(ContaBancaria.TipoConta.valueOf(dto.getTipo().name()));
@@ -73,6 +74,16 @@ public class ContaBancariaService {
         }
 
         return converterParaDTO(contaBancariaRepository.save(conta));
+    }
+
+    /** Compatível com fluxos WhatsApp que ainda montam {@link ContaBancariaDTO} completo. */
+    public ContaBancariaDTO atualizar(Long id, ContaBancariaDTO dto, Long usuarioId) {
+        ContaBancariaUpdateDTO update = new ContaBancariaUpdateDTO();
+        update.setNome(dto.getNome());
+        update.setTipo(dto.getTipo());
+        update.setAtiva(dto.isAtiva());
+        update.setPadrao(dto.isPadrao());
+        return atualizar(id, update, usuarioId);
     }
 
     public void inativar(Long id, Long usuarioId) {

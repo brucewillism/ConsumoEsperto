@@ -117,16 +117,13 @@ export class ContasBancariasComponent implements OnInit {
     this.contaService.listar(true).subscribe({
       next: (contas) => {
         this.contas = contas ?? [];
+        this.patrimonio = this.contas.reduce((acc, c) => acc + (Number(c.saldoAtual) || 0), 0);
         this.loading = false;
       },
       error: () => {
         this.loading = false;
         this.snackBar.open('Erro ao carregar contas', 'Fechar', { duration: 3000 });
       },
-    });
-    this.contaService.patrimonio().subscribe({
-      next: (v) => (this.patrimonio = Number(v) || 0),
-      error: () => (this.patrimonio = 0),
     });
   }
 
@@ -144,7 +141,12 @@ export class ContasBancariasComponent implements OnInit {
       this.form.reset({ tipo: 'CORRENTE', saldoAtual: 0, padrao: false });
       this.form.get('saldoAtual')?.enable();
     }
-    this.dialog.open(this.formTpl, { width: '480px' });
+    this.dialog.open(this.formTpl, {
+      width: '480px',
+      maxWidth: '96vw',
+      panelClass: 'conta-form-dialog',
+      autoFocus: 'first-titled-element',
+    });
   }
 
   salvar(): void {
@@ -162,7 +164,12 @@ export class ContasBancariasComponent implements OnInit {
     };
 
     const req$ = this.editando?.id
-      ? this.contaService.atualizar(this.editando.id, { ...payload, saldoAtual: this.editando.saldoAtual })
+      ? this.contaService.atualizar(this.editando.id, {
+          nome: payload.nome,
+          tipo: payload.tipo,
+          padrao: payload.padrao,
+          ativa: true,
+        })
       : this.contaService.criar(payload);
 
     req$.subscribe({

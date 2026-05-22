@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { ContaBancaria } from '../models/conta-bancaria.model';
+import { ContaBancaria, ContaBancariaUpdate } from '../models/conta-bancaria.model';
 import { AuthService } from './auth.service';
 import { environment } from '../../environments/environment';
 
@@ -44,7 +44,7 @@ export class ContaBancariaService {
     return this.http.post<ContaBancaria>(this.API_URL, conta, { headers: this.getHeaders() });
   }
 
-  atualizar(id: number, conta: ContaBancaria): Observable<ContaBancaria> {
+  atualizar(id: number, conta: ContaBancariaUpdate): Observable<ContaBancaria> {
     return this.http.put<ContaBancaria>(`${this.API_URL}/${id}`, conta, { headers: this.getHeaders() });
   }
 
