@@ -61,6 +61,8 @@ public class RelatorioFinanceiroService {
     // Repositório para operações de consulta de faturas
     private final FaturaRepository faturaRepository;
 
+    private final SaldoService saldoService;
+
     /**
      * Gera relatório financeiro mensal completo para um usuário
      * 
@@ -108,6 +110,10 @@ public class RelatorioFinanceiroService {
         relatorio.put("totalReceitas", totalReceitas);
         relatorio.put("totalDespesas", totalDespesas);
         relatorio.put("saldo", saldo);
+        if (yearMonth.equals(YearMonth.now())) {
+            relatorio.put("patrimonioLiquido", saldoService.patrimonioLiquido(usuarioId));
+            relatorio.put("saldoProjetadoFimMes", saldoService.calcularProjecaoMes(usuarioId).saldoProjetadoFimMes());
+        }
         relatorio.put("totalFaturas", totalFaturas);
         relatorio.put("faturasVencendo", faturasVencendo.size());
         relatorio.put("percentualEconomia", calcularPercentualEconomia(totalReceitas, totalDespesas));
@@ -186,16 +192,10 @@ public class RelatorioFinanceiroService {
         // Faturas vencendo nos próximos 30 dias (atenção)
         List<Fatura> faturasVencendo30Dias = faturaRepository.findVencidasByUsuarioId(usuarioId, proximos30Dias);
 
-        // Calcular saldo atual do mês
-        LocalDateTime inicioMes = agora.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
-        BigDecimal receitasMes = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, inicioMes, agora);
-        BigDecimal despesasMes = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.DESPESA, inicioMes, agora);
-        receitasMes = receitasMes != null ? receitasMes : BigDecimal.ZERO;
-        despesasMes = despesasMes != null ? despesasMes : BigDecimal.ZERO;
-        BigDecimal saldoMes = receitasMes.subtract(despesasMes);
-        boolean temMovimentoNoMes = receitasMes.compareTo(BigDecimal.ZERO) > 0 || despesasMes.compareTo(BigDecimal.ZERO) > 0;
+        // Saldo disponível: patrimônio em contas + projeção de fechamento
+        SaldoService.ProjecaoMesCaixa projecao = saldoService.calcularProjecaoMes(usuarioId);
+        BigDecimal patrimonio = projecao.patrimonioLiquido();
+        BigDecimal saldoProjetado = projecao.saldoProjetadoFimMes();
 
         // Monta o sistema de alertas com todas as informações críticas
         Map<String, Object> alertas = new HashMap<>();
@@ -203,8 +203,11 @@ public class RelatorioFinanceiroService {
         alertas.put("faturasVencendo30Dias", faturasVencendo30Dias.size());
         alertas.put("totalFaturasVencendo7Dias", calcularTotalFaturas(faturasVencendo7Dias));
         alertas.put("totalFaturasVencendo30Dias", calcularTotalFaturas(faturasVencendo30Dias));
-        alertas.put("saldoMes", saldoMes);
-        alertas.put("saldoBaixo", temMovimentoNoMes && saldoMes.compareTo(BigDecimal.valueOf(1000)) < 0);
+        alertas.put("patrimonioLiquido", patrimonio);
+        alertas.put("saldoMes", patrimonio);
+        alertas.put("saldoProjetadoFimMes", saldoProjetado);
+        alertas.put("saldoBaixo", patrimonio.compareTo(BigDecimal.valueOf(1000)) < 0
+            || saldoProjetado.compareTo(BigDecimal.ZERO) < 0);
         alertas.put("temFaturasVencendo", !faturasVencendo7Dias.isEmpty());
 
         return alertas;

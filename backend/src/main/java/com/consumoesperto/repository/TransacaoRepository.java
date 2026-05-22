@@ -173,6 +173,20 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("fim") LocalDateTime fim
     );
 
+    /** Receitas + despesas/investimentos confirmados em conta (sem fatura) — delta líquido no período. */
+    @Query("SELECT COALESCE(SUM(CASE WHEN t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
+        + "THEN t.valor ELSE -t.valor END), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.fatura IS NULL "
+        + "AND t.tipoTransacao IN (com.consumoesperto.model.Transacao$TipoTransacao.RECEITA, "
+        + "com.consumoesperto.model.Transacao$TipoTransacao.DESPESA, com.consumoesperto.model.Transacao$TipoTransacao.INVESTIMENTO) "
+        + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim")
+    BigDecimal sumMovimentoLiquidoContaConfirmadaPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
     @Query("SELECT COUNT(t) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
         + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim")
@@ -308,5 +322,56 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("usuarioId") Long usuarioId,
         @Param("inicio") LocalDateTime inicio,
         @Param("fim") LocalDateTime fim
+    );
+
+    /** Receitas confirmadas no período excluindo 13º/IR (gap salarial mensal). */
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.origemFiscal IS NULL AND t.excluido = false "
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim")
+    BigDecimal sumReceitaSalarialConfirmadaPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    /** Receitas fiscais confirmadas já creditadas em conta (já compõem patrimônio multicarteira). */
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.origemFiscal IS NOT NULL AND t.contaBancaria IS NOT NULL AND t.fatura IS NULL "
+        + "AND t.excluido = false "
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim")
+    BigDecimal sumReceitaFiscalConfirmadaRefletidaPatrimonioPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    /** Provisões PREVISTO vencidas (fantasmas) — fiscal ou despesa estimada. */
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.excluido = false "
+        + "AND t.dataTransacao < :limite "
+        + "AND (t.origemFiscal IS NOT NULL "
+        + "     OR t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA)")
+    List<Transacao> findProvisoesFantasmas(
+        @Param("usuarioId") Long usuarioId,
+        @Param("limite") LocalDateTime limite
+    );
+
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.excluido = false "
+        + "AND t.dataTransacao < :limite "
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim "
+        + "AND (t.origemFiscal IS NOT NULL "
+        + "     OR t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA)")
+    BigDecimal sumProvisoesFantasmasPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim,
+        @Param("limite") LocalDateTime limite
     );
 }

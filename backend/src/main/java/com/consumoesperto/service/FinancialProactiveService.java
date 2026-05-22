@@ -46,6 +46,7 @@ public class FinancialProactiveService {
     private final HabitDominoService habitDominoService;
     private final SentinelaProtocolService sentinelaProtocolService;
     private final PlanejamentoFiscalService planejamentoFiscalService;
+    private final AmortizacaoSazonalService amortizacaoSazonalService;
 
     @Transactional(readOnly = true)
     public Optional<Categoria> sugerirCategoria(Long usuarioId, String descricao) {
@@ -129,7 +130,7 @@ public class FinancialProactiveService {
         var sentinela = sentinelaProtocolService.calcularMargemSentinela(transacao);
         boolean forecastRuim = forecast.getSaldoProjetado().compareTo(BigDecimal.ZERO) < 0
             || forecast.getProbabilidadeVermelho().compareTo(BigDecimal.valueOf(70)) >= 0;
-        boolean sentinelaRuim = sentinela.saldoMarginal().compareTo(BigDecimal.ZERO) < 0;
+        boolean sentinelaRuim = sentinela.nivelAlerta() != SentinelaProtocolService.NivelAlertaSentinela.OK;
         if (!forecastRuim && !sentinelaRuim) {
             return;
         }
@@ -164,8 +165,11 @@ public class FinancialProactiveService {
     ) {
         if (sentinelaRuim && forecastRuim) {
             return "*Alerta financeiro proativo*\n"
-                + "Margem Sentinela (receitas − recorrências estimadas − esta despesa): *"
-                + BRL.format(sentinela.saldoMarginal()) + "*.\n\n"
+                + "Patrimônio em contas: *" + BRL.format(sentinela.patrimonioLiquido()) + "*.\n"
+                + "Margem Sentinela: *" + BRL.format(sentinela.saldoMarginal()) + "*"
+                + (sentinela.colchaoVirtual().compareTo(BigDecimal.ZERO) > 0
+                    ? " (colchão sazonal: " + BRL.format(sentinela.colchaoVirtual()) + ")" : "")
+                + ".\n\n"
                 + "Projeção de fechamento — saldo: *" + BRL.format(forecast.getSaldoProjetado()) + "*; "
                 + "probabilidade: *" + forecast.getProbabilidadeVermelho() + "%*.\n\n"
                 + forecast.getMensagemIa();
@@ -183,10 +187,34 @@ public class FinancialProactiveService {
 
     private String mensagemFallbackSoSentinela(SentinelaProtocolService.SentinelaMargemDTO sentinela) {
         return "*Alerta Sentinela*\n"
-            + "Margem após este lançamento: *" + BRL.format(sentinela.saldoMarginal()) + "* "
-            + "(receitas " + BRL.format(sentinela.receitasMes()) + " − recorrências estimadas "
-            + BRL.format(sentinela.somaAssinaturasEstimadas()) + " − despesa "
-            + BRL.format(sentinela.novaDespesa()) + ").";
+            + "Patrimônio em contas: *" + BRL.format(sentinela.patrimonioLiquido()) + "*.\n"
+            + "Margem projetada: *" + BRL.format(sentinela.saldoMarginal()) + "*"
+            + (sentinela.colchaoVirtual().compareTo(BigDecimal.ZERO) > 0
+                ? " | Ajustada c/ colchão sazonal: *" + BRL.format(sentinela.saldoMarginalAjustado()) + "*"
+                : "")
+            + ".";
+    }
+
+    /** Alertas proativos de amortização sazonal (Debt Snowball) — chamado por job agendado. */
+    public void notificarAmortizacaoSazonal(Long usuarioId) {
+        if (usuarioId == null) {
+            return;
+        }
+        List<AmortizacaoSazonalService.SimulacaoAntecipacao> ops =
+            amortizacaoSazonalService.oportunidadesParaAlertaProativo(usuarioId);
+        if (ops.isEmpty()) {
+            return;
+        }
+        AmortizacaoSazonalService.SimulacaoAntecipacao melhor = ops.get(0);
+        String msg = "*Oportunidade Debt Snowball*\n"
+            + "Com a entrada prevista (*" + melhor.rotuloReceitaFiscal() + "* — "
+            + BRL.format(melhor.valorReceitaFiscal()) + "), "
+            + "você pode amortizar *" + melhor.descricao() + "*.\n"
+            + "Parcelas restantes: *" + BRL.format(melhor.parcelasRestantesValor()) + "* "
+            + "(" + melhor.parcelasRestantes() + "x).\n"
+            + "Economia estimada de juros: *" + BRL.format(melhor.jurosEconomizadosEstimados()) + "*.\n"
+            + "Sugestão: destinar *" + BRL.format(melhor.valorSugeridoAmortizar()) + "* à quitação.";
+        whatsAppNotificationService.enviarParaUsuario(usuarioId, msg);
     }
 
     private void auditarJuros(Transacao transacao) {

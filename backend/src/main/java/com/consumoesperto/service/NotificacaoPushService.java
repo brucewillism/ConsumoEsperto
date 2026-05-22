@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -290,8 +291,28 @@ public class NotificacaoPushService {
     }
 
     /**
-     * Cria uma nova notificação
+     * Registra alerta in-app de provisão fantasma detectada na auditoria fiscal.
      */
+    public void registrarProvisaoFantasma(Long usuarioId, String descricao, BigDecimal valor, String tipo) {
+        String titulo = "Provisão fantasma detectada";
+        String mensagem = String.format(
+            "A provisão \"%s\" (%s) de R$ %s venceu há mais de %d dias sem materializar. "
+                + "Ela foi excluída da projeção e marcada para conciliação.",
+            descricao != null ? descricao : "sem descrição",
+            tipo,
+            valor != null ? valor.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() : "0,00",
+            ConciliacaoAuditoriaService.DIAS_EXPIRACAO_PROVISAO_FANTASMA
+        );
+        criarNotificacao(usuarioId, titulo, mensagem, "AUDITORIA");
+    }
+
+    /**
+     * Cria uma nova notificação in-app.
+     */
+    public void criarNotificacaoPublica(Long usuarioId, String titulo, String mensagem, String tipo) {
+        criarNotificacao(usuarioId, titulo, mensagem, tipo);
+    }
+
     private void criarNotificacao(Long usuarioId, String titulo, String mensagem, String tipo) {
         try {
             Notificacao notificacao = new Notificacao();

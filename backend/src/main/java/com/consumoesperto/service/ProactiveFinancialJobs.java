@@ -44,6 +44,9 @@ public class ProactiveFinancialJobs {
     private final OpenAiService openAiService;
     private final JarvisProtocolService jarvisProtocolService;
     private final PrevisaoFluxoCaixaService previsaoFluxoCaixaService;
+    private final FinancialProactiveService financialProactiveService;
+    private final ConciliacaoAuditoriaService conciliacaoAuditoriaService;
+    private final UsuarioSessaoContextoService sessaoContextoService;
 
     @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)
@@ -184,6 +187,47 @@ public class ProactiveFinancialJobs {
                     "Fechou o mês dentro de todos os orçamentos");
             }
             whatsAppNotificationService.enviarParaUsuario(usuario.getId(), scoreService.relatorioMensalEconomia(usuario.getId()));
+        }
+    }
+
+    /** Debt Snowball — alertas semanais antes de receitas fiscais (13º/IR). */
+    @Scheduled(cron = "0 0 10 * * MON", zone = "America/Sao_Paulo")
+    @Transactional(readOnly = true)
+    public void alertarAmortizacaoSazonal() {
+        for (Usuario usuario : usuarioRepository.findAll()) {
+            if (usuario.getWhatsappNumero() == null || usuario.getWhatsappNumero().isBlank()) {
+                continue;
+            }
+            try {
+                financialProactiveService.notificarAmortizacaoSazonal(usuario.getId());
+            } catch (Exception e) {
+                log.warn("[AMORTIZACAO] user {}: {}", usuario.getId(), e.getMessage());
+            }
+        }
+    }
+
+    /** Purga provisões fiscais/despesas PREVISTO vencidas — marca AUDITORIA e notifica in-app. */
+    @Scheduled(cron = "0 15 7 * * *", zone = "America/Sao_Paulo")
+    @Transactional
+    public void auditarProvisoesFantasmasDiario() {
+        int total = 0;
+        for (Usuario usuario : usuarioRepository.findAll()) {
+            try {
+                total += conciliacaoAuditoriaService.auditarProvisoesFantasmas(usuario.getId());
+            } catch (Exception e) {
+                log.warn("[AUDITORIA] user {}: {}", usuario.getId(), e.getMessage());
+            }
+        }
+        if (total > 0) {
+            log.info("[AUDITORIA] {} provisões fantasmas marcadas para conciliação.", total);
+        }
+    }
+
+    @Scheduled(cron = "0 0 * * * *", zone = "America/Sao_Paulo")
+    public void limparSessoesContextoExpiradas() {
+        int removidas = sessaoContextoService.limparExpiradas();
+        if (removidas > 0) {
+            log.debug("[SESSAO] {} sessões de contexto expiradas removidas.", removidas);
         }
     }
 

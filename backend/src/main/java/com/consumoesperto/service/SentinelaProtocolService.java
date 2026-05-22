@@ -1,9 +1,7 @@
 package com.consumoesperto.service;
 
-import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
-import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,14 +11,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
-import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Protocolo Sentinela — projeção com padrões de assinatura/recorrência e alerta tático via IA.
+ * Protocolo Sentinela — projeção com patrimônio multicarteira, colchão sazonal e alerta tático via IA.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,40 +25,39 @@ public class SentinelaProtocolService {
 
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
+    public enum NivelAlertaSentinela {
+        OK, MODERADO, CRITICO
+    }
+
     public record SentinelaMargemDTO(
-        BigDecimal receitasMes,
-        BigDecimal somaAssinaturasEstimadas,
+        BigDecimal patrimonioLiquido,
+        BigDecimal receitasPrevistas,
+        BigDecimal despesasPrevistas,
+        BigDecimal compromissosRecorrentes,
         BigDecimal novaDespesa,
-        BigDecimal saldoMarginal
+        BigDecimal colchaoVirtual,
+        BigDecimal saldoMarginal,
+        BigDecimal saldoMarginalAjustado,
+        NivelAlertaSentinela nivelAlerta,
+        String descricaoColchao
     ) {}
 
     private final RecurringExpenseDetectionService recurringExpenseDetectionService;
-    private final RendaConfigService rendaConfigService;
-    private final TransacaoRepository transacaoRepository;
+    private final SaldoService saldoService;
+    private final SentinelaBufferSazonalService sentinelaBufferSazonalService;
     private final OpenAiService openAiService;
     private final JarvisProtocolService jarvisProtocolService;
     private final UsuarioRepository usuarioRepository;
-    private final PlanejamentoFiscalService planejamentoFiscalService;
 
     @Transactional(readOnly = true)
     public SentinelaMargemDTO calcularMargemSentinela(Transacao novaDespesa) {
         if (novaDespesa == null || novaDespesa.getUsuario() == null) {
-            return new SentinelaMargemDTO(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+            return vazio();
         }
         Long usuarioId = novaDespesa.getUsuario().getId();
-        YearMonth ym = YearMonth.now();
-        LocalDateTime inicio = ym.atDay(1).atStartOfDay();
-        LocalDateTime fimMes = ym.atEndOfMonth().atTime(23, 59, 59);
 
-        BigDecimal receitas = rendaConfigService.obterDto(usuarioId)
-            .map(RendaConfigDTO::getSalarioLiquido)
-            .filter(v -> v.compareTo(BigDecimal.ZERO) > 0)
-            .orElseGet(() -> nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fimMes)));
-
-        BigDecimal receitasFiscaisPrevistas =
-            planejamentoFiscalService.somarReceitasPrevistasNoMes(usuarioId, ym);
-        receitas = receitas.add(receitasFiscaisPrevistas).setScale(2, RoundingMode.HALF_UP);
+        SaldoService.ProjecaoMesCaixa projecao = saldoService.calcularProjecaoMes(usuarioId);
+        SentinelaBufferSazonalService.ColchaoSazonal colchao = sentinelaBufferSazonalService.calcularColchao(usuarioId);
 
         List<RecurringExpenseDetectionService.RecurringExpense> padroes =
             recurringExpenseDetectionService.detectar(usuarioId);
@@ -71,36 +66,89 @@ public class SentinelaProtocolService {
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
 
+        BigDecimal receitasPrevistas = projecao.receitasPrevistasConsolidadas();
         BigDecimal nova = nz(novaDespesa.getValor());
-        BigDecimal saldoMarginal = receitas.subtract(somaFixas).subtract(nova).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal deltaNova = saldoService.deltaProjecaoNovaDespesa(novaDespesa);
+
+        BigDecimal saldoMarginal = projecao.patrimonioLiquido()
+            .add(receitasPrevistas)
+            .subtract(projecao.despesasPrevistas())
+            .subtract(somaFixas)
+            .subtract(deltaNova)
+            .setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal colchaoValor = colchao.valorTotal();
+        BigDecimal saldoAjustado = saldoMarginal.add(colchaoValor).setScale(2, RoundingMode.HALF_UP);
+        NivelAlertaSentinela nivel = classificarNivel(saldoMarginal, saldoAjustado);
 
         log.info(
-            "[JARVIS-LOG] Sentinela margem userId={} receitas={} fixasEstimadas={} novaDespesa={} saldoMarginal={}",
-            usuarioId, receitas, somaFixas, nova, saldoMarginal);
-        return new SentinelaMargemDTO(receitas, somaFixas, nova, saldoMarginal);
+            "[JARVIS-LOG] Sentinela margem userId={} patrimonio={} colchao={} saldoMarginal={} ajustado={} nivel={}",
+            usuarioId, projecao.patrimonioLiquido(), colchaoValor, saldoMarginal, saldoAjustado, nivel);
+
+        return new SentinelaMargemDTO(
+            projecao.patrimonioLiquido(),
+            receitasPrevistas,
+            projecao.despesasPrevistas(),
+            somaFixas,
+            nova,
+            colchaoValor,
+            saldoMarginal,
+            saldoAjustado,
+            nivel,
+            colchao.descricaoProxima()
+        );
     }
 
     public Optional<String> gerarAlertaTaticoIfNegativo(Transacao transacao, SentinelaMargemDTO dto) {
-        if (dto.saldoMarginal().compareTo(BigDecimal.ZERO) >= 0) {
+        if (dto.nivelAlerta() == NivelAlertaSentinela.OK) {
             return Optional.empty();
         }
+        if (dto.nivelAlerta() == NivelAlertaSentinela.MODERADO) {
+            String msg = "*Aviso Sentinela (moderado)*\n"
+                + "Margem bruta: *" + BRL.format(dto.saldoMarginal()) + "*, "
+                + "mas o colchão sazonal (*" + BRL.format(dto.colchaoVirtual()) + "*) "
+                + "de receita fiscal prevista cobre a diferença.\n"
+                + (dto.descricaoColchao() != null ? "Próxima entrada: " + dto.descricaoColchao() + ".\n" : "")
+                + "Mantenha disciplina até o crédito cair.";
+            return Optional.of(msg);
+        }
+
         Usuario u = usuarioRepository.findById(transacao.getUsuario().getId()).orElse(null);
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(u);
         String system = persona
-            + "O saldo marginal simplificado (receitas do mês menos padrões fixos/recorrentes estimados menos a despesa recém registada) "
-            + "ficou negativo. Emita um *alerta tático* breve (máximo 5 linhas), calmo e acionável. "
-            + "Indique risco de fecho de mês. Sem alarmismo. Responda via JSON {\"texto\":\"...\"} apenas.";
+            + "O saldo marginal do Protocolo Sentinela ficou negativo mesmo após colchão sazonal. "
+            + "Emita um *alerta tático* breve (máximo 5 linhas), calmo e acionável. "
+            + "Responda via JSON {\"texto\":\"...\"} apenas.";
 
-        String userPrompt = "Receitas consideradas: " + BRL.format(dto.receitasMes()) + ".\n"
-            + "Recorrências/assinaturas estimadas (soma das médias detectadas no histórico): " + BRL.format(dto.somaAssinaturasEstimadas()) + ".\n"
-            + "Valor da nova despesa: " + BRL.format(dto.novaDespesa()) + ".\n"
-            + "Saldo marginal após esta despesa (receitas − fixas estimadas − nova despesa): " + BRL.format(dto.saldoMarginal()) + ".";
+        String userPrompt = "Patrimônio: " + BRL.format(dto.patrimonioLiquido()) + ".\n"
+            + "Colchão sazonal: " + BRL.format(dto.colchaoVirtual()) + ".\n"
+            + "Saldo marginal bruto: " + BRL.format(dto.saldoMarginal()) + ".\n"
+            + "Saldo marginal ajustado: " + BRL.format(dto.saldoMarginalAjustado()) + ".\n"
+            + "Nova despesa: " + BRL.format(dto.novaDespesa()) + ".";
 
-        String fallback = "Com este lançamento, o indicador Sentinela ficou negativo: receitas menos compromissos recorrentes estimados "
-            + "menos esta despesa resultam em " + BRL.format(dto.saldoMarginal()) + ". Sugiro rever gastos variáveis e próximas recorrências.";
+        String fallback = "Mesmo considerando receitas fiscais previstas, o Sentinela projeta saldo negativo: "
+            + BRL.format(dto.saldoMarginalAjustado()) + ". Revise gastos variáveis.";
         String msg = openAiService.gerarTexto(transacao.getUsuario().getId(), system, userPrompt, fallback);
-        log.info("[JARVIS-LOG] Sentinela alerta tático emitido userId={}", transacao.getUsuario().getId());
         return Optional.of(msg != null && !msg.isBlank() ? msg : fallback);
+    }
+
+    private static NivelAlertaSentinela classificarNivel(BigDecimal bruto, BigDecimal ajustado) {
+        if (bruto.compareTo(BigDecimal.ZERO) >= 0) {
+            return NivelAlertaSentinela.OK;
+        }
+        if (ajustado.compareTo(BigDecimal.ZERO) >= 0) {
+            return NivelAlertaSentinela.MODERADO;
+        }
+        return NivelAlertaSentinela.CRITICO;
+    }
+
+    private static SentinelaMargemDTO vazio() {
+        return new SentinelaMargemDTO(
+            BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+            BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+            BigDecimal.ZERO, BigDecimal.ZERO,
+            NivelAlertaSentinela.OK, null
+        );
     }
 
     private static BigDecimal nz(BigDecimal v) {
