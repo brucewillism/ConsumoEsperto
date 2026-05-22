@@ -14,6 +14,7 @@ import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.dto.DespesaFixaRequest;
 import com.consumoesperto.model.CartaoCredito;
+import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.Fatura;
@@ -101,6 +102,7 @@ public class WhatsAppCommandService {
     private final ContaBancariaService contaBancariaService;
     private final CategoriaService categoriaService;
     private final OrcamentoService orcamentoService;
+    private final UsuarioSessaoContextoService sessaoContextoService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -2136,6 +2138,10 @@ public class WhatsAppCommandService {
 
     private Optional<String> tryResolveMetaConversation(Long userId, String sourceText) {
         String text = sourceText != null ? sourceText.trim() : "";
+        Optional<String> comprovante = tryResolveComprovanteConfirmacao(userId, text);
+        if (comprovante.isPresent()) {
+            return comprovante;
+        }
         Optional<String> despesaFixaDia = tryResolveDespesaFixaDiaPendente(userId, text);
         if (despesaFixaDia.isPresent()) {
             return despesaFixaDia;
@@ -2414,6 +2420,145 @@ public class WhatsAppCommandService {
         } catch (Exception e) {
             return extractAmountFromText(text);
         }
+    }
+
+    private Optional<String> tryResolveComprovanteConfirmacao(Long userId, String text) {
+        Optional<Map<String, Object>> ctxOpt = sessaoContextoService.buscarAtiva(
+            userId,
+            UsuarioSessaoContextoService.CANAL_WHATSAPP,
+            UsuarioSessaoContextoService.CHAVE_COMPROVANTE_CONFIRMACAO
+        );
+        if (ctxOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<String, Object> ctx = ctxOpt.get();
+        Long transacaoId = ctx.get("transacaoId") instanceof Number n ? n.longValue() : null;
+        if (transacaoId == null) {
+            sessaoContextoService.remover(
+                userId,
+                UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                UsuarioSessaoContextoService.CHAVE_COMPROVANTE_CONFIRMACAO
+            );
+            return Optional.empty();
+        }
+
+        if (isAffirmativeSaveReply(text)) {
+            sessaoContextoService.remover(
+                userId,
+                UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                UsuarioSessaoContextoService.CHAVE_COMPROVANTE_CONFIRMACAO
+            );
+            try {
+                TransacaoDTO dto = transacaoService.buscarPorId(transacaoId, userId);
+                dto.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
+                TransacaoDTO confirmada = transacaoService.atualizarTransacao(transacaoId, dto, userId);
+                return Optional.of(msgOk("Comprovante confirmado",
+                    BRL.format(confirmada.getValor()) + " em *"
+                        + (confirmada.getCategoriaNome() != null ? confirmada.getCategoriaNome() : "sem categoria")
+                        + "* — saldo atualizado."));
+            } catch (Exception e) {
+                return Optional.of(msgErro(userId, "Comprovante", "Não confirmei: " + e.getMessage()));
+            }
+        }
+
+        if (isNegativeReply(text)) {
+            sessaoContextoService.remover(
+                userId,
+                UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                UsuarioSessaoContextoService.CHAVE_COMPROVANTE_CONFIRMACAO
+            );
+            try {
+                transacaoService.deletarTransacao(transacaoId, userId);
+            } catch (Exception ignored) {
+                // ignore
+            }
+            return Optional.of(msgInfo("Comprovante", "Lançamento cancelado. Nada foi debitado do saldo."));
+        }
+
+        try {
+            JsonNode intent = openAiService.gerarJson(
+                userId,
+                "O usuário responde a uma confirmação de transação pendente (comprovante PIX). "
+                    + "Retorne JSON: {\"corrigir\":true|false,\"cancelar\":true|false,"
+                    + "\"categoriaNome\":\"\",\"valor\":0,\"descricao\":\"\",\"confirmar\":true|false}. "
+                    + "corrigir=true se pedir alteração de categoria, valor ou descrição.",
+                "Contexto: transacaoId=" + transacaoId
+                    + ", valor=" + ctx.get("valor")
+                    + ", categoria=" + ctx.get("categoriaNome")
+                    + ", banco=" + ctx.get("banco")
+                    + "\nMensagem do usuário: " + text
+            );
+
+            if (intent.path("cancelar").asBoolean(false)) {
+                sessaoContextoService.remover(
+                    userId,
+                    UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                    UsuarioSessaoContextoService.CHAVE_COMPROVANTE_CONFIRMACAO
+                );
+                transacaoService.deletarTransacao(transacaoId, userId);
+                return Optional.of(msgInfo("Comprovante", "Lançamento cancelado."));
+            }
+
+            if (intent.path("confirmar").asBoolean(false)) {
+                sessaoContextoService.remover(
+                    userId,
+                    UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                    UsuarioSessaoContextoService.CHAVE_COMPROVANTE_CONFIRMACAO
+                );
+                TransacaoDTO dto = transacaoService.buscarPorId(transacaoId, userId);
+                dto.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
+                TransacaoDTO confirmada = transacaoService.atualizarTransacao(transacaoId, dto, userId);
+                return Optional.of(msgOk("Comprovante confirmado",
+                    BRL.format(confirmada.getValor()) + " registrado."));
+            }
+
+            if (intent.path("corrigir").asBoolean(false)) {
+                TransacaoDTO dto = transacaoService.buscarPorId(transacaoId, userId);
+                String novaCat = intent.path("categoriaNome").asText("").trim();
+                if (!novaCat.isBlank()) {
+                    Categoria cat = categoriaRepository.findByUsuarioIdAndNome(userId, novaCat);
+                    if (cat == null) {
+                        for (Categoria c : categoriaRepository.findByUsuarioIdOrderByNome(userId)) {
+                            if (c.getNome() != null && c.getNome().toLowerCase(Locale.ROOT).contains(novaCat.toLowerCase(Locale.ROOT))) {
+                                cat = c;
+                                break;
+                            }
+                        }
+                    }
+                    if (cat != null) {
+                        dto.setCategoriaId(cat.getId());
+                    }
+                }
+                double novoValor = intent.path("valor").asDouble(0);
+                if (novoValor > 0) {
+                    dto.setValor(BigDecimal.valueOf(novoValor).setScale(2, RoundingMode.HALF_UP));
+                }
+                String novaDesc = intent.path("descricao").asText("").trim();
+                if (!novaDesc.isBlank()) {
+                    dto.setDescricao(novaDesc.length() > 200 ? novaDesc.substring(0, 200) : novaDesc);
+                }
+                TransacaoDTO atualizada = transacaoService.atualizarTransacao(transacaoId, dto, userId);
+                ctx.put("valor", atualizada.getValor());
+                ctx.put("categoriaNome", atualizada.getCategoriaNome() != null ? atualizada.getCategoriaNome() : novaCat);
+                sessaoContextoService.salvar(
+                    userId,
+                    UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                    UsuarioSessaoContextoService.CHAVE_COMPROVANTE_CONFIRMACAO,
+                    ctx,
+                    15
+                );
+                return Optional.of(msgOk("Comprovante ajustado",
+                    "Atualizei para " + BRL.format(atualizada.getValor()) + " em *"
+                        + (atualizada.getCategoriaNome() != null ? atualizada.getCategoriaNome() : "categoria")
+                        + "*. Confirma agora? (sim/não)"));
+            }
+        } catch (Exception e) {
+            log.debug("NLU comprovante indisponível: {}", e.getMessage());
+        }
+
+        return Optional.of(msgInfo("Comprovante pendente",
+            "Responde *sim* para confirmar, *não* para cancelar, ou diga o que alterar "
+                + "(ex.: _altera para Mercado_)."));
     }
 
     private Optional<String> tryResolveDespesaFixaDiaPendente(Long userId, String sourceText) {

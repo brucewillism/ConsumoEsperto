@@ -59,6 +59,7 @@ public class SecurityConfig {
                     "/api/oauth2/**",
                     "/api/integracoes/google-calendar/oauth2/callback",
                     "/api/public/**",
+                    "/api/extrator/webhook",
                     "/api/whatsapp/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
