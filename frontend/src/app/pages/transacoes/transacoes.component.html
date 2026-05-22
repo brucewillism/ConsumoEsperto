@@ -46,21 +46,21 @@
   <h2 mat-dialog-title>{{ transacaoEditando ? 'Editar' : 'Nova' }} Transação</h2>
   <form [formGroup]="transacaoForm" (ngSubmit)="salvarTransacao()">
     <mat-dialog-content class="ce-form-body">
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
+      <mat-form-field appearance="outline" class="full-width">
         <mat-label>Descrição</mat-label>
         <input matInput formControlName="descricao" placeholder="Ex.: Supermercado, Salário">
         <mat-error *ngIf="transacaoForm.get('descricao')?.hasError('required')">Informe a descrição</mat-error>
       </mat-form-field>
 
       <div class="ce-form-row">
-        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-form-field appearance="outline">
           <mat-label>Valor (R$)</mat-label>
           <input matInput type="number" formControlName="valor" placeholder="0,00" step="0.01" min="0.01">
           <mat-error *ngIf="transacaoForm.get('valor')?.hasError('required')">Informe o valor</mat-error>
           <mat-error *ngIf="transacaoForm.get('valor')?.hasError('min')">O valor deve ser maior que zero</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-form-field appearance="outline">
           <mat-label>Tipo</mat-label>
           <mat-select formControlName="tipoTransacao" panelClass="exec-select-panel">
             <mat-option [value]="tipoTransacao.RECEITA">Receita</mat-option>
@@ -71,7 +71,7 @@
       </div>
 
       <div class="ce-form-row">
-        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-form-field appearance="outline">
           <mat-label>Data</mat-label>
           <input matInput [matDatepicker]="dataPicker" formControlName="dataTransacao">
           <mat-datepicker-toggle matSuffix [for]="dataPicker"></mat-datepicker-toggle>
@@ -79,7 +79,7 @@
           <mat-error *ngIf="transacaoForm.get('dataTransacao')?.hasError('required')">Informe a data</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-form-field appearance="outline">
           <mat-label>Categoria</mat-label>
           <mat-select formControlName="categoriaId" panelClass="exec-select-panel">
             <mat-option value="">Sem categoria</mat-option>
@@ -90,7 +90,7 @@
         </mat-form-field>
       </div>
 
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
+      <mat-form-field appearance="outline" class="full-width">
         <mat-label>Conta / carteira</mat-label>
         <mat-select formControlName="contaBancariaId" panelClass="exec-select-panel">
           <mat-option value="">Sem conta (ou padrão automático)</mat-option>

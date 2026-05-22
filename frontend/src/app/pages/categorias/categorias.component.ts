@@ -11,6 +11,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Categoria } from '../../models/categoria.model';
 import { CategoriaService } from '../../services/categoria.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
@@ -81,7 +82,7 @@ export class CategoriasComponent implements OnInit {
     } else {
       this.form.reset({ nome: '', descricao: '', cor: '' });
     }
-    this.dialog.open(this.formTpl, { width: '460px', panelClass: 'ce-form-dialog' });
+    openCeFormDialog(this.dialog, this.formTpl, { width: '460px' });
   }
 
   salvar(): void {

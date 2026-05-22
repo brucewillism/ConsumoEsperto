@@ -15,6 +15,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { CartaoCredito, TipoCartao } from '../../models/cartao-credito.model';
 
@@ -234,7 +235,7 @@ export class CartoesComponent implements OnInit {
     }
     this.cartaoEmEdicao = { ...cartao };
     this.editLimite = cartao.limiteCredito ?? 0;
-    this.dialog.open(this.editCartaoTpl, { width: '400px', panelClass: 'ce-form-dialog' });
+    openCeFormDialog(this.dialog, this.editCartaoTpl, { width: '400px' });
   }
 
   salvarEdicaoCartao(): void {

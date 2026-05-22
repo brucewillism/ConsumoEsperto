@@ -17,6 +17,7 @@ import { ContaBancariaService } from '../../services/conta-bancaria.service';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { TransferenciaService } from '../../services/transferencia.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { TransferenciaModalComponent } from '../../shared/transferencia-modal/transferencia-modal.component';
 import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
 
@@ -142,10 +143,9 @@ export class ContasBancariasComponent implements OnInit {
       this.form.reset({ tipo: 'CORRENTE', saldoAtual: 0, padrao: false });
       this.form.get('saldoAtual')?.enable();
     }
-    this.dialog.open(this.formTpl, {
+    openCeFormDialog(this.dialog, this.formTpl, {
       width: '480px',
-      maxWidth: '96vw',
-      panelClass: ['conta-form-dialog', 'ce-form-dialog'],
+      panelClass: 'conta-form-dialog',
       autoFocus: 'first-titled-element',
     });
   }

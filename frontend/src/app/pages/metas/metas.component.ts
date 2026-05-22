@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import {
   MetaFinanceira,
@@ -203,7 +204,7 @@ export class MetasComponent implements OnInit {
     this.editValor = m.valorTotal;
     this.editPercentual = m.percentualComprometimento;
     this.editPrioridade = m.prioridade;
-    this.dialog.open(this.editMetaTpl, { width: '460px', panelClass: 'ce-form-dialog' });
+    openCeFormDialog(this.dialog, this.editMetaTpl, { width: '460px' });
   }
 
   confirmarEdicaoMeta(): void {

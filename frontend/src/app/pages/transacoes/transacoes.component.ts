@@ -6,6 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { ParcelamentoDeleteChoiceDialogComponent } from '../../shared/parcelamento-delete-choice-dialog.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -127,10 +128,8 @@ export class TransacoesComponent implements OnInit {
       });
     }
 
-    const ref = this.dialog.open(this.dialogoTransacao as any, {
+    const ref = openCeFormDialog(this.dialog, this.dialogoTransacao as any, {
       width: '560px',
-      maxWidth: '96vw',
-      panelClass: 'ce-form-dialog',
       autoFocus: 'first-titled-element'
     });
     ref.afterClosed().subscribe(() => {

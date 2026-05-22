@@ -57,7 +57,7 @@ export const appConfig: ApplicationConfig = {
       useValue: {
         appearance: 'outline',
         floatLabel: 'always',
-        subscriptSizing: 'dynamic'
+        subscriptSizing: 'fixed'
       }
     },
 
