@@ -14,6 +14,7 @@ import { Categoria } from '../../models/categoria.model';
 import { CategoriaService } from '../../services/categoria.service';
 import { ForecastFinanceiro, Orcamento, OrcamentoService } from '../../services/orcamento.service';
 import { ToastService } from '../../services/toast.service';
+import { resolveHttpError } from '../../shared/utils/form.utils';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 
 @Component({
@@ -47,6 +48,7 @@ export class OrcamentosComponent implements OnInit {
   mes = new Date().getMonth() + 1;
   ano = new Date().getFullYear();
   compartilhado = false;
+  formAlerta = '';
 
   constructor(
     private orcamentoService: OrcamentoService,
@@ -79,8 +81,21 @@ export class OrcamentosComponent implements OnInit {
   }
 
   salvar(): void {
-    if (!this.categoriaId || !this.valorLimite || this.valorLimite <= 0) {
-      this.toast.warning('Informe categoria e limite mensal.');
+    this.formAlerta = '';
+    if (!this.categoriaId) {
+      this.formAlerta = 'Selecione uma categoria.';
+      return;
+    }
+    if (!this.valorLimite || this.valorLimite <= 0) {
+      this.formAlerta = 'Informe um limite mensal maior que zero.';
+      return;
+    }
+    if (!this.mes || this.mes < 1 || this.mes > 12) {
+      this.formAlerta = 'Informe um mês válido (1 a 12).';
+      return;
+    }
+    if (!this.ano || this.ano < 2000 || this.ano > 2100) {
+      this.formAlerta = 'Informe um ano válido.';
       return;
     }
     this.salvando = true;
@@ -100,7 +115,7 @@ export class OrcamentosComponent implements OnInit {
         this.carregar();
       },
       error: (e) => {
-        this.toast.error(e?.error?.message || 'Erro ao salvar orçamento.');
+        this.formAlerta = resolveHttpError(e, 'Erro ao salvar orçamento.');
         this.salvando = false;
       }
     });

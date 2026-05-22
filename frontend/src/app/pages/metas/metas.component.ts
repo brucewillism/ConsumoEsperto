@@ -18,6 +18,7 @@ import {
   RendaMediaResponse
 } from '../../services/meta-financeira.service';
 import { ToastService } from '../../services/toast.service';
+import { resolveHttpError } from '../../shared/utils/form.utils';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { forkJoin } from 'rxjs';
 
@@ -51,6 +52,7 @@ export class MetasComponent implements OnInit {
   novaDescricao = '';
   novaValor = 0;
   novaPrioridade = 3;
+  novaMetaAlerta = '';
   percentualSimulador = 15;
   valorSimulado = 3500;
 
@@ -66,6 +68,7 @@ export class MetasComponent implements OnInit {
   editValor = 0;
   editPercentual = 15;
   editPrioridade = 3;
+  editMetaAlerta = '';
 
   constructor(
     private metaService: MetaFinanceiraService,
@@ -152,16 +155,18 @@ export class MetasComponent implements OnInit {
   }
 
   salvarMeta(): void {
+    this.novaMetaAlerta = '';
     if (!this.novaDescricao?.trim()) {
-      this.toast.warning('Informe a descrição da meta.');
+      this.novaMetaAlerta = 'Informe a descrição da meta (ex.: Geladeira, Viagem).';
       return;
     }
     if (!this.novaValor || this.novaValor <= 0) {
-      this.toast.warning('Informe o valor total da meta.');
+      this.novaMetaAlerta = 'Informe o valor total da meta, maior que zero.';
       return;
     }
     if (!this.rendaInfo?.calculadaDeLancamentos) {
-      this.toast.warning('Cadastre receitas nos últimos 3 meses para calcular a meta, ou use o WhatsApp informando sua renda.');
+      this.novaMetaAlerta =
+        'Cadastre receitas nos últimos 3 meses para calcular a meta, ou informe sua renda pelo WhatsApp.';
       return;
     }
     const body: MetaFinanceiraRequest = {
@@ -186,13 +191,14 @@ export class MetasComponent implements OnInit {
       },
       error: (e) => {
         this.salvando = false;
-        this.toast.error(e?.error?.message || 'Erro ao salvar meta.');
+        this.novaMetaAlerta = resolveHttpError(e, 'Erro ao salvar meta.');
       }
     });
   }
 
   abrirEdicao(m: MetaFinanceira): void {
     this.metaEmEdicao = m;
+    this.editMetaAlerta = '';
     this.editDescricao = m.descricao;
     this.editValor = m.valorTotal;
     this.editPercentual = m.percentualComprometimento;
@@ -204,12 +210,17 @@ export class MetasComponent implements OnInit {
     if (!this.metaEmEdicao?.id) {
       return;
     }
+    this.editMetaAlerta = '';
     if (!this.editDescricao?.trim()) {
-      this.toast.warning('Informe a descrição.');
+      this.editMetaAlerta = 'Informe a descrição da meta.';
       return;
     }
     if (!this.editValor || this.editValor <= 0) {
-      this.toast.warning('Valor inválido.');
+      this.editMetaAlerta = 'Informe um valor total maior que zero.';
+      return;
+    }
+    if (this.editPercentual < 1 || this.editPercentual > 100) {
+      this.editMetaAlerta = 'O percentual da renda deve estar entre 1% e 100%.';
       return;
     }
     this.salvando = true;
@@ -233,7 +244,7 @@ export class MetasComponent implements OnInit {
       },
       error: (e) => {
         this.salvando = false;
-        this.toast.error(e?.error?.message || 'Erro ao atualizar meta.');
+        this.editMetaAlerta = resolveHttpError(e, 'Erro ao atualizar meta.');
       }
     });
   }

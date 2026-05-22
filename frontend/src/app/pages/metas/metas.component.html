@@ -51,18 +51,19 @@
   <mat-card class="form-card hud-animate-meta" style="--stagger: 2">
     <mat-card-title>Nova meta</mat-card-title>
     <mat-card-content>
+      <div class="ce-form-alert" *ngIf="novaMetaAlerta">{{ novaMetaAlerta }}</div>
       <div class="form-grid">
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Descrição (ex: Geladeira)</mat-label>
           <input matInput [(ngModel)]="novaDescricao" [disabled]="salvando" />
         </mat-form-field>
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Valor total (R$)</mat-label>
           <input matInput type="number" min="0.01" step="0.01" [(ngModel)]="novaValor" [disabled]="salvando" />
         </mat-form-field>
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Prioridade</mat-label>
-          <mat-select [(ngModel)]="novaPrioridade" [disabled]="salvando">
+          <mat-select [(ngModel)]="novaPrioridade" [disabled]="salvando" panelClass="exec-select-panel">
             <mat-option [value]="1">1 — Baixa</mat-option>
             <mat-option [value]="2">2 — Moderada</mat-option>
             <mat-option [value]="3">3 — Média</mat-option>
@@ -133,22 +134,23 @@
 
 <ng-template #editMetaTpl>
   <h2 mat-dialog-title>Editar meta</h2>
-  <mat-dialog-content class="edit-meta-content">
-    <mat-form-field appearance="outline" class="fullw">
+  <mat-dialog-content class="ce-form-body">
+    <div class="ce-form-alert" *ngIf="editMetaAlerta">{{ editMetaAlerta }}</div>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="fullw">
       <mat-label>Descrição</mat-label>
       <input matInput [(ngModel)]="editDescricao" [disabled]="salvando" />
     </mat-form-field>
-    <mat-form-field appearance="outline" class="fullw">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="fullw">
       <mat-label>Valor total (R$)</mat-label>
       <input matInput type="number" min="0.01" step="0.01" [(ngModel)]="editValor" [disabled]="salvando" />
     </mat-form-field>
-    <mat-form-field appearance="outline" class="fullw">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="fullw">
       <mat-label>% da renda</mat-label>
       <input matInput type="number" min="1" max="100" step="0.5" [(ngModel)]="editPercentual" [disabled]="salvando" />
     </mat-form-field>
-    <mat-form-field appearance="outline" class="fullw">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="fullw">
       <mat-label>Prioridade</mat-label>
-      <mat-select [(ngModel)]="editPrioridade" [disabled]="salvando">
+      <mat-select [(ngModel)]="editPrioridade" [disabled]="salvando" panelClass="exec-select-panel">
         <mat-option [value]="1">1 — Baixa</mat-option>
         <mat-option [value]="2">2 — Moderada</mat-option>
         <mat-option [value]="3">3 — Média</mat-option>

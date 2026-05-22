@@ -1,31 +1,10 @@
 import { HttpInterceptorFn } from '@angular/common/http';
-import { inject } from '@angular/core';
-import { finalize } from 'rxjs/operators';
-import { LoadingService } from '../services/loading.service';
 
-/** Pedidos sem overlay global (login tem spinner no botão; popup Google não precisa de segundo loading). */
-function skipLoadingOverlay(url: string): boolean {
-  return /\/auth\/(login|google|registro|refresh)/i.test(url);
-}
-
-export const LoadingInterceptor: HttpInterceptorFn = (request, next) => {
-  const loadingService = inject(LoadingService);
-
-  if (skipLoadingOverlay(request.url)) {
-    return next(request);
-  }
-
-  loadingService.show();
-
-  let downstream;
-  try {
-    downstream = next(request);
-  } catch (e) {
-    loadingService.hide();
-    throw e;
-  }
-
-  return downstream.pipe(
-    finalize(() => loadingService.hide())
-  );
-};
+/**
+ * Interceptor de loading desativado: o overlay global bloqueava formulários
+ * durante polling, recargas silenciosas e GETs em paralelo sem atualizar a UI.
+ *
+ * Feedback de carregamento fica a cargo de cada tela (flags locais, spinners
+ * nos botões) e do overlay de autenticação (login / Google) via LoadingService.
+ */
+export const LoadingInterceptor: HttpInterceptorFn = (request, next) => next(request);

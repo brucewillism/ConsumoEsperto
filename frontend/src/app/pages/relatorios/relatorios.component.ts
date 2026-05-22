@@ -20,7 +20,6 @@ import { forkJoin } from 'rxjs';
 import { RelatorioService } from '../../services/relatorio.service';
 import { TransacaoService } from '../../services/transacao.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
-import { LoadingService } from '../../services/loading.service';
 import { Transacao, TipoTransacao } from '../../models/transacao.model';
 import {
   TOOLTIP_JUROS_TRANSACAO,
@@ -87,7 +86,6 @@ export class RelatoriosComponent implements OnInit {
     private transacaoService: TransacaoService,
     private cartaoService: CartaoCreditoService,
     private fb: FormBuilder,
-    private loadingService: LoadingService,
     private snackBar: MatSnackBar
   ) {
     const y = new Date().getFullYear();
@@ -100,10 +98,6 @@ export class RelatoriosComponent implements OnInit {
       cartaoId: [''],
       anoIr: [y - 1],
     });
-  }
-
-  get isLoading$() {
-    return this.loadingService.isLoading$;
   }
 
   ngOnInit(): void {

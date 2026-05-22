@@ -661,6 +661,81 @@ a {
   --mdc-outlined-text-field-label-text-color: var(--text-secondary);
 }
 
+/* Layout padrão para formulários Material */
+.ce-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+
+  .mat-mdc-form-field {
+    width: 100%;
+  }
+}
+
+.ce-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0 1rem;
+  align-items: start;
+}
+
+.ce-field-error {
+  display: block;
+  margin: -0.2rem 0 0.65rem 0.875rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--danger-color, #f87171);
+}
+
+.ce-form-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #fecaca;
+}
+
+.ce-form-alert--warning {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+}
+
+.mat-mdc-form-field .mat-mdc-form-field-error {
+  font-size: 0.8125rem;
+}
+
+/* Painéis de select (ex.: lançamento rápido no dashboard) */
+.cdk-overlay-pane:has(.exec-select-panel) {
+  z-index: 4000 !important;
+}
+
+.mat-mdc-select-panel.exec-select-panel {
+  background: #1e293b !important;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
+
+  .mat-mdc-option {
+    color: #e2e8f0;
+  }
+
+  .mat-mdc-option.mdc-list-item--selected:not(.mdc-list-item--disabled) {
+    background: rgba(16, 185, 129, 0.14);
+  }
+
+  .mat-mdc-option:hover:not(.mdc-list-item--disabled) {
+    background: rgba(148, 163, 184, 0.12);
+  }
+}
+
 /* Sem foco: só o rótulo (mat-label) — placeholder não sobrepõe o label */
 .mat-mdc-form-field:not(.mat-focused) .mat-mdc-input-element::placeholder {
   opacity: 0;

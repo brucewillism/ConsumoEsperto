@@ -73,6 +73,7 @@
     <h2>Obrigações fixas</h2>
     <p class="hint">Edite ou adicione retenções mensais para o protocolo Sentinela.</p>
 
+    <div class="ce-form-alert" *ngIf="fixaErro">{{ fixaErro }}</div>
     <div class="fixas-form">
       <label class="fld">
         <span>Descrição</span>

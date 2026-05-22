@@ -23,6 +23,7 @@ import { OrcamentoService, Orcamento } from '../../services/orcamento.service';
 import { FaturaMesGrupo } from './faturas-mes-grupo.model';
 import { PagamentoFaturaModalComponent } from '../../shared/pagamento-fatura-modal/pagamento-fatura-modal.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
+import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-faturas',
@@ -157,8 +158,15 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   adicionarFatura(): void {
-    if (this.novaFaturaForm.valid) {
-      this.acaoEmAndamento = true;
+    if (this.novaFaturaForm.invalid) {
+      markAllControlsTouched(this.novaFaturaForm);
+      this.snackBar.open('Revise os campos destacados antes de salvar a fatura.', 'Fechar', {
+        duration: 3500,
+        panelClass: ['warning-snackbar']
+      });
+      return;
+    }
+    this.acaoEmAndamento = true;
       const formValue = this.novaFaturaForm.value;
       const novaFatura: CreditCardInvoice = {
         id: Date.now().toString(),
@@ -200,13 +208,13 @@ export class FaturasComponent implements OnInit, OnDestroy {
           error: (error) => {
             console.error('Erro ao adicionar fatura:', error);
             this.acaoEmAndamento = false;
-            this.snackBar.open('Erro ao adicionar fatura. Tente novamente.', 'Fechar', {
-            duration: 3000,
-            panelClass: ['error-snackbar']
-          });
+            this.snackBar.open(
+              resolveHttpError(error, 'Erro ao adicionar fatura. Tente novamente.'),
+              'Fechar',
+              { duration: 4000, panelClass: ['error-snackbar'] }
+            );
           }
         });
-    }
   }
 
   editarFatura(fatura: CreditCardInvoice): void {

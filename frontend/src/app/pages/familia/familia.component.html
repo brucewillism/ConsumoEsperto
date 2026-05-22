@@ -10,10 +10,11 @@
 
   <mat-card class="panel" *ngIf="!grupo">
     <h2>Criar grupo familiar</h2>
+    <div class="ce-form-alert" *ngIf="grupoErro">{{ grupoErro }}</div>
     <div class="form-row">
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
         <mat-label>Nome do grupo</mat-label>
-        <input matInput [(ngModel)]="nomeGrupo">
+        <input matInput [(ngModel)]="nomeGrupo" placeholder="Ex.: Orçamento do Casal">
       </mat-form-field>
       <button mat-raised-button color="primary" (click)="criarGrupo()">Criar</button>
     </div>
@@ -28,12 +29,13 @@
     </div>
 
     <h3>Convidar parceiro(a)</h3>
+    <div class="ce-form-alert" *ngIf="conviteErro">{{ conviteErro }}</div>
     <div class="form-row">
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
         <mat-label>E-mail</mat-label>
-        <input matInput [(ngModel)]="conviteEmail">
+        <input matInput type="email" [(ngModel)]="conviteEmail" placeholder="parceiro@email.com">
       </mat-form-field>
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
         <mat-label>WhatsApp</mat-label>
         <input matInput [(ngModel)]="conviteWhatsapp" placeholder="+5511999999999">
       </mat-form-field>

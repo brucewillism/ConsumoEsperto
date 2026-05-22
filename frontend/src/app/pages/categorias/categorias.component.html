@@ -44,25 +44,29 @@
 <ng-template #formTpl>
   <h2 mat-dialog-title>{{ editando ? 'Editar categoria' : 'Nova categoria' }}</h2>
   <form [formGroup]="form" (ngSubmit)="salvar()">
-    <mat-dialog-content class="form-body">
-      <mat-form-field appearance="outline" class="full">
+    <mat-dialog-content class="ce-form-body">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
         <mat-label>Nome</mat-label>
         <input matInput formControlName="nome" placeholder="Ex.: Alimentação, Lazer">
+        <mat-error *ngIf="form.get('nome')?.hasError('required')">Informe o nome da categoria</mat-error>
+        <mat-error *ngIf="form.get('nome')?.hasError('maxlength')">Nome deve ter no máximo 100 caracteres</mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
         <mat-label>Descrição</mat-label>
-        <textarea matInput formControlName="descricao" rows="2"></textarea>
+        <textarea matInput formControlName="descricao" rows="2" placeholder="Opcional"></textarea>
+        <mat-error *ngIf="form.get('descricao')?.hasError('maxlength')">Descrição deve ter no máximo 500 caracteres</mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
         <mat-label>Cor (hex)</mat-label>
         <input matInput formControlName="cor" placeholder="#4CAF50">
+        <mat-hint>Formato: #RRGGBB (opcional)</mat-hint>
       </mat-form-field>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
-      <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || salvando">
+      <button mat-raised-button color="primary" type="submit" [disabled]="salvando">
         {{ salvando ? 'Salvando…' : 'Salvar' }}
       </button>
     </mat-dialog-actions>

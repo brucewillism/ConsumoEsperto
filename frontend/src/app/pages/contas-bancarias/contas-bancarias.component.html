@@ -78,22 +78,27 @@
   <div class="conta-dialog-wrap">
     <h2 mat-dialog-title>{{ editando ? 'Editar conta' : 'Nova conta' }}</h2>
     <form [formGroup]="form" (ngSubmit)="salvar()">
-      <mat-dialog-content class="form-body">
-      <mat-form-field appearance="outline" class="full">
+      <mat-dialog-content class="ce-form-body">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
         <mat-label>Nome</mat-label>
         <input matInput formControlName="nome" placeholder="Ex.: Nubank, Itaú, Carteira">
+        <mat-error *ngIf="form.get('nome')?.hasError('required')">Informe o nome da conta</mat-error>
+        <mat-error *ngIf="form.get('nome')?.hasError('maxlength')">Nome deve ter no máximo 100 caracteres</mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
         <mat-label>Tipo</mat-label>
-        <mat-select formControlName="tipo">
+        <mat-select formControlName="tipo" panelClass="exec-select-panel">
           <mat-option *ngFor="let t of tipos" [value]="t.value">{{ t.label }}</mat-option>
         </mat-select>
+        <mat-error *ngIf="form.get('tipo')?.hasError('required')">Selecione o tipo da conta</mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full" *ngIf="!editando">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full" *ngIf="!editando">
         <mat-label>Saldo inicial</mat-label>
-        <input matInput type="number" formControlName="saldoAtual" step="0.01" min="0">
+        <input matInput type="number" formControlName="saldoAtual" step="0.01">
+        <mat-hint>Pode ser negativo (ex.: cheque especial)</mat-hint>
+        <mat-error *ngIf="form.get('saldoAtual')?.hasError('required')">Informe o saldo inicial</mat-error>
       </mat-form-field>
 
       <p class="hint" *ngIf="editando">O saldo é atualizado automaticamente pelas transações confirmadas.</p>
@@ -102,7 +107,7 @@
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
-      <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || salvando">
+      <button mat-raised-button color="primary" type="submit" [disabled]="salvando">
         {{ salvando ? 'Salvando…' : 'Salvar' }}
       </button>
     </mat-dialog-actions>

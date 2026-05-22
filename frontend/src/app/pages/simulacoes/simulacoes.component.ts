@@ -16,6 +16,8 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatExpansionModule } from '@angular/material/expansion';
 
 import { SimulacaoService } from '../../services/simulacao.service';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-simulacoes',
@@ -35,7 +37,8 @@ import { SimulacaoService } from '../../services/simulacao.service';
     MatTableModule,
     MatChipsModule,
     MatProgressBarModule,
-    MatExpansionModule
+    MatExpansionModule,
+    MatSnackBarModule
   ],
   template: `
     <div class="simulacoes-container">
@@ -537,7 +540,8 @@ export class SimulacoesComponent implements OnInit {
 
   constructor(
     private simulacaoService: SimulacaoService,
-    private fb: FormBuilder
+    private fb: FormBuilder,
+    private snackBar: MatSnackBar
   ) {
     this.formCartao = this.fb.group({
       cartaoId: [''],
@@ -570,24 +574,50 @@ export class SimulacoesComponent implements OnInit {
   }
 
   simularInvestimento(): void {
-    if (this.formInvestimento.valid) {
-      this.simulacaoService.simularInvestimento(this.formInvestimento.value).subscribe({
-        next: (resultado) => this.resultadoInvestimento = resultado,
-        error: () => this.resultadoInvestimento = null
+    if (this.formInvestimento.invalid) {
+      markAllControlsTouched(this.formInvestimento);
+      this.snackBar.open('Preencha os campos obrigatórios da simulação de investimento.', 'Fechar', {
+        duration: 3500,
+        panelClass: ['warning-snackbar']
       });
+      return;
     }
+    this.simulacaoService.simularInvestimento(this.formInvestimento.value).subscribe({
+      next: (resultado) => (this.resultadoInvestimento = resultado),
+      error: (err) => {
+        this.resultadoInvestimento = null;
+        this.snackBar.open(
+          resolveHttpError(err, 'Não foi possível simular o investimento.'),
+          'Fechar',
+          { duration: 4000, panelClass: ['error-snackbar'] }
+        );
+      }
+    });
   }
 
   simularFinanciamento(): void {
-    if (this.formFinanciamento.valid) {
-      const payload = {
-        ...this.formFinanciamento.value,
-        taxaJuros: this.formFinanciamento.value.taxaJurosFinanciamento
-      };
-      this.simulacaoService.simularFinanciamento(payload).subscribe({
-        next: (resultado) => this.resultadoFinanciamento = resultado,
-        error: () => this.resultadoFinanciamento = null
+    if (this.formFinanciamento.invalid) {
+      markAllControlsTouched(this.formFinanciamento);
+      this.snackBar.open('Preencha os campos obrigatórios da simulação de financiamento.', 'Fechar', {
+        duration: 3500,
+        panelClass: ['warning-snackbar']
       });
+      return;
     }
+    const payload = {
+      ...this.formFinanciamento.value,
+      taxaJuros: this.formFinanciamento.value.taxaJurosFinanciamento
+    };
+    this.simulacaoService.simularFinanciamento(payload).subscribe({
+      next: (resultado) => (this.resultadoFinanciamento = resultado),
+      error: (err) => {
+        this.resultadoFinanciamento = null;
+        this.snackBar.open(
+          resolveHttpError(err, 'Não foi possível simular o financiamento.'),
+          'Fechar',
+          { duration: 4000, panelClass: ['error-snackbar'] }
+        );
+      }
+    });
   }
 }

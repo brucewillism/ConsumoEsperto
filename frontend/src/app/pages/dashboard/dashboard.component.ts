@@ -5,6 +5,12 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { BaseChartDirective } from 'ng2-charts';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  markAllControlsTouched,
+  parseValorBrasileiro,
+  resolveHttpError,
+  valorMonetarioBrValidator
+} from '../../shared/utils/form.utils';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -42,7 +48,6 @@ import { DateFormatPipe } from '../../pipes/date-format.pipe';
 import { forkJoin, catchError, of, fromEvent, timer, Subscription, filter, finalize, Observable } from 'rxjs';
 import { timeout } from 'rxjs/operators';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
-import { LoadingService } from '../../services/loading.service';
 import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
@@ -320,7 +325,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private cartaoCreditoService: CartaoCreditoService,
     private relatorioService: RelatorioService,
     private rendaConfigService: RendaConfigService,
-    private loadingService: LoadingService,
     private financaAlteracao: FinancaAlteracaoService,
     private categoriaService: CategoriaService,
     private dashboardService: DashboardService,
@@ -337,7 +341,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ) {
     this.quickTransacaoForm = this.fb.group({
       descricao: ['', Validators.required],
-      valor: ['', Validators.required],
+      valor: ['', [Validators.required, valorMonetarioBrValidator]],
       tipoTransacao: [TipoTransacao.DESPESA, Validators.required],
       categoriaId: [''],
       cartaoCreditoId: ['']
@@ -348,10 +352,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .subscribe(() => this.loadDashboardData({ silent: true }));
   }
 
-  get isLoading$() {
-    return this.loadingService.isLoading$;
-  }
-  
   /**
    * Método executado na inicialização do componente
    * Carrega todos os dados necessários para o dashboard
@@ -569,16 +569,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   salvarLancamentoRapido(): void {
-    if (this.quickTransacaoForm.invalid || this.salvandoQuickTransacao) {
+    if (this.salvandoQuickTransacao) {
+      return;
+    }
+    if (this.quickTransacaoForm.invalid) {
+      markAllControlsTouched(this.quickTransacaoForm);
       return;
     }
     const raw = this.quickTransacaoForm.getRawValue();
-    const valorNum = this.parseValorBrasileiro(raw.valor);
+    const valorNum = parseValorBrasileiro(raw.valor);
     if (valorNum == null || valorNum <= 0) {
-      this.snackBar.open('Informe um valor válido.', 'Fechar', {
-        duration: 3000,
-        panelClass: ['warning-snackbar']
-      });
+      this.quickTransacaoForm.get('valor')?.setErrors({ valorInvalido: true });
+      this.quickTransacaoForm.get('valor')?.markAsTouched();
       return;
     }
 
@@ -613,30 +615,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
         });
         this.financaAlteracao.notificar();
       },
-      error: () => {
+      error: (err) => {
         this.salvandoQuickTransacao = false;
-        this.snackBar.open('Não foi possível salvar. Tente novamente.', 'Fechar', {
-          duration: 4000,
-          panelClass: ['error-snackbar']
-        });
+        this.snackBar.open(
+          resolveHttpError(err, 'Não foi possível salvar o lançamento. Tente novamente.'),
+          'Fechar',
+          { duration: 4000, panelClass: ['error-snackbar'] }
+        );
       }
     });
   }
 
   private parseValorBrasileiro(v: unknown): number | null {
-    if (v == null) {
-      return null;
-    }
-    if (typeof v === 'number' && !Number.isNaN(v)) {
-      return v;
-    }
-    const s = String(v).trim().replace(/\s/g, '').replace(/R\$\s?/i, '');
-    if (!s) {
-      return null;
-    }
-    const normalized = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
-    const n = parseFloat(normalized);
-    return Number.isFinite(n) ? n : null;
+    return parseValorBrasileiro(v);
   }
   
   /**

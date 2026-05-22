@@ -45,38 +45,43 @@
 <ng-template #dialogoTransacao>
   <h2 mat-dialog-title>{{ transacaoEditando ? 'Editar' : 'Nova' }} Transação</h2>
   <form [formGroup]="transacaoForm" (ngSubmit)="salvarTransacao()">
-    <mat-dialog-content>
-      <mat-form-field appearance="outline" class="full-width">
+    <mat-dialog-content class="ce-form-body">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
         <mat-label>Descrição</mat-label>
-        <input matInput formControlName="descricao" placeholder="Digite a descrição">
+        <input matInput formControlName="descricao" placeholder="Ex.: Supermercado, Salário">
+        <mat-error *ngIf="transacaoForm.get('descricao')?.hasError('required')">Informe a descrição</mat-error>
       </mat-form-field>
 
-      <div class="form-row">
-        <mat-form-field appearance="outline">
-          <mat-label>Valor</mat-label>
-          <input matInput type="number" formControlName="valor" placeholder="0,00" step="0.01">
+      <div class="ce-form-row">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Valor (R$)</mat-label>
+          <input matInput type="number" formControlName="valor" placeholder="0,00" step="0.01" min="0.01">
+          <mat-error *ngIf="transacaoForm.get('valor')?.hasError('required')">Informe o valor</mat-error>
+          <mat-error *ngIf="transacaoForm.get('valor')?.hasError('min')">O valor deve ser maior que zero</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Tipo</mat-label>
-          <mat-select formControlName="tipoTransacao">
+          <mat-select formControlName="tipoTransacao" panelClass="exec-select-panel">
             <mat-option [value]="tipoTransacao.RECEITA">Receita</mat-option>
             <mat-option [value]="tipoTransacao.DESPESA">Despesa</mat-option>
           </mat-select>
+          <mat-error *ngIf="transacaoForm.get('tipoTransacao')?.hasError('required')">Selecione o tipo</mat-error>
         </mat-form-field>
       </div>
 
-      <div class="form-row">
-        <mat-form-field appearance="outline">
+      <div class="ce-form-row">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Data</mat-label>
           <input matInput [matDatepicker]="dataPicker" formControlName="dataTransacao">
           <mat-datepicker-toggle matSuffix [for]="dataPicker"></mat-datepicker-toggle>
           <mat-datepicker #dataPicker></mat-datepicker>
+          <mat-error *ngIf="transacaoForm.get('dataTransacao')?.hasError('required')">Informe a data</mat-error>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Categoria</mat-label>
-          <mat-select formControlName="categoriaId">
+          <mat-select formControlName="categoriaId" panelClass="exec-select-panel">
             <mat-option value="">Sem categoria</mat-option>
             <mat-option *ngFor="let categoria of categorias" [value]="categoria.id">
               {{ categoria.nome }}
@@ -85,9 +90,9 @@
         </mat-form-field>
       </div>
 
-      <mat-form-field appearance="outline" class="full-width">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
         <mat-label>Conta / carteira</mat-label>
-        <mat-select formControlName="contaBancariaId">
+        <mat-select formControlName="contaBancariaId" panelClass="exec-select-panel">
           <mat-option value="">Sem conta (ou padrão automático)</mat-option>
           <mat-option *ngFor="let conta of contas" [value]="conta.id">
             {{ conta.nome }} — {{ conta.saldoAtual | currency:'BRL':'symbol':'1.2-2':'pt' }}
@@ -98,7 +103,7 @@
 
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close [disabled]="salvandoTransacao">Cancelar</button>
-      <button mat-raised-button color="primary" type="submit" [disabled]="transacaoForm.invalid || salvandoTransacao">
+      <button mat-raised-button color="primary" type="submit" [disabled]="salvandoTransacao">
         {{ salvandoTransacao ? 'Salvando...' : (transacaoEditando ? 'Atualizar' : 'Salvar') }}
       </button>
     </mat-dialog-actions>

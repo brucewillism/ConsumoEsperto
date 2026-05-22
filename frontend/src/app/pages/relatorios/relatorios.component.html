@@ -60,7 +60,7 @@
             </mat-select>
           </mat-form-field>
 
-          <button mat-raised-button color="primary" type="submit" [disabled]="carregando || (isLoading$ | async)">
+          <button mat-raised-button color="primary" type="submit" [disabled]="carregando">
             <mat-icon>refresh</mat-icon>
             {{ carregando ? 'Gerando...' : 'Gerar Relatório' }}
           </button>
@@ -68,7 +68,7 @@
             mat-stroked-button
             color="accent"
             type="button"
-            [disabled]="exportandoIr || (isLoading$ | async)"
+            [disabled]="exportandoIr"
             (click)="baixarRelatorioIr()">
             <mat-icon>picture_as_pdf</mat-icon>
             {{ exportandoIr ? 'Gerando PDF...' : 'Gerar Relatório para IR (PDF)' }}

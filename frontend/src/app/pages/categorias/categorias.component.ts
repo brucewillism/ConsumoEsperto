@@ -11,6 +11,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Categoria } from '../../models/categoria.model';
 import { CategoriaService } from '../../services/categoria.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-categorias',
@@ -85,6 +86,7 @@ export class CategoriasComponent implements OnInit {
 
   salvar(): void {
     if (this.form.invalid) {
+      markAllControlsTouched(this.form);
       return;
     }
     this.salvando = true;
@@ -103,8 +105,7 @@ export class CategoriasComponent implements OnInit {
       },
       error: (err) => {
         this.salvando = false;
-        const msg = err?.error?.message || 'Erro ao salvar categoria';
-        this.snackBar.open(msg, 'Fechar', { duration: 4000 });
+        this.snackBar.open(resolveHttpError(err, 'Erro ao salvar categoria'), 'Fechar', { duration: 4000 });
       },
     });
   }

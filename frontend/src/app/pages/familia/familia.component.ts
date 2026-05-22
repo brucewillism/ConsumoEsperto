@@ -11,6 +11,7 @@ import { catchError } from 'rxjs/operators';
 import { FamiliaService, GrupoFamiliar, GrupoFamiliarMembro } from '../../services/familia.service';
 import { Orcamento } from '../../services/orcamento.service';
 import { ToastService } from '../../services/toast.service';
+import { isEmailValido, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-familia',
@@ -28,6 +29,8 @@ export class FamiliaComponent implements OnInit {
   conviteWhatsapp = '';
   carregando = true;
   conviteVisual = '';
+  grupoErro = '';
+  conviteErro = '';
 
   constructor(private familiaService: FamiliaService, private toast: ToastService) {}
 
@@ -50,17 +53,36 @@ export class FamiliaComponent implements OnInit {
   }
 
   criarGrupo(): void {
-    this.familiaService.criar(this.nomeGrupo || 'Família').subscribe({
+    this.grupoErro = '';
+    const nome = (this.nomeGrupo || '').trim();
+    if (!nome) {
+      this.grupoErro = 'Informe um nome para o grupo familiar.';
+      return;
+    }
+    this.familiaService.criar(nome).subscribe({
       next: (grupo) => {
         this.grupo = grupo;
         this.toast.success('Grupo familiar criado.');
         this.carregar();
       },
-      error: (e) => this.toast.error(e?.error?.message || 'Erro ao criar grupo.')
+      error: (e) => {
+        this.grupoErro = resolveHttpError(e, 'Erro ao criar grupo.');
+      }
     });
   }
 
   convidar(): void {
+    this.conviteErro = '';
+    const email = (this.conviteEmail || '').trim();
+    const whatsapp = (this.conviteWhatsapp || '').trim();
+    if (!email && !whatsapp) {
+      this.conviteErro = 'Informe o e-mail ou o WhatsApp do convidado.';
+      return;
+    }
+    if (email && !isEmailValido(email)) {
+      this.conviteErro = 'Digite um e-mail válido.';
+      return;
+    }
     this.familiaService.convidar(this.conviteEmail, this.conviteWhatsapp).subscribe({
       next: () => {
         this.toast.success('Convite enviado.');
@@ -69,7 +91,9 @@ export class FamiliaComponent implements OnInit {
         this.conviteWhatsapp = '';
         this.carregar();
       },
-      error: (e) => this.toast.error(e?.error?.message || 'Erro ao enviar convite.')
+      error: (e) => {
+        this.conviteErro = resolveHttpError(e, 'Erro ao enviar convite.');
+      }
     });
   }
 

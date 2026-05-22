@@ -1915,6 +1915,7 @@ $neon-amber: #ffc107;
   border-radius: 1rem;
   padding: 1.25rem 1.5rem;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  overflow: visible;
 }
 
 .quick-lancamento-title {
@@ -1932,22 +1933,39 @@ $neon-amber: #ffc107;
 }
 
 .quick-lancamento-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1rem;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr) auto;
+  gap: 0.65rem 0.85rem;
+  align-items: start;
 }
 
 .exec-field {
-  min-width: 140px;
-  flex: 1 1 160px;
+  width: 100%;
+  min-width: 0;
 }
 
-.exec-field-grow {
-  flex: 2 1 220px;
+.exec-field-desc { grid-column: 1; grid-row: 1; }
+.exec-field-valor { grid-column: 2; grid-row: 1; }
+.exec-field-tipo { grid-column: 3; grid-row: 1; }
+.exec-field-categoria { grid-column: 4; grid-row: 1; }
+.exec-field-cartao { grid-column: 1 / span 2; grid-row: 2; }
+
+.exec-submit-wrap {
+  grid-column: 5;
+  grid-row: 1;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
 }
 
-:host ::ng-deep .exec-field.mat-mdc-form-field {
+.quick-lancamento-form:has(.exec-field-cartao) .exec-submit-wrap {
+  grid-column: 5;
+  grid-row: 2;
+}
+
+:host ::ng-deep .quick-lancamento-form .exec-field.mat-mdc-form-field {
+  width: 100%;
+
   .mat-mdc-text-field-wrapper {
     background: rgba(15, 23, 42, 0.88);
   }
@@ -1976,10 +1994,29 @@ $neon-amber: #ffc107;
 }
 
 .exec-submit {
-  flex: 0 0 auto;
-  align-self: flex-end;
   min-height: 48px;
+  min-width: 108px;
   font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .quick-lancamento-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .exec-field-desc { grid-column: 1 / -1; grid-row: 1; }
+  .exec-field-valor { grid-column: 1; grid-row: 2; }
+  .exec-field-tipo { grid-column: 2; grid-row: 2; }
+  .exec-field-categoria { grid-column: 1 / -1; grid-row: 3; }
+  .exec-field-cartao { grid-column: 1 / -1; grid-row: 4; }
+  .exec-submit-wrap {
+    grid-column: 1 / -1;
+    grid-row: 5;
+  }
+
+  .quick-lancamento-form:has(.exec-field-cartao) .exec-submit-wrap {
+    grid-row: 5;
+  }
 }
 
 .btn-inline-spinner {

@@ -239,9 +239,3 @@
   size="lg"
   [message]="authFlowOverlay.message">
 </app-loading-indicator>
-
-<app-loading-indicator
-  *ngIf="!authFlowOverlay.active && (isLoading$ | async) && !isLoginPage"
-  mode="overlay"
-  size="lg">
-</app-loading-indicator>

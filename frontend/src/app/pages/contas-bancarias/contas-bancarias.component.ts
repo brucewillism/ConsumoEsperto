@@ -18,6 +18,7 @@ import { FinancaAlteracaoService } from '../../services/financa-alteracao.servic
 import { TransferenciaService } from '../../services/transferencia.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { TransferenciaModalComponent } from '../../shared/transferencia-modal/transferencia-modal.component';
+import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-contas-bancarias',
@@ -63,7 +64,7 @@ export class ContasBancariasComponent implements OnInit {
     this.form = this.fb.group({
       nome: ['', [Validators.required, Validators.maxLength(100)]],
       tipo: ['CORRENTE', Validators.required],
-      saldoAtual: [0, [Validators.required, Validators.min(0)]],
+      saldoAtual: [0, Validators.required],
       padrao: [false],
     });
   }
@@ -151,6 +152,7 @@ export class ContasBancariasComponent implements OnInit {
 
   salvar(): void {
     if (this.form.invalid) {
+      markAllControlsTouched(this.form);
       return;
     }
     this.salvando = true;
@@ -182,8 +184,7 @@ export class ContasBancariasComponent implements OnInit {
       },
       error: (err) => {
         this.salvando = false;
-        const msg = err?.error?.message || 'Erro ao salvar conta';
-        this.snackBar.open(msg, 'Fechar', { duration: 4000 });
+        this.snackBar.open(resolveHttpError(err, 'Erro ao salvar conta'), 'Fechar', { duration: 4000 });
       },
     });
   }

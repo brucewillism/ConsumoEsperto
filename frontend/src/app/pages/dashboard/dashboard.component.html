@@ -11,7 +11,7 @@
         type="button"
         class="btn btn-hud btn-hud-ghost memoria-nucleo-btn"
         (click)="alternarPainelMemoria()"
-        [disabled]="isLoading || (isLoading$ | async) === true"
+        [disabled]="isLoading"
         matTooltip="Recordações táticas que o núcleo de memória usa nas decisões (histórico semântico).">
         <i class="fas fa-brain" aria-hidden="true"></i>
         <span class="memoria-btn-text">Memória</span>
@@ -21,7 +21,7 @@
         class="btn btn-hud btn-hud-ghost simulation-mode-btn"
         [class.simulation-mode-on]="modoSimulacao"
         (click)="clicarModoSimulacao()"
-        [disabled]="isLoading || (isLoading$ | async) === true"
+        [disabled]="isLoading"
         role="switch"
         [attr.aria-checked]="modoSimulacao"
         matTooltip="Ligado: o painel mistura projeção real com os cenários “E se…” das simulações. Desligado: apenas o fluxo real.">
@@ -29,15 +29,15 @@
         <span class="simulation-mode-text">Simulação</span>
         <span class="simulation-mode-badge" *ngIf="modoSimulacao">on</span>
       </button>
-      <button class="btn btn-hud btn-hud-ghost" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading || (isLoading$ | async)">
+      <button class="btn btn-hud btn-hud-ghost" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading">
         <i class="fas fa-sync-alt" [class.fa-spin]="isLoading"></i>
         Atualizar
       </button>
-      <button class="btn btn-hud btn-hud-primary" routerLink="/transacoes" [disabled]="isLoading$ | async">
+      <button class="btn btn-hud btn-hud-primary" routerLink="/transacoes">
         <i class="fas fa-plus"></i>
         Nova Transação
       </button>
-      <button class="btn btn-hud btn-hud-ghost" routerLink="/relatorios" [disabled]="isLoading$ | async">
+      <button class="btn btn-hud btn-hud-ghost" routerLink="/relatorios">
         <i class="fas fa-chart-bar"></i>
         Relatórios
       </button>
@@ -105,46 +105,56 @@
     </div>
   </section>
 
-  <!-- Conteúdo oculto enquanto carrega; overlay global (LoadingInterceptor) trata o indicador visual. -->
+  <!-- Conteúdo oculto no carregamento inicial; recargas silenciosas não bloqueiam a tela. -->
   <section class="quick-lancamento" *ngIf="!errorMessage && !isLoading">
     <div class="quick-lancamento-card">
       <h3 class="quick-lancamento-title">Novo lançamento</h3>
       <p class="quick-lancamento-hint">Despesas no cartão usam a fatura aberta; débito/dinheiro impactam o saldo em conta.</p>
       <form [formGroup]="quickTransacaoForm" (ngSubmit)="salvarLancamentoRapido()" class="quick-lancamento-form">
-        <mat-form-field appearance="outline" class="exec-field exec-field-grow">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="exec-field exec-field-desc">
           <mat-label>Descrição</mat-label>
           <input matInput formControlName="descricao" autocomplete="off" />
+          <mat-error *ngIf="quickTransacaoForm.get('descricao')?.hasError('required')">Informe a descrição</mat-error>
         </mat-form-field>
-        <mat-form-field appearance="outline" class="exec-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="exec-field exec-field-valor">
           <mat-label>Valor (R$)</mat-label>
-          <input matInput type="text" inputmode="decimal" formControlName="valor" />
+          <input matInput type="text" inputmode="decimal" formControlName="valor" placeholder="0,00" />
+          <mat-error *ngIf="quickTransacaoForm.get('valor')?.hasError('required')">Informe o valor</mat-error>
+          <mat-error *ngIf="quickTransacaoForm.get('valor')?.hasError('valorInvalido')">Digite um valor maior que zero</mat-error>
         </mat-form-field>
-        <mat-form-field appearance="outline" class="exec-field">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="exec-field exec-field-tipo">
           <mat-label>Tipo</mat-label>
-          <mat-select formControlName="tipoTransacao">
+          <mat-select formControlName="tipoTransacao" panelClass="exec-select-panel">
             <mat-option [value]="tipoTransacaoEnum.DESPESA">Despesa</mat-option>
             <mat-option [value]="tipoTransacaoEnum.RECEITA">Receita</mat-option>
             <mat-option [value]="tipoTransacaoEnum.INVESTIMENTO">Investimento</mat-option>
           </mat-select>
+          <mat-error *ngIf="quickTransacaoForm.get('tipoTransacao')?.hasError('required')">Selecione o tipo</mat-error>
         </mat-form-field>
-        <mat-form-field appearance="outline" class="exec-field exec-field-grow">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="exec-field exec-field-categoria">
           <mat-label>Categoria</mat-label>
-          <mat-select formControlName="categoriaId">
+          <mat-select formControlName="categoriaId" panelClass="exec-select-panel">
             <mat-option value="">Sem categoria</mat-option>
             <mat-option *ngFor="let cat of categorias" [value]="cat.id">{{ cat.nome }}</mat-option>
           </mat-select>
         </mat-form-field>
-        <mat-form-field appearance="outline" class="exec-field exec-field-grow" *ngIf="quickTransacaoForm.get('tipoTransacao')?.value === tipoTransacaoEnum.DESPESA">
+        <mat-form-field
+          appearance="outline"
+          subscriptSizing="dynamic"
+          class="exec-field exec-field-cartao"
+          *ngIf="quickTransacaoForm.get('tipoTransacao')?.value === tipoTransacaoEnum.DESPESA">
           <mat-label>Cartão de crédito</mat-label>
-          <mat-select formControlName="cartaoCreditoId">
+          <mat-select formControlName="cartaoCreditoId" panelClass="exec-select-panel">
             <mat-option value="">Nenhum (Débito/Dinheiro)</mat-option>
             <mat-option *ngFor="let c of cartoesFormulario" [value]="c.id">{{ c.banco }} · {{ c.nome }}</mat-option>
           </mat-select>
         </mat-form-field>
-        <button mat-flat-button color="primary" type="submit" class="exec-submit" [disabled]="quickTransacaoForm.invalid || salvandoQuickTransacao">
-          <mat-spinner *ngIf="salvandoQuickTransacao" diameter="18" class="btn-inline-spinner"></mat-spinner>
-          <span *ngIf="!salvandoQuickTransacao">Salvar</span>
-        </button>
+        <div class="exec-submit-wrap">
+          <button mat-flat-button color="primary" type="submit" class="exec-submit" [disabled]="quickTransacaoForm.invalid || salvandoQuickTransacao">
+            <mat-spinner *ngIf="salvandoQuickTransacao" diameter="18" class="btn-inline-spinner"></mat-spinner>
+            <span *ngIf="!salvandoQuickTransacao">Salvar</span>
+          </button>
+        </div>
       </form>
     </div>
   </section>
@@ -156,7 +166,7 @@
       <div class="error-content">
         <i class="fas fa-exclamation-triangle"></i>
         <p>{{ errorMessage }}</p>
-        <button class="btn btn-primary" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading$ | async">
+        <button class="btn btn-primary" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading">
           <i class="fas fa-refresh"></i>
           Tentar Novamente
         </button>

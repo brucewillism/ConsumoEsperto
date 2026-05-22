@@ -8,6 +8,7 @@ import { ToastService } from '../../services/toast.service';
 import { PreferenciaTratamentoJarvis, Usuario } from '../../models/usuario.model';
 import { GoogleCalendarLinkService } from '../../services/google-calendar-link.service';
 import { DespesaFixa, DespesasFixaService } from '../../services/despesas-fixa.service';
+import { resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-perfil',
@@ -27,6 +28,7 @@ export class PerfilComponent implements OnInit {
   modalFixasAberto = false;
   editandoFixa: DespesaFixa | null = null;
   formFixa: DespesaFixa = this.novaFixaVazia();
+  fixaErro = '';
 
   readonly opcoes: { value: PreferenciaTratamentoJarvis; label: string; hint?: string }[] = [
     {
@@ -129,6 +131,7 @@ export class PerfilComponent implements OnInit {
   abrirModalFixas(): void {
     this.editandoFixa = null;
     this.formFixa = this.novaFixaVazia();
+    this.fixaErro = '';
     this.modalFixasAberto = true;
   }
 
@@ -139,6 +142,7 @@ export class PerfilComponent implements OnInit {
 
   editarFixa(f: DespesaFixa): void {
     this.editandoFixa = f;
+    this.fixaErro = '';
     this.formFixa = {
       id: f.id,
       descricao: f.descricao,
@@ -150,12 +154,21 @@ export class PerfilComponent implements OnInit {
   }
 
   salvarFixa(): void {
-    if (!this.formFixa.descricao?.trim() || !this.formFixa.valor || this.formFixa.valor <= 0) {
-      this.toastService.error('Preencha descrição e valor válidos.');
+    this.fixaErro = '';
+    if (!this.formFixa.descricao?.trim()) {
+      this.fixaErro = 'Informe a descrição da obrigação (ex.: Aluguel, Internet).';
       return;
     }
-    const d = Math.min(31, Math.max(1, Math.floor(Number(this.formFixa.diaVencimento)) || 1));
-    this.formFixa.diaVencimento = d;
+    if (!this.formFixa.valor || this.formFixa.valor <= 0) {
+      this.fixaErro = 'Informe um valor mensal maior que zero.';
+      return;
+    }
+    const dia = Math.floor(Number(this.formFixa.diaVencimento)) || 1;
+    if (dia < 1 || dia > 31) {
+      this.fixaErro = 'O dia de vencimento deve estar entre 1 e 31.';
+      return;
+    }
+    this.formFixa.diaVencimento = Math.min(31, Math.max(1, dia));
     this.carregandoFixas = true;
     if (this.editandoFixa?.id != null) {
       this.despesasFixaService.atualizar(this.editandoFixa.id, this.formFixa).subscribe({
@@ -164,8 +177,9 @@ export class PerfilComponent implements OnInit {
           this.fecharModalFixas();
           this.carregarFixas();
         },
-        error: () => {
+        error: (err) => {
           this.carregandoFixas = false;
+          this.fixaErro = resolveHttpError(err, 'Não foi possível atualizar a obrigação fixa.');
         },
       });
       return;
@@ -176,8 +190,9 @@ export class PerfilComponent implements OnInit {
         this.fecharModalFixas();
         this.carregarFixas();
       },
-      error: () => {
+      error: (err) => {
         this.carregandoFixas = false;
+        this.fixaErro = resolveHttpError(err, 'Não foi possível criar a obrigação fixa.');
       },
     });
   }

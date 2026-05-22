@@ -53,10 +53,6 @@ export class AppComponent implements OnInit {
     private scoreService: ScoreService
   ) {}
 
-  get isLoading$() {
-    return this.loadingService.isLoading$;
-  }
-
   ngOnInit() {
     this.authService.currentUser$.subscribe((user) => {
       this.isAuthenticated = !!user;
@@ -98,17 +94,7 @@ export class AppComponent implements OnInit {
         this.currentPage = this.tituloRota(path);
         this.routeAnimationState = path;
         if (!this.isLoginPage && this.loadingService.isAuthFlowActive()) {
-          this.loadingService.updateAuthFlowMessage('Carregando…');
-          if (!this.loadingService.isLoadingSnapshot()) {
-            this.loadingService.endAuthFlow();
-          } else {
-            const sub = this.loadingService.isLoading$.subscribe((loading) => {
-              if (!loading) {
-                this.loadingService.endAuthFlow();
-                sub.unsubscribe();
-              }
-            });
-          }
+          this.loadingService.endAuthFlow();
         }
       });
   }

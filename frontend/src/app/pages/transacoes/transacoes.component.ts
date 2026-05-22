@@ -28,6 +28,7 @@ import {
 } from '../../services/transacao.service';
 import { FiltroTransacaoComponent } from './components/filtro-transacao/filtro-transacao.component';
 import { ListaTransacaoComponent } from './components/lista-transacao/lista-transacao.component';
+import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-transacoes',
@@ -147,6 +148,7 @@ export class TransacoesComponent implements OnInit {
 
   salvarTransacao(): void {
     if (this.transacaoForm.invalid) {
+      markAllControlsTouched(this.transacaoForm);
       return;
     }
 
@@ -169,9 +171,13 @@ export class TransacoesComponent implements OnInit {
         this.financaAlteracao.notificar();
         this.carregarTransacoes();
       },
-      error: () => {
+      error: (err) => {
         this.salvandoTransacao = false;
-        this.snackBar.open('Erro ao salvar transação', 'Fechar', { duration: 3000, panelClass: ['error-snackbar'] });
+        this.snackBar.open(
+          resolveHttpError(err, 'Erro ao salvar transação. Verifique os dados e tente novamente.'),
+          'Fechar',
+          { duration: 4000, panelClass: ['error-snackbar'] }
+        );
       }
     });
   }

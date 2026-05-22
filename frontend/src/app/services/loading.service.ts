@@ -10,6 +10,10 @@ export interface AuthFlowOverlayState {
 @Injectable({
   providedIn: 'root'
 })
+/**
+ * Overlay de autenticação (login / Google). O overlay global por HTTP foi removido
+ * para não interromper formulários durante polling e recargas em segundo plano.
+ */
 export class LoadingService {
   private activeRequests = 0;
   private pendingHideTimer: ReturnType<typeof setTimeout> | null = null;

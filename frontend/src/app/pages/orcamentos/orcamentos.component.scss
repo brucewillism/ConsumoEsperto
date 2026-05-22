@@ -52,17 +52,18 @@
 
 .form-grid {
   display: grid;
-  grid-template-columns: minmax(140px, 2fr) minmax(100px, 1fr) 72px 88px auto;
-  gap: 12px;
-  align-items: center;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem 1rem;
+  align-items: start;
 }
 
 .form-actions {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  justify-self: end;
+  justify-content: space-between;
 
   .btn-salvar {
     width: auto;
