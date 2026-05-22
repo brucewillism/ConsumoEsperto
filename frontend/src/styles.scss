@@ -663,9 +663,9 @@ a {
   color: var(--text-secondary);
 }
 
-.mat-mdc-dialog-container .mat-mdc-input-element,
-.mat-mdc-dialog-container .mat-mdc-select-value-text {
-  color: var(--text-primary);
+.mat-mdc-dialog-container .mat-mdc-button.mat-primary,
+.mat-mdc-dialog-container .mat-mdc-raised-button.mat-primary {
+  color: #f8fafc !important;
 }
 
 .mat-mdc-dialog-container .mat-datepicker-toggle-default-icon,
@@ -712,6 +712,57 @@ a {
   --mdc-outlined-text-field-focus-outline-color: var(--exec-emerald);
   --mdc-outlined-text-field-label-text-color: var(--text-secondary);
   --mdc-outlined-text-field-focus-label-text-color: var(--exec-emerald);
+  --mdc-outlined-text-field-input-text-color: var(--text-primary);
+  --mdc-outlined-text-field-caret-color: var(--exec-emerald);
+  --mdc-outlined-text-field-input-text-placeholder-color: var(--text-muted);
+  --mdc-outlined-text-field-container-color: rgba(15, 23, 42, 0.88);
+  --mat-form-field-outlined-container-color: rgba(15, 23, 42, 0.88);
+
+  .mat-mdc-text-field-wrapper {
+    background-color: rgba(15, 23, 42, 0.88) !important;
+  }
+
+  &.mat-form-field-should-float .mdc-floating-label,
+  &.mat-form-field-should-float .mat-mdc-floating-label {
+    background-color: var(--exec-surface);
+  }
+
+  .mat-mdc-input-element,
+  .mat-mdc-select-value,
+  .mat-mdc-select-value-text,
+  .mat-mdc-select-min-line {
+    color: var(--text-primary) !important;
+  }
+
+  .mat-mdc-floating-label,
+  .mdc-floating-label {
+    color: var(--text-secondary) !important;
+  }
+
+  &.mat-focused .mat-mdc-floating-label,
+  &.mat-focused .mdc-floating-label,
+  &.mat-form-field-should-float .mat-mdc-floating-label,
+  &.mat-form-field-should-float .mdc-floating-label {
+    color: var(--exec-emerald) !important;
+  }
+
+  .mat-mdc-select-arrow svg {
+    fill: var(--text-secondary);
+  }
+
+  .mdc-notched-outline__leading,
+  .mdc-notched-outline__notch,
+  .mdc-notched-outline__trailing {
+    border-color: rgba(148, 163, 184, 0.35) !important;
+  }
+
+  &.mat-focused:not(.mat-form-field-invalid) {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--exec-emerald) !important;
+    }
+  }
 
   /* Evita linha vertical no recorte do label quando flutuando */
   &.mat-form-field-should-float .mdc-notched-outline__notch {
