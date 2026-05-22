@@ -19,6 +19,7 @@ import {
   PrevisaoFuturoChart,
   ProjecaoDashboardService,
 } from '../../services/projecao-dashboard.service';
+import { ChartMetodologiaComponent } from '../chart-metodologia/chart-metodologia.component';
 
 export interface PagamentoFaturaModalData {
   fatura: CreditCardInvoice;
@@ -50,6 +51,7 @@ const ALIASES_PROVEDOR: Record<string, string[]> = {
     MatIconModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
+    ChartMetodologiaComponent,
   ],
   templateUrl: './pagamento-fatura-modal.component.html',
   styleUrl: './pagamento-fatura-modal.component.scss',

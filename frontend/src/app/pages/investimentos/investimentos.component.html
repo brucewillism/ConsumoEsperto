@@ -29,6 +29,7 @@
           <span>estimativa em 1 mês</span>
         </mat-card>
       </div>
+      <app-chart-metodologia id="INVESTIMENTO_CARDS" [compact]="true"></app-chart-metodologia>
 
       <mat-card class="chart-panel hud-animate-inv" style="--stagger: 2">
         <h2 class="panel-title">Projeção de saldo · série temporal</h2>
@@ -58,6 +59,7 @@
           </div>
         </div>
         <small>{{ oportunidade?.explicacaoIa || 'Simulação educativa, sem promessa de rentabilidade.' }}</small>
+        <app-chart-metodologia id="INVESTIMENTO_SIMULADOR" [compact]="true"></app-chart-metodologia>
       </mat-card>
     </div>
 

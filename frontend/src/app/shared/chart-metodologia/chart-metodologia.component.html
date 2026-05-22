@@ -1,0 +1,14 @@
+<details class="chart-metodologia" [class.compact]="compact" [open]="aberto">
+  <summary>
+    <mat-icon class="icon-info" aria-hidden="true">info_outline</mat-icon>
+    Como este {{ meta.titulo ? 'gráfico' : 'indicador' }} é calculado
+    <span class="chart-metodologia-titulo" *ngIf="meta.titulo"> — {{ meta.titulo }}</span>
+  </summary>
+  <ul>
+    <li *ngFor="let item of meta.itens">{{ item }}</li>
+  </ul>
+  <p class="fonte-api" *ngIf="meta.fonte">
+    <mat-icon aria-hidden="true">source</mat-icon>
+    {{ meta.fonte }}
+  </p>
+</details>

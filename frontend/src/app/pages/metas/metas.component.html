@@ -79,6 +79,7 @@
   </mat-card>
 
   <h2 class="section-title">Suas metas</h2>
+  <app-chart-metodologia id="METAS_PROGRESSO" *ngIf="metas.length" [compact]="true"></app-chart-metodologia>
   <div class="metas-grid" *ngIf="metas.length; else vazio">
     <mat-card *ngFor="let m of metas; let mi = index" class="meta-card hud-animate-meta" [style.--stagger]="3 + mi">
       <mat-card-header>

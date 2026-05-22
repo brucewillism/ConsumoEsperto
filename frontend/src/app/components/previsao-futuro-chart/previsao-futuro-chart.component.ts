@@ -6,11 +6,12 @@ import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { ProjecaoDashboardService, PrevisaoFuturoChart, ProvisaoMemoriaHud } from '../../services/projecao-dashboard.service';
 import { catchError, of } from 'rxjs';
 import { LoadingIndicatorComponent } from '../loading-indicator/loading-indicator.component';
+import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 
 @Component({
   selector: 'app-previsao-futuro-chart',
   standalone: true,
-  imports: [CommonModule, BaseChartDirective, LoadingIndicatorComponent],
+  imports: [CommonModule, BaseChartDirective, LoadingIndicatorComponent, ChartMetodologiaComponent],
   templateUrl: './previsao-futuro-chart.component.html',
   styleUrl: './previsao-futuro-chart.component.scss',
 })

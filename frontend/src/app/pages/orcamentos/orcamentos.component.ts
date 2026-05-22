@@ -14,6 +14,7 @@ import { Categoria } from '../../models/categoria.model';
 import { CategoriaService } from '../../services/categoria.service';
 import { ForecastFinanceiro, Orcamento, OrcamentoService } from '../../services/orcamento.service';
 import { ToastService } from '../../services/toast.service';
+import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 
 @Component({
   selector: 'app-orcamentos',
@@ -28,7 +29,8 @@ import { ToastService } from '../../services/toast.service';
     MatInputModule,
     MatProgressBarModule,
     MatSelectModule,
-    MatCheckboxModule
+    MatCheckboxModule,
+    ChartMetodologiaComponent,
   ],
   templateUrl: './orcamentos.component.html',
   styleUrl: './orcamentos.component.scss'

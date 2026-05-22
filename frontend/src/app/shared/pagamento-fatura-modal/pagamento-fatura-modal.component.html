@@ -44,6 +44,11 @@
         <span *ngIf="carregandoProjecao"> Atualizando projeção…</span>
       </span>
     </p>
+    <app-chart-metodologia
+      *ngIf="mesmoProvedor && contaSelecionada"
+      id="PAGAMENTO_FATURA_PROJECAO"
+      [compact]="true">
+    </app-chart-metodologia>
 
     <mat-form-field appearance="outline" class="full">
       <mat-label>Valor do pagamento</mat-label>

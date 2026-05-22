@@ -1,0 +1,76 @@
+.chart-metodologia {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.45);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cbd5e1;
+
+  &.compact {
+    margin-top: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+
+  summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-weight: 600;
+    color: #94a3b8;
+    user-select: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    .icon-info {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      color: #38bdf8;
+    }
+  }
+
+  &-titulo {
+    font-weight: 500;
+    color: #64748b;
+  }
+
+  ul {
+    margin: 10px 0 0;
+    padding-left: 18px;
+
+    li {
+      margin-bottom: 6px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  .fonte-api {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 10px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid rgba(148, 163, 184, 0.15);
+    color: #64748b;
+    font-size: 11px;
+
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+  }
+}

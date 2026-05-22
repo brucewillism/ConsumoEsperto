@@ -4,11 +4,12 @@ import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { MatCardModule } from '@angular/material/card';
 import { HistoricoScore, ScoreService, UsuarioScore } from '../../services/score.service';
+import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 
 @Component({
   selector: 'app-score',
   standalone: true,
-  imports: [CommonModule, BaseChartDirective, MatCardModule],
+  imports: [CommonModule, BaseChartDirective, MatCardModule, ChartMetodologiaComponent],
   templateUrl: './score.component.html',
   styleUrl: './score.component.scss'
 })

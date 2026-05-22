@@ -59,6 +59,7 @@
       <div><span>Renda considerada</span><strong>{{ brl(forecast.rendaLiquida) }}</strong></div>
     </div>
     <p>{{ forecast.mensagemIa }}</p>
+    <app-chart-metodologia id="ORCAMENTO_FORECAST"></app-chart-metodologia>
   </mat-card>
 
   <div class="empty" *ngIf="!carregando && orcamentos.length === 0">
@@ -66,6 +67,7 @@
   </div>
 
   <div class="budget-list">
+    <app-chart-metodologia id="ORCAMENTO_PROGRESSO" *ngIf="orcamentos.length" [compact]="true"></app-chart-metodologia>
     <mat-card class="budget-card" *ngFor="let o of orcamentos" [class]="cor(o)">
       <div class="budget-head">
         <div>

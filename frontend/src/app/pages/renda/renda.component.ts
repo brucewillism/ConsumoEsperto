@@ -7,11 +7,12 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { ContrachequeDto, RendaConfigService } from '../../services/renda-config.service';
 import { ToastService } from '../../services/toast.service';
+import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 
 @Component({
   selector: 'app-renda',
   standalone: true,
-  imports: [CommonModule, BaseChartDirective, MatButtonModule, MatCardModule, MatIconModule],
+  imports: [CommonModule, BaseChartDirective, MatButtonModule, MatCardModule, MatIconModule, ChartMetodologiaComponent],
   templateUrl: './renda.component.html',
   styleUrl: './renda.component.scss'
 })

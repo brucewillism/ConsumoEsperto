@@ -8,11 +8,12 @@ import { forkJoin } from 'rxjs';
 import { PrevisaoFuturoChartComponent } from '../../components/previsao-futuro-chart/previsao-futuro-chart.component';
 import { OportunidadeInvestimento, ProjecaoDashboardService } from '../../services/projecao-dashboard.service';
 import { ScoreService, UsuarioScore } from '../../services/score.service';
+import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 
 @Component({
   selector: 'app-investimentos',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatCardModule, MatSliderModule, MatIconModule, PrevisaoFuturoChartComponent],
+  imports: [CommonModule, FormsModule, MatCardModule, MatSliderModule, MatIconModule, PrevisaoFuturoChartComponent, ChartMetodologiaComponent],
   templateUrl: './investimentos.component.html',
   styleUrl: './investimentos.component.scss'
 })

@@ -18,6 +18,7 @@ import {
   RendaMediaResponse
 } from '../../services/meta-financeira.service';
 import { ToastService } from '../../services/toast.service';
+import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { forkJoin } from 'rxjs';
 
 @Component({
@@ -33,7 +34,8 @@ import { forkJoin } from 'rxjs';
     MatSliderModule,
     MatIconModule,
     MatSelectModule,
-    MatDialogModule
+    MatDialogModule,
+    ChartMetodologiaComponent,
   ],
   templateUrl: './metas.component.html',
   styleUrl: './metas.component.scss'
