@@ -3,6 +3,7 @@ package com.consumoesperto.controller;
 import com.consumoesperto.dto.ContaBancariaDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.ContaBancariaService;
+import com.consumoesperto.service.SaldoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import java.util.List;
 public class ContaBancariaController {
 
     private final ContaBancariaService contaBancariaService;
+    private final SaldoService saldoService;
 
     @GetMapping
     @Operation(summary = "Listar contas do usuário")
@@ -40,9 +42,9 @@ public class ContaBancariaController {
     }
 
     @GetMapping("/patrimonio")
-    @Operation(summary = "Soma dos saldos atuais (patrimônio líquido em contas)")
+    @Operation(summary = "Patrimônio líquido (multicarteira ou legado unificado)")
     public ResponseEntity<BigDecimal> patrimonio(@AuthenticationPrincipal UserPrincipal currentUser) {
-        return ResponseEntity.ok(contaBancariaService.somarSaldosAtivos(currentUser.getId()));
+        return ResponseEntity.ok(saldoService.patrimonioLiquido(currentUser.getId()));
     }
 
     @PostMapping

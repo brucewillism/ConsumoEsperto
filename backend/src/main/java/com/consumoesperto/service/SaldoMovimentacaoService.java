@@ -78,6 +78,23 @@ public class SaldoMovimentacaoService {
         aplicarDelta(transacao.getContaBancaria().getId(), impacto.negate());
     }
 
+    /**
+     * Transferência interna TED/PIX — patrimônio total inalterado.
+     */
+    @Transactional
+    public void aplicarTransferenciaEntreContas(Long contaOrigemId, Long contaDestinoId, BigDecimal valor) {
+        if (contaOrigemId == null || contaDestinoId == null || contaOrigemId.equals(contaDestinoId)) {
+            throw new IllegalArgumentException("Contas de origem e destino devem ser distintas.");
+        }
+        BigDecimal v = scale(valor);
+        if (v.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Valor da transferência deve ser positivo.");
+        }
+        aplicarDelta(contaOrigemId, v.negate());
+        aplicarDelta(contaDestinoId, v);
+        log.info("[MULTICARTEIRA] Transferência {} → {} valor {}", contaOrigemId, contaDestinoId, v);
+    }
+
     private void aplicarDelta(Long contaId, BigDecimal delta) {
         ContaBancaria conta = contaBancariaRepository.findById(contaId)
             .orElseThrow(() -> new RuntimeException("Conta bancária não encontrada: " + contaId));
@@ -87,7 +104,7 @@ public class SaldoMovimentacaoService {
         log.debug("[MULTICARTEIRA] Conta {} saldo → {} (delta {})", contaId, saldo, delta);
     }
 
-    /** Só movimenta conta quando confirmada, com carteira e sem fatura de cartão. */
+    /** Só movimenta conta quando confirmada, com carteira; despesas de cartão/fatura não movimentam, exceto PAGAMENTO_FATURA. */
     BigDecimal impactoConfirmado(Transacao transacao) {
         if (transacao == null) {
             return BigDecimal.ZERO;
@@ -102,7 +119,8 @@ public class SaldoMovimentacaoService {
         if (snap.statusConferencia() != Transacao.StatusConferencia.CONFIRMADA) {
             return BigDecimal.ZERO;
         }
-        if (snap.faturaId() != null) {
+        if (snap.faturaId() != null
+            && snap.tipoTransacao() != Transacao.TipoTransacao.PAGAMENTO_FATURA) {
             return BigDecimal.ZERO;
         }
         if (snap.tipoTransacao() == null || snap.valor() == null) {
@@ -111,7 +129,7 @@ public class SaldoMovimentacaoService {
         BigDecimal valor = scale(snap.valor());
         return switch (snap.tipoTransacao()) {
             case RECEITA -> valor;
-            case DESPESA, INVESTIMENTO -> valor.negate();
+            case DESPESA, INVESTIMENTO, PAGAMENTO_FATURA -> valor.negate();
         };
     }
 

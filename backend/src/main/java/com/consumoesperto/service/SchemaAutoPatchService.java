@@ -63,6 +63,7 @@ public class SchemaAutoPatchService {
         ensureUsuarioConfiguracaoFiscalTable();
         ensureTransacaoOrigemFiscalColumn();
         ensureContasBancariasTable();
+        ensureTransferenciasContasTable();
         ensureTransacaoContaBancariaColumn();
         ensureUsuarioGeneroColumns();
         ensureUsuarioJarvisPerfilColumns();
@@ -75,6 +76,7 @@ public class SchemaAutoPatchService {
         ensureTransacaoSemanticaIndexTable();
         ensureJarvisFeedbackTable();
         ensureJarvisFeedbackDataExpiracaoColumn();
+        ensureUsuarioSessoesContextoTable();
         try {
             List<String> schemas = jdbcTemplate.queryForList(
                 "SELECT table_schema " +
@@ -295,6 +297,29 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: tabela public.contas_bancarias verificada.");
         } catch (Exception e) {
             log.warn("Falha ao CREATE contas_bancarias: {}", e.getMessage());
+        }
+    }
+
+    private void ensureTransferenciasContasTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.transferencias_contas ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "conta_origem_id BIGINT NOT NULL REFERENCES public.contas_bancarias(id),"
+                    + "conta_destino_id BIGINT NOT NULL REFERENCES public.contas_bancarias(id),"
+                    + "valor NUMERIC(19,2) NOT NULL,"
+                    + "descricao VARCHAR(200),"
+                    + "data_transferencia TIMESTAMP NOT NULL,"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_transferencias_usuario ON public.transferencias_contas(usuario_id)"
+            );
+            log.info("Schema patch: tabela public.transferencias_contas verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE transferencias_contas: {}", e.getMessage());
         }
     }
 
@@ -943,6 +968,42 @@ public class SchemaAutoPatchService {
             }
         } catch (Exception e) {
             log.warn("Schema patch jarvis_feedback.data_expiracao: {}", e.getMessage());
+        }
+    }
+
+    private void ensureUsuarioSessoesContextoTable() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedTable = schema + ".usuario_sessoes_contexto";
+                String qualifiedUsuarios = schema + ".usuarios";
+                executeDdlAutocommit(
+                    "CREATE TABLE IF NOT EXISTS " + qualifiedTable + " ("
+                        + "id BIGSERIAL PRIMARY KEY,"
+                        + "usuario_id BIGINT NOT NULL REFERENCES " + qualifiedUsuarios + "(id) ON DELETE CASCADE,"
+                        + "canal VARCHAR(32) NOT NULL DEFAULT 'WHATSAPP',"
+                        + "chave_sessao VARCHAR(128) NOT NULL,"
+                        + "contexto_json TEXT NOT NULL,"
+                        + "expira_em TIMESTAMP,"
+                        + "atualizado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                        + "UNIQUE (usuario_id, canal, chave_sessao)"
+                        + ")"
+                );
+                log.info("Schema patch: tabela {} verificada.", qualifiedTable);
+            }
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE usuario_sessoes_contexto: {}", e.getMessage());
         }
     }
 }

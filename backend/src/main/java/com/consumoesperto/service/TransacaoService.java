@@ -549,6 +549,13 @@ public class TransacaoService {
         resumo.put("totalDespesas", totalDespesas.doubleValue());
         resumo.put("totalInvestimentos", totalInvestimentos.doubleValue());
         resumo.put("saldo", saldo.doubleValue());
+        if (yearMonth.equals(YearMonth.now())) {
+            SaldoService.ProjecaoMesCaixa projecao = saldoService.calcularProjecaoMes(usuarioId);
+            resumo.put("patrimonioLiquido", projecao.patrimonioLiquido().doubleValue());
+            resumo.put("receitasPrevistas", projecao.receitasPrevistas().doubleValue());
+            resumo.put("receitasFiscaisPrevistas", projecao.receitasFiscaisPrevistas().doubleValue());
+            resumo.put("saldoProjetadoFimMes", projecao.saldoProjetadoFimMes().doubleValue());
+        }
         return resumo;
     }
 

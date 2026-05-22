@@ -55,11 +55,11 @@ public class ContaBancariaService {
 
     @Transactional(readOnly = true)
     public ContaBancariaDTO buscarPorId(Long id, Long usuarioId) {
-        return converterParaDTO(buscarEntidade(id, usuarioId));
+        return converterParaDTO(buscarEntidadeInterno(id, usuarioId));
     }
 
     public ContaBancariaDTO atualizar(Long id, ContaBancariaDTO dto, Long usuarioId) {
-        ContaBancaria conta = buscarEntidade(id, usuarioId);
+        ContaBancaria conta = buscarEntidadeInterno(id, usuarioId);
         conta.setNome(dto.getNome().trim());
         conta.setTipo(ContaBancaria.TipoConta.valueOf(dto.getTipo().name()));
         conta.setAtiva(dto.isAtiva());
@@ -75,7 +75,7 @@ public class ContaBancariaService {
     }
 
     public void inativar(Long id, Long usuarioId) {
-        ContaBancaria conta = buscarEntidade(id, usuarioId);
+        ContaBancaria conta = buscarEntidadeInterno(id, usuarioId);
         conta.setAtiva(false);
         conta.setPadrao(false);
         contaBancariaRepository.save(conta);
@@ -85,7 +85,7 @@ public class ContaBancariaService {
     @Transactional(readOnly = true)
     public ContaBancaria resolverContaParaTransacao(Long usuarioId, Long contaBancariaId) {
         if (contaBancariaId != null) {
-            return buscarEntidade(contaBancariaId, usuarioId);
+            return buscarEntidadeInterno(contaBancariaId, usuarioId);
         }
         return contaBancariaRepository.findFirstByUsuarioIdAndPadraoTrueAndAtivaTrue(usuarioId)
             .or(() -> contaBancariaRepository.findFirstByUsuarioIdAndAtivaTrueOrderByIdAsc(usuarioId))
@@ -131,12 +131,18 @@ public class ContaBancariaService {
 
     /** Ajuste manual de saldo via WhatsApp (reconciliação). */
     public ContaBancariaDTO ajustarSaldo(Long id, Long usuarioId, BigDecimal novoSaldo) {
-        ContaBancaria conta = buscarEntidade(id, usuarioId);
+        ContaBancaria conta = buscarEntidadeInterno(id, usuarioId);
         conta.setSaldoAtual(escala(novoSaldo));
         return converterParaDTO(contaBancariaRepository.save(conta));
     }
 
-    private ContaBancaria buscarEntidade(Long id, Long usuarioId) {
+    /** Entidade para serviços internos (transferência, conciliação). */
+    @Transactional(readOnly = true)
+    public ContaBancaria buscarEntidade(Long id, Long usuarioId) {
+        return buscarEntidadeInterno(id, usuarioId);
+    }
+
+    private ContaBancaria buscarEntidadeInterno(Long id, Long usuarioId) {
         return contaBancariaRepository.findByIdAndUsuarioId(id, usuarioId)
             .orElseThrow(() -> new RuntimeException("Conta bancária não encontrada"));
     }
