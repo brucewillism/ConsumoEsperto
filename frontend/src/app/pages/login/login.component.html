@@ -16,26 +16,24 @@
 
       <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
         <div class="form-group">
-          <label for="email" class="form-label">E-mail</label>
+          <label for="login" class="form-label">E-mail ou usuário</label>
           <div class="input-group">
             <div class="input-icon">
-              <i class="fas fa-envelope"></i>
+              <i class="fas fa-user"></i>
             </div>
             <input
-              type="email"
-              id="email"
-              formControlName="email"
+              type="text"
+              id="login"
+              formControlName="login"
               class="form-control"
-              placeholder="Digite seu e-mail"
-              [class.is-invalid]="isFieldInvalid('email')"
+              placeholder="Digite seu e-mail ou usuário"
+              autocomplete="username"
+              [class.is-invalid]="isFieldInvalid('login')"
             />
           </div>
-          <div class="invalid-feedback" *ngIf="isFieldInvalid('email')">
-            <span *ngIf="loginForm.get('email')?.errors?.['required']">
-              E-mail é obrigatório
-            </span>
-            <span *ngIf="loginForm.get('email')?.errors?.['email']">
-              Digite um e-mail válido
+          <div class="invalid-feedback" *ngIf="isFieldInvalid('login')">
+            <span *ngIf="loginForm.get('login')?.errors?.['required']">
+              E-mail ou usuário é obrigatório
             </span>
           </div>
         </div>

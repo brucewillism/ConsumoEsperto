@@ -2,6 +2,8 @@ package com.consumoesperto.repository;
 
 import com.consumoesperto.model.Usuario;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -35,6 +37,12 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
      * @return Optional contendo o usuário encontrado ou vazio se não encontrado
      */
     Optional<Usuario> findByEmail(String email);
+
+    /**
+     * Busca usuário pelo username exato ou pelo e-mail (ignorando maiúsculas/minúsculas).
+     */
+    @Query("SELECT u FROM Usuario u WHERE u.username = :login OR LOWER(u.email) = LOWER(:login)")
+    Optional<Usuario> findByUsernameOrEmail(@Param("login") String login);
     
     /**
      * Verifica se existe um usuário com o username informado

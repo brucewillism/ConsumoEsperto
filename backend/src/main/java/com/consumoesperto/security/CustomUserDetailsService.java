@@ -18,8 +18,13 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String usernameOrEmail) throws UsernameNotFoundException {
-        Usuario usuario = usuarioRepository.findByUsername(usernameOrEmail)
-                .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado com username ou email: " + usernameOrEmail));
+        String login = usernameOrEmail != null ? usernameOrEmail.trim() : "";
+        if (login.isEmpty()) {
+            throw new UsernameNotFoundException("Credencial de login vazia");
+        }
+
+        Usuario usuario = usuarioRepository.findByUsernameOrEmail(login)
+                .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado"));
 
         return UserPrincipal.create(usuario);
     }

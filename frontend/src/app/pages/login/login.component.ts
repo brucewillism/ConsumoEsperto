@@ -58,7 +58,7 @@ export class LoginComponent implements OnInit {
   ) {
     // Inicializa o formulário com validações
     this.loginForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
+      login: ['', Validators.required],
       password: ['', [Validators.required, Validators.minLength(6)]],
       rememberMe: [false]
     });
@@ -91,8 +91,7 @@ export class LoginComponent implements OnInit {
       this.loadingService.beginAuthFlow('Entrando…');
 
       const credentials = {
-        username: this.loginForm.value.email,
-        email: this.loginForm.value.email,
+        username: this.loginForm.value.login.trim(),
         password: this.loginForm.value.password
       };
 
