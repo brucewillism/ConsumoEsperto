@@ -1232,7 +1232,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       itens: [],
     };
 
-    // Faz múltiplas chamadas em paralelo para obter todos os dados REAIS
+    // Fase 1: dados rápidos — liberta o overlay e mostra o painel
     forkJoin({
       transacoesMes: this.wrapDashboardRequest(
         this.transacaoService.buscarDoMesAtual(),
@@ -1256,6 +1256,45 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Relatório categoria (mês anterior)'
       ),
       rendaConfig: this.wrapDashboardRequest(this.rendaConfigService.obter(), null, 'Config. renda'),
+      usuarioScore: this.wrapDashboardRequest(this.scoreService.obter(), null, 'Score utilizador'),
+      oportunidadeInvestimento: this.wrapDashboardRequest(
+        this.dashboardService.oportunidadeInvestimento(),
+        null,
+        'Oportunidade investimento'
+      ),
+      sugestoesContencao: this.wrapDashboardRequest(
+        this.contencaoJarvisService.listarPendentes(),
+        [] as SugestaoContencaoJarvis[],
+        'Sugestões contenção'
+      ),
+    }).subscribe({
+      next: (data) => {
+        this.sugestoesContencaoJarvis = Array.isArray(data.sugestoesContencao) ? data.sugestoesContencao : [];
+        this.processarDadosReais({
+          ...data,
+          dashboardProjection: null,
+          previsaoFuturo: null,
+        });
+        this.ultimaAtualizacao = new Date();
+        this.setDashboardLoading(false);
+        this.isLoadingData = false;
+        console.log('✅ Dashboard base carregado — projeção/previsão em segundo plano');
+        this.carregarDashboardPesadoEmSegundoPlano();
+      },
+      error: (error) => {
+        console.error('❌ Erro ao carregar dados do dashboard:', error);
+        this.errorMessage = 'Erro ao carregar dados. Tente novamente.';
+        this.setDashboardLoading(false);
+        this.isLoadingData = false;
+        this.isSilentRefreshing = false;
+      },
+    });
+  }
+
+  /** Projeção e previsão de fluxo (podem demorar) — não bloqueiam o overlay inicial. */
+  private carregarDashboardPesadoEmSegundoPlano(): void {
+    this.isSilentRefreshing = true;
+    forkJoin({
       dashboardProjection: this.wrapDashboardRequest(
         this.dashboardService.projection(),
         null,
@@ -1268,36 +1307,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Previsão de fluxo',
         90_000
       ),
-      usuarioScore: this.wrapDashboardRequest(this.scoreService.obter(), null, 'Score utilizador'),
-      oportunidadeInvestimento: this.wrapDashboardRequest(
-        this.dashboardService.oportunidadeInvestimento(),
-        null,
-        'Oportunidade investimento'
-      ),
-      sugestoesContencao: this.wrapDashboardRequest(
-        this.contencaoJarvisService.listarPendentes(),
-        [] as SugestaoContencaoJarvis[],
-        'Sugestões contenção'
-      ),
     })
-      .pipe(
-        finalize(() => {
-          this.setDashboardLoading(false);
-          this.isLoadingData = false;
-          this.isSilentRefreshing = false;
-        })
-      )
+      .pipe(finalize(() => (this.isSilentRefreshing = false)))
       .subscribe({
-        next: (data) => {
-          this.sugestoesContencaoJarvis = Array.isArray(data.sugestoesContencao) ? data.sugestoesContencao : [];
-          this.processarDadosReais(data);
-          this.ultimaAtualizacao = new Date();
-          console.log('✅ Dados carregados com sucesso');
+        next: (heavy) => {
+          this.dashboardProjection = heavy.dashboardProjection || null;
+          this.mesesSafra = normalizarSafra(this.dashboardProjection?.safraPatrimonio);
+          this.timelineImpacto = this.dashboardProjection?.timelineImpacto || [];
+          this.syncSpendingLineChart();
+          this.dashboardService.sincronizarPrevisaoAposFetch(heavy.previsaoFuturo ?? null);
         },
-        error: (error) => {
-          console.error('❌ Erro ao carregar dados do dashboard:', error);
-          this.errorMessage = 'Erro ao carregar dados. Tente novamente.';
-        },
+        error: (e) => console.warn('[Dashboard] Projeção/previsão em background:', e),
       });
   }
 
