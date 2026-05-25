@@ -75,6 +75,7 @@ public class OpenAiService {
             "accountName (nome da conta bancária/carteira), accountType (CORRENTE|POUPANCA|DINHEIRO), initialBalance (saldo inicial da conta), " +
             "categoryName (nome da categoria), budgetLimit (limite do orçamento mensal), " +
             "installmentCount (N parcelas, inteiro ≥2), installmentAmount (valor de cada parcela quando citado), " +
+            "paymentMethod (CONTA quando PIX/TED/débito/transferência na conta bancária; CARTAO quando compra ou gasto na fatura do cartão), " +
             "interestFree (true se 'sem juros'/'s/juros'), withInterest (true se 'com juros'), purchasePrice (preço à vista do bem quando citado), " +
             "newAvailableLimit (opcional), percentualComprometimento (0-100 quando for meta), " +
             "manageOperation (delete|edit), manageTarget (transacao|meta|cartao|conta_bancaria|categoria|orcamento), searchPhrase (termo de busca), " +
@@ -93,7 +94,10 @@ public class OpenAiService {
             "purchasePrice=2000 (à vista), amount pode ser 250 (parcela) ou 2000 — o backend usa purchasePrice + installmentAmount.\n" +
             "Se o utilizador disser só 'N vezes de X' sem 'sem juros' nem 'com juros' e N*X > total citado, o backend pede confirmação de juros; " +
             "ainda assim preencha installmentCount, installmentAmount e amount com o total citado à vista quando existir.\n" +
-            "- Em despesas, quando houver referência de cartão/banco, preencher cardName/bank.\n" +
+            "- Em despesas: paymentMethod=CONTA para PIX, TED, transferência ou débito na conta (ex.: 'fiz um pix de 50 da conta Nubank'); " +
+            "preencher accountName ou bank com o banco da conta; NÃO preencher cardName nesses casos. " +
+            "paymentMethod=CARTAO para compras na fatura (ex.: 'gastei 50 no cartão Nubank', 'paguei no Nubank' sem PIX). " +
+            "Quando houver referência só de cartão/fatura, preencher cardName/bank.\n" +
             "- Se for receita: action CREATE_INCOME e preencher description + amount.\n" +
             "- Se for cadastro de cartão: action CREATE_CARD e preencher cardName, bank, cardNumber (últimos 4 dígitos) e dueDay (1-31); " +
             "se a frase citar limite (ex.: 'limite 7800'), preencher creditLimit com o número; newAvailableLimit só se disser limite disponível separado.\n" +

@@ -33,7 +33,7 @@
         <mat-spinner diameter="14" class="hud-sync-spinner"></mat-spinner>
         Sincronizando…
       </span>
-      <button class="btn btn-hud btn-hud-ghost" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading">
+      <button class="btn btn-hud btn-hud-ghost" (click)="loadDashboardData({ silent: false, completo: true })" [disabled]="isLoading">
         <i class="fas fa-sync-alt" [class.fa-spin]="isLoading || isSilentRefreshing"></i>
         Atualizar
       </button>
@@ -128,7 +128,7 @@
       <div class="error-content">
         <i class="fas fa-exclamation-triangle"></i>
         <p>{{ errorMessage }}</p>
-        <button class="btn btn-primary" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading">
+        <button class="btn btn-primary" (click)="loadDashboardData({ silent: false, completo: true })" [disabled]="isLoading">
           <i class="fas fa-refresh"></i>
           Tentar Novamente
         </button>

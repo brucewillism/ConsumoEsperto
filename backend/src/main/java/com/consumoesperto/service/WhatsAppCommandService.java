@@ -1308,8 +1308,11 @@ public class WhatsAppCommandService {
         try {
             BigDecimal amount = readAmount(cmd, sourceText);
             String description = cmd.path("description").asText("Despesa via WhatsApp");
-            String cardToken = resolveCardToken(cmd, sourceText);
-            CardMatchResult matchResult = findBestCard(userId, cardToken);
+            boolean pagamentoEmConta = pagamentoIndicaContaBancaria(cmd, sourceText);
+            String cardToken = pagamentoEmConta ? "" : resolveCardToken(cmd, sourceText);
+            CardMatchResult matchResult = pagamentoEmConta
+                ? new CardMatchResult(null, false)
+                : findBestCard(userId, cardToken);
             TransacaoDTO.StatusConferencia status = matchResult.pendingReview
                 ? TransacaoDTO.StatusConferencia.PENDENTE
                 : TransacaoDTO.StatusConferencia.CONFIRMADA;
@@ -1328,6 +1331,9 @@ public class WhatsAppCommandService {
                 || textoIndicaComJuros(sourceText);
             BigDecimal purchasePrice = readOptionalBigDecimal(cmd, "purchasePrice");
 
+            if (nParcelas >= 2 && pagamentoEmConta) {
+                return msgErro(userId, "Parcelamento", "Parcelamento só no cartão. Indica o cartão (ex.: *no Nubank em 3x*).");
+            }
             if (nParcelas >= 2 && matchResult.card == null) {
                 return msgErro(userId, "Parcelamento", "Para parcelar no cartão, indica o banco ou apelido (ex.: *no Nubank*).");
             }
@@ -1379,17 +1385,19 @@ public class WhatsAppCommandService {
             dto.setTipoTransacao(TransacaoDTO.TipoTransacao.DESPESA);
             dto.setDataTransacao(LocalDateTime.now());
             dto.setStatusConferencia(status);
-            if (matchResult.card != null) {
+            if (matchResult.card != null && !pagamentoEmConta) {
                 Fatura faturaAlvo = faturaService.resolverFaturaAbertaParaCartao(userId, matchResult.card);
                 dto.setFaturaId(faturaAlvo.getId());
             } else {
-                aplicarContaBancariaSeInformada(cmd, sourceText, userId, dto);
+                aplicarContaBancariaSeInformada(cmd, sourceText, userId, dto, pagamentoEmConta);
             }
 
             TransacaoDTO created = transacaoService.criarTransacao(dto, userId);
-            String invoiceMessage = vincularNaFatura(matchResult, amount, userId);
+            String invoiceMessage = pagamentoEmConta
+                ? ""
+                : vincularNaFatura(matchResult, amount, userId);
             String jarvisLinha = jarvisProtocolService.formatExpenseCatalogued(BRL.format(created.getValor()));
-            if (matchResult.card != null) {
+            if (matchResult.card != null && !pagamentoEmConta) {
                 String detalhe = jarvisLinha + "\n\n*" + created.getDescricao() + "* no cartão *"
                     + matchResult.card.getNome() + "*.\n" + invoiceMessage.trim();
                 if (matchResult.pendingReview) {
@@ -1434,7 +1442,7 @@ public class WhatsAppCommandService {
             dto.setValor(amount);
             dto.setTipoTransacao(TransacaoDTO.TipoTransacao.RECEITA);
             dto.setDataTransacao(LocalDateTime.now());
-            aplicarContaBancariaSeInformada(cmd, sourceText, userId, dto);
+            aplicarContaBancariaSeInformada(cmd, sourceText, userId, dto, true);
 
             TransacaoDTO created = transacaoService.criarTransacao(dto, userId);
             String contaInfo = created.getContaBancariaNome() != null && !created.getContaBancariaNome().isBlank()
@@ -1565,7 +1573,13 @@ public class WhatsAppCommandService {
     }
 
     private void aplicarContaBancariaSeInformada(JsonNode cmd, String sourceText, Long userId, TransacaoDTO dto) {
-        String token = resolveAccountToken(cmd, sourceText);
+        aplicarContaBancariaSeInformada(cmd, sourceText, userId, dto, pagamentoIndicaContaBancaria(cmd, sourceText));
+    }
+
+    private void aplicarContaBancariaSeInformada(
+        JsonNode cmd, String sourceText, Long userId, TransacaoDTO dto, boolean forcarResolucaoConta
+    ) {
+        String token = resolveAccountToken(cmd, sourceText, forcarResolucaoConta);
         if (token.isBlank()) {
             return;
         }
@@ -1575,14 +1589,50 @@ public class WhatsAppCommandService {
         }
     }
 
+    private boolean pagamentoIndicaContaBancaria(JsonNode cmd, String sourceText) {
+        String pm = cmd.path("paymentMethod").asText("").trim();
+        if ("CONTA".equalsIgnoreCase(pm) || "CONTA_BANCARIA".equalsIgnoreCase(pm)) {
+            return true;
+        }
+        return textoIndicaPagamentoEmConta(sourceText);
+    }
+
+    private boolean textoIndicaPagamentoEmConta(String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return false;
+        }
+        String t = normalize(sourceText);
+        if (t.contains("pix") || t.contains("ted") || t.contains(" doc ") || t.startsWith("doc ")
+            || t.contains("transferencia") || t.contains("transferência") || t.contains("debito em conta")
+            || t.contains("débito em conta") || t.contains("debito na conta") || t.contains("débito na conta")) {
+            return true;
+        }
+        return t.contains("na conta") || t.contains("da conta") || t.contains("em conta")
+            || t.contains("conta corrente") || t.contains("conta bancaria") || t.contains("conta bancária");
+    }
+
     private String resolveAccountToken(JsonNode cmd, String sourceText) {
+        return resolveAccountToken(cmd, sourceText, pagamentoIndicaContaBancaria(cmd, sourceText));
+    }
+
+    private String resolveAccountToken(JsonNode cmd, String sourceText, boolean forcarPorPagamentoEmConta) {
         String accountName = cmd.path("accountName").asText("");
         if (!accountName.isBlank()) {
             return accountName;
         }
+        if (forcarPorPagamentoEmConta) {
+            String bank = cmd.path("bank").asText("");
+            if (!bank.isBlank()) {
+                return bank;
+            }
+            String cardName = cmd.path("cardName").asText("");
+            if (!cardName.isBlank()) {
+                return cardName;
+            }
+        }
         String cardName = cmd.path("cardName").asText("");
         String bank = cmd.path("bank").asText("");
-        if (!cardName.isBlank() && bank.isBlank()) {
+        if (!cardName.isBlank() && bank.isBlank() && !forcarPorPagamentoEmConta) {
             return cardName;
         }
         if (!bank.isBlank() && cardName.isBlank()) {
@@ -1590,7 +1640,9 @@ public class WhatsAppCommandService {
         }
         if (sourceText != null) {
             String lower = normalize(sourceText);
-            if (lower.contains("na conta") || lower.contains("conta ")) {
+            boolean indicaConta = forcarPorPagamentoEmConta
+                || lower.contains("na conta") || lower.contains("da conta") || lower.contains("conta ");
+            if (indicaConta) {
                 for (String token : new String[]{"nubank", "itau", "inter", "santander", "bradesco", "caixa", "bb", "picpay", "carteira"}) {
                     if (lower.contains(token)) {
                         return token;
@@ -1874,6 +1926,9 @@ public class WhatsAppCommandService {
     }
 
     private String resolveCardToken(JsonNode cmd, String sourceText) {
+        if (pagamentoIndicaContaBancaria(cmd, sourceText)) {
+            return "";
+        }
         String cardName = cmd.path("cardName").asText("");
         String bank = cmd.path("bank").asText("");
         if (!cardName.isBlank()) {

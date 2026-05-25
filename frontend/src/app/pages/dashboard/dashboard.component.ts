@@ -47,6 +47,7 @@ import { timeout } from 'rxjs/operators';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 import { LoadingService } from '../../services/loading.service';
+import { DashboardSessionCacheService } from '../../services/dashboard-session-cache.service';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { CartaoCredito } from '../../models/cartao-credito.model';
@@ -325,11 +326,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private usuarioService: UsuarioService,
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
-    private loadingService: LoadingService
+    private loadingService: LoadingService,
+    private dashboardSessionCache: DashboardSessionCacheService
   ) {
     this.financaAlteracao.alteracoes$
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.loadDashboardData({ silent: true }));
+      .subscribe(() => this.loadDashboardData({ silent: true, completo: false }));
   }
 
   /**
@@ -369,19 +371,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.radarPulsoHud = e.radarPulsoHud;
       });
 
-    this.loadDashboardData();
+    const revisita = this.dashboardSessionCache.isFresh();
+    if (revisita) {
+      this.restaurarDashboardDoCache();
+      this.isLoading = false;
+    }
+    this.loadDashboardData({ silent: revisita, completo: !revisita });
 
     fromEvent(document, 'visibilitychange')
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         if (document.visibilityState === 'visible') {
-          this.loadDashboardData({ silent: true });
+          this.loadDashboardData({ silent: true, completo: false });
         }
       });
 
     this.pollingSubscription = timer(60000, 60000)
       .pipe(filter(() => document.visibilityState === 'visible'))
-      .subscribe(() => this.loadDashboardData({ silent: true }));
+      .subscribe(() => this.loadDashboardData({ silent: true, completo: false }));
 
     this.syncDashboardPageOverlay();
   }
@@ -557,8 +564,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * financeiros do usuário autenticado. SEM DADOS MOCK.
    * Implementa controle anti-duplicação.
    */
-  public loadDashboardData(options?: { silent?: boolean }) {
+  public loadDashboardData(options?: { silent?: boolean; completo?: boolean }) {
     const silent = options?.silent === true;
+    const completo = options?.completo !== false && !silent;
 
     if (!silent) {
       this.dashboardService.prepararNovaRecargaCompleta();
@@ -590,7 +598,38 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
     this.lastLoadTime = now;
 
-    this.loadDashboardDataAfterSync();
+    this.loadDashboardDataAfterSync(completo);
+  }
+
+  private restaurarDashboardDoCache(): void {
+    const snap = this.dashboardSessionCache.get();
+    if (!snap) {
+      return;
+    }
+    this.totalIncome = snap.totalIncome;
+    this.totalSpent = snap.totalSpent;
+    this.balance = snap.balance;
+    this.receitasPrevistasMes = snap.receitasPrevistasMes;
+    this.creditCardLimit = snap.creditCardLimit;
+    this.creditCardUsed = snap.creditCardUsed;
+    this.dashboardCards = snap.dashboardCards.map((c) => ({ ...c }));
+    this.recentTransactions = snap.recentTransactions.map((t) => ({
+      ...t,
+      date: new Date(t.date),
+    }));
+  }
+
+  private persistirDashboardNoCache(): void {
+    this.dashboardSessionCache.save({
+      totalIncome: this.totalIncome,
+      totalSpent: this.totalSpent,
+      balance: this.balance,
+      receitasPrevistasMes: this.receitasPrevistasMes,
+      creditCardLimit: this.creditCardLimit,
+      creditCardUsed: this.creditCardUsed,
+      dashboardCards: this.dashboardCards.map((c) => ({ ...c })),
+      recentTransactions: this.recentTransactions.map((t) => ({ ...t })),
+    });
   }
   
   /**
@@ -702,6 +741,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       creditCardUsed: this.creditCardUsed,
       recentTransactionsCount: this.recentTransactions.length
     });
+    this.persistirDashboardNoCache();
   }
 
   private atualizarDoughnutComRelatorio(relatorio: RelatorioCategoriaMesAtual) {
@@ -1209,7 +1249,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Este método carrega os dados atualizados diretamente da API.
    * Implementa controle anti-duplicação.
    */
-  private loadDashboardDataAfterSync() {
+  private loadDashboardDataAfterSync(completo: boolean) {
     // Não verifica isLoadingData aqui porque este método é chamado
     // após a sincronização e precisa sempre executar para finalizar o carregamento
     
@@ -1270,13 +1310,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.ultimaAtualizacao = new Date();
         this.setDashboardLoading(false);
         this.isLoadingData = false;
+        this.persistirDashboardNoCache();
         console.log('✅ Dashboard visível — complementos em segundo plano');
-        this.carregarDashboardComplementosEmSegundoPlano(
-          prevAno,
-          prevMes,
-          rapido.despesasCategoriaMesAtual ?? despesasCategoriaFallback
-        );
-        this.carregarDashboardPesadoEmSegundoPlano();
+        if (completo) {
+          this.carregarDashboardComplementosEmSegundoPlano(
+            prevAno,
+            prevMes,
+            rapido.despesasCategoriaMesAtual ?? despesasCategoriaFallback
+          );
+          this.carregarDashboardPesadoEmSegundoPlano();
+        }
       },
       error: (error) => {
         console.error('❌ Erro ao carregar dados do dashboard:', error);
