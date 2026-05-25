@@ -5,8 +5,8 @@ import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.util.EvolutionUrlSupport;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -29,13 +29,23 @@ import java.util.Optional;
  * Garante instância Evolution dedicada por utilizador (evita partilhar um único QR/sessão WhatsApp).
  */
 @Service
-@Slf4j
-@RequiredArgsConstructor
 public class EvolutionInstanceLifecycleService {
+
+    private static final Logger log = LoggerFactory.getLogger(EvolutionInstanceLifecycleService.class);
 
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
     private final UsuarioRepository usuarioRepository;
     private final EvolutionPairingService evolutionPairingService;
+
+    public EvolutionInstanceLifecycleService(
+        UsuarioAiConfigRepository usuarioAiConfigRepository,
+        UsuarioRepository usuarioRepository,
+        EvolutionPairingService evolutionPairingService
+    ) {
+        this.usuarioAiConfigRepository = usuarioAiConfigRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.evolutionPairingService = evolutionPairingService;
+    }
 
     private RestTemplate restTemplate;
 
@@ -149,7 +159,23 @@ public class EvolutionInstanceLifecycleService {
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
     }
 
-    private record AssignResult(String instanceName, boolean newlyAssignedDedicated) {}
+    private static final class AssignResult {
+        private final String instanceName;
+        private final boolean newlyAssignedDedicated;
+
+        AssignResult(String instanceName, boolean newlyAssignedDedicated) {
+            this.instanceName = instanceName;
+            this.newlyAssignedDedicated = newlyAssignedDedicated;
+        }
+
+        String instanceName() {
+            return instanceName;
+        }
+
+        boolean newlyAssignedDedicated() {
+            return newlyAssignedDedicated;
+        }
+    }
 
     @Transactional
     protected AssignResult assignInstanceNameTransactional(Long usuarioId) {
@@ -177,7 +203,23 @@ public class EvolutionInstanceLifecycleService {
         return new AssignResult(dedicated, true);
     }
 
-    private record EnsureInstanceOutcome(boolean freshInstance, Optional<String> warning) {}
+    private static final class EnsureInstanceOutcome {
+        private final boolean freshInstance;
+        private final Optional<String> warning;
+
+        EnsureInstanceOutcome(boolean freshInstance, Optional<String> warning) {
+            this.freshInstance = freshInstance;
+            this.warning = warning;
+        }
+
+        boolean freshInstance() {
+            return freshInstance;
+        }
+
+        Optional<String> warning() {
+            return warning;
+        }
+    }
 
     /**
      * Cria instância, configura webhook e confirma presença na Evolution (fora de transação JPA).
