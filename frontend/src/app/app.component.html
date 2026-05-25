@@ -207,17 +207,17 @@
             <span>{{ userName || 'Usuário' }}</span>
             <i class="fas fa-chevron-down"></i>
           </button>
-          <div class="user-dropdown" [class.show]="showUserMenu">
-            <button type="button" class="dropdown-item" routerLink="/perfil" (click)="closeDropdowns()">
+          <div class="user-dropdown" [class.show]="showUserMenu" role="menu">
+            <button type="button" class="dropdown-item" role="menuitem" (click)="navigateUserMenu('/perfil', $event)">
               <i class="fas fa-user"></i>
               Perfil
             </button>
-            <button type="button" class="dropdown-item" (click)="closeDropdowns()">
+            <button type="button" class="dropdown-item" role="menuitem" (click)="navigateUserMenu('/whatsapp-config', $event)">
               <i class="fas fa-cog"></i>
               Configurações
             </button>
             <div class="dropdown-divider"></div>
-            <button type="button" class="dropdown-item" (click)="logout(); closeDropdowns()">
+            <button type="button" class="dropdown-item" role="menuitem" (click)="onUserMenuLogout($event)">
               <i class="fas fa-sign-out-alt"></i>
               Sair
             </button>
@@ -225,6 +225,14 @@
         </div>
       </div>
     </header>
+
+    <!-- Overlay só na área abaixo do header (não cobre o dropdown do perfil) -->
+    <div
+      class="dropdown-backdrop"
+      *ngIf="(showNotifications || showUserMenu) && !isLoginPage"
+      (click)="closeDropdowns()"
+      aria-hidden="true"
+    ></div>
 
     <!-- Page Content -->
     <div
@@ -236,9 +244,6 @@
     </div>
   </main>
 </div>
-
-<!-- Overlay para fechar dropdowns quando clicar fora -->
-<div class="overlay" *ngIf="(showNotifications || showUserMenu) && !isLoginPage" (click)="closeDropdowns()"></div>
 
 <app-loading-indicator
   *ngIf="authFlowOverlay.active"

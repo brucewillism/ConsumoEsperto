@@ -194,6 +194,24 @@ export class AppComponent implements OnInit {
     }
   }
 
+  navigateUserMenu(path: string, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.closeDropdowns();
+    const destino = path.split('?')[0];
+    const atual = this.router.url.split('?')[0];
+    if (atual !== destino) {
+      void this.router.navigateByUrl(destino);
+    }
+  }
+
+  onUserMenuLogout(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.closeDropdowns();
+    this.logout();
+  }
+
   trackNotif(_i: number, n: InboxNotification): string {
     return n.key;
   }

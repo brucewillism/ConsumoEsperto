@@ -319,10 +319,10 @@ body {
   }
 }
 
-// Header - SOLUÇÃO DEFINITIVA PARA SOBREPOSIÇÃO
+// Header — acima do backdrop dos dropdowns
 .header {
   height: var(--header-height);
-  background: var(--shell-bg-to);
+  background: #12141c;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -330,7 +330,8 @@ body {
   padding: 0 2rem;
   position: sticky;
   top: 0;
-  z-index: 1000;
+  z-index: 1100;
+  isolation: isolate;
   width: 100%;
   margin-left: 0 !important;
   transition: width 0.3s ease;
@@ -435,20 +436,22 @@ body {
   top: 100%;
   right: 0;
   width: 350px;
-  background: var(--shell-bg-to);
+  background: #1e222d;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  box-shadow: 0 10px 30px var(--shadow-color);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   opacity: 0;
   visibility: hidden;
   transform: translateY(-10px);
-  transition: all 0.3s ease;
-  z-index: 1001;
-  
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+  z-index: 1200;
+  pointer-events: none;
+
   &.show {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
+    pointer-events: auto;
   }
 }
 
@@ -596,23 +599,26 @@ body {
 
 .user-dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   right: 0;
   width: 200px;
-  background: var(--shell-bg-to);
+  background: #1e222d;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  box-shadow: 0 10px 30px var(--shadow-color);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-10px);
-  transition: all 0.3s ease;
-  z-index: 1001;
-  
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+  z-index: 1200;
+  pointer-events: none;
+  overflow: hidden;
+
   &.show {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
+    pointer-events: auto;
   }
 }
 
@@ -687,19 +693,32 @@ body {
   left: var(--sidebar-collapsed-width);
 }
 
-// Overlay
-.overlay {
+// Backdrop: área abaixo do header (dropdown fica no header, acima desta camada)
+.dropdown-backdrop {
   position: fixed;
-  top: 0;
-  left: 0;
+  top: var(--header-height);
+  left: var(--sidebar-width);
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 998;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1050;
+  cursor: default;
+}
+
+.main-content.sidebar-collapsed .dropdown-backdrop {
+  left: var(--sidebar-collapsed-width);
+}
+
+.main-content.full-width .dropdown-backdrop {
+  left: 0;
 }
 
 // Responsividade
 @media (max-width: 1024px) {
+  .dropdown-backdrop {
+    left: 0;
+  }
+
   .sidebar {
     transform: translateX(-100%);
     
