@@ -13,6 +13,7 @@ import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.ImportacaoFaturaCartaoRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.util.BancoBrasilCatalog;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -278,9 +279,19 @@ public class FaturaPdfImportService {
             return Optional.empty();
         }
         return ativos.stream()
-            .filter(c -> norm(c.getBanco()).contains(token) || token.contains(norm(c.getBanco()))
-                || norm(c.getNome()).contains(token) || token.contains(norm(c.getNome())))
+            .filter(c -> cartaoCorrespondeBancoExtraido(c, banco, token))
             .findFirst();
+    }
+
+    private static boolean cartaoCorrespondeBancoExtraido(CartaoCredito c, String bancoRef, String tokenNorm) {
+        if (BancoBrasilCatalog.bancosCorrespondem(c.getBanco(), bancoRef)
+            || BancoBrasilCatalog.bancosCorrespondem(c.getNome(), bancoRef)) {
+            return true;
+        }
+        String nb = norm(c.getBanco());
+        String nn = norm(c.getNome());
+        return nb.contains(tokenNorm) || tokenNorm.contains(nb)
+            || nn.contains(tokenNorm) || tokenNorm.contains(nn);
     }
 
     private boolean jaExiste(Long usuarioId, ImportacaoFaturaItemDTO item) {

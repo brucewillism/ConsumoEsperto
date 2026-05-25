@@ -4,6 +4,7 @@ import com.consumoesperto.dto.CartaoCreditoDTO;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.util.ApelidoNormalizador;
+import com.consumoesperto.util.BancoBrasilCatalog;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.FaturaRepository;
@@ -232,7 +233,8 @@ public class CartaoCreditoService {
             return exatosNome;
         }
         List<CartaoCredito> exatosBanco = todos.stream()
-            .filter(c -> ApelidoNormalizador.normalizar(c.getBanco()).equals(token))
+            .filter(c -> ApelidoNormalizador.normalizar(c.getBanco()).equals(token)
+                || BancoBrasilCatalog.bancosCorrespondem(c.getBanco(), apelidoOuBanco))
             .collect(Collectors.toList());
         if (exatosBanco.size() == 1) {
             return exatosBanco;
@@ -244,7 +246,9 @@ public class CartaoCreditoService {
             .filter(c -> {
                 String nn = ApelidoNormalizador.normalizar(c.getNome());
                 String bb = ApelidoNormalizador.normalizar(c.getBanco());
-                return nn.contains(token) || bb.contains(token);
+                return nn.contains(token) || bb.contains(token)
+                    || BancoBrasilCatalog.bancosCorrespondem(c.getBanco(), apelidoOuBanco)
+                    || BancoBrasilCatalog.bancosCorrespondem(c.getNome(), apelidoOuBanco);
             })
             .collect(Collectors.toList());
         if (parcial.size() == 1) {
