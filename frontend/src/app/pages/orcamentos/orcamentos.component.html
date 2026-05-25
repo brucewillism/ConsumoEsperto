@@ -10,70 +10,11 @@
       <strong>{{ forecast.probabilidadeVermelho }}%</strong>
       <small>{{ forecast.nivelRisco }} · saldo projetado {{ brl(forecast.saldoProjetado) }}</small>
     </div>
+    <button mat-raised-button color="primary" type="button" (click)="abrirNovoOrcamento()" [disabled]="carregando">
+      <mat-icon>add</mat-icon>
+      Novo orçamento
+    </button>
   </section>
-
-  <mat-card class="form-card">
-    <div class="ce-form-alert" *ngIf="formAlerta">{{ formAlerta }}</div>
-    <div class="form-grid">
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-label>Categoria</mat-label>
-        <mat-select [(ngModel)]="categoriaId" panelClass="exec-select-panel">
-          <mat-option *ngFor="let c of categorias" [value]="c.id">{{ c.nome }}</mat-option>
-        </mat-select>
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-label>Limite mensal</mat-label>
-        <input
-          matInput
-          type="text"
-          inputmode="decimal"
-          [ngModel]="valorLimiteInput"
-          (ngModelChange)="onValorLimiteInput($event)"
-          placeholder="0,00"
-          autocomplete="off"
-        />
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-label>Mês</mat-label>
-        <input
-          matInput
-          type="text"
-          inputmode="numeric"
-          maxlength="2"
-          [ngModel]="mesInput"
-          (ngModelChange)="onMesInput($event)"
-          autocomplete="off"
-        />
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-        <mat-label>Ano</mat-label>
-        <input
-          matInput
-          type="text"
-          inputmode="numeric"
-          maxlength="4"
-          [ngModel]="anoInput"
-          (ngModelChange)="onAnoInput($event)"
-          autocomplete="off"
-        />
-      </mat-form-field>
-
-      <div class="form-actions">
-        <mat-checkbox [(ngModel)]="compartilhado">
-          <i class="fas" [class.fa-users]="compartilhado" [class.fa-lock]="!compartilhado"></i>
-          {{ compartilhado ? 'Compartilhado com família/casal' : 'Privado' }}
-        </mat-checkbox>
-
-        <button mat-raised-button color="primary" type="button" class="btn-salvar" (click)="salvar()" [disabled]="salvando">
-          <mat-icon>save</mat-icon>
-          Salvar
-        </button>
-      </div>
-    </div>
-  </mat-card>
 
   <mat-card class="forecast-detail" *ngIf="forecast">
     <h2>Previsão do mês</h2>

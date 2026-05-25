@@ -11,6 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
+import { NovaMetaDialogComponent } from '../../shared/nova-meta-dialog/nova-meta-dialog.component';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import {
@@ -45,7 +46,6 @@ import { forkJoin } from 'rxjs';
   styleUrl: './metas.component.scss'
 })
 export class MetasComponent implements OnInit {
-  @ViewChild('novaMetaTpl') novaMetaTpl!: TemplateRef<unknown>;
   @ViewChild('editMetaTpl') editMetaTpl!: TemplateRef<unknown>;
 
   metas: MetaFinanceira[] = [];
@@ -53,10 +53,6 @@ export class MetasComponent implements OnInit {
   alertaListagem: string | null = null;
   totalPercentualComprometido = 0;
 
-  novaDescricao = '';
-  novaValor = 0;
-  novaPrioridade = 3;
-  novaMetaAlerta = '';
   percentualSimulador = 15;
   valorSimulado = 3500;
 
@@ -159,54 +155,20 @@ export class MetasComponent implements OnInit {
   }
 
   abrirNovaMeta(): void {
-    this.novaMetaAlerta = '';
-    this.novaDescricao = '';
-    this.novaValor = 0;
-    this.novaPrioridade = 3;
-    openCeFormDialog(this.dialog, this.novaMetaTpl, { width: '480px' });
-  }
-
-  salvarMeta(): void {
-    this.novaMetaAlerta = '';
-    if (!this.novaDescricao?.trim()) {
-      this.novaMetaAlerta = 'Informe a descrição da meta (ex.: Geladeira, Viagem).';
-      return;
-    }
-    if (!this.novaValor || this.novaValor <= 0) {
-      this.novaMetaAlerta = 'Informe o valor total da meta, maior que zero.';
-      return;
-    }
-    if (!this.rendaInfo?.calculadaDeLancamentos) {
-      this.novaMetaAlerta =
-        'Cadastre receitas nos últimos 3 meses para calcular a meta, ou informe sua renda pelo WhatsApp.';
-      return;
-    }
-    const body: MetaFinanceiraRequest = {
-      descricao: this.novaDescricao.trim(),
-      valorTotal: this.novaValor,
-      percentualComprometimento: this.percentualSimulador,
-      prioridade: this.novaPrioridade
-    };
-    this.salvando = true;
-    this.metaService.criar(body).subscribe({
-      next: (res) => {
-        this.salvando = false;
-        this.toast.success('Meta salva com sucesso.');
-        if (res.alertaComprometimento) {
-          this.toast.warning(res.alertaComprometimento);
-        }
-        this.financaAlteracao.notificar();
-        this.dialog.closeAll();
-        this.novaDescricao = '';
-        this.novaValor = 0;
-        this.novaPrioridade = 3;
-        this.carregar();
+    openCeFormDialog(this.dialog, NovaMetaDialogComponent, {
+      width: '480px',
+      data: {
+        percentualSimulador: this.percentualSimulador,
+        rendaInfo: this.rendaInfo,
       },
-      error: (e) => {
-        this.salvando = false;
-        this.novaMetaAlerta = resolveHttpError(e, 'Erro ao salvar meta.');
-      }
-    });
+    })
+      .afterClosed()
+      .subscribe((criada) => {
+        if (criada) {
+          this.financaAlteracao.notificar();
+          this.carregar();
+        }
+      });
   }
 
   abrirEdicao(m: MetaFinanceira): void {

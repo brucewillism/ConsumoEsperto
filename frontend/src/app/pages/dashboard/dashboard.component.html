@@ -33,7 +33,7 @@
         <i class="fas fa-sync-alt" [class.fa-spin]="isLoading"></i>
         Atualizar
       </button>
-      <button class="btn btn-hud btn-hud-primary" routerLink="/transacoes">
+      <button class="btn btn-hud btn-hud-primary" type="button" (click)="abrirNovoLancamento()">
         <i class="fas fa-plus"></i>
         Nova Transação
       </button>
@@ -109,53 +109,11 @@
   <section class="quick-lancamento" *ngIf="!errorMessage && !isLoading">
     <div class="quick-lancamento-card">
       <h3 class="quick-lancamento-title">Novo lançamento</h3>
-      <p class="quick-lancamento-hint">Despesas no cartão usam a fatura aberta; débito/dinheiro impactam o saldo em conta.</p>
-      <form [formGroup]="quickTransacaoForm" (ngSubmit)="salvarLancamentoRapido()" class="quick-lancamento-form">
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="exec-field exec-field-desc">
-          <mat-label>Descrição</mat-label>
-          <input matInput formControlName="descricao" autocomplete="off" />
-          <mat-error *ngIf="quickTransacaoForm.get('descricao')?.hasError('required')">Informe a descrição</mat-error>
-        </mat-form-field>
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="exec-field exec-field-valor">
-          <mat-label>Valor (R$)</mat-label>
-          <input matInput type="text" inputmode="decimal" formControlName="valor" ceMask="decimal" placeholder="0,00" />
-          <mat-error *ngIf="quickTransacaoForm.get('valor')?.hasError('required')">Informe o valor</mat-error>
-          <mat-error *ngIf="quickTransacaoForm.get('valor')?.hasError('valorInvalido')">Digite um valor maior que zero</mat-error>
-        </mat-form-field>
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="exec-field exec-field-tipo">
-          <mat-label>Tipo</mat-label>
-          <mat-select formControlName="tipoTransacao" panelClass="exec-select-panel">
-            <mat-option [value]="tipoTransacaoEnum.DESPESA">Despesa</mat-option>
-            <mat-option [value]="tipoTransacaoEnum.RECEITA">Receita</mat-option>
-            <mat-option [value]="tipoTransacaoEnum.INVESTIMENTO">Investimento</mat-option>
-          </mat-select>
-          <mat-error *ngIf="quickTransacaoForm.get('tipoTransacao')?.hasError('required')">Selecione o tipo</mat-error>
-        </mat-form-field>
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="exec-field exec-field-categoria">
-          <mat-label>Categoria</mat-label>
-          <mat-select formControlName="categoriaId" panelClass="exec-select-panel">
-            <mat-option value="">Sem categoria</mat-option>
-            <mat-option *ngFor="let cat of categorias" [value]="cat.id">{{ cat.nome }}</mat-option>
-          </mat-select>
-        </mat-form-field>
-        <mat-form-field
-          appearance="outline"
-          subscriptSizing="dynamic"
-          class="exec-field exec-field-cartao"
-          *ngIf="quickTransacaoForm.get('tipoTransacao')?.value === tipoTransacaoEnum.DESPESA">
-          <mat-label>Cartão de crédito</mat-label>
-          <mat-select formControlName="cartaoCreditoId" panelClass="exec-select-panel">
-            <mat-option value="">Nenhum (Débito/Dinheiro)</mat-option>
-            <mat-option *ngFor="let c of cartoesFormulario" [value]="c.id">{{ c.banco }} · {{ c.nome }}</mat-option>
-          </mat-select>
-        </mat-form-field>
-        <div class="exec-submit-wrap">
-          <button mat-flat-button color="primary" type="submit" class="exec-submit" [disabled]="quickTransacaoForm.invalid || salvandoQuickTransacao">
-            <mat-spinner *ngIf="salvandoQuickTransacao" diameter="18" class="btn-inline-spinner"></mat-spinner>
-            <span *ngIf="!salvandoQuickTransacao">Salvar</span>
-          </button>
-        </div>
-      </form>
+      <p class="quick-lancamento-hint">Registre receitas, despesas e investimentos sem sair do painel.</p>
+      <button mat-flat-button color="primary" type="button" class="exec-submit" (click)="abrirNovoLancamento()">
+        <mat-icon>add</mat-icon>
+        Novo lançamento
+      </button>
     </div>
   </section>
 
@@ -708,7 +666,7 @@
         <i class="fas fa-receipt"></i>
         <p>Nenhuma transação encontrada</p>
         <small>Adicione sua primeira transação para começar</small>
-        <button class="btn btn-primary" routerLink="/transacoes">
+        <button class="btn btn-primary" type="button" (click)="abrirNovoLancamento()">
           <i class="fas fa-plus"></i>
           Nova Transação
         </button>
@@ -722,7 +680,7 @@
       </div>
       
       <div class="actions-grid">
-        <a routerLink="/transacoes" class="action-card">
+        <button type="button" class="action-card" (click)="abrirNovoLancamento()">
           <div class="action-icon">
             <i class="fas fa-plus"></i>
           </div>
@@ -730,7 +688,7 @@
             <h4>Nova Transação</h4>
             <p>Registrar entrada ou saída</p>
           </div>
-        </a>
+        </button>
         
         <a routerLink="/cartoes" class="action-card">
           <div class="action-icon">

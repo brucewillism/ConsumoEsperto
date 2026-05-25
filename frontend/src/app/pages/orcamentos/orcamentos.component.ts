@@ -9,12 +9,14 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { forkJoin } from 'rxjs';
+import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
+import { NovoOrcamentoDialogComponent } from '../../shared/novo-orcamento-dialog/novo-orcamento-dialog.component';
 import { Categoria } from '../../models/categoria.model';
 import { CategoriaService } from '../../services/categoria.service';
 import { ForecastFinanceiro, Orcamento, OrcamentoService } from '../../services/orcamento.service';
 import { ToastService } from '../../services/toast.service';
-import { resolveHttpError, parseValorBrasileiro, sanitizeDecimalInput, sanitizeIntegerInput } from '../../shared/utils/form.utils';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 
 @Component({
@@ -31,6 +33,7 @@ import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-
     MatProgressBarModule,
     MatSelectModule,
     MatCheckboxModule,
+    MatDialogModule,
     ChartMetodologiaComponent,
   ],
   templateUrl: './orcamentos.component.html',
@@ -41,21 +44,14 @@ export class OrcamentosComponent implements OnInit {
   categorias: Categoria[] = [];
   forecast: ForecastFinanceiro | null = null;
   carregando = true;
-  salvando = false;
-
-  categoriaId: number | null = null;
-  valorLimiteInput = '';
-  mesInput = String(new Date().getMonth() + 1);
-  anoInput = String(new Date().getFullYear());
   mes = new Date().getMonth() + 1;
   ano = new Date().getFullYear();
-  compartilhado = false;
-  formAlerta = '';
 
   constructor(
     private orcamentoService: OrcamentoService,
     private categoriaService: CategoriaService,
-    private toast: ToastService
+    private toast: ToastService,
+    private dialog: MatDialog
   ) {}
 
   ngOnInit(): void {
@@ -82,50 +78,21 @@ export class OrcamentosComponent implements OnInit {
     });
   }
 
-  salvar(): void {
-    this.formAlerta = '';
-    if (!this.categoriaId) {
-      this.formAlerta = 'Selecione uma categoria.';
+  abrirNovoOrcamento(): void {
+    if (!this.categorias.length) {
+      this.toast.warning('Cadastre categorias antes de criar um orçamento.');
       return;
     }
-    const valorLimite = parseValorBrasileiro(this.valorLimiteInput);
-    if (valorLimite == null || valorLimite <= 0) {
-      this.formAlerta = 'Informe um limite mensal maior que zero (somente números).';
-      return;
-    }
-    const mes = parseInt(this.mesInput, 10);
-    const ano = parseInt(this.anoInput, 10);
-    if (!this.mesInput || !Number.isFinite(mes) || mes < 1 || mes > 12) {
-      this.formAlerta = 'Informe um mês válido (1 a 12).';
-      return;
-    }
-    if (!this.anoInput || !Number.isFinite(ano) || ano < 2000 || ano > 2100) {
-      this.formAlerta = 'Informe um ano válido (2000 a 2100).';
-      return;
-    }
-    this.mes = mes;
-    this.ano = ano;
-    this.salvando = true;
-    this.orcamentoService.salvar({
-      categoriaId: this.categoriaId,
-      valorLimite,
-      mes: this.mes,
-      ano: this.ano,
-      compartilhado: this.compartilhado
-    }).subscribe({
-      next: () => {
-        this.toast.success('Orçamento salvo.');
-        this.categoriaId = null;
-        this.valorLimiteInput = '';
-        this.compartilhado = false;
-        this.salvando = false;
-        this.carregar();
-      },
-      error: (e) => {
-        this.formAlerta = resolveHttpError(e, 'Erro ao salvar orçamento.');
-        this.salvando = false;
-      }
-    });
+    openCeFormDialog(this.dialog, NovoOrcamentoDialogComponent, {
+      width: '520px',
+      data: { categorias: this.categorias, mes: this.mes, ano: this.ano },
+    })
+      .afterClosed()
+      .subscribe((salvo) => {
+        if (salvo) {
+          this.carregar();
+        }
+      });
   }
 
   excluir(o: Orcamento): void {
@@ -150,17 +117,5 @@ export class OrcamentosComponent implements OnInit {
 
   brl(v: number | null | undefined): string {
     return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-
-  onValorLimiteInput(raw: string): void {
-    this.valorLimiteInput = sanitizeDecimalInput(raw);
-  }
-
-  onMesInput(raw: string): void {
-    this.mesInput = sanitizeIntegerInput(raw, 2);
-  }
-
-  onAnoInput(raw: string): void {
-    this.anoInput = sanitizeIntegerInput(raw, 4);
   }
 }

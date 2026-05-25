@@ -1,0 +1,63 @@
+<h2 mat-dialog-title>Novo orçamento</h2>
+<mat-dialog-content class="ce-form-body">
+  <div class="ce-form-alert" *ngIf="formAlerta">{{ formAlerta }}</div>
+
+  <mat-form-field appearance="outline" class="full">
+    <mat-label>Categoria</mat-label>
+    <mat-select [(ngModel)]="categoriaId" panelClass="exec-select-panel">
+      <mat-option *ngFor="let c of data.categorias" [value]="c.id">{{ c.nome }}</mat-option>
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="full">
+    <mat-label>Limite mensal</mat-label>
+    <input
+      matInput
+      type="text"
+      inputmode="decimal"
+      [ngModel]="valorLimiteInput"
+      (ngModelChange)="onValorLimiteInput($event)"
+      placeholder="0,00"
+      autocomplete="off"
+    />
+  </mat-form-field>
+
+  <div class="ce-form-row">
+    <mat-form-field appearance="outline">
+      <mat-label>Mês</mat-label>
+      <input
+        matInput
+        type="text"
+        inputmode="numeric"
+        maxlength="2"
+        [ngModel]="mesInput"
+        (ngModelChange)="onMesInput($event)"
+        autocomplete="off"
+      />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Ano</mat-label>
+      <input
+        matInput
+        type="text"
+        inputmode="numeric"
+        maxlength="4"
+        [ngModel]="anoInput"
+        (ngModelChange)="onAnoInput($event)"
+        autocomplete="off"
+      />
+    </mat-form-field>
+  </div>
+
+  <mat-checkbox [(ngModel)]="compartilhado">
+    Compartilhado com família/casal
+  </mat-checkbox>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
+  <button mat-raised-button color="primary" (click)="salvar()" [disabled]="salvando">
+    <mat-icon>save</mat-icon>
+    Salvar
+  </button>
+</mat-dialog-actions>

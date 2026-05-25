@@ -4,14 +4,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { BaseChartDirective } from 'ng2-charts';
-import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
-import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
-import {
-  markAllControlsTouched,
-  parseValorBrasileiro,
-  resolveHttpError,
-  valorMonetarioBrValidator
-} from '../../shared/utils/form.utils';
+import { FormsModule } from '@angular/forms';
+import { parseValorBrasileiro, resolveHttpError } from '../../shared/utils/form.utils';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -20,11 +14,13 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
+import { QuickTransacaoDialogComponent } from '../../shared/quick-transacao-dialog/quick-transacao-dialog.component';
 import { TransacaoService } from '../../services/transacao.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { RelatorioCategoriaMesAtual, RelatorioService } from '../../services/relatorio.service';
 import { RendaConfigService, RendaConfigDto } from '../../services/renda-config.service';
-import { CategoriaService } from '../../services/categoria.service';
 import {
   DashboardProjection,
   OportunidadeInvestimento,
@@ -52,7 +48,6 @@ import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
-import { Categoria } from '../../models/categoria.model';
 import { CartaoCredito } from '../../models/cartao-credito.model';
 import { TipoTransacao, Transacao } from '../../models/transacao.model';
 import {
@@ -118,7 +113,6 @@ interface ChartData {
     DateFormatPipe,
     BaseChartDirective,
     FormsModule,
-    ReactiveFormsModule,
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
@@ -127,10 +121,10 @@ interface ChartData {
     MatProgressSpinnerModule,
     MatIconModule,
     MatTooltipModule,
+    MatDialogModule,
     PrevisaoFuturoChartComponent,
     LoadingIndicatorComponent,
     ChartMetodologiaComponent,
-    CeInputMaskDirective,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
@@ -268,11 +262,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isSilentRefreshing = false;
   ultimaAtualizacao: Date | null = null;
 
-  /** Lançamento rápido no dashboard */
-  readonly quickTransacaoForm: FormGroup;
-  categorias: Categoria[] = [];
-  cartoesFormulario: CartaoCredito[] = [];
-  salvandoQuickTransacao = false;
   readonly tipoTransacaoEnum = TipoTransacao;
   modoSimulacao = false;
   /** Sentinela — mesma fonte que {@link PrevisaoFuturoChartComponent} quando integrado ao painel. */
@@ -328,7 +317,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private relatorioService: RelatorioService,
     private rendaConfigService: RendaConfigService,
     private financaAlteracao: FinancaAlteracaoService,
-    private categoriaService: CategoriaService,
     private dashboardService: DashboardService,
     private scoreService: ScoreService,
     private notificacaoInbox: NotificacaoInboxService,
@@ -338,17 +326,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private jarvisFeedbackService: JarvisFeedbackService,
     private authService: AuthService,
     private usuarioService: UsuarioService,
-    private fb: FormBuilder,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private dialog: MatDialog
   ) {
-    this.quickTransacaoForm = this.fb.group({
-      descricao: ['', Validators.required],
-      valor: ['', [Validators.required, valorMonetarioBrValidator]],
-      tipoTransacao: [TipoTransacao.DESPESA, Validators.required],
-      categoriaId: [''],
-      cartaoCreditoId: ['']
-    });
-
     this.financaAlteracao.alteracoes$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.loadDashboardData({ silent: true }));
@@ -379,16 +359,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
     });
     this.carregarInsightsFeed();
-    this.quickTransacaoForm.get('tipoTransacao')?.valueChanges.subscribe((tipo) => {
-      if (tipo === TipoTransacao.RECEITA) {
-        this.quickTransacaoForm.patchValue({ cartaoCreditoId: '' }, { emitEvent: false });
-      }
-    });
-
-    this.categoriaService
-      .buscarTodas()
-      .pipe(takeUntilDestroyed(this.destroyRef), catchError(() => of([] as Categoria[])))
-      .subscribe((c) => (this.categorias = c));
 
     this.dashboardService.estadoDashboardCompleto$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -570,62 +540,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.pollingSubscription = undefined;
   }
 
-  salvarLancamentoRapido(): void {
-    if (this.salvandoQuickTransacao) {
-      return;
-    }
-    if (this.quickTransacaoForm.invalid) {
-      markAllControlsTouched(this.quickTransacaoForm);
-      return;
-    }
-    const raw = this.quickTransacaoForm.getRawValue();
-    const valorNum = parseValorBrasileiro(raw.valor);
-    if (valorNum == null || valorNum <= 0) {
-      this.quickTransacaoForm.get('valor')?.setErrors({ valorInvalido: true });
-      this.quickTransacaoForm.get('valor')?.markAsTouched();
-      return;
-    }
-
-    const body: Transacao = {
-      descricao: String(raw.descricao).trim(),
-      valor: valorNum,
-      tipoTransacao: raw.tipoTransacao as TipoTransacao,
-      dataTransacao: new Date()
-    };
-    const cat = raw.categoriaId;
-    if (cat !== '' && cat != null) {
-      body.categoriaId = Number(cat);
-    }
-    if (raw.tipoTransacao === TipoTransacao.DESPESA && raw.cartaoCreditoId !== '' && raw.cartaoCreditoId != null) {
-      body.cartaoCreditoId = Number(raw.cartaoCreditoId);
-    }
-
-    this.salvandoQuickTransacao = true;
-    this.transacaoService.criarTransacao(body).subscribe({
-      next: () => {
-        this.salvandoQuickTransacao = false;
-        this.snackBar.open('Transação registrada com sucesso.', 'Fechar', {
-          duration: 3000,
-          panelClass: ['success-snackbar']
-        });
-        this.quickTransacaoForm.reset({
-          descricao: '',
-          valor: '',
-          tipoTransacao: TipoTransacao.DESPESA,
-          categoriaId: '',
-          cartaoCreditoId: ''
-        });
-        this.financaAlteracao.notificar();
-      },
-      error: (err) => {
-        this.salvandoQuickTransacao = false;
-        this.snackBar.open(
-          resolveHttpError(err, 'Não foi possível salvar o lançamento. Tente novamente.'),
-          'Fechar',
-          { duration: 4000, panelClass: ['error-snackbar'] }
-        );
-      }
-    });
+  abrirNovoLancamento(): void {
+    openCeFormDialog(this.dialog, QuickTransacaoDialogComponent, { width: '560px' })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((criada) => {
+        if (criada) {
+          this.financaAlteracao.notificar();
+        }
+      });
   }
 
   private parseValorBrasileiro(v: unknown): number | null {
@@ -716,9 +639,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     
     // Cartões: totais a partir da lista (limite utilizado = soma na fatura aberta; nunca mistura com saldo em conta)
     const cartoesList = data.cartoes || [];
-    this.cartoesFormulario = cartoesList.filter(
-      (c: CartaoCredito) => c.ativo !== false && c.id != null
-    ) as CartaoCredito[];
     this.creditCardLimit = cartoesList.reduce((s: number, c: { limiteCredito?: number }) => s + (Number(c.limiteCredito) || 0), 0);
     this.creditCardUsed = cartoesList.reduce((s: number, c: { limiteUtilizado?: number; limiteCredito?: number; limiteDisponivel?: number }) => {
       if (c.limiteUtilizado != null && !Number.isNaN(Number(c.limiteUtilizado))) {

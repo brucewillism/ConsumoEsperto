@@ -6,18 +6,34 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
 import { forkJoin, of } from 'rxjs';
+import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
+import { CriarGrupoFamiliarDialogComponent } from '../../shared/criar-grupo-familiar-dialog/criar-grupo-familiar-dialog.component';
+import {
+  ConvidarFamiliarDialogComponent,
+  ConvidarFamiliarDialogResult,
+} from '../../shared/convidar-familiar-dialog/convidar-familiar-dialog.component';
 import { catchError } from 'rxjs/operators';
 import { FamiliaService, GrupoFamiliar, GrupoFamiliarMembro } from '../../services/familia.service';
 import { Orcamento } from '../../services/orcamento.service';
 import { ToastService } from '../../services/toast.service';
-import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
-import { isEmailValido, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-familia',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, CeInputMaskDirective],
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatButtonModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressBarModule,
+    MatDialogModule,
+    MatIconModule,
+  ],
   templateUrl: './familia.component.html',
   styleUrl: './familia.component.scss'
 })
@@ -25,15 +41,14 @@ export class FamiliaComponent implements OnInit {
   grupo: GrupoFamiliar | null = null;
   convites: GrupoFamiliarMembro[] = [];
   orcamentos: Orcamento[] = [];
-  nomeGrupo = 'Orçamento do Casal';
-  conviteEmail = '';
-  conviteWhatsapp = '';
   carregando = true;
   conviteVisual = '';
-  grupoErro = '';
-  conviteErro = '';
 
-  constructor(private familiaService: FamiliaService, private toast: ToastService) {}
+  constructor(
+    private familiaService: FamiliaService,
+    private toast: ToastService,
+    private dialog: MatDialog
+  ) {}
 
   ngOnInit(): void {
     this.carregar();
@@ -53,49 +68,28 @@ export class FamiliaComponent implements OnInit {
     });
   }
 
-  criarGrupo(): void {
-    this.grupoErro = '';
-    const nome = (this.nomeGrupo || '').trim();
-    if (!nome) {
-      this.grupoErro = 'Informe um nome para o grupo familiar.';
-      return;
-    }
-    this.familiaService.criar(nome).subscribe({
-      next: (grupo) => {
-        this.grupo = grupo;
-        this.toast.success('Grupo familiar criado.');
-        this.carregar();
-      },
-      error: (e) => {
-        this.grupoErro = resolveHttpError(e, 'Erro ao criar grupo.');
-      }
-    });
+  abrirCriarGrupo(): void {
+    openCeFormDialog(this.dialog, CriarGrupoFamiliarDialogComponent, { width: '440px' })
+      .afterClosed()
+      .subscribe((grupo) => {
+        const criado = grupo as GrupoFamiliar | null | undefined;
+        if (criado) {
+          this.grupo = criado;
+          this.carregar();
+        }
+      });
   }
 
-  convidar(): void {
-    this.conviteErro = '';
-    const email = (this.conviteEmail || '').trim();
-    const whatsapp = (this.conviteWhatsapp || '').trim();
-    if (!email && !whatsapp) {
-      this.conviteErro = 'Informe o e-mail ou o WhatsApp do convidado.';
-      return;
-    }
-    if (email && !isEmailValido(email)) {
-      this.conviteErro = 'Digite um e-mail válido.';
-      return;
-    }
-    this.familiaService.convidar(this.conviteEmail, this.conviteWhatsapp).subscribe({
-      next: () => {
-        this.toast.success('Convite enviado.');
-        this.conviteVisual = `${window.location.origin}/familia?convite=${encodeURIComponent(this.conviteEmail || this.conviteWhatsapp)}`;
-        this.conviteEmail = '';
-        this.conviteWhatsapp = '';
-        this.carregar();
-      },
-      error: (e) => {
-        this.conviteErro = resolveHttpError(e, 'Erro ao enviar convite.');
-      }
-    });
+  abrirConvidar(): void {
+    openCeFormDialog(this.dialog, ConvidarFamiliarDialogComponent, { width: '480px' })
+      .afterClosed()
+      .subscribe((res) => {
+        const convite = res as ConvidarFamiliarDialogResult | null | undefined;
+        if (convite?.conviteVisual) {
+          this.conviteVisual = convite.conviteVisual;
+          this.carregar();
+        }
+      });
   }
 
   responder(convite: GrupoFamiliarMembro, aceitar: boolean): void {

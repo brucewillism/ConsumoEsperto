@@ -1,0 +1,56 @@
+<h2 mat-dialog-title>Novo lançamento</h2>
+<form [formGroup]="form" (ngSubmit)="salvar()">
+  <mat-dialog-content class="ce-form-body">
+    <p class="hint">Despesas no cartão usam a fatura aberta; débito/dinheiro impactam o saldo em conta.</p>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Descrição</mat-label>
+      <input matInput formControlName="descricao" autocomplete="off" />
+      <mat-error *ngIf="form.get('descricao')?.hasError('required')">Informe a descrição</mat-error>
+    </mat-form-field>
+
+    <div class="ce-form-row">
+      <mat-form-field appearance="outline">
+        <mat-label>Valor (R$)</mat-label>
+        <input matInput type="text" inputmode="decimal" formControlName="valor" ceMask="decimal" placeholder="0,00" />
+        <mat-error *ngIf="form.get('valor')?.hasError('required')">Informe o valor</mat-error>
+        <mat-error *ngIf="form.get('valor')?.hasError('valorInvalido')">Digite um valor maior que zero</mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Tipo</mat-label>
+        <mat-select formControlName="tipoTransacao" panelClass="exec-select-panel">
+          <mat-option [value]="tipoTransacaoEnum.DESPESA">Despesa</mat-option>
+          <mat-option [value]="tipoTransacaoEnum.RECEITA">Receita</mat-option>
+          <mat-option [value]="tipoTransacaoEnum.INVESTIMENTO">Investimento</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Categoria</mat-label>
+      <mat-select formControlName="categoriaId" panelClass="exec-select-panel">
+        <mat-option value="">Sem categoria</mat-option>
+        <mat-option *ngFor="let cat of categorias" [value]="cat.id">{{ cat.nome }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field
+      appearance="outline"
+      class="full"
+      *ngIf="form.get('tipoTransacao')?.value === tipoTransacaoEnum.DESPESA">
+      <mat-label>Cartão de crédito</mat-label>
+      <mat-select formControlName="cartaoCreditoId" panelClass="exec-select-panel">
+        <mat-option value="">Nenhum (Débito/Dinheiro)</mat-option>
+        <mat-option *ngFor="let c of cartoes" [value]="c.id">{{ c.banco }} · {{ c.nome }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close type="button" [disabled]="salvando">Cancelar</button>
+    <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || salvando">
+      <mat-spinner *ngIf="salvando" diameter="18"></mat-spinner>
+      <span *ngIf="!salvando">Salvar</span>
+    </button>
+  </mat-dialog-actions>
+</form>

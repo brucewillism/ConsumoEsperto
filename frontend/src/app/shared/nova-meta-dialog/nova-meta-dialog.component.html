@@ -1,0 +1,29 @@
+<h2 mat-dialog-title>Nova meta</h2>
+<mat-dialog-content class="ce-form-body">
+  <div class="ce-form-alert" *ngIf="novaMetaAlerta">{{ novaMetaAlerta }}</div>
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
+    <mat-label>Descrição (ex: Geladeira)</mat-label>
+    <input matInput [(ngModel)]="novaDescricao" [disabled]="salvando" />
+  </mat-form-field>
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
+    <mat-label>Valor total (R$)</mat-label>
+    <input matInput type="text" inputmode="decimal" ceMask="decimal" [(ngModel)]="novaValor" [disabled]="salvando" />
+  </mat-form-field>
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
+    <mat-label>Prioridade</mat-label>
+    <mat-select [(ngModel)]="novaPrioridade" [disabled]="salvando" panelClass="exec-select-panel">
+      <mat-option [value]="1">1 — Baixa</mat-option>
+      <mat-option [value]="2">2 — Moderada</mat-option>
+      <mat-option [value]="3">3 — Média</mat-option>
+      <mat-option [value]="4">4 — Alta</mat-option>
+      <mat-option [value]="5">5 — Máxima</mat-option>
+    </mat-select>
+  </mat-form-field>
+  <p class="hint">O percentual usado será o do simulador ({{ data.percentualSimulador }}%).</p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
+  <button mat-raised-button color="primary" (click)="salvar()" [disabled]="salvando">
+    Salvar meta
+  </button>
+</mat-dialog-actions>

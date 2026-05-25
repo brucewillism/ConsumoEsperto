@@ -1,25 +1,22 @@
 import { Component, OnInit, TemplateRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
+import { NovoCartaoDialogComponent } from '../../shared/novo-cartao-dialog/novo-cartao-dialog.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
-import { CartaoCredito, TipoCartao } from '../../models/cartao-credito.model';
+import { CartaoCredito } from '../../models/cartao-credito.model';
 import { BANCOS_BRASIL } from '../../shared/constants/bancos-brasil';
-import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { parseValorBrasileiro, sanitizeCardNumberInput } from '../../shared/utils/form.utils';
 
 @Component({
@@ -27,27 +24,21 @@ import { parseValorBrasileiro, sanitizeCardNumberInput } from '../../shared/util
   standalone: true,
   imports: [
     CommonModule,
-    ReactiveFormsModule,
     MatButtonModule,
     MatCardModule,
     MatChipsModule,
-    MatDatepickerModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatNativeDateModule,
     MatProgressSpinnerModule,
-    MatSelectModule,
     MatSnackBarModule,
     MatDialogModule,
     FormsModule,
-    CeInputMaskDirective
   ],
   templateUrl: './cartoes.component.html',
   styleUrls: ['./cartoes.component.scss']
 })
 export class CartoesComponent implements OnInit {
-  @ViewChild('novoCartaoTpl') novoCartaoTpl!: TemplateRef<unknown>;
   @ViewChild('editCartaoTpl') editCartaoTpl!: TemplateRef<unknown>;
 
   readonly bancosBrasil = BANCOS_BRASIL;
@@ -58,33 +49,18 @@ export class CartoesComponent implements OnInit {
   acaoEmAndamento = false;
   cartaoProcessandoId: number | null = null;
   error: string | null = null;
-  novoCartaoForm!: FormGroup;
-
   cartaoEmEdicao: CartaoCredito | null = null;
   editLimite = 0;
 
   constructor(
-    private fb: FormBuilder,
     private cartaoCreditoService: CartaoCreditoService,
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
     private financaAlteracao: FinancaAlteracaoService
-  ) {
-    this.initForm();
-  }
+  ) {}
 
   ngOnInit(): void {
     this.loadData();
-  }
-
-  private initForm(): void {
-    this.novoCartaoForm = this.fb.group({
-      banco: ['', Validators.required],
-      numero: ['', [Validators.required, Validators.minLength(4), Validators.maxLength(19)]],
-      titular: ['', Validators.required],
-      limite: [0, [Validators.required, Validators.min(0.01)]],
-      vencimento: ['', Validators.required]
-    });
   }
 
   loadData(): void {
@@ -105,85 +81,14 @@ export class CartoesComponent implements OnInit {
   }
 
   abrirNovoCartao(): void {
-    this.novoCartaoForm.reset();
-    openCeFormDialog(this.dialog, this.novoCartaoTpl, { width: '560px' });
-  }
-
-  adicionarCartao(): void {
-    if (this.novoCartaoForm.invalid) {
-      this.novoCartaoForm.markAllAsTouched();
-      this.snackBar.open('Revise os campos destacados antes de adicionar o cartão.', 'Fechar', {
-        duration: 3500,
-        panelClass: ['warning-snackbar']
-      });
-      return;
-    }
-
-    if (this.novoCartaoForm.valid) {
-      this.acaoEmAndamento = true;
-      const cartaoForm = this.novoCartaoForm.value;
-      const limite = parseValorBrasileiro(cartaoForm.limite) ?? 0;
-      const dueDate = new Date(cartaoForm.vencimento);
-      const numeroCartao = String(cartaoForm.numero).replace(/\D/g, '');
-      const diaVencimento = Number.isNaN(dueDate.getTime()) ? undefined : dueDate.getDate();
-
-      const payload: CartaoCredito = {
-        nome: cartaoForm.titular,
-        banco: cartaoForm.banco,
-        numeroCartao,
-        limiteCredito: limite,
-        limiteDisponivel: limite,
-        tipoCartao: TipoCartao.CREDITO,
-        ativo: true,
-        diaVencimento,
-        dataVencimento: dueDate,
-        limite: limite,
-        limiteUtilizado: 0
-      };
-
-      this.cartaoCreditoService.criarCartaoCredito(payload).subscribe({
-        next: () => {
-          this.snackBar.open('Cartão cadastrado com sucesso!', 'Fechar', {
-          duration: 3000,
-          panelClass: ['success-snackbar']
-        });
-          this.dialog.closeAll();
-          this.novoCartaoForm.reset();
-          this.acaoEmAndamento = false;
+    openCeFormDialog(this.dialog, NovoCartaoDialogComponent, { width: '560px' })
+      .afterClosed()
+      .subscribe((criado) => {
+        if (criado) {
+          this.financaAlteracao.notificar();
           this.loadData();
-        },
-        error: (err) => {
-          this.acaoEmAndamento = false;
-          this.snackBar.open(this.mensagemErroCadastroCartao(err), 'Fechar', {
-          duration: 3000,
-          panelClass: ['error-snackbar']
-        });
         }
       });
-    }
-  }
-
-  private mensagemErroCadastroCartao(err: any): string {
-    const body = err?.error;
-    if (typeof body === 'string' && body.trim()) {
-      return body;
-    }
-    if (body?.message) {
-      return body.message;
-    }
-    if (body?.errors && typeof body.errors === 'object') {
-      const primeira = Object.values(body.errors)[0];
-      if (typeof primeira === 'string') {
-        return primeira;
-      }
-      if (Array.isArray(primeira) && primeira.length > 0) {
-        return String(primeira[0]);
-      }
-    }
-    if (err?.status === 400) {
-      return 'Dados inválidos. Confira número, limite e vencimento.';
-    }
-    return 'Erro ao cadastrar cartão.';
   }
 
   atualizarDados(): void {

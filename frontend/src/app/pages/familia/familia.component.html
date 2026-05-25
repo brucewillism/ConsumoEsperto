@@ -9,15 +9,12 @@
   </section>
 
   <mat-card class="panel" *ngIf="!grupo">
-    <h2>Criar grupo familiar</h2>
-    <div class="ce-form-alert" *ngIf="grupoErro">{{ grupoErro }}</div>
-    <div class="form-row">
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
-        <mat-label>Nome do grupo</mat-label>
-        <input matInput [(ngModel)]="nomeGrupo" placeholder="Ex.: Orçamento do Casal">
-      </mat-form-field>
-      <button mat-raised-button color="primary" (click)="criarGrupo()">Criar</button>
-    </div>
+    <h2>Grupo familiar</h2>
+    <p>Crie um grupo para compartilhar orçamentos com família ou casal.</p>
+    <button mat-raised-button color="primary" (click)="abrirCriarGrupo()">
+      <mat-icon>group_add</mat-icon>
+      Criar grupo
+    </button>
   </mat-card>
 
   <mat-card class="panel" *ngIf="grupo">
@@ -29,18 +26,10 @@
     </div>
 
     <h3>Convidar parceiro(a)</h3>
-    <div class="ce-form-alert" *ngIf="conviteErro">{{ conviteErro }}</div>
-    <div class="form-row">
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
-        <mat-label>E-mail</mat-label>
-        <input matInput type="email" ceMask="email" [(ngModel)]="conviteEmail" placeholder="parceiro@email.com">
-      </mat-form-field>
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
-        <mat-label>WhatsApp</mat-label>
-        <input matInput ceMask="phone" [(ngModel)]="conviteWhatsapp" placeholder="+55 (11) 99999-9999">
-      </mat-form-field>
-      <button mat-raised-button color="primary" (click)="convidar()">Enviar convite</button>
-    </div>
+    <button mat-raised-button color="primary" (click)="abrirConvidar()">
+      <mat-icon>person_add</mat-icon>
+      Enviar convite
+    </button>
     <div class="invite-link" *ngIf="conviteVisual">
       <img [src]="qrUrl()" alt="QR Code do convite">
       <div>
