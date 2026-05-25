@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { DashboardSessionCacheService } from './dashboard-session-cache.service';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, tap, map } from 'rxjs';
 import { Usuario, LoginRequest, LoginResponse, GoogleLoginRequest, GoogleLoginResponse } from '../models/usuario.model';
@@ -43,9 +44,10 @@ export class AuthService {
    * @param router Serviço de roteamento para navegação
    */
   constructor(
-    private http: HttpClient, 
+    private http: HttpClient,
     private router: Router,
-    private loadingService: LoadingService
+    private loadingService: LoadingService,
+    private dashboardSessionCache: DashboardSessionCacheService
   ) {
     // Carrega usuário armazenado no localStorage (se existir)
     this.loadStoredUser();
@@ -348,6 +350,7 @@ export class AuthService {
   logout(): void {
     localStorage.removeItem('token'); // Remove o token JWT
     localStorage.removeItem('user'); // Remove dados do usuário
+    this.dashboardSessionCache.clear();
     this.currentUserSubject.next(null); // Limpa o usuário atual
     this.router.navigate(['/login']); // Redireciona para login
   }

@@ -251,7 +251,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   readonly tooltipJurosTransacao = TOOLTIP_JUROS_TRANSACAO;
   
   // Estado de carregamento para mostrar spinner
-  isLoading = true;
+  isLoading = false;
   
   // Dados de erro para tratamento
   errorMessage = '';
@@ -262,6 +262,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   /** Polling 60s — cancelado em ngOnDestroy */
   private pollingSubscription?: Subscription;
+
+  /** Complementos/projeção pesada — uma vez por sessão do componente (não bloqueia overlay). */
+  private heavyBackgroundStarted = false;
+
+  private overlayDelayTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Atualização em segundo plano (polling / eventos) sem overlay completo */
   isSilentRefreshing = false;
@@ -378,7 +383,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.restaurarDashboardDoCache();
       this.isLoading = false;
     }
-    this.loadDashboardData({ silent: revisita, completo: !revisita });
+    this.loadDashboardData({ silent: revisita, completo: false });
 
     fromEvent(document, 'visibilitychange')
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -528,7 +533,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.pollingSubscription?.unsubscribe();
     this.pollingSubscription = undefined;
+    this.clearOverlayDelayTimer();
     this.loadingService.setPageOverlay(false);
+  }
+
+  private clearOverlayDelayTimer(): void {
+    if (this.overlayDelayTimer != null) {
+      clearTimeout(this.overlayDelayTimer);
+      this.overlayDelayTimer = null;
+    }
   }
 
   private syncDashboardPageOverlay(): void {
@@ -541,7 +554,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private setDashboardLoading(loading: boolean): void {
     this.isLoading = loading;
-    this.syncDashboardPageOverlay();
+    this.clearOverlayDelayTimer();
+    if (!loading) {
+      this.syncDashboardPageOverlay();
+      return;
+    }
+    // Evita flash de overlay em recargas rápidas (login / voltar à rota).
+    this.overlayDelayTimer = setTimeout(() => {
+      this.overlayDelayTimer = null;
+      if (this.isLoading) {
+        this.syncDashboardPageOverlay();
+      }
+    }, 400);
   }
 
   abrirNovoLancamento(): void {
@@ -568,7 +592,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   public loadDashboardData(options?: { silent?: boolean; completo?: boolean }) {
     const silent = options?.silent === true;
-    const completo = options?.completo !== false && !silent;
+    const completo = options?.completo === true;
 
     if (!silent) {
       this.dashboardService.prepararNovaRecargaCompleta();
@@ -1252,17 +1276,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Implementa controle anti-duplicação.
    */
   private loadDashboardDataAfterSync(completo: boolean) {
-    // Não verifica isLoadingData aqui porque este método é chamado
-    // após a sincronização e precisa sempre executar para finalizar o carregamento
-    
     this.isLoadingData = true;
     console.log('📊 Carregando dados após sincronização...');
-    
-    // Calcula datas para o mês atual
+
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    
     const prevRef = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prevAno = prevRef.getFullYear();
     const prevMes = prevRef.getMonth() + 1;
@@ -1274,33 +1291,41 @@ export class DashboardComponent implements OnInit, OnDestroy {
       itens: [],
     };
 
-    // Fase 1: só agregados rápidos (resumo sem calcularProjecaoMes no servidor)
-    forkJoin({
-      resumoMes: this.wrapDashboardRequest(
-        this.transacaoService.obterResumoDoMesAtual({ incluirProjecao: false }),
-        {},
-        'Resumo do mês (rápido)',
-        12_000
-      ),
-      cartoes: this.wrapDashboardRequest(
-        this.cartaoCreditoService.buscarTodosCartoes(),
-        [] as CartaoCredito[],
-        'Cartões',
-        12_000
-      ),
-      despesasCategoriaMesAtual: this.wrapDashboardRequest(
-        this.relatorioService.getDespesasPorCategoriaMesAtual(),
-        despesasCategoriaFallback,
-        'Despesas por categoria (mês)',
-        12_000
-      ),
-    }).subscribe({
-      next: (rapido) => {
+    const liberarOverlay = () => {
+      this.ultimaAtualizacao = new Date();
+      this.setDashboardLoading(false);
+      this.isLoadingData = false;
+      this.isSilentRefreshing = false;
+      this.persistirDashboardNoCache();
+    };
+
+    const agendarComplementosPesados = (despesasCat: RelatorioCategoriaMesAtual) => {
+      if (completo) {
+        this.heavyBackgroundStarted = true;
+        this.carregarDashboardComplementosEmSegundoPlano(prevAno, prevMes, despesasCat);
+        this.carregarDashboardPesadoEmSegundoPlano();
+        return;
+      }
+      if (!this.heavyBackgroundStarted) {
+        this.heavyBackgroundStarted = true;
+        this.carregarDashboardComplementosEmSegundoPlano(prevAno, prevMes, despesasCat);
+        this.carregarDashboardPesadoEmSegundoPlano();
+      }
+    };
+
+    // Fase 1a: resumo do mês primeiro — libera o overlay sem esperar cartões/relatório.
+    this.wrapDashboardRequest(
+      this.transacaoService.obterResumoDoMesAtual({ incluirProjecao: false }),
+      {},
+      'Resumo do mês (rápido)',
+      8_000
+    ).subscribe({
+      next: (resumoMes) => {
         this.processarDadosReais({
           transacoesMes: [] as Transacao[],
-          resumoMes: rapido.resumoMes,
-          cartoes: rapido.cartoes,
-          despesasCategoriaMesAtual: rapido.despesasCategoriaMesAtual,
+          resumoMes,
+          cartoes: [],
+          despesasCategoriaMesAtual: despesasCategoriaFallback,
           relatorioCategoriaMesPassado: null,
           rendaConfig: null,
           usuarioScore: null,
@@ -1309,26 +1334,47 @@ export class DashboardComponent implements OnInit, OnDestroy {
           dashboardProjection: null,
           previsaoFuturo: null,
         });
-        this.ultimaAtualizacao = new Date();
-        this.setDashboardLoading(false);
-        this.isLoadingData = false;
-        this.persistirDashboardNoCache();
-        console.log('✅ Dashboard visível — complementos em segundo plano');
-        if (completo) {
-          this.carregarDashboardComplementosEmSegundoPlano(
-            prevAno,
-            prevMes,
-            rapido.despesasCategoriaMesAtual ?? despesasCategoriaFallback
-          );
-          this.carregarDashboardPesadoEmSegundoPlano();
-        }
+        liberarOverlay();
+        console.log('✅ Dashboard visível (resumo) — restante em segundo plano');
+
+        forkJoin({
+          cartoes: this.wrapDashboardRequest(
+            this.cartaoCreditoService.buscarTodosCartoes(),
+            [] as CartaoCredito[],
+            'Cartões',
+            10_000
+          ),
+          despesasCategoriaMesAtual: this.wrapDashboardRequest(
+            this.relatorioService.getDespesasPorCategoriaMesAtual(),
+            despesasCategoriaFallback,
+            'Despesas por categoria (mês)',
+            10_000
+          ),
+        }).subscribe({
+          next: (extra) => {
+            this.processarDadosReais({
+              transacoesMes: [] as Transacao[],
+              resumoMes,
+              cartoes: extra.cartoes,
+              despesasCategoriaMesAtual: extra.despesasCategoriaMesAtual ?? despesasCategoriaFallback,
+              relatorioCategoriaMesPassado: null,
+              rendaConfig: this.rendaConfig,
+              usuarioScore: this.usuarioScore,
+              oportunidadeInvestimento: this.oportunidadeInvestimento,
+              sugestoesContencao: this.sugestoesContencaoJarvis,
+              dashboardProjection: this.dashboardProjection,
+              previsaoFuturo: this.previsaoFuturoChart,
+            });
+            this.persistirDashboardNoCache();
+            agendarComplementosPesados(extra.despesasCategoriaMesAtual ?? despesasCategoriaFallback);
+          },
+          error: () => agendarComplementosPesados(despesasCategoriaFallback),
+        });
       },
       error: (error) => {
-        console.error('❌ Erro ao carregar dados do dashboard:', error);
+        console.error('❌ Erro ao carregar resumo do dashboard:', error);
         this.errorMessage = 'Erro ao carregar dados. Tente novamente.';
-        this.setDashboardLoading(false);
-        this.isLoadingData = false;
-        this.isSilentRefreshing = false;
+        liberarOverlay();
       },
     });
   }
