@@ -48,6 +48,9 @@ public class OpenAiService {
     @Value("${consumoesperto.ai.gemini-model:gemini-2.5-flash}")
     private String geminiModel;
 
+    @Value("${consumoesperto.ai.groq-model-document:llama-3.1-8b-instant}")
+    private String groqModelDocument;
+
     /** Modelo exclusivo OpenAI / endpoint compatível {@code /v1/embeddings}. */
     @Value("${consumoesperto.ai.embedding-model:text-embedding-3-small}")
     private String embeddingModel;
@@ -286,16 +289,39 @@ public class OpenAiService {
     }
 
     public JsonNode gerarJson(Long userId, String systemPrompt, String userPrompt) {
+        return gerarJsonInternal(userId, systemPrompt, userPrompt, false);
+    }
+
+    /** Extração de PDF/contracheque: modelo Groq mais leve para poupar quota diária. */
+    public JsonNode gerarJsonDocumento(Long userId, String systemPrompt, String userPrompt) {
+        return gerarJsonInternal(userId, systemPrompt, userPrompt, true);
+    }
+
+    private JsonNode gerarJsonInternal(Long userId, String systemPrompt, String userPrompt, boolean documento) {
         AiProvidersConfig cfg = cfgForAi(userId);
         return executeAIRequestWithFallback(
             cfg,
             p -> canChatJson(cfg, p),
             (p, c) -> {
-                String model = chatModelFor(p, c);
+                String model = documento ? chatModelForDocument(p, c) : chatModelFor(p, c);
                 return parseChatJsonForProvider(p, c, model, systemPrompt, userPrompt);
             },
             "Nao foi possivel gerar JSON via IA. Detalhes: "
         );
+    }
+
+    private String chatModelForDocument(AiProviderType p, AiProvidersConfig cfg) {
+        if (p == AiProviderType.GROQ) {
+            if (groqModelDocument != null && !groqModelDocument.isBlank()) {
+                return groqModelDocument.trim();
+            }
+            String m = groq(cfg).getModelText();
+            if (m != null && (m.contains("70b") || m.contains("versatile"))) {
+                return "llama-3.1-8b-instant";
+            }
+            return m != null && !m.isBlank() ? m : "llama-3.1-8b-instant";
+        }
+        return chatModelFor(p, cfg);
     }
 
     public String gerarTexto(Long userId, String systemPrompt, String userPrompt, String fallback) {
@@ -701,6 +727,7 @@ public class OpenAiService {
         aiProvidersConfigService.applyGroqMasterFallback(cfg);
         aiProvidersConfigService.applyOpenaiMasterFallback(cfg);
         aiProvidersConfigService.applyOllamaMasterFallback(cfg);
+        aiProvidersConfigService.ensureGeminiInProviderOrder(cfg);
         return cfg;
     }
 }

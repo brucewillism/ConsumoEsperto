@@ -47,6 +47,39 @@ public class AiProvidersConfigService {
     @Value("${consumoesperto.ai.platform-ollama-model:llama3.2}")
     private String platformOllamaModel;
 
+    @Value("${consumoesperto.ai.platform-gemini-api-key:}")
+    private String platformGeminiApiKey;
+
+    /**
+     * Garante GEMINI na ordem de fallback quando a chave da plataforma existe (utilizadores antigos
+     * tinham só GROQ/OPENAI/OLLAMA e nunca tentavam Gemini antes do fim da cadeia).
+     */
+    public void ensureGeminiInProviderOrder(AiProvidersConfig cfg) {
+        if (cfg == null || platformGeminiApiKey == null || platformGeminiApiKey.isBlank()) {
+            return;
+        }
+        List<String> order = cfg.getProviderOrder();
+        if (order == null) {
+            order = new ArrayList<>();
+        } else {
+            order = new ArrayList<>(order);
+        }
+        boolean hasGemini = order.stream().anyMatch(s -> "GEMINI".equalsIgnoreCase(s != null ? s.trim() : ""));
+        if (hasGemini) {
+            cfg.setProviderOrder(order);
+            return;
+        }
+        int insertAt = 0;
+        for (int i = 0; i < order.size(); i++) {
+            if ("GROQ".equalsIgnoreCase(order.get(i) != null ? order.get(i).trim() : "")) {
+                insertAt = i + 1;
+                break;
+            }
+        }
+        order.add(insertAt, "GEMINI");
+        cfg.setProviderOrder(order);
+    }
+
     /**
      * Preenche a chave Groq em memória: prioridade à chave do utilizador; se vazia, usa a mestra do servidor.
      */

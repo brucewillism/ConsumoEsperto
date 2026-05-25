@@ -217,7 +217,7 @@ public class DocumentoIAContextService {
     private JsonNode extrairJsonPrimeiroTrecho(Long usuarioId, String trechoUsuario, boolean esquemaCabecalho, LogAuditoria logOp) {
         String system = sistemaExtracaoCabecalho(esquemaCabecalho);
         String userMsg = "(Trecho inicial do PDF; pode haver continuações.)\n\nTexto extraído:\n" + trechoUsuario;
-        JsonNode json = openAiService.gerarJson(usuarioId, system, userMsg);
+        JsonNode json = openAiService.gerarJsonDocumento(usuarioId, system, userMsg);
         registrarAuditoria(logOp, userMsg, json);
         return json;
     }
@@ -235,7 +235,7 @@ public class DocumentoIAContextService {
             + "Juros (rotativo/atraso/financiamento), Tarifas de serviço/cobrança, Seguro prestamista — registre em taxasForaDaTabelaPrincipal E como lançamento descritivo quando couber. "
             + "Não omita linhas por serem muitas; não resuma listas. Linhas já extraídas noutras partes NÃO repetir.";
         String userMsg = "Trecho PDF parte " + parteNum + " de ~" + totalTrechos + "\n\n" + trecho;
-        JsonNode json = openAiService.gerarJson(usuarioId, system, userMsg);
+        JsonNode json = openAiService.gerarJsonDocumento(usuarioId, system, userMsg);
         registrarAuditoria(LogAuditoria.PDF_CHUNK, userMsg, json);
         return json;
     }
@@ -428,7 +428,7 @@ public class DocumentoIAContextService {
             + "\"lancamentos\":[{\"data\":\"yyyy-MM-dd\",\"descricao\":\"...\",\"valor\":0.0,\"parcelaAtual\":null,\"totalParcelas\":null}]}";
 
         String userRetry = "Texto completo concatenado das páginas do PDF:\n" + text;
-        JsonNode retry = openAiService.gerarJson(usuarioId, systemRetry, userRetry);
+        JsonNode retry = openAiService.gerarJsonDocumento(usuarioId, systemRetry, userRetry);
         registrarAuditoria(LogAuditoria.PDF_REFINAMENTO, userRetry, retry);
 
         ArrayNode retryLancamentos = retry.path("lancamentos").isArray()
@@ -460,7 +460,7 @@ public class DocumentoIAContextService {
         }
 
         String userParcelas = "Texto extraído do PDF:\n" + text;
-        JsonNode parcelas = openAiService.gerarJson(
+        JsonNode parcelas = openAiService.gerarJsonDocumento(
             usuarioId,
             "Você é auditor de fatura de cartão. Retorne apenas JSON válido no formato "
                 + "{\"parcelas\":[{\"data\":\"yyyy-MM-dd\",\"descricao\":\"...\",\"valor\":0.0,\"parcelaAtual\":1,\"totalParcelas\":2}]}. "

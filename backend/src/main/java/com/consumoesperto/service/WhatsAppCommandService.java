@@ -156,6 +156,9 @@ public class WhatsAppCommandService {
     private static final Pattern ATUALIZACAO_CARTAO_PARA = Pattern.compile(
         "(?i)(?:para|em|como)\\s+(?:cart[aã]o\\s+)?(.+)$");
 
+    private static final Pattern FINAL_CARTAO_4_DIGITOS = Pattern.compile(
+        "(?i)(?:final|termina(?:do|l)?|numero|n[uú]mero)\\s*(?:do\\s+cart[aã]o\\s+)?(\\d{4})|\\bfinal\\s+(\\d{4})\\b|(?:cart[aã]o\\s+)?(\\d{4})\\s*$");
+
     public void processIncomingMessage(String from, String body, String mediaUrl, String mediaContentType) {
         Long userId = null;
         try {
@@ -317,12 +320,17 @@ public class WhatsAppCommandService {
             return false;
         }
         String n = normalize(text);
+        if (n.contains("atualiz") || n.contains("altera") || n.contains("muda") || n.contains("troca")) {
+            return false;
+        }
         if (n.contains("quantos cart") || n.contains("quantas cart")) {
             return true;
         }
-        return (n.contains("lista") || n.contains("listar") || n.contains("mostra") || n.contains("mostre")
-            || n.contains("quais") || n.contains("meus") || n.contains("meu "))
-            && n.contains("cart");
+        if ((n.contains("lista") || n.contains("listar") || n.contains("mostre") || n.contains("mostra")
+            || n.contains("quais")) && n.contains("cart")) {
+            return true;
+        }
+        return n.contains("meus cart") || n.contains("meu cart") || n.contains("lista meus");
     }
 
     private boolean textoPedeAtualizacaoCartao(String text) {
@@ -330,8 +338,11 @@ public class WhatsAppCommandService {
             return false;
         }
         String n = normalize(text);
-        return (n.contains("atualiz") || n.contains("altera") || n.contains("muda") || n.contains("troca"))
-            && (n.contains("cart") || n.contains("banco"));
+        if (n.contains("atualiz") || n.contains("altera") || n.contains("muda") || n.contains("troca")) {
+            return n.contains("cart") || n.contains("banco") || extrairFinalCartaoQuatroDigitos(text).isPresent();
+        }
+        return extrairFinalCartaoQuatroDigitos(text).isPresent()
+            && (n.contains("banco") || n.contains("cart") || n.contains("mercado"));
     }
 
     private Optional<String> tryConsultaListaCartoes(Long userId, String text) {
@@ -359,44 +370,74 @@ public class WhatsAppCommandService {
         if (!textoPedeAtualizacaoCartao(text)) {
             return Optional.empty();
         }
-        String destino = extrairDestinoAtualizacaoCartao(text);
-        if (destino.isBlank()) {
-            return Optional.empty();
-        }
         List<CartaoCreditoDTO> ativos = cartaoCreditoService.buscarPorUsuarioId(userId);
         if (ativos.isEmpty()) {
             return Optional.of(msgErro(userId, "Cartão", "Não há cartão ativo para atualizar."));
         }
+
+        Optional<String> finalOpt = extrairFinalCartaoQuatroDigitos(text);
         CartaoCreditoDTO alvo = null;
-        String n = normalize(text);
-        if (n.contains("nao informado") || n.contains("não informado") || n.contains("sem banco")) {
-            alvo = ativos.stream()
-                .filter(c -> bancoCartaoIndefinido(c.getBanco()))
-                .findFirst()
-                .orElse(null);
+        if (finalOpt.isPresent()) {
+            String fin = finalOpt.get();
+            List<CartaoCreditoDTO> porFinal = ativos.stream()
+                .filter(c -> fin.equals(ultimos4DigitosCartao(c.getNumeroCartao())))
+                .toList();
+            if (porFinal.size() == 1) {
+                alvo = porFinal.get(0);
+            } else if (porFinal.size() > 1) {
+                return Optional.of(msgErro(userId, "Cartão",
+                    "Há mais de um cartão com final *" + fin + "*. Seja mais específico no apelido."));
+            } else {
+                return Optional.of(msgErro(userId, "Cartão",
+                    "Não encontrei cartão ativo com final *" + fin + "*."));
+            }
         }
+
+        String n = normalize(text);
+        if (alvo == null && (n.contains("nao informado") || n.contains("sem banco"))) {
+            List<CartaoCreditoDTO> indefinidos = ativos.stream()
+                .filter(c -> bancoCartaoIndefinido(c.getBanco()))
+                .toList();
+            if (indefinidos.size() == 1) {
+                alvo = indefinidos.get(0);
+            } else if (indefinidos.size() > 1) {
+                return Optional.of(msgErro(userId, "Cartão",
+                    "Há *" + indefinidos.size() + "* cartões com banco indefinido. Indica o *final* (ex.: *final 0911*)."));
+            }
+        }
+
         if (alvo == null && ativos.size() == 1) {
             alvo = ativos.get(0);
         }
+
         if (alvo == null) {
-            String ref = whatsAppFirstNonBlank(destino, text);
-            CardMatchResult match = findBestCard(userId, ref);
-            if (match.card != null) {
-                alvo = cartaoCreditoService.buscarPorId(match.card.getId(), userId);
+            String ref = resolverTokenCartaoParaBusca(text);
+            if (!ref.isBlank()) {
+                CardMatchResult match = findBestCard(userId, ref);
+                if (match.card != null) {
+                    alvo = cartaoCreditoService.buscarPorId(match.card.getId(), userId);
+                }
             }
         }
+
         if (alvo == null) {
             return Optional.of(msgErro(userId, "Cartão",
-                "Há vários cartões. Indica qual (ex.: *atualiza o Itaú para Mercado Pago*) ou o final do cartão."));
+                "Indica qual cartão: apelido/banco ou *final 0911* (ex.: *atualiza o banco para Mercado Pago do final 0911*)."));
         }
-        String nomeNovo = sanitizeName(capitalizarPalavras(destino));
-        String bancoNovo = nomeNovo;
-        if (destino.toLowerCase(Locale.ROOT).contains("mercado")) {
-            bancoNovo = "Mercado Pago";
-            if (!nomeNovo.toLowerCase(Locale.ROOT).contains("cart")) {
-                nomeNovo = "Cartão Mercado Pago";
-            }
+
+        String bancoNovo = resolverBancoDestinoAtualizacao(text);
+        String nomeNovo = resolverNomeDestinoAtualizacao(text, bancoNovo, alvo.getNome());
+        if (bancoNovo.isBlank() && nomeNovo.isBlank()) {
+            return Optional.of(msgErro(userId, "Cartão",
+                "Diz para qual banco ou apelido alterar (ex.: *Mercado Pago*)."));
         }
+        if (bancoNovo.isBlank()) {
+            bancoNovo = alvo.getBanco();
+        }
+        if (nomeNovo.isBlank()) {
+            nomeNovo = alvo.getNome();
+        }
+
         try {
             CartaoCreditoDTO atualizado = cartaoCreditoService.atualizarConfigPorCartaoId(
                 userId, alvo.getId(), null, null, nomeNovo, bancoNovo, null, null, null);
@@ -406,6 +447,72 @@ public class WhatsAppCommandService {
         } catch (RuntimeException e) {
             return Optional.of(msgErro(userId, "Cartão", humanizarErroComando(e.getMessage())));
         }
+    }
+
+    private static Optional<String> extrairFinalCartaoQuatroDigitos(String text) {
+        if (text == null || text.isBlank()) {
+            return Optional.empty();
+        }
+        Matcher m = FINAL_CARTAO_4_DIGITOS.matcher(text.trim());
+        if (m.find()) {
+            for (int g = 1; g <= m.groupCount(); g++) {
+                String digits = m.group(g);
+                if (digits != null && digits.matches("\\d{4}")) {
+                    return Optional.of(digits);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static String resolverBancoDestinoAtualizacao(String text) {
+        String n = normalize(text);
+        if (n.contains("mercado pago") || n.contains("mercadopago")) {
+            return "Mercado Pago";
+        }
+        String dest = extrairDestinoAtualizacaoCartao(text);
+        if (dest.isBlank()) {
+            return "";
+        }
+        String d = normalize(dest);
+        if (d.contains("mercado pago")) {
+            return "Mercado Pago";
+        }
+        if (d.contains("desse cartao") || d.contains("do final")) {
+            dest = dest.replaceAll("(?i)\\s+desse\\s+cart[aã]o.*", "").trim();
+            dest = dest.replaceAll("(?i)\\s+do\\s+final.*", "").trim();
+        }
+        if (dest.isBlank()) {
+            return "";
+        }
+        return sanitizeName(capitalizarPalavras(dest));
+    }
+
+    private static String resolverNomeDestinoAtualizacao(String text, String bancoNovo, String nomeAtual) {
+        if ("Mercado Pago".equalsIgnoreCase(bancoNovo)) {
+            String n = normalize(nomeAtual != null ? nomeAtual : "");
+            if (n.contains("mercado") && n.contains("pago")) {
+                return sanitizeName(nomeAtual);
+            }
+            return "Cartão Mercado Pago";
+        }
+        return "";
+    }
+
+    private String resolverTokenCartaoParaBusca(String text) {
+        String dest = extrairDestinoAtualizacaoCartao(text);
+        if (!dest.isBlank()) {
+            String limpo = dest.replaceAll("(?i)\\s+desse\\s+cart[aã]o.*", "").trim();
+            limpo = limpo.replaceAll("(?i)\\s+do\\s+final.*", "").trim();
+            if (!limpo.isBlank()) {
+                return limpo;
+            }
+        }
+        String n = normalize(text);
+        if (n.contains("mercado pago")) {
+            return "mercado pago";
+        }
+        return "";
     }
 
     private static boolean bancoCartaoIndefinido(String banco) {
@@ -609,7 +716,49 @@ public class WhatsAppCommandService {
         if (m.contains("Usuário não encontrado")) {
             return "Conta de utilizador inválida. Volta a autenticar-te no app.";
         }
+        String ia = humanizarFalhaProvedoresIa(m);
+        if (ia != null) {
+            return ia;
+        }
         return m;
+    }
+
+    /** Mensagem amigável quando Groq/OpenAI/Ollama esgotam quota ou limite diário. */
+    private static String humanizarFalhaProvedoresIa(String m) {
+        boolean falhaIa = m.contains("Nao foi possivel gerar JSON via IA")
+            || m.contains("Falha OCR em todos provedores")
+            || m.contains("429 Too Many Requests")
+            || m.contains("rate_limit")
+            || m.contains("insufficient_quota")
+            || m.contains("Rate limit reached");
+        if (!falhaIa) {
+            return null;
+        }
+        boolean semGemini = !m.contains("GEMINI:");
+        boolean groqLimite = m.contains("Rate limit reached") || m.contains("rate_limit_exceeded");
+        boolean openaiQuota = m.contains("insufficient_quota");
+        StringBuilder sb = new StringBuilder();
+        sb.append("O *serviço de IA* está temporariamente indisponível");
+        if (groqLimite && openaiQuota) {
+            sb.append(" (limite diário da Groq e quota da OpenAI esgotados)");
+        } else if (groqLimite) {
+            sb.append(" (limite diário da *Groq* atingido — costuma libertar em ~1–2 h)");
+        } else if (openaiQuota) {
+            sb.append(" (quota da *OpenAI* esgotada)");
+        }
+        sb.append(".\n\n");
+        if (m.contains("Nao foi possivel gerar JSON via IA")) {
+            sb.append("Para importar fatura/contracheque *agora* pelo app: menu *Importações pendentes* (arrasta o PDF).\n");
+        }
+        sb.append("Podes voltar a enviar o PDF pelo WhatsApp mais tarde");
+        if (groqLimite && m.contains("try again in")) {
+            sb.append(" (quando o limite da Groq renovar)");
+        }
+        sb.append(".\n\n");
+        if (semGemini) {
+            sb.append("_Administrador:_ configure `GEMINI_API_KEY` no servidor (`.env` / Docker) para fallback automático quando Groq/OpenAI falharem._");
+        }
+        return sb.toString().trim();
     }
 
     /**
