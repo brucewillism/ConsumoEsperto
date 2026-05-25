@@ -149,6 +149,9 @@ public class WhatsAppCommandService {
     private static final Pattern META_CHAMADA = Pattern.compile(
         "(?is)\\bchamada\\s+([\\p{L}0-9][\\p{L}0-9'\\- ]{0,60}?)(?:\\.|,|$)");
 
+    private static final Pattern REATIVAR_CARTAO_WHATSAPP = Pattern.compile(
+        "(?i)^(reativar|ativar|restaurar)\\s+(?:o\\s+)?(?:cart[aã]o\\s+)?(.+)$");
+
     public void processIncomingMessage(String from, String body, String mediaUrl, String mediaContentType) {
         Long userId = null;
         try {
@@ -468,6 +471,12 @@ public class WhatsAppCommandService {
                                         Optional<String> jarvisNotaEv = tryJarvisAnoteIsso(userId, sourceText);
                                         if (jarvisNotaEv.isPresent()) {
                                             response = jarvisNotaEv.get();
+                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
+                                            return;
+                                        }
+                                        Optional<String> reativarCartaoEv = tryReativarCartaoInativo(userId, sourceText);
+                                        if (reativarCartaoEv.isPresent()) {
+                                            response = reativarCartaoEv.get();
                                             sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
                                             return;
                                         }
@@ -1652,6 +1661,11 @@ public class WhatsAppCommandService {
     }
 
     private String handleCard(JsonNode cmd, Long userId, String sourceText) {
+        Optional<String> reativarDireto = tryReativarCartaoInativo(userId, sourceText);
+        if (reativarDireto.isPresent()) {
+            return reativarDireto.get();
+        }
+
         String cardName = cmd.path("cardName").asText("Cartao WhatsApp");
         String bank = cmd.path("bank").asText("Banco nao informado");
         int dueDay = cmd.path("dueDay").asInt(10);
@@ -1672,11 +1686,26 @@ public class WhatsAppCommandService {
         dto.setUsuarioId(userId);
         dto.setNome(sanitizeName(cardName));
         dto.setBanco(sanitizeName(bank));
-        dto.setNumeroCartao(normalizeCardNumber(rawNumber));
+        String numeroNormalizado = normalizeCardNumber(rawNumber);
+        dto.setNumeroCartao(numeroNormalizado);
         dto.setLimiteCredito(limiteCredito);
         dto.setLimiteDisponivel(limiteDisponivel);
         dto.setDiaVencimento(Math.max(1, Math.min(31, dueDay)));
         dto.setAtivo(true);
+
+        if ("0000".equals(numeroNormalizado)) {
+            String refBanco = whatsAppFirstNonBlank(bank, cardName, sourceText);
+            List<com.consumoesperto.model.CartaoCredito> inativos =
+                cartaoCreditoService.encontrarInativosPorReferencia(userId, refBanco);
+            if (inativos.size() == 1) {
+                try {
+                    CartaoCreditoDTO reativado = cartaoCreditoService.reativarCartao(inativos.get(0).getId(), userId);
+                    return formatarMensagemCartaoReativado(reativado);
+                } catch (Exception e) {
+                    log.warn("Reativar cartão por referência [{}]: {}", refBanco, e.getMessage());
+                }
+            }
+        }
 
         boolean tinhaInativo = cartaoCreditoService.isCartaoInativoComNumero(userId, dto.getNumeroCartao());
         try {
@@ -1687,7 +1716,7 @@ public class WhatsAppCommandService {
                 + "Já aparece na lista de cartões.";
             if (tinhaInativo) {
                 return msgOk("Cartão reativado",
-                    "Havia um cartão *apagado na app* com o mesmo final; reativei e apliquei estes dados:\n" + corpo);
+                    "Havia um cartão *desativado* com o mesmo final; reativei com os dados anteriores:\n" + corpo);
             }
             return msgOk("Cartão criado", corpo);
         } catch (RuntimeException e) {
@@ -1704,6 +1733,55 @@ public class WhatsAppCommandService {
             log.warn("WhatsApp cartão: {}", m);
             return msgErro(userId, "Cartão", m != null && !m.isBlank() ? m : "Não foi possível concluir o cadastro do cartão.");
         }
+    }
+
+    private Optional<String> tryReativarCartaoInativo(Long userId, String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return Optional.empty();
+        }
+        Matcher m = REATIVAR_CARTAO_WHATSAPP.matcher(sourceText.trim());
+        if (!m.matches()) {
+            return Optional.empty();
+        }
+        String ref = m.group(2).trim();
+        if (ref.isBlank()) {
+            return Optional.of(msgErro(userId, "Cartão", "Indica qual cartão reativar (ex.: *ativar cartão Itaú*)."));
+        }
+        try {
+            List<com.consumoesperto.model.CartaoCredito> jaAtivos =
+                cartaoCreditoService.encontrarAtivosPorApelidoNormalizado(userId, ref);
+            if (jaAtivos.size() == 1) {
+                com.consumoesperto.model.CartaoCredito c = jaAtivos.get(0);
+                return Optional.of(msgInfo("Cartão",
+                    "O cartão *" + c.getBanco() + "* · *" + c.getNome() + "* já está ativo na app."));
+            }
+            if (jaAtivos.size() > 1) {
+                return Optional.of(msgInfo("Cartão",
+                    "Há vários cartões ativos parecidos com «" + ref + "». Sê mais específico no nome ou banco."));
+            }
+            Optional<CartaoCreditoDTO> reativado = cartaoCreditoService.reativarUnicoInativoPorReferencia(userId, ref);
+            if (reativado.isEmpty()) {
+                return Optional.of(msgErro(userId, "Cartão",
+                    "Não encontrei cartão *inativo* com «" + ref + "». Se apagaste as faturas, o cartão fica desativado — "
+                        + "usa *ativar cartão* + banco/apelido, não *criar* cartão novo."));
+            }
+            return Optional.of(formatarMensagemCartaoReativado(reativado.get()));
+        } catch (IllegalArgumentException e) {
+            return Optional.of(msgErro(userId, "Cartão", e.getMessage()));
+        } catch (Exception e) {
+            log.warn("tryReativarCartaoInativo: {}", e.getMessage());
+            return Optional.of(msgErro(userId, "Cartão", e.getMessage()));
+        }
+    }
+
+    private String formatarMensagemCartaoReativado(CartaoCreditoDTO created) {
+        String finalDigits = created.getNumeroCartao().length() >= 4
+            ? created.getNumeroCartao().substring(created.getNumeroCartao().length() - 4)
+            : created.getNumeroCartao();
+        String corpo = "*" + created.getNome() + "* (" + created.getBanco() + "), final *" + finalDigits
+            + "*, venc. dia *" + created.getDiaVencimento() + "*, limite *" + BRL.format(created.getLimiteCredito()) + "*. "
+            + "Cartão reativado — não foi criado um registo novo.";
+        return msgOk("Cartão reativado", corpo);
     }
 
     /** Compatível com prompts antigos: monta {@code UPDATE_ENTITY_CONFIG} para cartão. */

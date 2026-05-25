@@ -261,6 +261,64 @@ public class CartaoCreditoService {
     }
 
     /**
+     * Cartões desativados (soft delete) que correspondem a banco ou apelido — ex.: reativar Itaú após apagar faturas.
+     */
+    public List<CartaoCredito> encontrarInativosPorReferencia(Long usuarioId, String referencia) {
+        if (referencia == null || referencia.isBlank()) {
+            return List.of();
+        }
+        String token = ApelidoNormalizador.normalizar(referencia);
+        if (token.length() < 2) {
+            return List.of();
+        }
+        return cartaoCreditoRepository.findByUsuarioId(usuarioId).stream()
+            .filter(c -> !Boolean.TRUE.equals(c.getAtivo()))
+            .filter(c -> cartaoCorrespondeReferencia(c, referencia, token))
+            .sorted(Comparator.comparing(CartaoCredito::getId).reversed())
+            .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public CartaoCreditoDTO reativarCartao(Long cartaoId, Long usuarioId) {
+        CartaoCredito cartao = cartaoCreditoRepository.findByIdAndUsuarioId(cartaoId, usuarioId)
+            .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+        if (Boolean.TRUE.equals(cartao.getAtivo())) {
+            throw new IllegalStateException("Este cartão já está ativo.");
+        }
+        cartao.setAtivo(true);
+        return converterParaDTO(cartaoCreditoRepository.save(cartao));
+    }
+
+    /**
+     * Reativa um único cartão inativo; lista vazia = nenhum; vários = ambíguo.
+     */
+    public Optional<CartaoCreditoDTO> reativarUnicoInativoPorReferencia(Long usuarioId, String referencia) {
+        List<CartaoCredito> found = encontrarInativosPorReferencia(usuarioId, referencia);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        if (found.size() > 1) {
+            throw new IllegalArgumentException(
+                "Encontrei " + found.size() + " cartões inativos com «" + referencia.trim()
+                    + "». Indica o apelido completo ou os últimos 4 dígitos.");
+        }
+        return Optional.of(reativarCartao(found.get(0).getId(), usuarioId));
+    }
+
+    private static boolean cartaoCorrespondeReferencia(CartaoCredito c, String referencia, String token) {
+        String nome = c.getNome() != null ? c.getNome() : "";
+        String banco = c.getBanco() != null ? c.getBanco() : "";
+        if (BancoBrasilCatalog.bancosCorrespondem(banco, referencia)) {
+            return true;
+        }
+        String nn = ApelidoNormalizador.normalizar(nome);
+        String bb = ApelidoNormalizador.normalizar(banco);
+        return nn.equals(token) || bb.equals(token)
+            || nn.contains(token) || token.contains(nn)
+            || bb.contains(token) || token.contains(bb);
+    }
+
+    /**
      * Atualiza limite(s) e/ou apelido de um cartão já validado como pertencente ao {@code usuarioId}.
      */
     public CartaoCreditoDTO atualizarConfigPorCartaoId(Long usuarioId, Long cartaoId,
