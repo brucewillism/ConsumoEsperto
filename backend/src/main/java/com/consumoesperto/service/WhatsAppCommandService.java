@@ -2290,7 +2290,7 @@ public class WhatsAppCommandService {
         return s.substring(0, 200);
     }
 
-    private String sanitizeName(String value) {
+    private static String sanitizeName(String value) {
         String sanitized = value == null ? "" : value.replaceAll("[^a-zA-Z0-9\\s\\-]", "").trim();
         return sanitized.isBlank() ? "Nao informado" : sanitized;
     }
