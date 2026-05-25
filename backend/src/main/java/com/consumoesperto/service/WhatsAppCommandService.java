@@ -2289,13 +2289,13 @@ public class WhatsAppCommandService {
         evolutionBotEchoFilterService.registerOutgoingText(to, normalize(message).replaceAll("\\s+", " ").trim());
     }
 
-    private String normalize(String text) {
+    private static String normalize(String text) {
         if (text == null) {
             return "";
         }
         return Normalizer.normalize(text, Normalizer.Form.NFD)
             .replaceAll("\\p{M}", "")
-            .toLowerCase();
+            .toLowerCase(Locale.ROOT);
     }
 
     private double readConfianca(JsonNode cmd) {
