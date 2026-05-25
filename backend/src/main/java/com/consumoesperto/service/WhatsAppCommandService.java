@@ -6,6 +6,7 @@ import com.consumoesperto.dto.ContaBancariaDTO;
 import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.dto.ImportacaoFaturaDTO;
+import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.dto.OrcamentoRequest;
 import com.consumoesperto.dto.SugestaoContencaoJarvisDTO;
 import com.consumoesperto.dto.MetaFinanceiraDTO;
@@ -711,9 +712,11 @@ public class WhatsAppCommandService {
         if (imp == null || imp.getAuditorias() == null) {
             return false;
         }
+        if (Boolean.TRUE.equals(imp.getAguardandoEscolhaSaldoAnterior())) {
+            return false;
+        }
         return imp.getAuditorias().stream()
-            .anyMatch(a -> normalize(a).contains("soma dos lancamentos extraidos")
-                && normalize(a).contains("nao bate com o total da fatura"));
+            .anyMatch(a -> SaldoAnteriorFaturaBbSupport.ehAuditoriaDivergenciaChecksum(a));
     }
 
     private JsonNode normalizarUpdateEntityConfig(JsonNode cmd, String sourceText) {

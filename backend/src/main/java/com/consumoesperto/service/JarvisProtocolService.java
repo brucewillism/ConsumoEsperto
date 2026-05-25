@@ -589,19 +589,19 @@ public class JarvisProtocolService {
     public String formatoEscolhaSaldoAnteriorFatura(
         String bancoCartao,
         java.math.BigDecimal saldoAnterior,
-        java.math.BigDecimal saldoAtual,
+        java.math.BigDecimal saldoMesAtual,
         java.math.BigDecimal totalPdf
     ) {
         String b = bancoCartao != null && !bancoCartao.isBlank() ? bancoCartao : "Cartão";
         java.text.NumberFormat brl = java.text.NumberFormat.getCurrencyInstance(java.util.Locale.forLanguageTag("pt-BR"));
         String ant = saldoAnterior != null ? brl.format(saldoAnterior) : "—";
-        String atu = saldoAtual != null ? brl.format(saldoAtual) : "—";
+        String mes = saldoMesAtual != null ? brl.format(saldoMesAtual) : "—";
         String tot = totalPdf != null ? brl.format(totalPdf) : "—";
-        return "📋 *Fatura " + b + "* — verifiquei que o PDF traz *saldo anterior* de " + ant
-            + " e *saldo desta fatura* de " + atu + " (total no documento: " + tot + ").\n\n"
-            + "Deseja *somar* os dois e importar com esse total combinado?\n"
-            + "• Responda *sim* para somar saldo anterior + saldo atual.\n"
-            + "• Responda *não* para importar *apenas* o saldo desta fatura (sem somar o anterior).";
+        return "📋 *Fatura " + b + "* — o PDF traz *saldo da fatura anterior* de " + ant
+            + " e *lançamentos desta fatura* de cerca de " + mes + " (total a pagar no PDF: " + tot + ").\n"
+            + "A lista extraída ainda inclui a linha «SALDO FATURA ANTERIOR» — por isso a soma bruta fica maior.\n\n"
+            + "• Responda *sim* para importar a lista completa (anterior + mês atual).\n"
+            + "• Responda *não* para importar *só esta fatura* (" + mes + ") e ignorar a linha de saldo anterior.";
     }
 
     /** Resumo de importação de fatura PDF. */

@@ -296,8 +296,9 @@ public class DocumentoIAContextService {
             + "Tarifas de cobrança/serviço, multa, seguro do cartão — muitas vezes em rodapé, box lateral ou resumo. "
             + "Inclua essas taxas tanto em \"lancamentos\" (descrição clara, ex.: 'IOF compra internacional') quanto em \"taxasForaDaTabelaPrincipal\" com tipo adequado. "
             + "Confira a soma dos lançamentos contra o valorTotal informado pela fatura e contra subtotais do PDF (ex.: 'Lançamentos no cartão', 'Total dos lançamentos atuais'); se não bater, revise linhas de parcela N/N e duplicatas. "
-            + "Em faturas Banco do Brasil (bb), se o PDF mostrar saldo/remanescente da fatura anterior e saldo ou total desta fatura, preencha saldoFaturaAnterior e saldoFaturaAtual separadamente; "
-            + "valorTotal deve ser o total a pagar exibido (muitas vezes anterior + atual + encargos). ";
+            + "Em faturas Banco do Brasil (bb), se o PDF mostrar saldo da fatura anterior e total desta fatura, preencha saldoFaturaAnterior (valor do saldo anterior) "
+            + "e saldoFaturaAtual (total desta fatura / lançamentos do mês, SEM incluir o saldo anterior de novo); "
+            + "valorTotal = total a pagar no PDF. A linha «SALDO FATURA ANTERIOR» nos lançamentos NÃO é despesa nova — é remanescente. ";
     }
 
     private static String auditoriaFinanceiraHumanaLinhas() {

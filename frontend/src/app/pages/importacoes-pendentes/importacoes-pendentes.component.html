@@ -41,9 +41,9 @@
 
     <div class="saldo-anterior-choice" *ngIf="imp.aguardandoEscolhaSaldoAnterior">
       <p>
-        Esta fatura inclui saldo anterior de <strong>{{ brl(imp.saldoFaturaAnterior) }}</strong>
-        e saldo desta fatura de <strong>{{ brl(imp.saldoFaturaAtual) }}</strong>.
-        Deseja somar os dois no total ou importar apenas o saldo atual?
+        Saldo da fatura anterior: <strong>{{ brl(imp.saldoFaturaAnterior) }}</strong>.
+        Lançamentos desta fatura (sem repetir o anterior): <strong>{{ brl(imp.saldoFaturaAtual) }}</strong>.
+        A lista do PDF ainda traz a linha «SALDO FATURA ANTERIOR» — escolha se importa tudo ou só este mês.
       </p>
       <div class="saldo-anterior-actions">
         <button mat-raised-button color="primary" (click)="escolhaSaldoAnterior(imp, true)" [disabled]="confirmandoId === imp.id">

@@ -126,7 +126,7 @@ public class FaturaPdfImportService {
         aplicarValidacaoChecksumFatura(valorTotal, itens, extracted, auditorias);
         Optional<BigDecimal> ultimaFatura = ultimoValorFaturaConfirmadaCartao(cartao.getId());
         BigDecimal somaItens = somaValoresItens(itens);
-        SaldoAnteriorFaturaBbSupport.detectar(extracted, banco, valorTotal, somaItens, ultimaFatura)
+        SaldoAnteriorFaturaBbSupport.detectar(extracted, banco, valorTotal, somaItens, itens, ultimaFatura)
             .ifPresent(p -> SaldoAnteriorFaturaBbSupport.registrarPendenciaNasAuditorias(auditorias, p));
         imp.setAuditoriaJson(writeJson(auditorias));
         imp.setNovosDetectados((int) itens.stream().filter(ImportacaoFaturaItemDTO::isNovo).count());
@@ -275,17 +275,26 @@ public class FaturaPdfImportService {
             .orElseThrow(() -> new IllegalArgumentException(
                 "Não há escolha de saldo anterior pendente nesta importação."));
 
+        List<ImportacaoFaturaItemDTO> itens = readItens(imp.getItensJson());
+        int linhasSaldoIgnoradas = 0;
+        if (!somar) {
+            linhasSaldoIgnoradas = SaldoAnteriorFaturaBbSupport.desmarcarLinhasSaldoAnterior(itens);
+            imp.setItensJson(writeJson(itens));
+            imp.setNovosDetectados((int) itens.stream().filter(ImportacaoFaturaItemDTO::isNovo).count());
+        }
+
         BigDecimal novoTotal = SaldoAnteriorFaturaBbSupport.valorTotalAposEscolha(meta, somar);
         imp.setValorTotal(novoTotal);
 
         List<String> auditoriasAtualizadas = SaldoAnteriorFaturaBbSupport.marcarMetaResolvida(auditoriasCompletas, somar);
-        auditoriasAtualizadas.removeIf(a -> a != null && (
-            (a.contains("soma dos lancamentos extraidos") && a.contains("nao bate com o total da fatura"))
-            || a.contains("Escolha *sim* para somar")
-            || a.contains("parece incluir os dois")));
-        List<ImportacaoFaturaItemDTO> itens = readItens(imp.getItensJson());
-        aplicarValidacaoChecksumFatura(novoTotal, itens, objectMapper.createObjectNode(), auditoriasAtualizadas);
-        auditoriasAtualizadas.add(SaldoAnteriorFaturaBbSupport.mensagemPosEscolha(somar, novoTotal));
+        List<ImportacaoFaturaItemDTO> itensChecksum = somar
+            ? itens
+            : itens.stream()
+                .filter(i -> !SaldoAnteriorFaturaBbSupport.descricaoEhLinhaSaldoFaturaAnterior(i.getDescricao()))
+                .collect(Collectors.toList());
+        aplicarValidacaoChecksumFatura(novoTotal, itensChecksum, objectMapper.createObjectNode(), auditoriasAtualizadas);
+        auditoriasAtualizadas.add(
+            SaldoAnteriorFaturaBbSupport.mensagemPosEscolha(somar, novoTotal, linhasSaldoIgnoradas));
         imp.setAuditoriaJson(writeJson(auditoriasAtualizadas));
         return toDto(importacaoRepository.save(imp));
     }
@@ -308,7 +317,7 @@ public class FaturaPdfImportService {
             .collect(Collectors.toList()));
         SaldoAnteriorFaturaBbSupport.lerMeta(auditoriasCompletas).ifPresent(m -> {
             dto.setSaldoFaturaAnterior(m.saldoAnterior());
-            dto.setSaldoFaturaAtual(m.saldoAtual());
+            dto.setSaldoFaturaAtual(m.saldoMesAtual());
             dto.setAguardandoEscolhaSaldoAnterior(!m.resolvido());
         });
         dto.setDataCriacao(imp.getDataCriacao());
