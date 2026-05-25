@@ -1,0 +1,72 @@
+<h2 mat-dialog-title>Adicionar Nova Fatura</h2>
+<form [formGroup]="form" (ngSubmit)="salvar()">
+  <mat-dialog-content class="ce-form-body">
+    <div class="ce-form-row">
+      <mat-form-field appearance="outline">
+        <mat-label>Cartão</mat-label>
+        <mat-select formControlName="cartaoCreditoId" required panelClass="exec-select-panel">
+          <mat-option *ngFor="let c of data.cartoes" [value]="c.id != null ? '' + c.id : ''">
+            {{ rotuloCartao(c) }}
+          </mat-option>
+        </mat-select>
+        <mat-error *ngIf="form.get('cartaoCreditoId')?.hasError('required')">
+          Cartão é obrigatório
+        </mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Valor</mat-label>
+        <input matInput type="text" inputmode="decimal" formControlName="valor" ceMask="decimal" placeholder="0,00" required>
+        <mat-error *ngIf="form.get('valor')?.hasError('required')">
+          Valor é obrigatório
+        </mat-error>
+        <mat-error *ngIf="form.get('valor')?.hasError('min')">
+          Valor deve ser maior que zero
+        </mat-error>
+      </mat-form-field>
+    </div>
+
+    <div class="ce-form-row">
+      <mat-form-field appearance="outline">
+        <mat-label>Data de Vencimento</mat-label>
+        <input matInput [matDatepicker]="vencimentoPicker" formControlName="vencimento" required>
+        <mat-datepicker-toggle matSuffix [for]="vencimentoPicker"></mat-datepicker-toggle>
+        <mat-datepicker #vencimentoPicker></mat-datepicker>
+        <mat-error *ngIf="form.get('vencimento')?.hasError('required')">
+          Data de vencimento é obrigatória
+        </mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Data de Fechamento</mat-label>
+        <input matInput [matDatepicker]="fechamentoPicker" formControlName="fechamento" required>
+        <mat-datepicker-toggle matSuffix [for]="fechamentoPicker"></mat-datepicker-toggle>
+        <mat-datepicker #fechamentoPicker></mat-datepicker>
+        <mat-error *ngIf="form.get('fechamento')?.hasError('required')">
+          Data de fechamento é obrigatória
+        </mat-error>
+      </mat-form-field>
+    </div>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Status</mat-label>
+      <mat-select formControlName="status" required panelClass="exec-select-panel">
+        <mat-option value="PENDING">Pendente</mat-option>
+        <mat-option value="PAID">Paga</mat-option>
+        <mat-option value="OVERDUE">Vencida</mat-option>
+        <mat-option value="PREVISTA">Prevista (projeção)</mat-option>
+      </mat-select>
+      <mat-error *ngIf="form.get('status')?.hasError('required')">
+        Status é obrigatório
+      </mat-error>
+    </mat-form-field>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close type="button" [disabled]="salvando">Cancelar</button>
+    <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || salvando">
+      <mat-icon *ngIf="!salvando">save</mat-icon>
+      <mat-spinner *ngIf="salvando" diameter="18"></mat-spinner>
+      {{ salvando ? 'Salvando...' : 'Adicionar Fatura' }}
+    </button>
+  </mat-dialog-actions>
+</form>

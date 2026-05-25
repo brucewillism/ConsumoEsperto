@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, TemplateRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, TemplateRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,22 +12,21 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators, FormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil, catchError, of, forkJoin } from 'rxjs';
 
 import { CreditCardInvoice } from '../../models/credit-card-invoice.model';
 import { BANCOS_BRASIL, getBancoCorBr, getBancoNomeBr } from '../../shared/constants/bancos-brasil';
-import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
-import { parseValorBrasileiro } from '../../shared/utils/form.utils';
 import { CartaoCredito } from '../../models/cartao-credito.model';
 import { FaturaService } from '../../services/fatura.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { OrcamentoService, Orcamento } from '../../services/orcamento.service';
 import { FaturaMesGrupo } from './faturas-mes-grupo.model';
 import { PagamentoFaturaModalComponent } from '../../shared/pagamento-fatura-modal/pagamento-fatura-modal.component';
+import { NovaFaturaDialogComponent } from '../../shared/nova-fatura-dialog/nova-fatura-dialog.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
-import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
+import { resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-faturas',
@@ -46,16 +45,12 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatDialogModule,
-    ReactiveFormsModule,
-    FormsModule,
-    CeInputMaskDirective
+    FormsModule
   ],
   templateUrl: './faturas.component.html',
   styleUrls: ['./faturas.component.scss']
 })
 export class FaturasComponent implements OnInit, OnDestroy {
-  @ViewChild('novaFaturaTpl') novaFaturaTpl!: TemplateRef<unknown>;
-
   readonly bancosBrasil = BANCOS_BRASIL;
   faturas: CreditCardInvoice[] = [];
   faturasFiltradas: CreditCardInvoice[] = [];
@@ -76,9 +71,6 @@ export class FaturasComponent implements OnInit, OnDestroy {
   filtroBanco = '';
   filtroMes = '';
   
-  // Formulário
-  novaFaturaForm: FormGroup;
-  
   // Resumos
   totalFaturas = 0;
   totalFaturasPagas = 0;
@@ -94,17 +86,8 @@ export class FaturasComponent implements OnInit, OnDestroy {
     private orcamentoService: OrcamentoService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
-    private fb: FormBuilder,
     private financaAlteracao: FinancaAlteracaoService
-  ) {
-    this.novaFaturaForm = this.fb.group({
-      cartaoCreditoId: ['', Validators.required],
-      valor: ['', [Validators.required, Validators.min(0.01)]],
-      vencimento: ['', Validators.required],
-      fechamento: ['', Validators.required],
-      status: ['PENDING', Validators.required]
-    });
-  }
+  ) {}
 
   ngOnInit(): void {
     this.loadData();
@@ -173,65 +156,16 @@ export class FaturasComponent implements OnInit, OnDestroy {
       );
       return;
     }
-    const cartaoPadrao = this.cartoes[0]?.id != null ? String(this.cartoes[0].id) : '';
-    this.novaFaturaForm.reset({ cartaoCreditoId: cartaoPadrao, status: 'PENDING' });
-    openCeFormDialog(this.dialog, this.novaFaturaTpl, { width: '560px' });
-  }
-
-  adicionarFatura(): void {
-    if (this.novaFaturaForm.invalid) {
-      markAllControlsTouched(this.novaFaturaForm);
-      this.snackBar.open('Revise os campos destacados antes de salvar a fatura.', 'Fechar', {
-        duration: 3500,
-        panelClass: ['warning-snackbar']
-      });
-      return;
-    }
-    const formValue = this.novaFaturaForm.value;
-    const cartaoCreditoId = Number(formValue.cartaoCreditoId);
-    if (!cartaoCreditoId || Number.isNaN(cartaoCreditoId)) {
-      this.snackBar.open('Selecione o cartão de crédito da fatura.', 'Fechar', {
-        duration: 3500,
-        panelClass: ['warning-snackbar']
-      });
-      return;
-    }
-
-    const cartao = this.cartoes.find((c) => c.id === cartaoCreditoId);
-    const payload: CreditCardInvoice = {
-      cardId: String(cartaoCreditoId),
-      bankName: cartao?.banco || cartao?.nome || '',
-      amount: parseValorBrasileiro(formValue.valor) ?? formValue.valor,
-      dueDate: formValue.vencimento,
-      closingDate: formValue.fechamento,
-      status: formValue.status,
-      transactions: []
-    };
-
-    this.acaoEmAndamento = true;
-    this.faturaService
-      .criarFaturaCartao(payload)
+    openCeFormDialog(this.dialog, NovaFaturaDialogComponent, {
+      width: '560px',
+      data: { cartoes: this.cartoes },
+    })
+      .afterClosed()
       .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => {
-          this.snackBar.open('Fatura adicionada com sucesso!', 'Fechar', {
-            duration: 3000,
-            panelClass: ['success-snackbar']
-          });
-          this.novaFaturaForm.reset({ status: 'PENDING' });
-          this.dialog.closeAll();
-          this.acaoEmAndamento = false;
+      .subscribe((criada) => {
+        if (criada) {
           this.financaAlteracao.notificar();
           this.loadData();
-        },
-        error: (error) => {
-          console.error('Erro ao adicionar fatura:', error);
-          this.acaoEmAndamento = false;
-          this.snackBar.open(
-            resolveHttpError(error, 'Erro ao adicionar fatura. Verifique o cartão e tente novamente.'),
-            'Fechar',
-            { duration: 4000, panelClass: ['error-snackbar'] }
-          );
         }
       });
   }
