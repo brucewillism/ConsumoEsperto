@@ -189,8 +189,10 @@ public class UsuarioController {
             com.consumoesperto.model.Usuario usuario = usuarioOpt.get();
             com.consumoesperto.model.Usuario atualizado = whatsAppUserMappingService.linkWhatsAppNumber(usuario.getId(), numero);
 
-            evolutionInstanceLifecycleService.prepareInstanceForPairing(usuario.getId());
-            evolutionInstanceLifecycleService.resetSessionBeforePairing(usuario.getId());
+            EvolutionInstanceLifecycleService.PrepareInstanceResult prep =
+                evolutionInstanceLifecycleService.prepareInstanceForPairing(usuario.getId());
+            evolutionInstanceLifecycleService.resetSessionBeforePairing(
+                usuario.getId(), prep.skipLogoutBeforeConnect());
 
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(usuario.getId());
 
@@ -211,6 +213,7 @@ public class UsuarioController {
             body.put("usuarioId", atualizado.getId());
             body.put("whatsappNumero", atualizado.getWhatsappNumero());
             aplicarCamposEvolutionPairing(body, pairing);
+            prep.getSetupWarning().ifPresent(w -> appendEvolutionSetupWarning(body, w));
 
             return ResponseEntity.ok(body);
         } catch (Exception e) {
@@ -236,12 +239,14 @@ public class UsuarioController {
                 ));
             }
             Long uid = usuarioOpt.get().getId();
-            evolutionInstanceLifecycleService.prepareInstanceForPairing(uid);
-            evolutionInstanceLifecycleService.resetSessionBeforePairing(uid);
+            // Sem logout aqui: o modal faz polling a cada 5 s e logout repetido impede o QR de aparecer.
+            EvolutionInstanceLifecycleService.PrepareInstanceResult prep =
+                evolutionInstanceLifecycleService.prepareInstanceForPairing(uid);
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(uid);
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("status", "success");
             aplicarCamposEvolutionPairing(body, pairing);
+            prep.getSetupWarning().ifPresent(w -> appendEvolutionSetupWarning(body, w));
             return ResponseEntity.ok(body);
         } catch (Exception e) {
             log.error("Evolution pairing refresh: {}", e.getMessage(), e);
@@ -250,6 +255,17 @@ public class UsuarioController {
                 "message", e.getMessage()
             ));
         }
+    }
+
+    private static void appendEvolutionSetupWarning(Map<String, Object> body, String setupWarning) {
+        if (setupWarning == null || setupWarning.isBlank()) {
+            return;
+        }
+        Object cur = body.get("evolutionWarning");
+        String merged = cur instanceof String && !((String) cur).isBlank()
+            ? ((String) cur) + " " + setupWarning
+            : setupWarning;
+        body.put("evolutionWarning", merged);
     }
 
     private static void aplicarCamposEvolutionPairing(Map<String, Object> body, EvolutionPairingOutcomeDTO pairing) {

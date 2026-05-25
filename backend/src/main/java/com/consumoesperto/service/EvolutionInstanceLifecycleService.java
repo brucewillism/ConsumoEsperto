@@ -12,6 +12,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,9 @@ import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Garante instância Evolution dedicada por utilizador (evita partilhar um único QR/sessão WhatsApp).
@@ -51,6 +54,10 @@ public class EvolutionInstanceLifecycleService {
     @Value("${consumoesperto.evolution.dedicated-instance-per-user:true}")
     private boolean dedicatedInstancePerUser;
 
+    /** URL do webhook ConsumoEsperto registada em cada instância Evolution (além do webhook global no Compose). */
+    @Value("${consumoesperto.evolution.webhook.url:http://backend:8087/api/public/evolution/webhook}")
+    private String evolutionWebhookUrl;
+
     @PostConstruct
     void initRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -59,21 +66,54 @@ public class EvolutionInstanceLifecycleService {
         restTemplate = new RestTemplate(factory);
     }
 
-    /**
-     * Antes do pareamento: instância dedicada criada na Evolution e gravada em {@link UsuarioAiConfig}.
-     *
-     * @return nome da instância a usar em /instance/connect
-     */
-    @Transactional
-    public String prepareInstanceForPairing(Long usuarioId) {
-        String instanceName = resolveOrAssignInstanceName(usuarioId);
-        if (!apiConfigured()) {
-            log.warn("Evolution não configurada — instância {} não criada na API", instanceName);
+    /** Resultado de {@link #prepareInstanceForPairing(Long)} — usado para evitar logout destrutivo em instância nova. */
+    public static final class PrepareInstanceResult {
+        private final String instanceName;
+        private final boolean skipLogoutBeforeConnect;
+        private final Optional<String> setupWarning;
+
+        public PrepareInstanceResult(
+            String instanceName,
+            boolean skipLogoutBeforeConnect,
+            Optional<String> setupWarning
+        ) {
+            this.instanceName = instanceName;
+            this.skipLogoutBeforeConnect = skipLogoutBeforeConnect;
+            this.setupWarning = setupWarning;
+        }
+
+        public String getInstanceName() {
             return instanceName;
         }
-        createInstanceIfAbsent(instanceName);
+
+        /** Evita {@code logout} antes do primeiro QR (instância acabada de criar ou nome dedicado novo). */
+        public boolean skipLogoutBeforeConnect() {
+            return skipLogoutBeforeConnect;
+        }
+
+        public Optional<String> getSetupWarning() {
+            return setupWarning;
+        }
+    }
+
+    /**
+     * Antes do pareamento: instância dedicada criada na Evolution e gravada em {@link UsuarioAiConfig}.
+     */
+    public PrepareInstanceResult prepareInstanceForPairing(Long usuarioId) {
+        AssignResult assign = assignInstanceNameTransactional(usuarioId);
+        if (!apiConfigured()) {
+            log.warn("Evolution não configurada — instância {} não criada na API", assign.instanceName());
+            evolutionPairingService.invalidatePairingCredCache(usuarioId);
+            return new PrepareInstanceResult(
+                assign.instanceName(),
+                true,
+                Optional.of("Evolution API não configurada (evolution.url / evolution.apikey)")
+            );
+        }
+        EnsureInstanceOutcome ensure = ensureEvolutionInstanceReady(assign.instanceName());
+        boolean skipLogout = assign.newlyAssignedDedicated() || ensure.freshInstance();
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
-        return instanceName;
+        return new PrepareInstanceResult(assign.instanceName(), skipLogout, ensure.warning());
     }
 
     /**
@@ -89,10 +129,13 @@ public class EvolutionInstanceLifecycleService {
     }
 
     /**
-     * Reinicia sessão antes de novo QR (instância já ligada a outro telefone ou estado inconsistente).
+     * Reinicia sessão antes de novo QR — apenas no vínculo inicial, não no polling do modal
+     * (logout repetido impede a Evolution de gerar o QR).
+     *
+     * @param skipLogout quando true (instância nova), não chama {@code /instance/logout}
      */
-    public void resetSessionBeforePairing(Long usuarioId) {
-        if (!apiConfigured()) {
+    public void resetSessionBeforePairing(Long usuarioId, boolean skipLogout) {
+        if (skipLogout || !apiConfigured()) {
             return;
         }
         String instanceName = evolutionPairingService.resolvedInstanceDisplayName(usuarioId);
@@ -106,10 +149,12 @@ public class EvolutionInstanceLifecycleService {
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
     }
 
+    private record AssignResult(String instanceName, boolean newlyAssignedDedicated) {}
+
     @Transactional
-    protected String resolveOrAssignInstanceName(Long usuarioId) {
+    protected AssignResult assignInstanceNameTransactional(Long usuarioId) {
         if (!dedicatedInstancePerUser || usuarioId == null) {
-            return defaultInstanceTrimmed();
+            return new AssignResult(defaultInstanceTrimmed(), false);
         }
 
         UsuarioAiConfig cfg = usuarioAiConfigRepository.findByUsuarioId(usuarioId)
@@ -122,14 +167,52 @@ public class EvolutionInstanceLifecycleService {
             || current.equalsIgnoreCase(sharedDefault);
 
         if (!usesSharedOrEmpty) {
-            return current.trim();
+            return new AssignResult(current.trim(), false);
         }
 
         String dedicated = dedicatedInstanceName(usuarioId);
         cfg.setEvolutionInstanceName(dedicated);
         usuarioAiConfigRepository.save(cfg);
         log.info("Instância Evolution dedicada atribuída ao utilizador {}: {}", usuarioId, dedicated);
-        return dedicated;
+        return new AssignResult(dedicated, true);
+    }
+
+    private record EnsureInstanceOutcome(boolean freshInstance, Optional<String> warning) {}
+
+    /**
+     * Cria instância, configura webhook e confirma presença na Evolution (fora de transação JPA).
+     */
+    private EnsureInstanceOutcome ensureEvolutionInstanceReady(String instanceName) {
+        boolean existed = instanceExistsInEvolution(instanceName);
+        createInstanceIfAbsent(instanceName);
+        configureInstanceWebhookQuietly(instanceName);
+        boolean existsNow = instanceExistsInEvolution(instanceName);
+        boolean fresh = !existed && existsNow;
+        if (!existed && !existsNow) {
+            return new EnsureInstanceOutcome(
+                fresh,
+                Optional.of(
+                    "A Evolution não listou a instância " + instanceName
+                        + " após criar — verifique EVOLUTION_URL, API key e logs do contentor evolution_api."
+                )
+            );
+        }
+        return new EnsureInstanceOutcome(fresh, Optional.empty());
+    }
+
+    private boolean instanceExistsInEvolution(String instanceName) {
+        try {
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/fetchInstances");
+            String body = evolutionGet(url);
+            if (body == null || body.isBlank()) {
+                return false;
+            }
+            String needle = "\"" + instanceName + "\"";
+            return body.contains(needle) || body.contains(instanceName);
+        } catch (Exception ex) {
+            log.debug("fetchInstances [{}]: {}", instanceName, ex.getMessage());
+            return false;
+        }
     }
 
     private UsuarioAiConfig newConfigFor(Long usuarioId) {
@@ -163,22 +246,22 @@ public class EvolutionInstanceLifecycleService {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("instanceName", instanceName);
         body.put("integration", "WHATSAPP-BAILEYS");
-        body.put("qrcode", false);
+        body.put("qrcode", true);
 
         try {
             evolutionPostJson(url, body);
             log.info("Evolution instância criada ou confirmada: {}", instanceName);
         } catch (HttpClientErrorException e) {
-            if (e.getRawStatusCode() == 403 || e.getRawStatusCode() == 409) {
+            if (isInstanceAlreadyExistsHttp(e.getRawStatusCode())) {
                 log.debug("Evolution instância {} já existe (HTTP {})", instanceName, e.getRawStatusCode());
                 return;
             }
             String altUrl = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/create/" + instanceName);
             try {
-                evolutionPostJson(altUrl, Map.of());
+                evolutionPostJson(altUrl, Map.of("integration", "WHATSAPP-BAILEYS", "qrcode", true));
                 log.info("Evolution instância criada via path alternativo: {}", instanceName);
             } catch (HttpClientErrorException e2) {
-                if (e2.getRawStatusCode() == 403 || e2.getRawStatusCode() == 409) {
+                if (isInstanceAlreadyExistsHttp(e2.getRawStatusCode())) {
                     log.debug("Evolution instância {} já existe (alt HTTP {})", instanceName, e2.getRawStatusCode());
                 } else {
                     log.warn("Evolution create instance [{}]: HTTP {} — {}", instanceName, e2.getRawStatusCode(),
@@ -188,6 +271,30 @@ public class EvolutionInstanceLifecycleService {
         } catch (Exception ex) {
             log.warn("Evolution create instance [{}] falhou: {}", instanceName, ex.getMessage());
         }
+    }
+
+    private void configureInstanceWebhookQuietly(String instanceName) {
+        String webhook = evolutionWebhookUrl != null ? evolutionWebhookUrl.trim() : "";
+        if (webhook.isBlank()) {
+            return;
+        }
+        String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "webhook/set/" + instanceName);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("enabled", true);
+        body.put("url", webhook);
+        body.put("webhook_by_events", false);
+        body.put("webhook_base64", true);
+        body.put("events", List.of("MESSAGES_UPSERT"));
+        try {
+            evolutionPostJson(url, body);
+            log.debug("Evolution webhook configurado para {}", instanceName);
+        } catch (Exception ex) {
+            log.debug("Evolution webhook/set [{}]: {}", instanceName, ex.getMessage());
+        }
+    }
+
+    private static boolean isInstanceAlreadyExistsHttp(int status) {
+        return status == 403 || status == 409;
     }
 
     private void logoutInstanceQuietly(String instanceName) {
@@ -208,16 +315,28 @@ public class EvolutionInstanceLifecycleService {
         }
     }
 
+    private String evolutionGet(String url) {
+        HttpHeaders headers = evolutionHeaders();
+        ResponseEntity<String> resp = restTemplate.exchange(
+            url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+        return resp.getBody();
+    }
+
     private void evolutionPostJson(String url, Map<String, Object> body) {
         evolutionRequest(url, HttpMethod.POST, body);
     }
 
-    private void evolutionRequest(String url, HttpMethod method, Map<String, Object> body) {
+    private HttpHeaders evolutionHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         String key = evolutionApiKey.trim();
         headers.set("apikey", key);
         headers.setBearerAuth(key);
+        return headers;
+    }
+
+    private void evolutionRequest(String url, HttpMethod method, Map<String, Object> body) {
+        HttpHeaders headers = evolutionHeaders();
         HttpEntity<?> entity = body == null
             ? new HttpEntity<>(headers)
             : new HttpEntity<>(body, headers);
