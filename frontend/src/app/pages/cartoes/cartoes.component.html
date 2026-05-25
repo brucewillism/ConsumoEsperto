@@ -10,9 +10,9 @@
         <mat-icon>refresh</mat-icon>
         {{ loading ? 'Atualizando...' : 'Atualizar Dados' }}
       </button>
-      <button mat-raised-button color="primary" (click)="showForm = !showForm" [disabled]="acaoEmAndamento">
+      <button mat-raised-button color="primary" (click)="abrirNovoCartao()" [disabled]="acaoEmAndamento">
         <mat-icon>add</mat-icon>
-        {{ showForm ? 'Cancelar' : 'Novo Cartão' }}
+        Novo Cartão
       </button>
     </div>
   </div>
@@ -67,84 +67,6 @@
     </mat-card>
   </div>
 
-  <!-- Formulário para Novo Cartão -->
-  <mat-card *ngIf="showForm" class="form-card">
-    <mat-card-header>
-      <mat-card-title>Adicionar Novo Cartão</mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <form [formGroup]="novoCartaoForm" (ngSubmit)="adicionarCartao()">
-        <div class="form-row">
-          <mat-form-field appearance="outline">
-            <mat-label>Banco</mat-label>
-            <mat-select formControlName="banco" required>
-              <mat-option *ngFor="let b of bancosBrasil" [value]="b.id">{{ b.nome }}</mat-option>
-            </mat-select>
-            <mat-error *ngIf="novoCartaoForm.get('banco')?.hasError('required')">
-              Banco é obrigatório
-            </mat-error>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline">
-            <mat-label>Número do Cartão</mat-label>
-            <input matInput formControlName="numero" ceMask="card" placeholder="0000 0000 0000 0000" required>
-            <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('required')">
-              Número é obrigatório
-            </mat-error>
-            <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('minlength')">
-              Informe pelo menos os 4 últimos dígitos
-            </mat-error>
-            <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('maxlength')">
-              Número deve ter no máximo 19 dígitos
-            </mat-error>
-          </mat-form-field>
-        </div>
-
-        <div class="form-row">
-          <mat-form-field appearance="outline">
-            <mat-label>Nome do Titular</mat-label>
-            <input matInput formControlName="titular" placeholder="Nome completo" required>
-            <mat-error *ngIf="novoCartaoForm.get('titular')?.hasError('required')">
-              Nome do titular é obrigatório
-            </mat-error>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline">
-            <mat-label>Limite de Crédito</mat-label>
-            <input matInput type="text" inputmode="decimal" formControlName="limite" ceMask="decimal" placeholder="0,00" required>
-            <mat-error *ngIf="novoCartaoForm.get('limite')?.hasError('required')">
-              Limite é obrigatório
-            </mat-error>
-            <mat-error *ngIf="novoCartaoForm.get('limite')?.hasError('min')">
-              Limite deve ser maior que zero
-            </mat-error>
-          </mat-form-field>
-        </div>
-
-        <div class="form-row">
-          <mat-form-field appearance="outline">
-            <mat-label>Data de Vencimento</mat-label>
-            <input matInput [matDatepicker]="vencimentoPicker" formControlName="vencimento" required>
-            <mat-datepicker-toggle matSuffix [for]="vencimentoPicker"></mat-datepicker-toggle>
-            <mat-datepicker #vencimentoPicker></mat-datepicker>
-            <mat-error *ngIf="novoCartaoForm.get('vencimento')?.hasError('required')">
-              Data de vencimento é obrigatória
-            </mat-error>
-          </mat-form-field>
-        </div>
-
-        <div class="form-actions">
-          <button mat-button type="button" (click)="showForm = false" [disabled]="acaoEmAndamento">Cancelar</button>
-          <button mat-raised-button color="primary" type="submit" [disabled]="acaoEmAndamento">
-            <mat-icon *ngIf="!acaoEmAndamento">save</mat-icon>
-            <mat-spinner *ngIf="acaoEmAndamento" diameter="18"></mat-spinner>
-            {{ acaoEmAndamento ? 'Salvando...' : 'Adicionar Cartão' }}
-          </button>
-        </div>
-      </form>
-    </mat-card-content>
-  </mat-card>
-
   <!-- Lista de Cartões -->
   <mat-card class="cartoes-card" *ngIf="!loading">
     <mat-card-header>
@@ -156,7 +78,7 @@
         <mat-icon>credit_card_off</mat-icon>
         <h3>Nenhum cartão cadastrado</h3>
         <p>Adicione seu primeiro cartão de crédito para começar</p>
-        <button mat-raised-button color="primary" (click)="showForm = true">
+        <button mat-raised-button color="primary" (click)="abrirNovoCartao()">
           <mat-icon>add</mat-icon>
           Adicionar Cartão
         </button>
@@ -247,6 +169,78 @@
     </mat-card-content>
   </mat-card>
 </div>
+
+<ng-template #novoCartaoTpl>
+  <h2 mat-dialog-title>Adicionar Novo Cartão</h2>
+  <form [formGroup]="novoCartaoForm" (ngSubmit)="adicionarCartao()">
+    <mat-dialog-content class="ce-form-body">
+      <div class="ce-form-row">
+        <mat-form-field appearance="outline">
+          <mat-label>Banco</mat-label>
+          <mat-select formControlName="banco" required panelClass="exec-select-panel">
+            <mat-option *ngFor="let b of bancosBrasil" [value]="b.id">{{ b.nome }}</mat-option>
+          </mat-select>
+          <mat-error *ngIf="novoCartaoForm.get('banco')?.hasError('required')">
+            Banco é obrigatório
+          </mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Número do Cartão</mat-label>
+          <input matInput formControlName="numero" ceMask="card" placeholder="0000 0000 0000 0000" required>
+          <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('required')">
+            Número é obrigatório
+          </mat-error>
+          <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('minlength')">
+            Informe pelo menos os 4 últimos dígitos
+          </mat-error>
+          <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('maxlength')">
+            Número deve ter no máximo 19 dígitos
+          </mat-error>
+        </mat-form-field>
+      </div>
+
+      <div class="ce-form-row">
+        <mat-form-field appearance="outline">
+          <mat-label>Nome do Titular</mat-label>
+          <input matInput formControlName="titular" placeholder="Nome completo" required>
+          <mat-error *ngIf="novoCartaoForm.get('titular')?.hasError('required')">
+            Nome do titular é obrigatório
+          </mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Limite de Crédito</mat-label>
+          <input matInput type="text" inputmode="decimal" formControlName="limite" ceMask="decimal" placeholder="0,00" required>
+          <mat-error *ngIf="novoCartaoForm.get('limite')?.hasError('required')">
+            Limite é obrigatório
+          </mat-error>
+          <mat-error *ngIf="novoCartaoForm.get('limite')?.hasError('min')">
+            Limite deve ser maior que zero
+          </mat-error>
+        </mat-form-field>
+      </div>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Data de Vencimento</mat-label>
+        <input matInput [matDatepicker]="novoVencimentoPicker" formControlName="vencimento" required>
+        <mat-datepicker-toggle matSuffix [for]="novoVencimentoPicker"></mat-datepicker-toggle>
+        <mat-datepicker #novoVencimentoPicker></mat-datepicker>
+        <mat-error *ngIf="novoCartaoForm.get('vencimento')?.hasError('required')">
+          Data de vencimento é obrigatória
+        </mat-error>
+      </mat-form-field>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close type="button" [disabled]="acaoEmAndamento">Cancelar</button>
+      <button mat-raised-button color="primary" type="submit" [disabled]="acaoEmAndamento">
+        <mat-icon *ngIf="!acaoEmAndamento">save</mat-icon>
+        <mat-spinner *ngIf="acaoEmAndamento" diameter="18"></mat-spinner>
+        {{ acaoEmAndamento ? 'Salvando...' : 'Adicionar Cartão' }}
+      </button>
+    </mat-dialog-actions>
+  </form>
+</ng-template>
 
 <ng-template #editCartaoTpl>
   <h2 mat-dialog-title>Editar limite</h2>

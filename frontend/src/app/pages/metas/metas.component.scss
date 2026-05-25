@@ -44,8 +44,13 @@
 
 .header-card,
 .sim-card,
-.form-card {
+.nova-meta-actions {
   margin-bottom: 20px;
+}
+
+.nova-meta-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .renda-banner {

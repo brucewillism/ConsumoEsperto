@@ -113,13 +113,15 @@ export class FaturaService {
 
   // Métodos auxiliares de conversão
   private converterParaDTO(fatura: Fatura): FaturaDTO {
-    const cartaoId =
+    const cartaoIdRaw =
       fatura.cartaoCreditoId ??
       (fatura.cardId != null && String(fatura.cardId).trim() !== ''
         ? Number(fatura.cardId)
         : undefined);
+    const cartaoId =
+      cartaoIdRaw != null && !Number.isNaN(cartaoIdRaw) && cartaoIdRaw > 0 ? cartaoIdRaw : undefined;
     return {
-      id: fatura.id,
+      id: fatura.id && fatura.id > 0 ? fatura.id : undefined,
       valorFatura: fatura.valorFatura || fatura.valor || 0,
       valorPago: fatura.valorPago ?? 0,
       dataVencimento: fatura.dataVencimento || fatura.dueDate,
@@ -176,15 +178,18 @@ export class FaturaService {
   }
 
   private converterParaFatura(fatura: CreditCardInvoice): Fatura {
+    const cartaoId = fatura.cardId ? Number(fatura.cardId) : undefined;
+    const idNumerico = fatura.id ? Number(fatura.id) : undefined;
     return {
-      id: fatura.id ? Number(fatura.id) : undefined,
+      id: idNumerico != null && !Number.isNaN(idNumerico) && idNumerico > 0 ? idNumerico : undefined,
       valorFatura: fatura.amount,
       valorPago: 0,
       dataVencimento: fatura.dueDate,
       dataFechamento: fatura.closingDate,
       statusFatura: this.converterStatusDeCreditCard(fatura.status),
       numeroFatura: fatura.numeroFatura,
-      cartaoCreditoId: fatura.cardId ? Number(fatura.cardId) : undefined,
+      cartaoCreditoId:
+        cartaoId != null && !Number.isNaN(cartaoId) && cartaoId > 0 ? cartaoId : undefined,
       bankName: fatura.bankName,
       amount: fatura.amount,
       dueDate: fatura.dueDate,

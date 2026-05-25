@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, TemplateRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, TemplateRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -26,6 +26,7 @@ import { OrcamentoService, Orcamento } from '../../services/orcamento.service';
 import { FaturaMesGrupo } from './faturas-mes-grupo.model';
 import { PagamentoFaturaModalComponent } from '../../shared/pagamento-fatura-modal/pagamento-fatura-modal.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
+import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
@@ -53,6 +54,8 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
   styleUrls: ['./faturas.component.scss']
 })
 export class FaturasComponent implements OnInit, OnDestroy {
+  @ViewChild('novaFaturaTpl') novaFaturaTpl!: TemplateRef<unknown>;
+
   readonly bancosBrasil = BANCOS_BRASIL;
   faturas: CreditCardInvoice[] = [];
   faturasFiltradas: CreditCardInvoice[] = [];
@@ -64,7 +67,6 @@ export class FaturasComponent implements OnInit, OnDestroy {
   loading = false;
   acaoEmAndamento = false;
   faturaProcessandoId: string | null = null;
-  showForm = false;
   faturaTransacoesSelecionada: CreditCardInvoice | null = null;
   /** Orçamentos do mês da fatura aberta no modal (scanner). */
   orcamentosModal: Orcamento[] = [];
@@ -96,7 +98,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
     private financaAlteracao: FinancaAlteracaoService
   ) {
     this.novaFaturaForm = this.fb.group({
-      banco: ['', Validators.required],
+      cartaoCreditoId: ['', Validators.required],
       valor: ['', [Validators.required, Validators.min(0.01)]],
       vencimento: ['', Validators.required],
       fechamento: ['', Validators.required],
@@ -162,6 +164,20 @@ export class FaturasComponent implements OnInit, OnDestroy {
       .reduce((s, f) => s + (Number(f.amount) || 0), 0);
   }
 
+  abrirNovaFatura(): void {
+    if (!this.cartoes.length) {
+      this.snackBar.open(
+        'Cadastre um cartão de crédito antes de adicionar uma fatura.',
+        'Fechar',
+        { duration: 4500, panelClass: ['warning-snackbar'] }
+      );
+      return;
+    }
+    const cartaoPadrao = this.cartoes[0]?.id != null ? String(this.cartoes[0].id) : '';
+    this.novaFaturaForm.reset({ cartaoCreditoId: cartaoPadrao, status: 'PENDING' });
+    openCeFormDialog(this.dialog, this.novaFaturaTpl, { width: '560px' });
+  }
+
   adicionarFatura(): void {
     if (this.novaFaturaForm.invalid) {
       markAllControlsTouched(this.novaFaturaForm);
@@ -171,55 +187,53 @@ export class FaturasComponent implements OnInit, OnDestroy {
       });
       return;
     }
-    this.acaoEmAndamento = true;
-      const formValue = this.novaFaturaForm.value;
-      const novaFatura: CreditCardInvoice = {
-        id: Date.now().toString(),
-        cardId: formValue.banco + '-card',
-        bankName: formValue.banco,
-        amount: parseValorBrasileiro(formValue.valor) ?? formValue.valor,
-        dueDate: formValue.vencimento,
-        closingDate: formValue.fechamento,
-        status: formValue.status,
-        transactions: []
-      };
+    const formValue = this.novaFaturaForm.value;
+    const cartaoCreditoId = Number(formValue.cartaoCreditoId);
+    if (!cartaoCreditoId || Number.isNaN(cartaoCreditoId)) {
+      this.snackBar.open('Selecione o cartão de crédito da fatura.', 'Fechar', {
+        duration: 3500,
+        panelClass: ['warning-snackbar']
+      });
+      return;
+    }
 
-      // Tenta salvar no backend primeiro
-      this.faturaService.criarFaturaCartao(novaFatura)
-        .pipe(
-          takeUntil(this.destroy$),
-          catchError(error => {
-            console.warn('Erro ao salvar no backend, salvando localmente:', error);
-            // Se falhar, adiciona localmente
-            this.faturas.unshift(novaFatura);
-            return of(novaFatura);
-          })
-        )
-        .subscribe({
-          next: (fatura) => {
-            if (fatura.id !== novaFatura.id) {
-              // Fatura foi salva no backend, atualiza a lista
-              this.faturas.unshift(fatura);
-            }
-            this.snackBar.open('Fatura adicionada com sucesso!', 'Fechar', {
-              duration: 3000,
-              panelClass: ['success-snackbar']
-            });
-            this.novaFaturaForm.reset();
-            this.showForm = false;
-            this.acaoEmAndamento = false;
-            this.carregarFaturas();
-          },
-          error: (error) => {
-            console.error('Erro ao adicionar fatura:', error);
-            this.acaoEmAndamento = false;
-            this.snackBar.open(
-              resolveHttpError(error, 'Erro ao adicionar fatura. Tente novamente.'),
-              'Fechar',
-              { duration: 4000, panelClass: ['error-snackbar'] }
-            );
-          }
-        });
+    const cartao = this.cartoes.find((c) => c.id === cartaoCreditoId);
+    const payload: CreditCardInvoice = {
+      cardId: String(cartaoCreditoId),
+      bankName: cartao?.banco || cartao?.nome || '',
+      amount: parseValorBrasileiro(formValue.valor) ?? formValue.valor,
+      dueDate: formValue.vencimento,
+      closingDate: formValue.fechamento,
+      status: formValue.status,
+      transactions: []
+    };
+
+    this.acaoEmAndamento = true;
+    this.faturaService
+      .criarFaturaCartao(payload)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.snackBar.open('Fatura adicionada com sucesso!', 'Fechar', {
+            duration: 3000,
+            panelClass: ['success-snackbar']
+          });
+          this.novaFaturaForm.reset({ status: 'PENDING' });
+          this.dialog.closeAll();
+          this.acaoEmAndamento = false;
+          this.financaAlteracao.notificar();
+          this.loadData();
+        },
+        error: (error) => {
+          console.error('Erro ao adicionar fatura:', error);
+          this.acaoEmAndamento = false;
+          this.snackBar.open(
+            resolveHttpError(error, 'Erro ao adicionar fatura. Verifique o cartão e tente novamente.'),
+            'Fechar',
+            { duration: 4000, panelClass: ['error-snackbar'] }
+          );
+        }
+      });
   }
 
   editarFatura(fatura: CreditCardInvoice): void {
@@ -233,7 +247,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
   excluirFatura(fatura: CreditCardInvoice): void {
     if (confirm(`Tem certeza que deseja excluir a fatura ${fatura.bankName}?`)) {
       this.acaoEmAndamento = true;
-      this.faturaProcessandoId = fatura.id;
+      this.faturaProcessandoId = fatura.id ?? null;
       // Tenta excluir do backend primeiro
       this.faturaService.excluirFaturaCartao(fatura)
         .pipe(
@@ -449,7 +463,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   trackByFaturaId(_index: number, f: CreditCardInvoice): string {
-    return f.id;
+    return f.id ?? String(_index);
   }
 
   trackByCartaoId(_index: number, c: CartaoCredito): string {

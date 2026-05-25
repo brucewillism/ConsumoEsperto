@@ -45,6 +45,7 @@ import { forkJoin } from 'rxjs';
   styleUrl: './metas.component.scss'
 })
 export class MetasComponent implements OnInit {
+  @ViewChild('novaMetaTpl') novaMetaTpl!: TemplateRef<unknown>;
   @ViewChild('editMetaTpl') editMetaTpl!: TemplateRef<unknown>;
 
   metas: MetaFinanceira[] = [];
@@ -157,6 +158,14 @@ export class MetasComponent implements OnInit {
     return labels[p] ?? String(p);
   }
 
+  abrirNovaMeta(): void {
+    this.novaMetaAlerta = '';
+    this.novaDescricao = '';
+    this.novaValor = 0;
+    this.novaPrioridade = 3;
+    openCeFormDialog(this.dialog, this.novaMetaTpl, { width: '480px' });
+  }
+
   salvarMeta(): void {
     this.novaMetaAlerta = '';
     if (!this.novaDescricao?.trim()) {
@@ -187,6 +196,7 @@ export class MetasComponent implements OnInit {
           this.toast.warning(res.alertaComprometimento);
         }
         this.financaAlteracao.notificar();
+        this.dialog.closeAll();
         this.novaDescricao = '';
         this.novaValor = 0;
         this.novaPrioridade = 3;

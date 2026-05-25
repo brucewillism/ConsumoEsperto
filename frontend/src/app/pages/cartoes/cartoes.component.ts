@@ -47,6 +47,7 @@ import { parseValorBrasileiro, sanitizeCardNumberInput } from '../../shared/util
   styleUrls: ['./cartoes.component.scss']
 })
 export class CartoesComponent implements OnInit {
+  @ViewChild('novoCartaoTpl') novoCartaoTpl!: TemplateRef<unknown>;
   @ViewChild('editCartaoTpl') editCartaoTpl!: TemplateRef<unknown>;
 
   readonly bancosBrasil = BANCOS_BRASIL;
@@ -57,7 +58,6 @@ export class CartoesComponent implements OnInit {
   acaoEmAndamento = false;
   cartaoProcessandoId: number | null = null;
   error: string | null = null;
-  showForm = false;
   novoCartaoForm!: FormGroup;
 
   cartaoEmEdicao: CartaoCredito | null = null;
@@ -104,6 +104,11 @@ export class CartoesComponent implements OnInit {
     });
   }
 
+  abrirNovoCartao(): void {
+    this.novoCartaoForm.reset();
+    openCeFormDialog(this.dialog, this.novoCartaoTpl, { width: '560px' });
+  }
+
   adicionarCartao(): void {
     if (this.novoCartaoForm.invalid) {
       this.novoCartaoForm.markAllAsTouched();
@@ -142,7 +147,7 @@ export class CartoesComponent implements OnInit {
           duration: 3000,
           panelClass: ['success-snackbar']
         });
-          this.showForm = false;
+          this.dialog.closeAll();
           this.novoCartaoForm.reset();
           this.acaoEmAndamento = false;
           this.loadData();
