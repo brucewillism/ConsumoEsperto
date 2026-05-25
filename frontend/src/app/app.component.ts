@@ -183,14 +183,15 @@ export class AppComponent implements OnInit {
     this.showUserMenu = false;
   }
 
-  /** Garante navegação mesmo se o clique for interceptado por overlay da sidebar. */
-  navigateSidebar(path: string, event: MouseEvent): void {
+  /** Garante navegação mesmo se routerLink for bloqueado por overlay. */
+  navigateSidebar(path: string, event: Event): void {
     event.preventDefault();
+    event.stopPropagation();
     this.closeDropdowns();
-    const destino = path.split('?')[0];
-    const atual = this.router.url.split('?')[0];
-    if (atual !== destino) {
-      void this.router.navigateByUrl(destino);
+    const destino = path.split('?')[0] || '/';
+    void this.router.navigateByUrl(destino);
+    if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+      this.sidebarCollapsed = false;
     }
   }
 

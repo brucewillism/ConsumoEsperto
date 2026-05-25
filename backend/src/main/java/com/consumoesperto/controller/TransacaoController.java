@@ -265,11 +265,19 @@ public class TransacaoController {
     @GetMapping("/resumo-mes-atual")
     @Operation(summary = "Obter resumo do mês atual", description = "Retorna resumo financeiro do mês atual")
     public ResponseEntity<Object> obterResumoDoMesAtual(
+            @RequestParam(name = "projecao", defaultValue = "true") boolean projecao,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
-        // Obtém resumo financeiro do mês atual
-        Object resumo = transacaoService.obterResumoDoMesAtual(currentUser.getId());
+        Object resumo = transacaoService.obterResumoDoMesAtual(currentUser.getId(), projecao);
         return ResponseEntity.ok(resumo);
+    }
+
+    @GetMapping("/recentes-mes-atual")
+    @Operation(summary = "Transações recentes do mês", description = "Lista paginada das últimas transações do mês atual")
+    public ResponseEntity<List<TransacaoDTO>> buscarRecentesDoMesAtual(
+            @RequestParam(name = "limite", defaultValue = "8") int limite,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        return ResponseEntity.ok(transacaoService.buscarRecentesDoMesAtual(currentUser.getId(), limite));
     }
 
     /**

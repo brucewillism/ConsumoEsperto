@@ -336,8 +336,24 @@ export class TransacaoService {
    * 
    * @returns Observable com resumo financeiro do mês atual
    */
-  obterResumoDoMesAtual(): Observable<any> {
-    return this.http.get<any>(`${this.API_URL}/resumo-mes-atual`, { headers: this.getHeaders() });
+  obterResumoDoMesAtual(opcoes?: { incluirProjecao?: boolean }): Observable<any> {
+    let params = new HttpParams();
+    if (opcoes?.incluirProjecao === false) {
+      params = params.set('projecao', 'false');
+    }
+    return this.http.get<any>(`${this.API_URL}/resumo-mes-atual`, {
+      headers: this.getHeaders(),
+      params,
+    });
+  }
+
+  /** Últimas transações do mês (paginado no servidor). */
+  buscarRecentesDoMesAtual(limite = 8): Observable<Transacao[]> {
+    const params = new HttpParams().set('limite', String(limite));
+    return this.http.get<Transacao[]>(`${this.API_URL}/recentes-mes-atual`, {
+      headers: this.getHeaders(),
+      params,
+    });
   }
 }
 

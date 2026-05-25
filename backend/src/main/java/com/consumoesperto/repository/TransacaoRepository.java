@@ -53,6 +53,16 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     List<Transacao> findByUsuarioIdAndPeriodoEfetivoOrderByDataDesc(@Param("usuarioId") Long usuarioId,
                                                                      @Param("dataInicio") LocalDateTime dataInicio,
                                                                      @Param("dataFim") LocalDateTime dataFim);
+
+    @EntityGraph(attributePaths = "categoria")
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND COALESCE(t.dataTransacao, t.dataCriacao) BETWEEN :dataInicio AND :dataFim "
+        + "ORDER BY COALESCE(t.dataTransacao, t.dataCriacao) DESC, t.id DESC")
+    Page<Transacao> findPageByUsuarioIdAndPeriodoEfetivo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("dataInicio") LocalDateTime dataInicio,
+        @Param("dataFim") LocalDateTime dataFim,
+        Pageable pageable);
     
     @Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
     BigDecimal sumByUsuarioIdAndTipoAndPeriodo(@Param("usuarioId") Long usuarioId, 

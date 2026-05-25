@@ -530,6 +530,13 @@ public class TransacaoService {
      * Usado pelo dashboard, relatório JSON e PDF para manter números alinhados.
      */
     public Map<String, Object> resumoFinanceiroMes(Long usuarioId, YearMonth yearMonth) {
+        return resumoFinanceiroMes(usuarioId, yearMonth, true);
+    }
+
+    /**
+     * @param incluirProjecao quando false, omite {@link SaldoService#calcularProjecaoMes} (resposta rápida para o dashboard).
+     */
+    public Map<String, Object> resumoFinanceiroMes(Long usuarioId, YearMonth yearMonth, boolean incluirProjecao) {
         LocalDateTime inicio = yearMonth.atDay(1).atStartOfDay();
         LocalDateTime fim = yearMonth.atEndOfMonth().atTime(23, 59, 59);
         BigDecimal totalReceitas = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
@@ -549,7 +556,7 @@ public class TransacaoService {
         resumo.put("totalDespesas", totalDespesas.doubleValue());
         resumo.put("totalInvestimentos", totalInvestimentos.doubleValue());
         resumo.put("saldo", saldo.doubleValue());
-        if (yearMonth.equals(YearMonth.now())) {
+        if (incluirProjecao && yearMonth.equals(YearMonth.now())) {
             SaldoService.ProjecaoMesCaixa projecao = saldoService.calcularProjecaoMes(usuarioId);
             resumo.put("patrimonioLiquido", projecao.patrimonioLiquido().doubleValue());
             resumo.put("receitasPrevistas", projecao.receitasPrevistas().doubleValue());
@@ -563,7 +570,28 @@ public class TransacaoService {
      * Calcula resumo financeiro do mês atual (mesma base que relatório mensal / PDF).
      */
     public Map<String, Object> obterResumoDoMesAtual(Long usuarioId) {
-        return resumoFinanceiroMes(usuarioId, YearMonth.now());
+        return obterResumoDoMesAtual(usuarioId, true);
+    }
+
+    public Map<String, Object> obterResumoDoMesAtual(Long usuarioId, boolean incluirProjecao) {
+        return resumoFinanceiroMes(usuarioId, YearMonth.now(), incluirProjecao);
+    }
+
+    /**
+     * Últimas transações do mês (paginado) — evita carregar todas as linhas no dashboard.
+     */
+    public List<TransacaoDTO> buscarRecentesDoMesAtual(Long usuarioId, int limite) {
+        int cap = Math.min(Math.max(limite, 1), 50);
+        YearMonth mesAtual = YearMonth.now();
+        LocalDateTime inicioMes = mesAtual.atDay(1).atStartOfDay();
+        LocalDateTime fimMes = mesAtual.atEndOfMonth().atTime(23, 59, 59);
+        org.springframework.data.domain.Pageable pageable =
+            org.springframework.data.domain.PageRequest.of(0, cap);
+        return transacaoRepository
+            .findPageByUsuarioIdAndPeriodoEfetivo(usuarioId, inicioMes, fimMes, pageable)
+            .stream()
+            .map(this::converterParaDTO)
+            .collect(Collectors.toList());
     }
 
     /**

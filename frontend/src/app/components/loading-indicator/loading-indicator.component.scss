@@ -2,12 +2,12 @@
   display: contents;
 }
 
-/* Overlay em tela cheia: host fixo no viewport (acima da sidebar z-index 1005) */
+/* Preenche .shell-loading-layer (sidebar fica livre para navegação) */
 :host:has(.loading-indicator--overlay) {
   display: block;
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 10050;
+  z-index: 1;
   pointer-events: all;
 }
 

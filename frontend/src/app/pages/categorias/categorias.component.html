@@ -58,11 +58,33 @@
         <mat-error *ngIf="form.get('descricao')?.hasError('maxlength')">Descrição deve ter no máximo 500 caracteres</mat-error>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
-        <mat-label>Cor (hex)</mat-label>
-        <input matInput formControlName="cor" placeholder="#4CAF50">
-        <mat-hint>Formato: #RRGGBB (opcional)</mat-hint>
-      </mat-form-field>
+      <div class="cor-picker">
+        <span class="cor-picker-label">Cor da categoria</span>
+        <div class="cor-swatches" role="listbox" aria-label="Cores padrão">
+          <button
+            type="button"
+            class="cor-swatch cor-swatch--none"
+            [class.cor-swatch--selected]="!corSelecionada"
+            (click)="selecionarCor('')"
+            [attr.aria-selected]="!corSelecionada"
+            title="Sem cor">
+            <span>—</span>
+          </button>
+          <button
+            type="button"
+            *ngFor="let c of coresPadrao"
+            class="cor-swatch"
+            [class.cor-swatch--selected]="corSelecionada === c.hex"
+            [style.background]="c.hex"
+            (click)="selecionarCor(c.hex)"
+            [attr.aria-label]="c.nome"
+            [attr.aria-selected]="corSelecionada === c.hex"
+            [title]="c.nome">
+          </button>
+        </div>
+        <p class="cor-picker-hint" *ngIf="corSelecionada">Selecionada: {{ nomeCorSelecionada }}</p>
+        <p class="cor-picker-hint muted" *ngIf="!corSelecionada">Opcional — ajuda nos gráficos e listas</p>
+      </div>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>

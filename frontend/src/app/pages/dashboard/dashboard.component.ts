@@ -1232,53 +1232,50 @@ export class DashboardComponent implements OnInit, OnDestroy {
       itens: [],
     };
 
-    // Fase 1: dados rápidos — liberta o overlay e mostra o painel
+    // Fase 1: só agregados rápidos (resumo sem calcularProjecaoMes no servidor)
     forkJoin({
-      transacoesMes: this.wrapDashboardRequest(
-        this.transacaoService.buscarDoMesAtual(),
-        [] as Transacao[],
-        'Transações do mês'
+      resumoMes: this.wrapDashboardRequest(
+        this.transacaoService.obterResumoDoMesAtual({ incluirProjecao: false }),
+        {},
+        'Resumo do mês (rápido)',
+        12_000
       ),
-      resumoMes: this.wrapDashboardRequest(this.transacaoService.obterResumoDoMesAtual(), {}, 'Resumo do mês'),
       cartoes: this.wrapDashboardRequest(
         this.cartaoCreditoService.buscarTodosCartoes(),
         [] as CartaoCredito[],
-        'Cartões'
+        'Cartões',
+        12_000
       ),
       despesasCategoriaMesAtual: this.wrapDashboardRequest(
         this.relatorioService.getDespesasPorCategoriaMesAtual(),
         despesasCategoriaFallback,
-        'Despesas por categoria (mês)'
-      ),
-      relatorioCategoriaMesPassado: this.wrapDashboardRequest(
-        this.relatorioService.getRelatorioPorCategoria(prevAno, prevMes),
-        null,
-        'Relatório categoria (mês anterior)'
-      ),
-      rendaConfig: this.wrapDashboardRequest(this.rendaConfigService.obter(), null, 'Config. renda'),
-      usuarioScore: this.wrapDashboardRequest(this.scoreService.obter(), null, 'Score utilizador'),
-      oportunidadeInvestimento: this.wrapDashboardRequest(
-        this.dashboardService.oportunidadeInvestimento(),
-        null,
-        'Oportunidade investimento'
-      ),
-      sugestoesContencao: this.wrapDashboardRequest(
-        this.contencaoJarvisService.listarPendentes(),
-        [] as SugestaoContencaoJarvis[],
-        'Sugestões contenção'
+        'Despesas por categoria (mês)',
+        12_000
       ),
     }).subscribe({
-      next: (data) => {
-        this.sugestoesContencaoJarvis = Array.isArray(data.sugestoesContencao) ? data.sugestoesContencao : [];
+      next: (rapido) => {
         this.processarDadosReais({
-          ...data,
+          transacoesMes: [] as Transacao[],
+          resumoMes: rapido.resumoMes,
+          cartoes: rapido.cartoes,
+          despesasCategoriaMesAtual: rapido.despesasCategoriaMesAtual,
+          relatorioCategoriaMesPassado: null,
+          rendaConfig: null,
+          usuarioScore: null,
+          oportunidadeInvestimento: null,
+          sugestoesContencao: [],
           dashboardProjection: null,
           previsaoFuturo: null,
         });
         this.ultimaAtualizacao = new Date();
         this.setDashboardLoading(false);
         this.isLoadingData = false;
-        console.log('✅ Dashboard base carregado — projeção/previsão em segundo plano');
+        console.log('✅ Dashboard visível — complementos em segundo plano');
+        this.carregarDashboardComplementosEmSegundoPlano(
+          prevAno,
+          prevMes,
+          rapido.despesasCategoriaMesAtual ?? despesasCategoriaFallback
+        );
         this.carregarDashboardPesadoEmSegundoPlano();
       },
       error: (error) => {
@@ -1291,9 +1288,95 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Projeção e previsão de fluxo (podem demorar) — não bloqueiam o overlay inicial. */
-  private carregarDashboardPesadoEmSegundoPlano(): void {
+  /** Transações recentes, resumo com projeção, score, etc. */
+  private carregarDashboardComplementosEmSegundoPlano(
+    prevAno: number,
+    prevMes: number,
+    despesasCategoriaMesAtual: RelatorioCategoriaMesAtual
+  ): void {
     this.isSilentRefreshing = true;
+    forkJoin({
+      transacoesRecentes: this.wrapDashboardRequest(
+        this.transacaoService.buscarRecentesDoMesAtual(8),
+        [] as Transacao[],
+        'Transações recentes',
+        15_000
+      ),
+      resumoProjecao: this.wrapDashboardRequest(
+        this.transacaoService.obterResumoDoMesAtual({ incluirProjecao: true }),
+        {},
+        'Resumo com projeção',
+        45_000
+      ),
+      relatorioCategoriaMesPassado: this.wrapDashboardRequest(
+        this.relatorioService.getRelatorioPorCategoria(prevAno, prevMes),
+        null,
+        'Relatório categoria (mês anterior)',
+        20_000
+      ),
+      rendaConfig: this.wrapDashboardRequest(this.rendaConfigService.obter(), null, 'Config. renda', 15_000),
+      usuarioScore: this.wrapDashboardRequest(this.scoreService.obter(), null, 'Score utilizador', 12_000),
+      sugestoesContencao: this.wrapDashboardRequest(
+        this.contencaoJarvisService.listarPendentes(),
+        [] as SugestaoContencaoJarvis[],
+        'Sugestões contenção',
+        15_000
+      ),
+      oportunidadeInvestimento: this.wrapDashboardRequest(
+        this.dashboardService.oportunidadeInvestimento(),
+        null,
+        'Oportunidade investimento',
+        30_000
+      ),
+    })
+      .pipe(finalize(() => (this.isSilentRefreshing = false)))
+      .subscribe({
+        next: (extra) => {
+          this.sugestoesContencaoJarvis = Array.isArray(extra.sugestoesContencao)
+            ? extra.sugestoesContencao
+            : [];
+          this.aplicarResumoProjecao(extra.resumoProjecao);
+          this.usuarioScore = extra.usuarioScore || this.usuarioScore;
+          this.oportunidadeInvestimento = extra.oportunidadeInvestimento || this.oportunidadeInvestimento;
+          const rawRenda = extra.rendaConfig as RendaConfigDto | null | undefined;
+          const bruto = rawRenda != null ? Number(rawRenda.salarioBruto) : 0;
+          this.rendaConfig = rawRenda != null && bruto > 0 ? rawRenda : this.rendaConfig;
+          this.syncRendaDoughnut();
+          const mesList = (extra.transacoesRecentes || []) as Transacao[];
+          const gruposJuros = buildGrupoParcelamentoTemJuros(mesList);
+          this.recentTransactions = mesList
+            .filter((t) => !!t.dataTransacao)
+            .map((t) => ({
+              id: t.id,
+              description: descricaoComIndicadorParcela(t),
+              amount: t.tipoTransacao === 'RECEITA' ? t.valor : -t.valor,
+              category: t.categoriaNome || 'Sem categoria',
+              date: new Date(t.dataTransacao!),
+              type: t.tipoTransacao === 'RECEITA' ? 'credit' : 'debit',
+              showJurosWarning: transacaoMostraBadgeJuros(t, gruposJuros),
+            }));
+          this.atualizarGraficosComDadosReais(mesList);
+          const relatorioCategoria = this.resolverRelatorioCategoria(despesasCategoriaMesAtual, mesList);
+          this.atualizarDoughnutComRelatorio(relatorioCategoria);
+          this.syncCategoriaRankingHud(relatorioCategoria, extra.relatorioCategoriaMesPassado);
+        },
+        error: (e) => console.warn('[Dashboard] Complementos em background:', e),
+      });
+  }
+
+  private aplicarResumoProjecao(resumo: Record<string, unknown> | null | undefined): void {
+    if (!resumo) {
+      return;
+    }
+    const previstas = this.coercerValorMonetario(resumo['receitasPrevistas']);
+    if (resumo['receitasPrevistas'] != null && !Number.isNaN(previstas)) {
+      this.receitasPrevistasMes = Math.max(0, previstas);
+    }
+    this.atualizarCardsComDadosReais();
+  }
+
+  /** Projeção Sentinela e previsão de fluxo — não bloqueiam o overlay inicial. */
+  private carregarDashboardPesadoEmSegundoPlano(): void {
     forkJoin({
       dashboardProjection: this.wrapDashboardRequest(
         this.dashboardService.projection(),
@@ -1307,18 +1390,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Previsão de fluxo',
         90_000
       ),
-    })
-      .pipe(finalize(() => (this.isSilentRefreshing = false)))
-      .subscribe({
-        next: (heavy) => {
-          this.dashboardProjection = heavy.dashboardProjection || null;
-          this.mesesSafra = normalizarSafra(this.dashboardProjection?.safraPatrimonio);
-          this.timelineImpacto = this.dashboardProjection?.timelineImpacto || [];
-          this.syncSpendingLineChart();
-          this.dashboardService.sincronizarPrevisaoAposFetch(heavy.previsaoFuturo ?? null);
-        },
-        error: (e) => console.warn('[Dashboard] Projeção/previsão em background:', e),
-      });
+    }).subscribe({
+      next: (heavy) => {
+        this.dashboardProjection = heavy.dashboardProjection || null;
+        this.mesesSafra = normalizarSafra(this.dashboardProjection?.safraPatrimonio);
+        this.timelineImpacto = this.dashboardProjection?.timelineImpacto || [];
+        this.syncSpendingLineChart();
+        this.dashboardService.sincronizarPrevisaoAposFetch(heavy.previsaoFuturo ?? null);
+      },
+      error: (e) => console.warn('[Dashboard] Projeção/previsão em background:', e),
+    });
   }
 
   getFluxoPercentualReceitas(): number {

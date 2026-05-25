@@ -13,6 +13,10 @@ import { CategoriaService } from '../../services/categoria.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
+import {
+  CORES_CATEGORIA_PADRAO,
+  normalizarCorCategoria,
+} from '../../shared/constants/cores-categoria';
 
 @Component({
   selector: 'app-categorias',
@@ -39,6 +43,16 @@ export class CategoriasComponent implements OnInit {
   salvando = false;
   form!: FormGroup;
   editando: Categoria | null = null;
+  readonly coresPadrao = CORES_CATEGORIA_PADRAO;
+
+  get corSelecionada(): string {
+    return normalizarCorCategoria(this.form?.get('cor')?.value);
+  }
+
+  get nomeCorSelecionada(): string {
+    const hex = this.corSelecionada;
+    return this.coresPadrao.find((c) => c.hex.toLowerCase() === hex.toLowerCase())?.nome ?? hex;
+  }
 
   constructor(
     private fb: FormBuilder,
@@ -77,12 +91,16 @@ export class CategoriasComponent implements OnInit {
       this.form.patchValue({
         nome: categoria.nome,
         descricao: categoria.descricao ?? '',
-        cor: categoria.cor ?? '',
+        cor: normalizarCorCategoria(categoria.cor) || '',
       });
     } else {
       this.form.reset({ nome: '', descricao: '', cor: '' });
     }
     openCeFormDialog(this.dialog, this.formTpl, { width: '460px' });
+  }
+
+  selecionarCor(hex: string): void {
+    this.form.patchValue({ cor: hex });
   }
 
   salvar(): void {
@@ -91,7 +109,11 @@ export class CategoriasComponent implements OnInit {
       return;
     }
     this.salvando = true;
-    const payload: Categoria = this.form.value;
+    const raw = this.form.getRawValue();
+    const payload: Categoria = {
+      ...raw,
+      cor: normalizarCorCategoria(raw.cor) || undefined,
+    };
 
     const req$ = this.editando?.id
       ? this.categoriaService.atualizarCategoria(this.editando.id, payload)

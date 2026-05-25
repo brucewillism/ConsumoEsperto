@@ -78,3 +78,61 @@
 .form-body .full {
   width: 100%;
 }
+
+.cor-picker {
+  margin: 0.5rem 0 0.25rem;
+}
+
+.cor-picker-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary, #94a3b8);
+  margin-bottom: 0.65rem;
+}
+
+.cor-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.cor-swatch {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    transform: scale(1.08);
+  }
+
+  &--selected {
+    border-color: #5eead4;
+    box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.35);
+    transform: scale(1.1);
+  }
+
+  &--none {
+    background: rgba(30, 41, 59, 0.8);
+    color: #94a3b8;
+    font-size: 1rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.cor-picker-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+
+  &.muted {
+    color: #64748b;
+  }
+}

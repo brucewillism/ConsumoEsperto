@@ -245,9 +245,16 @@
   </main>
 </div>
 
-<app-loading-indicator
+<div
+  class="shell-loading-layer"
+  [class.sidebar-collapsed]="sidebarCollapsed && !isLoginPage"
+  [class.shell-loading-layer--full]="isLoginPage"
   *ngIf="shellOverlay.active"
-  mode="overlay"
-  size="lg"
-  [message]="shellOverlay.message">
-</app-loading-indicator>
+  aria-busy="true"
+  aria-live="polite">
+  <app-loading-indicator
+    mode="overlay"
+    size="lg"
+    [message]="shellOverlay.message">
+  </app-loading-indicator>
+</div>
