@@ -33,7 +33,7 @@ import { buildSafraCascadeChart, toLineChartDatasets } from '../../utils/safra-c
 import { PrevisaoFuturoChartComponent } from '../../components/previsao-futuro-chart/previsao-futuro-chart.component';
 import { ScoreService, UsuarioScore } from '../../services/score.service';
 import { InboxNotification, NotificacaoInboxService } from '../../services/notificacao-inbox.service';
-import { IaChatService } from '../../services/ia-chat.service';
+import { JarvisChatPanelComponent } from '../../shared/jarvis-chat/jarvis-chat-panel.component';
 import { ContencaoJarvisService, SugestaoContencaoJarvis } from '../../services/contencao-jarvis.service';
 import { JarvisMemoriaService, JarvisMemoriaTimelineItem } from '../../services/jarvis-memoria.service';
 import { JarvisFeedbackService } from '../../services/jarvis-feedback.service';
@@ -125,6 +125,7 @@ interface ChartData {
     PrevisaoFuturoChartComponent,
     LoadingIndicatorComponent,
     ChartMetodologiaComponent,
+    JarvisChatPanelComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
@@ -280,13 +281,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /** Metas de contenção sugeridas pelo J.A.R.V.I.S. (hábito / pós-importação). */
   sugestoesContencaoJarvis: SugestaoContencaoJarvis[] = [];
   sugestaoContencaoEmAcao: number | null = null;
-  chatAberto = false;
-  chatMensagem = '';
-  chatCarregando = false;
-  chatHistorico: { autor: 'user' | 'ia'; texto: string }[] = [
-    { autor: 'ia', texto: 'Olá! Pergunte “Como vou fechar o mês?” ou “Onde invisto meu saldo?”.' }
-  ];
-
   userPerfilJarvis: Usuario | null = null;
   showJarvisTratamentoWizard = false;
   /** Só avalia o wizard após GET /perfil (evita localStorage antigo sem jarvisConfigurado). */
@@ -320,7 +314,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private dashboardService: DashboardService,
     private scoreService: ScoreService,
     private notificacaoInbox: NotificacaoInboxService,
-    private iaChatService: IaChatService,
     private contencaoJarvisService: ContencaoJarvisService,
     private jarvisMemoriaService: JarvisMemoriaService,
     private jarvisFeedbackService: JarvisFeedbackService,
@@ -514,25 +507,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.snackBar.open('Não foi possível recusar agora.', 'Fechar', { duration: 4000 });
         },
       });
-  }
-
-  enviarChatIa(): void {
-    const mensagem = this.chatMensagem.trim();
-    if (!mensagem || this.chatCarregando) return;
-    this.chatHistorico.push({ autor: 'user', texto: mensagem });
-    this.chatMensagem = '';
-    this.chatCarregando = true;
-    this.iaChatService.perguntar(mensagem).subscribe({
-      next: (res) => {
-        this.chatHistorico.push({ autor: 'ia', texto: res.resposta || 'Os sistemas não devolveram texto neste momento, Senhor.' });
-        this.chatCarregando = false;
-        this.loadDashboardData({ silent: true });
-      },
-      error: () => {
-        this.chatHistorico.push({ autor: 'ia', texto: 'J.A.R.V.I.S. indisponível no momento. Verifique a conexão com o servidor.' });
-        this.chatCarregando = false;
-      }
-    });
   }
 
   ngOnDestroy(): void {

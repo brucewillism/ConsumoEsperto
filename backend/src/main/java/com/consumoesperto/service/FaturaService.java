@@ -91,7 +91,8 @@ public class FaturaService {
         // Converte o DTO para entidade e associa ao cartão de crédito
         Fatura fatura = converterParaEntidade(faturaDTO);
         fatura.setCartaoCredito(cartaoCredito);
-        
+        aplicarDefaultsCriacao(fatura, cartaoCredito);
+
         // Persiste a fatura no banco de dados
         Fatura faturaSalva = faturaRepository.save(fatura);
         return converterParaDTO(faturaSalva);
@@ -490,6 +491,51 @@ public class FaturaService {
         fatura.setStatusFatura(dto.getStatusFatura());
         fatura.setNumeroFatura(dto.getNumeroFatura());
         return fatura;
+    }
+
+    /**
+     * Preenche campos obrigatórios da entidade quando o cliente não envia número da fatura
+     * ou totais derivados (cadastro manual pelo modal web).
+     */
+    private void aplicarDefaultsCriacao(Fatura fatura, CartaoCredito cartao) {
+        BigDecimal valor = fatura.getValorFatura() != null ? fatura.getValorFatura() : BigDecimal.ZERO;
+        if (fatura.getValorFatura() == null) {
+            fatura.setValorFatura(valor);
+        }
+        if (fatura.getValorTotal() == null) {
+            fatura.setValorTotal(valor);
+        }
+        if (fatura.getValorMinimo() == null) {
+            fatura.setValorMinimo(valor);
+        }
+        if (fatura.getValorPago() == null) {
+            fatura.setValorPago(BigDecimal.ZERO);
+        }
+        if (fatura.getNumeroFatura() == null || fatura.getNumeroFatura().isBlank()) {
+            fatura.setNumeroFatura(gerarNumeroFatura(fatura, cartao));
+        }
+        if (fatura.getStatusFatura() == null) {
+            fatura.setStatusFatura(Fatura.StatusFatura.ABERTA);
+        }
+        if (fatura.getPaga() == null) {
+            fatura.setPaga(Fatura.StatusFatura.PAGA.equals(fatura.getStatusFatura()));
+        }
+        if (fatura.getUsuario() == null && cartao.getUsuario() != null) {
+            fatura.setUsuario(cartao.getUsuario());
+        }
+    }
+
+    private String gerarNumeroFatura(Fatura fatura, CartaoCredito cartao) {
+        LocalDateTime venc = fatura.getDataVencimento() != null
+            ? fatura.getDataVencimento()
+            : LocalDateTime.now();
+        return String.format(
+            "%d-%02d-%d-%d",
+            venc.getYear(),
+            venc.getMonthValue(),
+            cartao.getId(),
+            System.nanoTime()
+        );
     }
 
     /**

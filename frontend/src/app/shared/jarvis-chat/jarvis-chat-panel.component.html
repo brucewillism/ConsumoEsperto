@@ -1,0 +1,57 @@
+<ng-container *ngIf="!dashboardCarregando">
+  <button
+    class="ai-chat-toggle"
+    type="button"
+    (click)="toggle()"
+    aria-label="Abrir assistente J.A.R.V.I.S."
+  >
+    <i class="fas fa-robot" aria-hidden="true"></i>
+  </button>
+
+  <section class="ai-chat-panel" *ngIf="aberto" role="dialog" aria-label="J.A.R.V.I.S.">
+    <header>
+      <strong>J.A.R.V.I.S.</strong>
+      <button type="button" (click)="fechar()" aria-label="Fechar chat">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </header>
+
+    <div class="chat-sugestoes" *ngIf="!carregando">
+      <button
+        type="button"
+        class="chip-sugestao"
+        *ngFor="let s of sugestoes"
+        (click)="usarSugestao(s)"
+        [disabled]="carregando"
+      >
+        {{ s.rotulo }}
+      </button>
+    </div>
+
+    <div class="chat-body" #chatBody>
+      <div class="chat-msg" *ngFor="let msg of historico" [class.user]="msg.autor === 'user'">
+        {{ msg.texto }}
+      </div>
+      <div class="chat-msg jarvis-typing" *ngIf="carregando">
+        <span class="typing-dot" aria-hidden="true"></span>
+        <span class="typing-dot" aria-hidden="true"></span>
+        <span class="typing-dot" aria-hidden="true"></span>
+        <span class="typing-label">{{ mensagemDigitando }}</span>
+      </div>
+    </div>
+
+    <form class="chat-form" (ngSubmit)="enviar()">
+      <textarea
+        name="chatMensagem"
+        [(ngModel)]="mensagem"
+        (keydown)="onKeydown($event)"
+        rows="2"
+        placeholder="Como vou fechar o mês?"
+        aria-label="Mensagem para o J.A.R.V.I.S."
+      ></textarea>
+      <button type="submit" [disabled]="carregando || !mensagem.trim()" aria-label="Enviar">
+        <i class="fas fa-paper-plane" aria-hidden="true"></i>
+      </button>
+    </form>
+  </section>
+</ng-container>

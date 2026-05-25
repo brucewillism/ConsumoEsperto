@@ -180,6 +180,11 @@ export class FaturaService {
   private converterParaFatura(fatura: CreditCardInvoice): Fatura {
     const cartaoId = fatura.cardId ? Number(fatura.cardId) : undefined;
     const idNumerico = fatura.id ? Number(fatura.id) : undefined;
+    const numeroFatura =
+      fatura.numeroFatura?.trim() ||
+      (cartaoId != null && !Number.isNaN(cartaoId) && cartaoId > 0
+        ? this.gerarNumeroFatura(cartaoId, fatura.dueDate)
+        : undefined);
     return {
       id: idNumerico != null && !Number.isNaN(idNumerico) && idNumerico > 0 ? idNumerico : undefined,
       valorFatura: fatura.amount,
@@ -187,7 +192,7 @@ export class FaturaService {
       dataVencimento: fatura.dueDate,
       dataFechamento: fatura.closingDate,
       statusFatura: this.converterStatusDeCreditCard(fatura.status),
-      numeroFatura: fatura.numeroFatura,
+      numeroFatura,
       cartaoCreditoId:
         cartaoId != null && !Number.isNaN(cartaoId) && cartaoId > 0 ? cartaoId : undefined,
       bankName: fatura.bankName,
@@ -218,6 +223,13 @@ export class FaturaService {
       case StatusFatura.PREVISTA: return 'PREVISTA';
       default: return 'PENDING';
     }
+  }
+
+  private gerarNumeroFatura(cartaoId: number, dueDate?: Date | string): string {
+    const d = dueDate ? new Date(dueDate) : new Date();
+    const ano = Number.isNaN(d.getTime()) ? new Date().getFullYear() : d.getFullYear();
+    const mes = Number.isNaN(d.getTime()) ? new Date().getMonth() + 1 : d.getMonth() + 1;
+    return `${ano}-${String(mes).padStart(2, '0')}-${cartaoId}-${Date.now()}`;
   }
 
   private converterStatusDeCreditCard(status: 'PENDING' | 'PAID' | 'OVERDUE' | 'PREVISTA'): StatusFatura {

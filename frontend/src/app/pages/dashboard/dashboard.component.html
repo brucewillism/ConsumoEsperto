@@ -398,28 +398,11 @@
       </div>
     </section>
 
-  <button class="ai-chat-toggle" type="button" (click)="chatAberto = !chatAberto" *ngIf="!isLoading">
-    <i class="fas fa-robot"></i>
-  </button>
-
-  <section class="ai-chat-panel" *ngIf="chatAberto && !isLoading">
-    <header>
-      <strong>J.A.R.V.I.S.</strong>
-      <button type="button" (click)="chatAberto = false"><i class="fas fa-times"></i></button>
-    </header>
-    <div class="chat-body">
-      <div class="chat-msg" *ngFor="let msg of chatHistorico" [class.user]="msg.autor === 'user'">
-        {{ msg.texto }}
-      </div>
-      <div class="chat-msg" *ngIf="chatCarregando">Consultando os sistemas…</div>
-    </div>
-    <form class="chat-form" (ngSubmit)="enviarChatIa()">
-      <input name="chatMensagem" [(ngModel)]="chatMensagem" placeholder="Como vou fechar o mês?">
-      <button type="submit" [disabled]="chatCarregando || !chatMensagem.trim()">
-        <i class="fas fa-paper-plane"></i>
-      </button>
-    </form>
-  </section>
+  <app-jarvis-chat-panel
+    [usuario]="userPerfilJarvis"
+    [dashboardCarregando]="isLoading"
+    (consultaConcluida)="loadDashboardData({ silent: true })"
+  ></app-jarvis-chat-panel>
 
     <!-- Cards Informativos -->
     <div class="dashboard-cards" *ngIf="!errorMessage">
