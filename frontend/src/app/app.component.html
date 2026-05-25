@@ -246,8 +246,8 @@
 </div>
 
 <app-loading-indicator
-  *ngIf="authFlowOverlay.active"
+  *ngIf="shellOverlay.active"
   mode="overlay"
   size="lg"
-  [message]="authFlowOverlay.message">
+  [message]="shellOverlay.message">
 </app-loading-indicator>

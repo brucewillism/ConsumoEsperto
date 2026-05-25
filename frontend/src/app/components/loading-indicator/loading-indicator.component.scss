@@ -2,6 +2,15 @@
   display: contents;
 }
 
+/* Overlay em tela cheia: host fixo no viewport (acima da sidebar z-index 1005) */
+:host:has(.loading-indicator--overlay) {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  pointer-events: all;
+}
+
 .loading-indicator {
   box-sizing: border-box;
 }
@@ -34,9 +43,8 @@
 }
 
 .loading-indicator--overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 5000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -46,7 +54,8 @@
 .loading-indicator__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(13, 14, 18, 0.82);
+  backdrop-filter: blur(4px);
 }
 
 .loading-indicator__content {

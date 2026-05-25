@@ -46,6 +46,7 @@ import { forkJoin, catchError, of, fromEvent, timer, Subscription, filter, final
 import { timeout } from 'rxjs/operators';
 import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
+import { LoadingService } from '../../services/loading.service';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { CartaoCredito } from '../../models/cartao-credito.model';
@@ -323,7 +324,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private usuarioService: UsuarioService,
     private snackBar: MatSnackBar,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private loadingService: LoadingService
   ) {
     this.financaAlteracao.alteracoes$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -380,6 +382,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.pollingSubscription = timer(60000, 60000)
       .pipe(filter(() => document.visibilityState === 'visible'))
       .subscribe(() => this.loadDashboardData({ silent: true }));
+
+    this.syncDashboardPageOverlay();
   }
 
   carregarInsightsFeed(): void {
@@ -515,6 +519,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.pollingSubscription?.unsubscribe();
     this.pollingSubscription = undefined;
+    this.loadingService.setPageOverlay(false);
+  }
+
+  private syncDashboardPageOverlay(): void {
+    if (this.isLoading) {
+      this.loadingService.setPageOverlay(true, this.mensagemCarregamentoDashboard);
+    } else {
+      this.loadingService.setPageOverlay(false);
+    }
+  }
+
+  private setDashboardLoading(loading: boolean): void {
+    this.isLoading = loading;
+    this.syncDashboardPageOverlay();
   }
 
   abrirNovoLancamento(): void {
@@ -548,7 +566,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isLoadingData) {
       console.log('⚠️ Carregamento já em andamento, ignorando chamada duplicada');
       if (!silent) {
-        this.isLoading = true;
+        this.setDashboardLoading(true);
       }
       return;
     }
@@ -557,14 +575,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (now - this.lastLoadTime < 2000) {
       console.log('⚠️ Carregamento muito frequente, aguardando cooldown');
       if (!silent && this.isLoadingData) {
-        this.isLoading = true;
+        this.setDashboardLoading(true);
       }
       return;
     }
 
     console.log('📊 Carregando dados REAIS do dashboard...', silent ? '(silencioso)' : '');
     if (!silent) {
-      this.isLoading = true;
+      this.setDashboardLoading(true);
     } else {
       this.isSilentRefreshing = true;
     }
@@ -1264,7 +1282,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     })
       .pipe(
         finalize(() => {
-          this.isLoading = false;
+          this.setDashboardLoading(false);
           this.isLoadingData = false;
           this.isSilentRefreshing = false;
         })

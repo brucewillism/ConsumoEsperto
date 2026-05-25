@@ -1,19 +1,24 @@
-import { Component, Input } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { LoadingIndicatorComponent, LoadingIndicatorSize } from '../../components/loading-indicator/loading-indicator.component';
+import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { LoadingService } from '../../services/loading.service';
 
+/**
+ * Ativa overlay global em tela cheia via LoadingService (não renderiza bloco local).
+ */
 @Component({
   selector: 'app-page-loading',
   standalone: true,
-  imports: [CommonModule, LoadingIndicatorComponent],
-  template: `
-    <section class="page-loading-block" aria-live="polite" aria-busy="true">
-      <app-loading-indicator mode="panel" [size]="size" [message]="message"></app-loading-indicator>
-    </section>
-  `,
-  styleUrl: './page-loading.component.scss',
+  template: '',
 })
-export class PageLoadingComponent {
+export class PageLoadingComponent implements OnInit, OnDestroy {
   @Input() message = 'Carregando…';
-  @Input() size: LoadingIndicatorSize = 'md';
+
+  constructor(private loadingService: LoadingService) {}
+
+  ngOnInit(): void {
+    this.loadingService.setPageOverlay(true, this.message);
+  }
+
+  ngOnDestroy(): void {
+    this.loadingService.setPageOverlay(false);
+  }
 }

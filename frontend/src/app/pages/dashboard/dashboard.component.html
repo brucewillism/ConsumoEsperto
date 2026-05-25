@@ -80,18 +80,6 @@
     </p>
   </section>
 
-  <section
-    class="dashboard-loading-shell hud-animate"
-    *ngIf="isLoading"
-    aria-live="polite"
-    aria-busy="true">
-    <app-loading-indicator
-      mode="panel"
-      size="lg"
-      [message]="mensagemCarregamentoDashboard">
-    </app-loading-indicator>
-  </section>
-
   <!-- Núcleo de memória semântica — timeline tática -->
   <section class="memoria-tatica-drawer hud-animate" *ngIf="painelMemoriaAberto" [style.--stagger]="1">
     <div class="memoria-tatica-inner">

@@ -10,11 +10,12 @@ import {
   WhatsappEvolutionQrDialogData,
 } from '../../shared/whatsapp-evolution-qr-dialog.component';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
+import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 
 @Component({
   selector: 'app-whatsapp-config',
   standalone: true,
-  imports: [CommonModule, FormsModule, CeInputMaskDirective],
+  imports: [CommonModule, FormsModule, CeInputMaskDirective, PageLoadingComponent],
   templateUrl: './whatsapp-config.component.html',
   styleUrl: './whatsapp-config.component.scss'
 })
@@ -22,6 +23,7 @@ export class WhatsappConfigComponent implements OnInit {
   numeroWhatsapp = '';
   numeroAtual = '';
   carregando = false;
+  mensagemCarregamento = 'Carregando…';
 
   constructor(
     private usuarioService: UsuarioService,
@@ -34,6 +36,7 @@ export class WhatsappConfigComponent implements OnInit {
   }
 
   carregarPerfil(): void {
+    this.mensagemCarregamento = 'Carregando dados do WhatsApp…';
     this.carregando = true;
     this.usuarioService.getUsuario().subscribe({
       next: (usuario: Usuario) => {
@@ -54,6 +57,7 @@ export class WhatsappConfigComponent implements OnInit {
       return;
     }
 
+    this.mensagemCarregamento = 'A vincular WhatsApp e preparar o QR Code…';
     this.carregando = true;
     this.usuarioService.vincularWhatsapp(this.numeroWhatsapp.trim()).subscribe({
       next: (response: VincularWhatsappResponse) => {
@@ -97,6 +101,7 @@ export class WhatsappConfigComponent implements OnInit {
       return;
     }
 
+    this.mensagemCarregamento = 'A desvincular WhatsApp…';
     this.carregando = true;
     this.usuarioService.desvincularWhatsapp().subscribe({
       next: () => {

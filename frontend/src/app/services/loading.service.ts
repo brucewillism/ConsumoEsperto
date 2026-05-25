@@ -7,6 +7,12 @@ export interface AuthFlowOverlayState {
   message: string;
 }
 
+/** Overlay em tela cheia (sidebar + header + conteúdo). */
+export interface ShellOverlayState {
+  active: boolean;
+  message: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -28,6 +34,16 @@ export class LoadingService {
   });
   readonly authFlowOverlay$ = this.authFlowSubject.asObservable();
 
+  private pageOverlayDepth = 0;
+  private pageOverlayMessage = 'Carregando…';
+  private requestOverlayActive = false;
+
+  private readonly shellOverlaySubject = new BehaviorSubject<ShellOverlayState>({
+    active: false,
+    message: '',
+  });
+  readonly shellOverlay$ = this.shellOverlaySubject.asObservable();
+
   /** Margem fixa após o último pedido terminar, antes de ocultar (evita flicker). */
   private tailAfterRequestsMs(): number {
     const t = environment.loadingOverlayTailMs;
@@ -44,6 +60,7 @@ export class LoadingService {
 
   beginAuthFlow(message = 'Autenticando…'): void {
     this.authFlowSubject.next({ active: true, message });
+    this.emitShellOverlay();
   }
 
   updateAuthFlowMessage(message: string): void {
@@ -51,21 +68,65 @@ export class LoadingService {
       return;
     }
     this.authFlowSubject.next({ active: true, message });
+    this.emitShellOverlay();
   }
 
   endAuthFlow(): void {
     this.authFlowSubject.next({ active: false, message: '' });
+    this.emitShellOverlay();
   }
 
-  show(): void {
+  /**
+   * Overlay de página (dashboard, page-loading, etc.) — sempre no app-root, cobre o ecrã inteiro.
+   */
+  setPageOverlay(active: boolean, message = 'Carregando…'): void {
+    if (active) {
+      this.pageOverlayDepth += 1;
+      this.pageOverlayMessage = message;
+    } else {
+      this.pageOverlayDepth = Math.max(0, this.pageOverlayDepth - 1);
+    }
+    this.emitShellOverlay();
+  }
+
+  updatePageOverlayMessage(message: string): void {
+    if (this.pageOverlayDepth > 0) {
+      this.pageOverlayMessage = message;
+      this.emitShellOverlay();
+    }
+  }
+
+  private emitShellOverlay(): void {
+    const auth = this.authFlowSubject.value;
+    if (auth.active) {
+      this.shellOverlaySubject.next({ active: true, message: auth.message });
+      return;
+    }
+    if (this.pageOverlayDepth > 0) {
+      this.shellOverlaySubject.next({ active: true, message: this.pageOverlayMessage });
+      return;
+    }
+    if (this.requestOverlayActive) {
+      this.shellOverlaySubject.next({ active: true, message: this.requestOverlayMessage });
+      return;
+    }
+    this.shellOverlaySubject.next({ active: false, message: '' });
+  }
+
+  private requestOverlayMessage = 'Carregando…';
+
+  show(message = 'Carregando…'): void {
     if (this.pendingHideTimer != null) {
       clearTimeout(this.pendingHideTimer);
       this.pendingHideTimer = null;
     }
 
+    this.requestOverlayMessage = message;
     this.activeRequests += 1;
     if (this.activeRequests === 1) {
+      this.requestOverlayActive = true;
       this.loadingSubject.next(true);
+      this.emitShellOverlay();
     }
   }
 
@@ -79,8 +140,10 @@ export class LoadingService {
     }
 
     const finish = () => {
+      this.requestOverlayActive = false;
       this.loadingSubject.next(false);
       this.pendingHideTimer = null;
+      this.emitShellOverlay();
     };
 
     const tail = this.tailAfterRequestsMs();
@@ -101,7 +164,10 @@ export class LoadingService {
       this.pendingHideTimer = null;
     }
     this.activeRequests = 0;
+    this.requestOverlayActive = false;
+    this.pageOverlayDepth = 0;
     this.loadingSubject.next(false);
     this.endAuthFlow();
+    this.emitShellOverlay();
   }
 }

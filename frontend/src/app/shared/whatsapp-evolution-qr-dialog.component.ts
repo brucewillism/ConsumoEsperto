@@ -10,6 +10,7 @@ import {
   coerceEvolutionQrDataUri,
   coerceEvolutionUserFacingText,
 } from './evolution-response-coerce';
+import { LoadingIndicatorComponent } from '../components/loading-indicator/loading-indicator.component';
 
 /** Dados para o modal de QR Evolution. */
 export interface WhatsappEvolutionQrDialogData {
@@ -23,7 +24,7 @@ export interface WhatsappEvolutionQrDialogData {
 @Component({
   selector: 'app-whatsapp-evolution-qr-dialog',
   standalone: true,
-  imports: [CommonModule, MatDialogModule, MatButtonModule],
+  imports: [CommonModule, MatDialogModule, MatButtonModule, LoadingIndicatorComponent],
   template: `
     <h2 mat-dialog-title>Pareamento WhatsApp (Evolution)</h2>
 
@@ -43,7 +44,9 @@ export interface WhatsappEvolutionQrDialogData {
         Depois do pareamento, fale com o J.A.R.V.I.S. na conversa <strong>consigo mesmo</strong> (chat «Eu»), com o número que vinculou na app.
       </p>
 
-      <p class="spinner-line" *ngIf="waitingForQr">À obter o QR Code da Evolution (tentativa contínua)…</p>
+      <div class="qr-loading" *ngIf="waitingForQr">
+        <app-loading-indicator mode="panel" size="md" message="A gerar QR Code na Evolution…"></app-loading-indicator>
+      </div>
 
       <div class="qr-wrap" *ngIf="safeQrSrc">
         <img class="qr" [src]="safeQrSrc" alt="QR Code Evolution" />
@@ -89,9 +92,9 @@ export interface WhatsappEvolutionQrDialogData {
         color: #7dd3fc;
         font-size: 0.88rem;
       }
-      .spinner-line {
-        font-size: 0.9rem;
-        opacity: 0.82;
+      .qr-loading {
+        margin: 0.5rem 0 1rem;
+        min-height: 10rem;
       }
       .qr-wrap {
         margin: 1rem 0;
