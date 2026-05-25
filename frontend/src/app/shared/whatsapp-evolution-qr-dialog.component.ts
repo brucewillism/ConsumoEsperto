@@ -35,8 +35,12 @@ export interface WhatsappEvolutionQrDialogData {
       <p class="warn-banner" *ngIf="safeBanner">{{ safeBanner }}</p>
 
       <p class="instructions">
-        No celular: WhatsApp → Aparelhos associados → Associar um aparelho →
-        quando solicitado, leia este código QR ou use o código alfanumérico abaixo.
+        No telemóvel: WhatsApp → <strong>Aparelhos ligados</strong> → <strong>Ligar um dispositivo</strong>.
+        Leia este QR (ou use o código abaixo). Se aparecer «não é possível ligar outro dispositivo», remova aparelhos antigos
+        na lista e tente outra vez.
+      </p>
+      <p class="instructions jarvis-hint">
+        Depois do pareamento, fale com o J.A.R.V.I.S. na conversa <strong>consigo mesmo</strong> (chat «Eu»), com o número que vinculou na app.
       </p>
 
       <p class="spinner-line" *ngIf="waitingForQr">À obter o QR Code da Evolution (tentativa contínua)…</p>
@@ -80,6 +84,10 @@ export interface WhatsappEvolutionQrDialogData {
       .instructions {
         font-size: 0.92rem;
         line-height: 1.35;
+      }
+      .jarvis-hint {
+        color: #7dd3fc;
+        font-size: 0.88rem;
       }
       .spinner-line {
         font-size: 0.9rem;

@@ -63,6 +63,7 @@ services:
       EVOLUTION_URL: ${EVOLUTION_URL:-http://evolution_api:8585}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
       EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-ConsumoEsperto}
+      EVOLUTION_DEDICATED_INSTANCE_PER_USER: ${EVOLUTION_DEDICATED_INSTANCE_PER_USER:-true}
 
       APP_FRONTEND_BASE_URL: ${APP_FRONTEND_BASE_URL:-https://consumoesperto.brucew07.com.br}
       CORS_ALLOWED_PATTERNS: ${CORS_ALLOWED_PATTERNS:-http://localhost:8181,http://127.0.0.1:8181,https://consumoesperto.brucew07.com.br}

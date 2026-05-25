@@ -4,6 +4,7 @@ import com.consumoesperto.dto.EvolutionPairingOutcomeDTO;
 import com.consumoesperto.dto.PerfilJarvisRequest;
 import com.consumoesperto.dto.PreferenciaTratamentoRequest;
 import com.consumoesperto.dto.UsuarioDTO;
+import com.consumoesperto.service.EvolutionInstanceLifecycleService;
 import com.consumoesperto.service.EvolutionPairingService;
 import com.consumoesperto.service.JarvisProtocolService;
 import com.consumoesperto.service.UsuarioService;
@@ -42,6 +43,7 @@ public class UsuarioController {
     private final WhatsAppUserMappingService whatsAppUserMappingService;
     private final JarvisProtocolService jarvisProtocolService;
     private final EvolutionPairingService evolutionPairingService;
+    private final EvolutionInstanceLifecycleService evolutionInstanceLifecycleService;
 
     /**
      * Busca o perfil do usuário autenticado
@@ -187,6 +189,9 @@ public class UsuarioController {
             com.consumoesperto.model.Usuario usuario = usuarioOpt.get();
             com.consumoesperto.model.Usuario atualizado = whatsAppUserMappingService.linkWhatsAppNumber(usuario.getId(), numero);
 
+            evolutionInstanceLifecycleService.prepareInstanceForPairing(usuario.getId());
+            evolutionInstanceLifecycleService.resetSessionBeforePairing(usuario.getId());
+
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(usuario.getId());
 
             boolean temQrOuCodigo = (pairing.getQrCodeDataUri() != null && !pairing.getQrCodeDataUri().isBlank())
@@ -230,8 +235,10 @@ public class UsuarioController {
                     "message", "Usuario nao autenticado"
                 ));
             }
-            EvolutionPairingOutcomeDTO pairing =
-                evolutionPairingService.invokeInstanceConnect(usuarioOpt.get().getId());
+            Long uid = usuarioOpt.get().getId();
+            evolutionInstanceLifecycleService.prepareInstanceForPairing(uid);
+            evolutionInstanceLifecycleService.resetSessionBeforePairing(uid);
+            EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(uid);
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("status", "success");
             aplicarCamposEvolutionPairing(body, pairing);
@@ -292,6 +299,7 @@ public class UsuarioController {
             }
 
             com.consumoesperto.model.Usuario usuario = usuarioOpt.get();
+            evolutionInstanceLifecycleService.releaseInstanceOnUnlink(usuario.getId());
             whatsAppUserMappingService.unlinkWhatsAppNumber(usuario.getId());
 
             return ResponseEntity.ok(Map.of(

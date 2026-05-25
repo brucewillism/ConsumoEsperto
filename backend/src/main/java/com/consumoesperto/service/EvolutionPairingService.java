@@ -81,6 +81,13 @@ public class EvolutionPairingService {
     private boolean logWeakEvolutionResponses;
 
     private final ConcurrentHashMap<Long, PairingCredCacheEntry> pairingCredCache = new ConcurrentHashMap<>();
+
+    /** Invalida cache de credenciais após mudança de instância Evolution (vínculo/desvínculo). */
+    public void invalidatePairingCredCache(Long usuarioId) {
+        if (usuarioId != null) {
+            pairingCredCache.remove(usuarioId);
+        }
+    }
     @PostConstruct
     void initRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
