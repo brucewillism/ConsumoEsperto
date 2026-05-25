@@ -29,7 +29,8 @@ import {
 } from '../../services/transacao.service';
 import { FiltroTransacaoComponent } from './components/filtro-transacao/filtro-transacao.component';
 import { ListaTransacaoComponent } from './components/lista-transacao/lista-transacao.component';
-import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
+import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError, valorMonetarioBrValidator } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-transacoes',
@@ -48,7 +49,8 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
     MatDatepickerModule,
     MatNativeDateModule,
     FiltroTransacaoComponent,
-    ListaTransacaoComponent
+    ListaTransacaoComponent,
+    CeInputMaskDirective
   ],
   templateUrl: './transacoes.component.html',
   styleUrls: ['./transacoes.component.scss']
@@ -92,7 +94,7 @@ export class TransacoesComponent implements OnInit {
   ) {
     this.transacaoForm = this.fb.group({
       descricao: ['', Validators.required],
-      valor: ['', [Validators.required, Validators.min(0.01)]],
+      valor: ['', [Validators.required, valorMonetarioBrValidator]],
       tipoTransacao: [TipoTransacao.DESPESA, Validators.required],
       dataTransacao: [new Date(), Validators.required],
       categoriaId: [''],
@@ -156,7 +158,11 @@ export class TransacoesComponent implements OnInit {
       return;
     }
 
-    const transacao: Transacao = this.transacaoForm.value;
+    const raw = this.transacaoForm.value;
+    const transacao: Transacao = {
+      ...raw,
+      valor: parseValorBrasileiro(raw.valor) ?? 0,
+    };
     this.salvandoTransacao = true;
 
     const request$ = this.transacaoEditando?.id

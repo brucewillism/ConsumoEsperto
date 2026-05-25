@@ -4,12 +4,13 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angula
 import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { Usuario } from '../../models/usuario.model';
 
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, CeInputMaskDirective],
   templateUrl: './register.component.html',
   styleUrl: './register.component.scss'
 })

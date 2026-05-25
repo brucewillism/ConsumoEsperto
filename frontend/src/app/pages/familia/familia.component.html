@@ -33,11 +33,11 @@
     <div class="form-row">
       <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
         <mat-label>E-mail</mat-label>
-        <input matInput type="email" [(ngModel)]="conviteEmail" placeholder="parceiro@email.com">
+        <input matInput type="email" ceMask="email" [(ngModel)]="conviteEmail" placeholder="parceiro@email.com">
       </mat-form-field>
       <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
         <mat-label>WhatsApp</mat-label>
-        <input matInput [(ngModel)]="conviteWhatsapp" placeholder="+5511999999999">
+        <input matInput ceMask="phone" [(ngModel)]="conviteWhatsapp" placeholder="+55 (11) 99999-9999">
       </mat-form-field>
       <button mat-raised-button color="primary" (click)="convidar()">Enviar convite</button>
     </div>

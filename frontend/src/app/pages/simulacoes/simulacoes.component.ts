@@ -17,7 +17,8 @@ import { MatExpansionModule } from '@angular/material/expansion';
 
 import { SimulacaoService } from '../../services/simulacao.service';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
+import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-simulacoes',
@@ -38,7 +39,8 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
     MatChipsModule,
     MatProgressBarModule,
     MatExpansionModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    CeInputMaskDirective
   ],
   template: `
     <div class="simulacoes-container">
@@ -75,7 +77,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
 
                     <mat-form-field appearance="outline">
                       <mat-label>Valor da Compra</mat-label>
-                      <input matInput type="number" formControlName="valorCompra" required min="0" step="0.01">
+                      <input matInput type="text" inputmode="decimal" ceMask="decimal" formControlName="valorCompra" required>
                       <mat-error *ngIf="formCartao.get('valorCompra')?.hasError('required')">
                         Valor é obrigatório
                       </mat-error>
@@ -102,7 +104,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
 
                     <mat-form-field appearance="outline">
                       <mat-label>Taxa de Juros Mensal (%)</mat-label>
-                      <input matInput type="number" formControlName="taxaJuros" min="0" max="100" step="0.01">
+                      <input matInput type="text" inputmode="decimal" ceMask="decimal" formControlName="taxaJuros">
                       <mat-error *ngIf="formCartao.get('taxaJuros')?.hasError('min')">
                         Taxa deve ser maior ou igual a zero
                       </mat-error>
@@ -180,7 +182,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
                   <div class="form-row">
                     <mat-form-field appearance="outline">
                       <mat-label>Valor Inicial</mat-label>
-                      <input matInput type="number" formControlName="valorInicial" required min="0" step="0.01">
+                      <input matInput type="text" inputmode="decimal" ceMask="decimal" formControlName="valorInicial" required>
                       <mat-error *ngIf="formInvestimento.get('valorInicial')?.hasError('required')">
                         Valor inicial é obrigatório
                       </mat-error>
@@ -188,7 +190,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
 
                     <mat-form-field appearance="outline">
                       <mat-label>Aporte Mensal</mat-label>
-                      <input matInput type="number" formControlName="aporteMensal" min="0" step="0.01">
+                      <input matInput type="text" inputmode="decimal" ceMask="decimal" formControlName="aporteMensal">
                       <mat-error *ngIf="formInvestimento.get('aporteMensal')?.hasError('min')">
                         Aporte deve ser maior ou igual a zero
                       </mat-error>
@@ -198,7 +200,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
                   <div class="form-row">
                     <mat-form-field appearance="outline">
                       <mat-label>Taxa de Retorno Anual (%)</mat-label>
-                      <input matInput type="number" formControlName="taxaRetorno" required min="0" max="100" step="0.01">
+                      <input matInput type="text" inputmode="decimal" ceMask="decimal" formControlName="taxaRetorno" required>
                       <mat-error *ngIf="formInvestimento.get('taxaRetorno')?.hasError('required')">
                         Taxa de retorno é obrigatória
                       </mat-error>
@@ -206,7 +208,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
 
                     <mat-form-field appearance="outline">
                       <mat-label>Período (anos)</mat-label>
-                      <input matInput type="number" formControlName="periodo" required min="1" max="50" step="1">
+                      <input matInput type="text" inputmode="numeric" ceMask="integer" [ceMaskMaxLength]="2" formControlName="periodo" required>
                       <mat-error *ngIf="formInvestimento.get('periodo')?.hasError('required')">
                         Período é obrigatório
                       </mat-error>
@@ -290,7 +292,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
                   <div class="form-row">
                     <mat-form-field appearance="outline">
                       <mat-label>Valor do Bem</mat-label>
-                      <input matInput type="number" formControlName="valorBem" required min="0" step="0.01">
+                      <input matInput type="text" inputmode="decimal" ceMask="decimal" formControlName="valorBem" required>
                       <mat-error *ngIf="formFinanciamento.get('valorBem')?.hasError('required')">
                         Valor do bem é obrigatório
                       </mat-error>
@@ -298,7 +300,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
 
                     <mat-form-field appearance="outline">
                       <mat-label>Entrada</mat-label>
-                      <input matInput type="number" formControlName="entrada" min="0" step="0.01">
+                      <input matInput type="text" inputmode="decimal" ceMask="decimal" formControlName="entrada">
                       <mat-error *ngIf="formFinanciamento.get('entrada')?.hasError('min')">
                         Entrada deve ser maior ou igual a zero
                       </mat-error>
@@ -308,7 +310,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
                   <div class="form-row">
                     <mat-form-field appearance="outline">
                       <mat-label>Taxa de Juros Mensal (%)</mat-label>
-                      <input matInput type="number" formControlName="taxaJurosFinanciamento" required min="0" max="100" step="0.01">
+                      <input matInput type="text" inputmode="decimal" ceMask="decimal" formControlName="taxaJurosFinanciamento" required>
                       <mat-error *ngIf="formFinanciamento.get('taxaJurosFinanciamento')?.hasError('required')">
                         Taxa de juros é obrigatória
                       </mat-error>
@@ -316,7 +318,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
 
                     <mat-form-field appearance="outline">
                       <mat-label>Prazo (meses)</mat-label>
-                      <input matInput type="number" formControlName="prazo" required min="1" max="360" step="1">
+                      <input matInput type="text" inputmode="numeric" ceMask="integer" [ceMaskMaxLength]="3" formControlName="prazo" required>
                       <mat-error *ngIf="formFinanciamento.get('prazo')?.hasError('required')">
                         Prazo é obrigatório
                       </mat-error>
@@ -582,7 +584,14 @@ export class SimulacoesComponent implements OnInit {
       });
       return;
     }
-    this.simulacaoService.simularInvestimento(this.formInvestimento.value).subscribe({
+    const inv = this.formInvestimento.value;
+    this.simulacaoService.simularInvestimento({
+      ...inv,
+      valorInicial: parseValorBrasileiro(inv.valorInicial) ?? 0,
+      aporteMensal: parseValorBrasileiro(inv.aporteMensal) ?? 0,
+      taxaRetorno: parseValorBrasileiro(inv.taxaRetorno) ?? 0,
+      periodo: parseValorBrasileiro(inv.periodo) ?? 0,
+    }).subscribe({
       next: (resultado) => (this.resultadoInvestimento = resultado),
       error: (err) => {
         this.resultadoInvestimento = null;
@@ -604,9 +613,13 @@ export class SimulacoesComponent implements OnInit {
       });
       return;
     }
+    const fin = this.formFinanciamento.value;
     const payload = {
-      ...this.formFinanciamento.value,
-      taxaJuros: this.formFinanciamento.value.taxaJurosFinanciamento
+      ...fin,
+      valorBem: parseValorBrasileiro(fin.valorBem) ?? 0,
+      entrada: parseValorBrasileiro(fin.entrada) ?? 0,
+      taxaJuros: parseValorBrasileiro(fin.taxaJurosFinanciamento) ?? 0,
+      prazo: parseValorBrasileiro(fin.prazo) ?? 0,
     };
     this.simulacaoService.simularFinanciamento(payload).subscribe({
       next: (resultado) => (this.resultadoFinanciamento = resultado),

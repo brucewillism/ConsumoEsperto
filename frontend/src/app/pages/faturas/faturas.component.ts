@@ -16,6 +16,9 @@ import { ReactiveFormsModule, FormBuilder, FormGroup, Validators, FormsModule } 
 import { Subject, takeUntil, catchError, of, forkJoin } from 'rxjs';
 
 import { CreditCardInvoice } from '../../models/credit-card-invoice.model';
+import { BANCOS_BRASIL, getBancoCorBr, getBancoNomeBr } from '../../shared/constants/bancos-brasil';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
+import { parseValorBrasileiro } from '../../shared/utils/form.utils';
 import { CartaoCredito } from '../../models/cartao-credito.model';
 import { FaturaService } from '../../services/fatura.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
@@ -43,12 +46,14 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
     MatSnackBarModule,
     MatDialogModule,
     ReactiveFormsModule,
-    FormsModule
+    FormsModule,
+    CeInputMaskDirective
   ],
   templateUrl: './faturas.component.html',
   styleUrls: ['./faturas.component.scss']
 })
 export class FaturasComponent implements OnInit, OnDestroy {
+  readonly bancosBrasil = BANCOS_BRASIL;
   faturas: CreditCardInvoice[] = [];
   faturasFiltradas: CreditCardInvoice[] = [];
   /** Linha do tempo: mês/ano ascendente (atual → futuro). */
@@ -172,7 +177,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
         id: Date.now().toString(),
         cardId: formValue.banco + '-card',
         bankName: formValue.banco,
-        amount: formValue.valor,
+        amount: parseValorBrasileiro(formValue.valor) ?? formValue.valor,
         dueDate: formValue.vencimento,
         closingDate: formValue.fechamento,
         status: formValue.status,
@@ -570,21 +575,11 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   getBancoColor(bankName: string): string {
-    const cores = {
-      'itau': '#EC7000',
-      'nubank': '#8A05BE',
-      'inter': '#FF7A00'
-    };
-    return cores[bankName as keyof typeof cores] || '#666';
+    return getBancoCorBr(bankName);
   }
 
   getBancoNome(bankName: string): string {
-    const nomes = {
-      'itau': 'Itaú',
-      'nubank': 'Nubank',
-      'inter': 'Banco Inter'
-    };
-    return nomes[bankName as keyof typeof nomes] || bankName;
+    return getBancoNomeBr(bankName);
   }
 
   faturaEstaProcessando(fatura: CreditCardInvoice): boolean {

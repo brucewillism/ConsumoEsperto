@@ -27,7 +27,7 @@
       <div class="sim-row">
         <mat-form-field appearance="outline" class="grow">
           <mat-label>Valor do bem (R$)</mat-label>
-          <input matInput type="number" min="1" step="0.01" [(ngModel)]="valorSimulado" (ngModelChange)="onValorSimuladoChange()" />
+          <input matInput type="text" inputmode="decimal" ceMask="decimal" [(ngModel)]="valorSimulado" (ngModelChange)="onValorSimuladoChange()" />
         </mat-form-field>
       </div>
       <div class="slider-row">
@@ -59,7 +59,7 @@
         </mat-form-field>
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Valor total (R$)</mat-label>
-          <input matInput type="number" min="0.01" step="0.01" [(ngModel)]="novaValor" [disabled]="salvando" />
+          <input matInput type="text" inputmode="decimal" ceMask="decimal" [(ngModel)]="novaValor" [disabled]="salvando" />
         </mat-form-field>
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Prioridade</mat-label>
@@ -142,11 +142,11 @@
     </mat-form-field>
     <mat-form-field appearance="outline" subscriptSizing="dynamic" class="fullw">
       <mat-label>Valor total (R$)</mat-label>
-      <input matInput type="number" min="0.01" step="0.01" [(ngModel)]="editValor" [disabled]="salvando" />
+      <input matInput type="text" inputmode="decimal" ceMask="decimal" [(ngModel)]="editValor" [disabled]="salvando" />
     </mat-form-field>
     <mat-form-field appearance="outline" subscriptSizing="dynamic" class="fullw">
       <mat-label>% da renda</mat-label>
-      <input matInput type="number" min="1" max="100" step="0.5" [(ngModel)]="editPercentual" [disabled]="salvando" />
+      <input matInput type="text" inputmode="decimal" ceMask="decimal" [(ngModel)]="editPercentual" [disabled]="salvando" />
     </mat-form-field>
     <mat-form-field appearance="outline" subscriptSizing="dynamic" class="fullw">
       <mat-label>Prioridade</mat-label>

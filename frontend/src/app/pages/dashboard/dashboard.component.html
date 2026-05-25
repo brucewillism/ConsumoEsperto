@@ -118,7 +118,7 @@
         </mat-form-field>
         <mat-form-field appearance="outline" subscriptSizing="dynamic" class="exec-field exec-field-valor">
           <mat-label>Valor (R$)</mat-label>
-          <input matInput type="text" inputmode="decimal" formControlName="valor" placeholder="0,00" />
+          <input matInput type="text" inputmode="decimal" formControlName="valor" ceMask="decimal" placeholder="0,00" />
           <mat-error *ngIf="quickTransacaoForm.get('valor')?.hasError('required')">Informe o valor</mat-error>
           <mat-error *ngIf="quickTransacaoForm.get('valor')?.hasError('valorInvalido')">Digite um valor maior que zero</mat-error>
         </mat-form-field>

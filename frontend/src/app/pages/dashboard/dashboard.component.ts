@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { BaseChartDirective } from 'ng2-charts';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import {
   markAllControlsTouched,
   parseValorBrasileiro,
@@ -129,6 +130,7 @@ interface ChartData {
     PrevisaoFuturoChartComponent,
     LoadingIndicatorComponent,
     ChartMetodologiaComponent,
+    CeInputMaskDirective,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'

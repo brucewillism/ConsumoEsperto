@@ -18,6 +18,9 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { CartaoCredito, TipoCartao } from '../../models/cartao-credito.model';
+import { BANCOS_BRASIL } from '../../shared/constants/bancos-brasil';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
+import { parseValorBrasileiro, sanitizeCardNumberInput } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-cartoes',
@@ -37,7 +40,8 @@ import { CartaoCredito, TipoCartao } from '../../models/cartao-credito.model';
     MatSelectModule,
     MatSnackBarModule,
     MatDialogModule,
-    FormsModule
+    FormsModule,
+    CeInputMaskDirective
   ],
   templateUrl: './cartoes.component.html',
   styleUrls: ['./cartoes.component.scss']
@@ -45,6 +49,7 @@ import { CartaoCredito, TipoCartao } from '../../models/cartao-credito.model';
 export class CartoesComponent implements OnInit {
   @ViewChild('editCartaoTpl') editCartaoTpl!: TemplateRef<unknown>;
 
+  readonly bancosBrasil = BANCOS_BRASIL;
   cartoes: CartaoCredito[] = [];
   totalCreditLimit = 0;
   totalAvailableCredit = 0;
@@ -112,7 +117,7 @@ export class CartoesComponent implements OnInit {
     if (this.novoCartaoForm.valid) {
       this.acaoEmAndamento = true;
       const cartaoForm = this.novoCartaoForm.value;
-      const limite = Number(cartaoForm.limite || 0);
+      const limite = parseValorBrasileiro(cartaoForm.limite) ?? 0;
       const dueDate = new Date(cartaoForm.vencimento);
       const numeroCartao = String(cartaoForm.numero).replace(/\D/g, '');
       const diaVencimento = Number.isNaN(dueDate.getTime()) ? undefined : dueDate.getDate();

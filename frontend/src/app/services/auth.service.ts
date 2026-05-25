@@ -200,9 +200,19 @@ export class AuthService {
           // Callback de erro
           error_callback: (error: any) => {
             console.error('Erro na autenticação Google:', error);
+            const detail = String(error?.type || error?.error || '').toLowerCase();
+            let message = 'Erro na autenticação com Google.';
+            if (detail.includes('origin_mismatch')) {
+              message =
+                'Origem não autorizada no Google Cloud. Adicione "' +
+                window.location.origin +
+                '" em Credenciais → Cliente OAuth (Web) → Origens JavaScript autorizadas.';
+            } else if (error?.error) {
+              message = 'Erro na autenticação com Google: ' + error.error;
+            }
             observer.error({
               status: 400,
-              error: { message: 'Erro na autenticação com Google: ' + (error.error || 'Erro desconhecido') }
+              error: { message }
             });
           }
         });

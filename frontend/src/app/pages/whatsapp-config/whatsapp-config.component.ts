@@ -9,11 +9,12 @@ import {
   WhatsappEvolutionQrDialogComponent,
   WhatsappEvolutionQrDialogData,
 } from '../../shared/whatsapp-evolution-qr-dialog.component';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 
 @Component({
   selector: 'app-whatsapp-config',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CeInputMaskDirective],
   templateUrl: './whatsapp-config.component.html',
   styleUrl: './whatsapp-config.component.scss'
 })

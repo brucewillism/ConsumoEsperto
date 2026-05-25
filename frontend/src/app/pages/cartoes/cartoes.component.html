@@ -78,9 +78,7 @@
           <mat-form-field appearance="outline">
             <mat-label>Banco</mat-label>
             <mat-select formControlName="banco" required>
-              <mat-option value="itau">Itaú</mat-option>
-              <mat-option value="nubank">Nubank</mat-option>
-              <mat-option value="inter">Banco Inter</mat-option>
+              <mat-option *ngFor="let b of bancosBrasil" [value]="b.id">{{ b.nome }}</mat-option>
             </mat-select>
             <mat-error *ngIf="novoCartaoForm.get('banco')?.hasError('required')">
               Banco é obrigatório
@@ -89,7 +87,7 @@
 
           <mat-form-field appearance="outline">
             <mat-label>Número do Cartão</mat-label>
-            <input matInput formControlName="numero" placeholder="Últimos 4 dígitos ou número completo" required>
+            <input matInput formControlName="numero" ceMask="card" placeholder="0000 0000 0000 0000" required>
             <mat-error *ngIf="novoCartaoForm.get('numero')?.hasError('required')">
               Número é obrigatório
             </mat-error>
@@ -113,7 +111,7 @@
 
           <mat-form-field appearance="outline">
             <mat-label>Limite de Crédito</mat-label>
-            <input matInput type="number" formControlName="limite" placeholder="0,00" step="0.01" required>
+            <input matInput type="text" inputmode="decimal" formControlName="limite" ceMask="decimal" placeholder="0,00" required>
             <mat-error *ngIf="novoCartaoForm.get('limite')?.hasError('required')">
               Limite é obrigatório
             </mat-error>

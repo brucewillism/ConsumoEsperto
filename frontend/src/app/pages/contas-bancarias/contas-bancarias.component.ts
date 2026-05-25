@@ -19,7 +19,8 @@ import { TransferenciaService } from '../../services/transferencia.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { TransferenciaModalComponent } from '../../shared/transferencia-modal/transferencia-modal.component';
-import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
+import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-contas-bancarias',
@@ -37,6 +38,7 @@ import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/for
     MatSnackBarModule,
     MatDialogModule,
     MatProgressSpinnerModule,
+    CeInputMaskDirective,
   ],
   templateUrl: './contas-bancarias.component.html',
   styleUrl: './contas-bancarias.component.scss',
@@ -160,7 +162,7 @@ export class ContasBancariasComponent implements OnInit {
     const payload: ContaBancaria = {
       nome: raw.nome,
       tipo: raw.tipo,
-      saldoAtual: Number(raw.saldoAtual) || 0,
+      saldoAtual: parseValorBrasileiro(raw.saldoAtual) ?? 0,
       padrao: !!raw.padrao,
       ativa: true,
     };

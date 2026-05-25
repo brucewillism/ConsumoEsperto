@@ -11,6 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import {
   MetaFinanceira,
@@ -38,6 +39,7 @@ import { forkJoin } from 'rxjs';
     MatSelectModule,
     MatDialogModule,
     ChartMetodologiaComponent,
+    CeInputMaskDirective,
   ],
   templateUrl: './metas.component.html',
   styleUrl: './metas.component.scss'

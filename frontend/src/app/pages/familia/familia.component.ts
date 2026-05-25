@@ -11,12 +11,13 @@ import { catchError } from 'rxjs/operators';
 import { FamiliaService, GrupoFamiliar, GrupoFamiliarMembro } from '../../services/familia.service';
 import { Orcamento } from '../../services/orcamento.service';
 import { ToastService } from '../../services/toast.service';
+import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { isEmailValido, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-familia',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule, MatProgressBarModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, CeInputMaskDirective],
   templateUrl: './familia.component.html',
   styleUrl: './familia.component.scss'
 })

@@ -53,7 +53,7 @@
     <mat-form-field appearance="outline" class="full">
       <mat-label>Valor do pagamento</mat-label>
       <span matTextPrefix>R$&nbsp;</span>
-      <input matInput type="number" formControlName="valor" step="0.01" min="0.01" inputmode="decimal">
+      <input matInput type="text" formControlName="valor" ceMask="decimal" inputmode="decimal" placeholder="0,00">
       <mat-hint>Edite para pagamento parcial, se necessário</mat-hint>
       <mat-error *ngIf="form.get('valor')?.hasError('required')">Informe o valor</mat-error>
       <mat-error *ngIf="form.get('valor')?.hasError('min')">O valor deve ser maior que zero</mat-error>

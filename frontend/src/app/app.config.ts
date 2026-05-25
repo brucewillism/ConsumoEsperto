@@ -3,8 +3,9 @@ import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import { provideNativeDateAdapter } from '@angular/material/core';
+import { DateAdapter, MAT_DATE_FORMATS, MAT_DATE_LOCALE } from '@angular/material/core';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
+import { BR_DATE_FORMATS, BrDateAdapter } from './shared/locale/br-date.adapter';
 
 import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 
@@ -48,8 +49,10 @@ export const appConfig: ApplicationConfig = {
     // Útil para animações complexas e lazy loading
     provideAnimationsAsync(),
     
-    // Fornece adaptador de data nativo para Angular Material
-    provideNativeDateAdapter(),
+    // Calendário Material — locale e formato Brasil (dd/MM/yyyy)
+    { provide: MAT_DATE_LOCALE, useValue: 'pt-BR' },
+    { provide: DateAdapter, useClass: BrDateAdapter },
+    { provide: MAT_DATE_FORMATS, useValue: BR_DATE_FORMATS },
 
     // Labels sempre no notch (evita estado quebrado ao abrir modais)
     {

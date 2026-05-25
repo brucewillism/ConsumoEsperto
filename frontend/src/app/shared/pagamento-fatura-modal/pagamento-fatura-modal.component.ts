@@ -20,6 +20,9 @@ import {
   ProjecaoDashboardService,
 } from '../../services/projecao-dashboard.service';
 import { ChartMetodologiaComponent } from '../chart-metodologia/chart-metodologia.component';
+import { getBancoNomeBr } from '../constants/bancos-brasil';
+import { CeInputMaskDirective } from '../directives/ce-input-mask.directive';
+import { parseValorBrasileiro } from '../utils/form.utils';
 
 export interface PagamentoFaturaModalData {
   fatura: CreditCardInvoice;
@@ -52,6 +55,7 @@ const ALIASES_PROVEDOR: Record<string, string[]> = {
     MatProgressSpinnerModule,
     MatSnackBarModule,
     ChartMetodologiaComponent,
+    CeInputMaskDirective,
   ],
   templateUrl: './pagamento-fatura-modal.component.html',
   styleUrl: './pagamento-fatura-modal.component.scss',
@@ -118,17 +122,7 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
   }
 
   getBancoNome(bankName: string): string {
-    const nomes: Record<string, string> = {
-      itau: 'Itaú',
-      nubank: 'Nubank',
-      bradesco: 'Bradesco',
-      santander: 'Santander',
-      inter: 'Banco Inter',
-      c6: 'C6 Bank',
-      bb: 'Banco do Brasil',
-      caixa: 'Caixa',
-    };
-    return nomes[bankName?.toLowerCase()] ?? bankName ?? 'Cartão';
+    return getBancoNomeBr(bankName) || 'Cartão';
   }
 
   mesReferencia(): string {
@@ -155,7 +149,7 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
   }
 
   get valorPagamento(): number {
-    return Number(this.form.get('valor')?.value) || 0;
+    return parseValorBrasileiro(this.form.get('valor')?.value) ?? 0;
   }
 
   get saldoInsuficiente(): boolean {
@@ -238,7 +232,7 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
       .pagarFatura({
         faturaId,
         contaBancariaId: Number(raw.contaBancariaId),
-        valor: Number(raw.valor),
+        valor: parseValorBrasileiro(raw.valor) ?? 0,
       })
       .subscribe({
         next: () => {
