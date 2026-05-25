@@ -5,3 +5,9 @@
 .full {
   width: 100%;
 }
+
+@media (max-width: 767px) {
+  :host .ce-form-body {
+    padding: 0;
+  }
+}

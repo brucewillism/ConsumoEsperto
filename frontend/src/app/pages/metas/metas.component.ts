@@ -23,6 +23,7 @@ import {
 import { ToastService } from '../../services/toast.service';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
+import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 import { forkJoin } from 'rxjs';
 
 @Component({
@@ -41,6 +42,7 @@ import { forkJoin } from 'rxjs';
     MatDialogModule,
     ChartMetodologiaComponent,
     CeInputMaskDirective,
+    PageLoadingComponent,
   ],
   templateUrl: './metas.component.html',
   styleUrl: './metas.component.scss'

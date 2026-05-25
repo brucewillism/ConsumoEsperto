@@ -18,6 +18,7 @@ import { FinancaAlteracaoService } from '../../services/financa-alteracao.servic
 import { CartaoCredito } from '../../models/cartao-credito.model';
 import { BANCOS_BRASIL } from '../../shared/constants/bancos-brasil';
 import { parseValorBrasileiro, sanitizeCardNumberInput } from '../../shared/utils/form.utils';
+import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 
 @Component({
   selector: 'app-cartoes',
@@ -34,6 +35,7 @@ import { parseValorBrasileiro, sanitizeCardNumberInput } from '../../shared/util
     MatSnackBarModule,
     MatDialogModule,
     FormsModule,
+    PageLoadingComponent,
   ],
   templateUrl: './cartoes.component.html',
   styleUrls: ['./cartoes.component.scss']

@@ -1128,3 +1128,57 @@ app-root {
   min-height: 100vh;
   min-height: 100dvh;
 }
+
+/* ——— Mobile-first (< 768px) ——— */
+@media (max-width: 767px) {
+  body.jarvis-chat-open-mobile {
+    overflow: hidden;
+    touch-action: none;
+  }
+
+  body.jarvis-chat-open-mobile .ai-chat-toggle {
+    display: none;
+  }
+
+  .cdk-overlay-pane.mat-mdc-dialog-panel {
+    max-width: 100vw !important;
+    width: 100vw !important;
+  }
+
+  .ce-form-dialog .mat-mdc-dialog-surface {
+    padding: 16px !important;
+    border-radius: 12px 12px 0 0 !important;
+  }
+
+  .ce-form-dialog .mat-mdc-dialog-content,
+  .mat-mdc-dialog-container .mat-mdc-dialog-content {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .ce-form-dialog .ce-form-row,
+  .ce-form-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .ce-form-dialog .mat-mdc-dialog-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 0 max(12px, env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    background: var(--exec-surface);
+    border-top: 1px solid var(--exec-border);
+  }
+
+  .ce-form-dialog .mat-mdc-dialog-actions .mat-mdc-button,
+  .ce-form-dialog .mat-mdc-dialog-actions .mat-mdc-raised-button {
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+  }
+}

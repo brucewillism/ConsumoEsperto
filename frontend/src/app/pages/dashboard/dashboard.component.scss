@@ -1062,6 +1062,34 @@ $neon-amber: #ffc107;
   justify-content: flex-end;
 }
 
+.dashboard-loading-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: min(52vh, 480px);
+  margin: 1.25rem 0 2rem;
+  padding: 2rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.hud-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+}
+
+.hud-sync-spinner {
+  display: inline-block;
+}
+
 .impact-timeline {
   margin: 0 0 2rem;
   padding: 1.25rem;

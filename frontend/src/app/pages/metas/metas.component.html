@@ -48,6 +48,8 @@
     </mat-card-content>
   </mat-card>
 
+  <app-page-loading *ngIf="carregando" message="Carregando metas…"></app-page-loading>
+
   <div class="nova-meta-actions hud-animate-meta" style="--stagger: 2">
     <button mat-raised-button color="primary" (click)="abrirNovaMeta()" [disabled]="salvando || carregando">
       <mat-icon>add</mat-icon>

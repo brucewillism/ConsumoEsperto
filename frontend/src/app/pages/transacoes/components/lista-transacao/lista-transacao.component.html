@@ -2,7 +2,82 @@
   <mat-card-content>
     <div class="loading-overlay" *ngIf="loading" aria-busy="true" aria-label="Carregando transações"></div>
 
-    <div class="table-responsive">
+    <div class="tx-mobile-list" *ngIf="transacoes.length">
+      <article class="tx-mobile-card" *ngFor="let transacao of transacoes">
+        <header class="tx-mobile-card-head">
+          <div class="tx-mobile-desc">
+            <span
+              class="badge-conferencia badge-pendente"
+              *ngIf="isPendente(transacao)"
+              [matTooltip]="tooltipPendente(transacao)"
+              matTooltipShowDelay="200">
+              Pendente
+            </span>
+            <strong class="tx-mobile-titulo">{{ descricaoLinha(transacao) }}</strong>
+          </div>
+          <span
+            class="tx-mobile-valor"
+            [class.positive]="transacao.tipoTransacao === 'RECEITA'"
+            [class.negative]="transacao.tipoTransacao !== 'RECEITA'">
+            {{ transacao.tipoTransacao === 'RECEITA' ? '+' : '-' }}R$ {{ transacao.valor | number:'1.2-2' }}
+            <mat-icon
+              *ngIf="mostrarBadgeJuros(transacao)"
+              class="icone-juros-parcela"
+              [matTooltip]="tooltipJuros"
+              matTooltipShowDelay="200"
+              aria-label="Compra com juros no parcelamento">warning</mat-icon>
+          </span>
+        </header>
+        <dl class="tx-mobile-meta">
+          <div>
+            <dt>Tipo</dt>
+            <dd>
+              <mat-chip [color]="transacao.tipoTransacao === 'RECEITA' ? 'accent' : 'warn'" selected>
+                {{ transacao.tipoTransacao === 'RECEITA' ? 'Receita' : 'Despesa' }}
+              </mat-chip>
+            </dd>
+          </div>
+          <div>
+            <dt>Categoria</dt>
+            <dd>{{ transacao.categoriaNome || 'Sem categoria' }}</dd>
+          </div>
+          <div>
+            <dt>Conta</dt>
+            <dd>{{ transacao.contaBancariaNome || '—' }}</dd>
+          </div>
+          <div>
+            <dt>Data</dt>
+            <dd>{{ transacao.dataTransacao | date:'dd/MM/yyyy' }}</dd>
+          </div>
+        </dl>
+        <div class="tx-mobile-acoes">
+          <button
+            *ngIf="isPendente(transacao)"
+            type="button"
+            mat-mini-fab
+            color="accent"
+            class="btn-confirmar"
+            [disabled]="acoesDesabilitadas || loading || isConfirmando(transacao.id)"
+            (click)="confirmar.emit(transacao.id!)"
+            title="Confirmar lançamento">
+            <mat-spinner *ngIf="isConfirmando(transacao.id)" diameter="22" class="spinner-inline"></mat-spinner>
+            <mat-icon *ngIf="!isConfirmando(transacao.id)">done</mat-icon>
+          </button>
+          <button mat-icon-button color="primary" (click)="editar.emit(transacao)" [disabled]="acoesDesabilitadas || loading">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            color="warn"
+            (click)="deletar.emit(transacao)"
+            [disabled]="acoesDesabilitadas || loading || !transacao.id">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <div class="table-responsive table-responsive--desktop">
     <table
       mat-table
       [dataSource]="transacoes"

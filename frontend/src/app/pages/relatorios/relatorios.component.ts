@@ -29,6 +29,7 @@ import {
 } from '../../utils/transacao-parcela.util';
 import { CartaoCredito } from '../../models/cartao-credito.model';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
+import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 
 @Component({
   selector: 'app-relatorios',
@@ -51,6 +52,7 @@ import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-
     MatSnackBarModule,
     MatTooltipModule,
     ChartMetodologiaComponent,
+    PageLoadingComponent,
   ],
   templateUrl: './relatorios.component.html',
   styleUrl: './relatorios.component.scss',

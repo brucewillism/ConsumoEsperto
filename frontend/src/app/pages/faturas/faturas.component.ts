@@ -27,6 +27,7 @@ import { NovaFaturaDialogComponent } from '../../shared/nova-fatura-dialog/nova-
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { resolveHttpError } from '../../shared/utils/form.utils';
+import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 
 @Component({
   selector: 'app-faturas',
@@ -45,7 +46,8 @@ import { resolveHttpError } from '../../shared/utils/form.utils';
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatDialogModule,
-    FormsModule
+    FormsModule,
+    PageLoadingComponent,
   ],
   templateUrl: './faturas.component.html',
   styleUrls: ['./faturas.component.scss']

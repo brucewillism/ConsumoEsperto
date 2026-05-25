@@ -4,6 +4,7 @@ import {
   EventEmitter,
   Input,
   OnChanges,
+  OnDestroy,
   OnInit,
   Output,
   SimpleChanges,
@@ -36,7 +37,7 @@ export interface JarvisChatMensagem {
   templateUrl: './jarvis-chat-panel.component.html',
   styleUrl: './jarvis-chat-panel.component.scss',
 })
-export class JarvisChatPanelComponent implements OnInit, OnChanges {
+export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
   @Input() usuario: Usuario | null = null;
   @Input() dashboardCarregando = false;
 
@@ -67,8 +68,13 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges {
     }
   }
 
+  ngOnDestroy(): void {
+    this.definirBloqueioScrollMobile(false);
+  }
+
   toggle(): void {
     this.aberto = !this.aberto;
+    this.definirBloqueioScrollMobile(this.aberto);
     if (this.aberto) {
       setTimeout(() => this.rolarParaFim(), 0);
     }
@@ -76,6 +82,7 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges {
 
   fechar(): void {
     this.aberto = false;
+    this.definirBloqueioScrollMobile(false);
   }
 
   usarSugestao(s: JarvisChatSugestao): void {
@@ -132,5 +139,13 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges {
     if (el) {
       el.scrollTop = el.scrollHeight;
     }
+  }
+
+  private definirBloqueioScrollMobile(ativo: boolean): void {
+    if (typeof document === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+    const mobile = window.matchMedia('(max-width: 767px)').matches;
+    document.body.classList.toggle('jarvis-chat-open-mobile', ativo && mobile);
   }
 }

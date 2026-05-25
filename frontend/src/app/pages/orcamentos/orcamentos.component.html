@@ -28,6 +28,8 @@
     <app-chart-metodologia id="ORCAMENTO_FORECAST"></app-chart-metodologia>
   </mat-card>
 
+  <app-page-loading *ngIf="carregando" message="Carregando orçamentos…"></app-page-loading>
+
   <div class="empty" *ngIf="!carregando && orcamentos.length === 0">
     Nenhum orçamento cadastrado para este mês.
   </div>

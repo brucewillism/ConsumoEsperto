@@ -18,7 +18,7 @@
   </div>
 
   <!-- Carregamento inicial da página (sem overlay global). -->
-  <div *ngIf="loading" class="loading-placeholder" aria-hidden="true"></div>
+  <app-page-loading *ngIf="loading" message="Carregando cartões…"></app-page-loading>
 
   <!-- Resumo dos Limites -->
   <div class="resumo-grid" *ngIf="!loading">

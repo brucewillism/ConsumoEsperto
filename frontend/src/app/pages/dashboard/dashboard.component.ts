@@ -263,6 +263,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isSilentRefreshing = false;
   ultimaAtualizacao: Date | null = null;
 
+  readonly mensagemCarregamentoDashboard =
+    'Sincronizando o ecossistema operacional do J.A.R.V.I.S.…';
+
   readonly tipoTransacaoEnum = TipoTransacao;
   modoSimulacao = false;
   /** Sentinela — mesma fonte que {@link PrevisaoFuturoChartComponent} quando integrado ao painel. */
@@ -544,12 +547,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     if (this.isLoadingData) {
       console.log('⚠️ Carregamento já em andamento, ignorando chamada duplicada');
+      if (!silent) {
+        this.isLoading = true;
+      }
       return;
     }
 
     const now = Date.now();
     if (now - this.lastLoadTime < 2000) {
       console.log('⚠️ Carregamento muito frequente, aguardando cooldown');
+      if (!silent && this.isLoadingData) {
+        this.isLoading = true;
+      }
       return;
     }
 

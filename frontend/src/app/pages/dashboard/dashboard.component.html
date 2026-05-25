@@ -29,8 +29,12 @@
         <span class="simulation-mode-text">Simulação</span>
         <span class="simulation-mode-badge" *ngIf="modoSimulacao">on</span>
       </button>
+      <span class="hud-sync-badge" *ngIf="isSilentRefreshing" aria-live="polite">
+        <mat-spinner diameter="14" class="hud-sync-spinner"></mat-spinner>
+        Sincronizando…
+      </span>
       <button class="btn btn-hud btn-hud-ghost" (click)="loadDashboardData({ silent: false })" [disabled]="isLoading">
-        <i class="fas fa-sync-alt" [class.fa-spin]="isLoading"></i>
+        <i class="fas fa-sync-alt" [class.fa-spin]="isLoading || isSilentRefreshing"></i>
         Atualizar
       </button>
       <button class="btn btn-hud btn-hud-primary" type="button" (click)="abrirNovoLancamento()">
@@ -74,6 +78,18 @@
         {{ (previsaoFuturoChart!.fatorCorrecaoInflacao! * 100 - 100) | number : '1.1-1' }}%
       </span>
     </p>
+  </section>
+
+  <section
+    class="dashboard-loading-shell hud-animate"
+    *ngIf="isLoading"
+    aria-live="polite"
+    aria-busy="true">
+    <app-loading-indicator
+      mode="panel"
+      size="lg"
+      [message]="mensagemCarregamentoDashboard">
+    </app-loading-indicator>
   </section>
 
   <!-- Núcleo de memória semântica — timeline tática -->
