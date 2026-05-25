@@ -28,6 +28,7 @@ import { FinancaAlteracaoService } from '../../services/financa-alteracao.servic
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
+import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 
 @Component({
   selector: 'app-faturas',
@@ -181,41 +182,79 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   excluirFatura(fatura: CreditCardInvoice): void {
-    if (confirm(`Tem certeza que deseja excluir a fatura ${fatura.bankName}?`)) {
+    if (!fatura.id) {
+      this.snackBar.open('Fatura inválida para exclusão.', 'Fechar', {
+        duration: 3500,
+        panelClass: ['warning-snackbar'],
+      });
+      return;
+    }
+
+    const banco = this.getBancoNome(fatura.bankName);
+    const ref = this.dialog.open(ConfirmDialogComponent, {
+      width: '400px',
+      maxWidth: '96vw',
+      data: {
+        title: 'Excluir fatura',
+        message: `Deseja excluir a fatura de ${banco}? Esta ação não pode ser desfeita.`,
+        confirmLabel: 'Excluir',
+        destructive: true,
+      },
+    });
+
+    ref.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((ok) => {
+      if (!ok) {
+        return;
+      }
+
       this.acaoEmAndamento = true;
       this.faturaProcessandoId = fatura.id ?? null;
-      // Tenta excluir do backend primeiro
-      this.faturaService.excluirFaturaCartao(fatura)
-        .pipe(
-          takeUntil(this.destroy$),
-          catchError(error => {
-            console.warn('Erro ao excluir do backend, removendo localmente:', error);
-            // Se falhar, remove localmente
-            this.faturas = this.faturas.filter(f => f.id !== fatura.id);
-            return of(void 0);
-          })
-        )
+
+      this.faturaService
+        .excluirFaturaCartao(fatura)
+        .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: () => {
+            this.removerFaturaDaLista(fatura);
+            this.aplicarFiltros();
+            this.calcularResumos();
+            this.financaAlteracao.notificar();
             this.snackBar.open('Fatura excluída com sucesso!', 'Fechar', {
-            duration: 3000,
-            panelClass: ['success-snackbar']
-          });
+              duration: 3000,
+              panelClass: ['success-snackbar'],
+            });
             this.acaoEmAndamento = false;
             this.faturaProcessandoId = null;
-            this.carregarFaturas();
           },
           error: (error) => {
             console.error('Erro ao excluir fatura:', error);
             this.acaoEmAndamento = false;
             this.faturaProcessandoId = null;
-            this.snackBar.open('Erro ao excluir fatura. Tente novamente.', 'Fechar', {
-            duration: 3000,
-            panelClass: ['error-snackbar']
-          });
-          }
+            this.snackBar.open(
+              resolveHttpError(error, 'Erro ao excluir fatura. Tente novamente.'),
+              'Fechar',
+              { duration: 4000, panelClass: ['error-snackbar'] }
+            );
+          },
         });
+    });
+  }
+
+  private removerFaturaDaLista(fatura: CreditCardInvoice): void {
+    this.faturas = this.faturas.filter((f) => !this.mesmoIdFatura(f, fatura));
+    if (
+      this.faturaTransacoesSelecionada &&
+      this.mesmoIdFatura(this.faturaTransacoesSelecionada, fatura)
+    ) {
+      this.faturaTransacoesSelecionada = null;
     }
+  }
+
+  private mesmoIdFatura(a: CreditCardInvoice, b: CreditCardInvoice): boolean {
+    if (a.id == null || b.id == null) {
+      return false;
+    }
+    return String(a.id) === String(b.id);
   }
 
   marcarComoPaga(fatura: CreditCardInvoice): void {
