@@ -35,6 +35,15 @@ public class ImportacaoFaturaController {
         return ResponseEntity.ok(faturaPdfImportService.processarPdf(user.getId(), file.getBytes()));
     }
 
+    @PostMapping("/{id}/escolha-saldo-anterior")
+    public ResponseEntity<ImportacaoFaturaDTO> escolhaSaldoAnterior(
+        @AuthenticationPrincipal UserPrincipal user,
+        @PathVariable Long id,
+        @RequestParam boolean somar
+    ) {
+        return ResponseEntity.ok(faturaPdfImportService.aplicarEscolhaSaldoAnteriorBb(user.getId(), id, somar));
+    }
+
     @PostMapping("/{id}/confirmar")
     public ResponseEntity<Map<String, Integer>> confirmar(
         @AuthenticationPrincipal UserPrincipal user,

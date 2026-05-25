@@ -130,6 +130,8 @@ public class WhatsAppCommandService {
     /** Após SET_SALARY_CONFIG: pergunta se activa lançamento automático no dia de pagamento. */
     private final java.util.Set<Long> awaitingSalaryAutoConfirm = java.util.Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Map<Long, Long> awaitingFaturaImportConfirm = new ConcurrentHashMap<>();
+    /** Importação BB: sim = somar saldo anterior; não = só saldo atual. */
+    private final Map<Long, Long> awaitingFaturaSaldoAnteriorChoice = new ConcurrentHashMap<>();
     private final Map<Long, Long> awaitingContrachequeImportConfirm = new ConcurrentHashMap<>();
     private final Map<Long, PendingDespesaFixaDraft> awaitingDespesaFixaDia = new ConcurrentHashMap<>();
 
@@ -675,23 +677,34 @@ public class WhatsAppCommandService {
             }
             if ("FATURA_CARTAO".equalsIgnoreCase(tipo) || faturaPdfImportService.pareceFaturaCartao(extracted)) {
                 ImportacaoFaturaDTO imp = faturaPdfImportService.processarExtracao(userId, extracted);
-                awaitingFaturaImportConfirm.put(userId, imp.getId());
-                boolean divergencia = temDivergenciaSomaFatura(imp);
-                String bullets = "";
-                if (imp.getAuditorias() != null && !imp.getAuditorias().isEmpty()) {
-                    bullets = imp.getAuditorias().stream().map(a -> "• " + a).collect(Collectors.joining("\n"));
+                if (Boolean.TRUE.equals(imp.getAguardandoEscolhaSaldoAnterior())) {
+                    awaitingFaturaSaldoAnteriorChoice.put(userId, imp.getId());
+                    String banco = imp.getBancoCartao() != null && !imp.getBancoCartao().isBlank()
+                        ? imp.getBancoCartao() : "Cartão";
+                    return jarvisProtocolService.formatoEscolhaSaldoAnteriorFatura(
+                        banco, imp.getSaldoFaturaAnterior(), imp.getSaldoFaturaAtual(), imp.getValorTotal());
                 }
-                if (divergencia) {
-                    awaitingFaturaImportConfirm.remove(userId);
-                }
-                String banco = imp.getBancoCartao() != null && !imp.getBancoCartao().isBlank() ? imp.getBancoCartao() : "Cartão";
-                return jarvisProtocolService.formatoFaturaVarredura(banco, imp.getNovosDetectados(), bullets, divergencia);
+                return mensagemVarreduraFaturaAposProcessamento(userId, imp);
             }
             return msgErro(userId, "PDF", "Identifiquei o documento como *" + tipo + "*, mas ainda não tenho fluxo automático para ele.");
         } catch (Exception e) {
             log.warn("Falha ao processar PDF financeiro: {}", e.getMessage());
             return msgErro(userId, "PDF financeiro", humanizarErroComando(e.getMessage()));
         }
+    }
+
+    private String mensagemVarreduraFaturaAposProcessamento(Long userId, ImportacaoFaturaDTO imp) {
+        awaitingFaturaImportConfirm.put(userId, imp.getId());
+        boolean divergencia = temDivergenciaSomaFatura(imp);
+        String bullets = "";
+        if (imp.getAuditorias() != null && !imp.getAuditorias().isEmpty()) {
+            bullets = imp.getAuditorias().stream().map(a -> "• " + a).collect(Collectors.joining("\n"));
+        }
+        if (divergencia) {
+            awaitingFaturaImportConfirm.remove(userId);
+        }
+        String banco = imp.getBancoCartao() != null && !imp.getBancoCartao().isBlank() ? imp.getBancoCartao() : "Cartão";
+        return jarvisProtocolService.formatoFaturaVarredura(banco, imp.getNovosDetectados(), bullets, divergencia);
     }
 
     private boolean temDivergenciaSomaFatura(ImportacaoFaturaDTO imp) {
@@ -2234,6 +2247,24 @@ public class WhatsAppCommandService {
                 return Optional.of(msgInfo("Cupom / foto", "Não guardei o lançamento. Podes enviar outra foto quando quiseres."));
             }
             return Optional.of(msgInfo("Cupom / foto", "Responde *sim* para lançar a despesa do cupom ou *não* para cancelar."));
+        }
+        if (awaitingFaturaSaldoAnteriorChoice.containsKey(userId)) {
+            Long importId = awaitingFaturaSaldoAnteriorChoice.get(userId);
+            if (isAffirmativeSaveReply(text) || isNegativeReply(text)) {
+                boolean somar = isAffirmativeSaveReply(text);
+                awaitingFaturaSaldoAnteriorChoice.remove(userId);
+                try {
+                    ImportacaoFaturaDTO imp = faturaPdfImportService.aplicarEscolhaSaldoAnteriorBb(userId, importId, somar);
+                    String intro = somar
+                        ? msgOk("Saldo da fatura", "Vou considerar saldo anterior + saldo desta fatura no total.")
+                        : msgOk("Saldo da fatura", "Vou importar só o saldo desta fatura (sem somar o anterior).");
+                    return Optional.of(intro + "\n\n" + mensagemVarreduraFaturaAposProcessamento(userId, imp));
+                } catch (Exception e) {
+                    return Optional.of(msgErro(userId, "Fatura", e.getMessage()));
+                }
+            }
+            return Optional.of(msgInfo("Saldo anterior na fatura",
+                "Responda *sim* para somar saldo anterior + saldo atual, ou *não* para importar apenas o saldo desta fatura."));
         }
         if (awaitingFaturaImportConfirm.containsKey(userId)) {
             Long importId = awaitingFaturaImportConfirm.get(userId);

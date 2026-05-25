@@ -17,6 +17,10 @@ public class ImportacaoFaturaDTO {
     private List<ImportacaoFaturaItemDTO> itens;
     private List<String> auditorias;
     private LocalDateTime dataCriacao;
+    /** Banco do Brasil: aguarda sim/não para somar saldo anterior ao total. */
+    private Boolean aguardandoEscolhaSaldoAnterior;
+    private BigDecimal saldoFaturaAnterior;
+    private BigDecimal saldoFaturaAtual;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -53,4 +57,15 @@ public class ImportacaoFaturaDTO {
 
     public LocalDateTime getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public Boolean getAguardandoEscolhaSaldoAnterior() { return aguardandoEscolhaSaldoAnterior; }
+    public void setAguardandoEscolhaSaldoAnterior(Boolean aguardandoEscolhaSaldoAnterior) {
+        this.aguardandoEscolhaSaldoAnterior = aguardandoEscolhaSaldoAnterior;
+    }
+
+    public BigDecimal getSaldoFaturaAnterior() { return saldoFaturaAnterior; }
+    public void setSaldoFaturaAnterior(BigDecimal saldoFaturaAnterior) { this.saldoFaturaAnterior = saldoFaturaAnterior; }
+
+    public BigDecimal getSaldoFaturaAtual() { return saldoFaturaAtual; }
+    public void setSaldoFaturaAtual(BigDecimal saldoFaturaAtual) { this.saldoFaturaAtual = saldoFaturaAtual; }
 }

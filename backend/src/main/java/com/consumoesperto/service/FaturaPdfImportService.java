@@ -14,6 +14,9 @@ import com.consumoesperto.repository.ImportacaoFaturaCartaoRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.util.BancoBrasilCatalog;
+import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
+import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbMeta;
+import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbPendente;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,7 +73,9 @@ public class FaturaPdfImportService {
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
     public static boolean isBulletVisivelAoUsuario(String linhaAuditoria) {
-        return linhaAuditoria != null && !linhaAuditoria.startsWith(META_ANUIDADE_CKSM_PREFIX);
+        return linhaAuditoria != null
+            && !linhaAuditoria.startsWith(META_ANUIDADE_CKSM_PREFIX)
+            && !linhaAuditoria.startsWith(SaldoAnteriorFaturaBbSupport.META_SALDO_ANTERIOR_BB_PREFIX);
     }
 
     @Transactional
@@ -119,6 +124,10 @@ public class FaturaPdfImportService {
         auditorias.addAll(contencaoJarvisService.montarAuditoriasComMetasNaImportacao(
             usuarioId, cartao.getId(), prevItens, itens, contencaoDrafts));
         aplicarValidacaoChecksumFatura(valorTotal, itens, extracted, auditorias);
+        Optional<BigDecimal> ultimaFatura = ultimoValorFaturaConfirmadaCartao(cartao.getId());
+        BigDecimal somaItens = somaValoresItens(itens);
+        SaldoAnteriorFaturaBbSupport.detectar(extracted, banco, valorTotal, somaItens, ultimaFatura)
+            .ifPresent(p -> SaldoAnteriorFaturaBbSupport.registrarPendenciaNasAuditorias(auditorias, p));
         imp.setAuditoriaJson(writeJson(auditorias));
         imp.setNovosDetectados((int) itens.stream().filter(ImportacaoFaturaItemDTO::isNovo).count());
         ImportacaoFaturaCartao salvo = importacaoRepository.save(imp);
@@ -171,6 +180,11 @@ public class FaturaPdfImportService {
             .orElseThrow(() -> new IllegalArgumentException("Importação não encontrada"));
         if (imp.getStatus() != ImportacaoFaturaCartao.Status.PENDENTE) {
             return new ResultadoConfirmacaoFatura(0, 0, 0);
+        }
+        if (SaldoAnteriorFaturaBbSupport.pendenteNaoResolvido(readAuditorias(imp.getAuditoriaJson()))) {
+            throw new IllegalArgumentException(
+                "Antes de confirmar, escolha se o total deve *somar* o saldo anterior ao saldo desta fatura "
+                    + "ou importar *apenas* o saldo atual (responda *sim* ou *não* no WhatsApp ou use os botões em Importações pendentes).");
         }
         List<ImportacaoFaturaItemDTO> itens = readItens(imp.getItensJson());
         Set<Integer> indices = request != null && request.getIndices() != null && !request.getIndices().isEmpty()
@@ -245,6 +259,37 @@ public class FaturaPdfImportService {
             + " foram para faturas seguintes.";
     }
 
+    /**
+     * Aplica escolha do utilizador sobre saldo anterior (BB): {@code somar=true} inclui anterior+atual no total.
+     */
+    @Transactional
+    public ImportacaoFaturaDTO aplicarEscolhaSaldoAnteriorBb(Long usuarioId, Long importacaoId, boolean somar) {
+        ImportacaoFaturaCartao imp = importacaoRepository.findByIdAndUsuarioId(importacaoId, usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Importação não encontrada"));
+        if (imp.getStatus() != ImportacaoFaturaCartao.Status.PENDENTE) {
+            throw new IllegalStateException("Importação já foi finalizada.");
+        }
+        List<String> auditoriasCompletas = new ArrayList<>(readAuditorias(imp.getAuditoriaJson()));
+        SaldoAnteriorBbMeta meta = SaldoAnteriorFaturaBbSupport.lerMeta(auditoriasCompletas)
+            .filter(m -> !m.resolvido())
+            .orElseThrow(() -> new IllegalArgumentException(
+                "Não há escolha de saldo anterior pendente nesta importação."));
+
+        BigDecimal novoTotal = SaldoAnteriorFaturaBbSupport.valorTotalAposEscolha(meta, somar);
+        imp.setValorTotal(novoTotal);
+
+        List<String> auditoriasAtualizadas = SaldoAnteriorFaturaBbSupport.marcarMetaResolvida(auditoriasCompletas, somar);
+        auditoriasAtualizadas.removeIf(a -> a != null && (
+            (a.contains("soma dos lancamentos extraidos") && a.contains("nao bate com o total da fatura"))
+            || a.contains("Escolha *sim* para somar")
+            || a.contains("parece incluir os dois")));
+        List<ImportacaoFaturaItemDTO> itens = readItens(imp.getItensJson());
+        aplicarValidacaoChecksumFatura(novoTotal, itens, objectMapper.createObjectNode(), auditoriasAtualizadas);
+        auditoriasAtualizadas.add(SaldoAnteriorFaturaBbSupport.mensagemPosEscolha(somar, novoTotal));
+        imp.setAuditoriaJson(writeJson(auditoriasAtualizadas));
+        return toDto(importacaoRepository.save(imp));
+    }
+
     public ImportacaoFaturaDTO toDto(ImportacaoFaturaCartao imp) {
         ImportacaoFaturaDTO dto = new ImportacaoFaturaDTO();
         dto.setId(imp.getId());
@@ -257,11 +302,41 @@ public class FaturaPdfImportService {
         dto.setStatus(imp.getStatus() != null ? imp.getStatus().name() : null);
         dto.setNovosDetectados(imp.getNovosDetectados());
         dto.setItens(readItens(imp.getItensJson()));
-        dto.setAuditorias(readAuditorias(imp.getAuditoriaJson()).stream()
+        List<String> auditoriasCompletas = readAuditorias(imp.getAuditoriaJson());
+        dto.setAuditorias(auditoriasCompletas.stream()
             .filter(FaturaPdfImportService::isBulletVisivelAoUsuario)
             .collect(Collectors.toList()));
+        SaldoAnteriorFaturaBbSupport.lerMeta(auditoriasCompletas).ifPresent(m -> {
+            dto.setSaldoFaturaAnterior(m.saldoAnterior());
+            dto.setSaldoFaturaAtual(m.saldoAtual());
+            dto.setAguardandoEscolhaSaldoAnterior(!m.resolvido());
+        });
         dto.setDataCriacao(imp.getDataCriacao());
         return dto;
+    }
+
+    private Optional<BigDecimal> ultimoValorFaturaConfirmadaCartao(Long cartaoCreditoId) {
+        if (cartaoCreditoId == null) {
+            return Optional.empty();
+        }
+        List<Fatura> faturas = faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartaoCreditoId);
+        for (int i = faturas.size() - 1; i >= 0; i--) {
+            Fatura f = faturas.get(i);
+            if (f.getValorTotal() != null && f.getValorTotal().compareTo(BigDecimal.ZERO) > 0) {
+                return Optional.of(f.getValorTotal());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static BigDecimal somaValoresItens(List<ImportacaoFaturaItemDTO> itens) {
+        if (itens == null || itens.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return itens.stream()
+            .map(i -> i.getValor() != null ? i.getValor() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
     }
 
     private Optional<CartaoCredito> localizarCartao(Long usuarioId, String banco) {

@@ -262,7 +262,7 @@ public class DocumentoIAContextService {
             + "Juros Rotativos, Encargos, Tarifa de Cobrança, Seguro Prestamista etc. mesmo fora das linhas típicas de compras.\n\n"
             + "Schema: {\"tipoDocumento\":\"FATURA_CARTAO|EXTRATO_CONTA|CONTRACHEQUE|OUTRO\","
             + "\"bancoCartao\":\"...\",\"dataVencimento\":\"yyyy-MM-dd\",\"dataFechamento\":\"yyyy-MM-dd\","
-            + "\"valorTotal\":0.0,\"pagamentoMinimo\":0.0,"
+            + "\"valorTotal\":0.0,\"saldoFaturaAnterior\":0.0,\"saldoFaturaAtual\":0.0,\"pagamentoMinimo\":0.0,"
             + "\"taxasForaDaTabelaPrincipal\":[{\"tipo\":\"ANUIDADE|IOF|JUROS|TARIFA|OUTRO\",\"valor\":0.0,\"descricao\":\"string\"}],"
             + "\"lancamentos\":[{\"data\":\"yyyy-MM-dd\",\"descricao\":\"...\",\"valor\":0.0,\"parcelaAtual\":null,\"totalParcelas\":null}],"
             + "\"insights\":[\"pontos objetivos opcionais: não confundir assinatura mensal fixa com hábito de consumo variável conforme auditoria financeira humanizada\"],"
@@ -276,7 +276,7 @@ public class DocumentoIAContextService {
             + baseAudit + " "
             + "Campo obrigatório taxasForaDaTabelaPrincipal quando houver anuidade, IOF, juros ou tarifa fora do bloco típico de compras.\n\n"
             + "{\"tipoDocumento\":\"FATURA_CARTAO\",\"bancoCartao\":\"...\",\"dataVencimento\":\"yyyy-MM-dd\",\"dataFechamento\":\"yyyy-MM-dd\","
-            + "\"valorTotal\":0.0,\"pagamentoMinimo\":0.0,"
+            + "\"valorTotal\":0.0,\"saldoFaturaAnterior\":0.0,\"saldoFaturaAtual\":0.0,\"pagamentoMinimo\":0.0,"
             + "\"taxasForaDaTabelaPrincipal\":[{\"tipo\":\"ANUIDADE|IOF|JUROS|TARIFA|OUTRO\",\"valor\":0.0,\"descricao\":\"string\"}],"
             + "\"lancamentos\":[...],\"insights\":[]}";
     }
@@ -295,7 +295,9 @@ public class DocumentoIAContextService {
             + "TAXAS (varredura dedicada): em cada página, procure além da tabela principal por Anuidade, IOF (internacional/exterior), Juros (rotativo/multa/encargo), "
             + "Tarifas de cobrança/serviço, multa, seguro do cartão — muitas vezes em rodapé, box lateral ou resumo. "
             + "Inclua essas taxas tanto em \"lancamentos\" (descrição clara, ex.: 'IOF compra internacional') quanto em \"taxasForaDaTabelaPrincipal\" com tipo adequado. "
-            + "Confira a soma dos lançamentos contra o valorTotal informado pela fatura e contra subtotais do PDF (ex.: 'Lançamentos no cartão', 'Total dos lançamentos atuais'); se não bater, revise linhas de parcela N/N e duplicatas. ";
+            + "Confira a soma dos lançamentos contra o valorTotal informado pela fatura e contra subtotais do PDF (ex.: 'Lançamentos no cartão', 'Total dos lançamentos atuais'); se não bater, revise linhas de parcela N/N e duplicatas. "
+            + "Em faturas Banco do Brasil (bb), se o PDF mostrar saldo/remanescente da fatura anterior e saldo ou total desta fatura, preencha saldoFaturaAnterior e saldoFaturaAtual separadamente; "
+            + "valorTotal deve ser o total a pagar exibido (muitas vezes anterior + atual + encargos). ";
     }
 
     private static String auditoriaFinanceiraHumanaLinhas() {

@@ -45,7 +45,30 @@ export class ImportacoesPendentesComponent implements OnInit {
     });
   }
 
+  escolhaSaldoAnterior(imp: ImportacaoFatura, somar: boolean): void {
+    this.confirmandoId = imp.id;
+    this.importacaoService.escolhaSaldoAnterior(imp.id, somar).subscribe({
+      next: () => {
+        this.toast.success(
+          somar
+            ? 'Total atualizado: saldo anterior + saldo desta fatura.'
+            : 'Total atualizado: apenas saldo desta fatura.'
+        );
+        this.confirmandoId = null;
+        this.carregar();
+      },
+      error: (e) => {
+        this.toast.error(e?.error?.message || 'Erro ao aplicar escolha do saldo.');
+        this.confirmandoId = null;
+      }
+    });
+  }
+
   confirmar(imp: ImportacaoFatura): void {
+    if (imp.aguardandoEscolhaSaldoAnterior) {
+      this.toast.warning('Escolha primeiro se deseja somar o saldo anterior ou importar só o saldo atual.');
+      return;
+    }
     const indices = imp.itens
       .map((item, index) => ({ item, index }))
       .filter(({ item }) => item.novo && item.selecionado)

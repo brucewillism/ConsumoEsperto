@@ -33,6 +33,25 @@
   border: 1px solid rgba(255, 255, 255, .08);
 }
 
+.saldo-anterior-choice {
+  margin: 12px 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 193, 7, 0.12);
+  border: 1px solid rgba(255, 193, 7, 0.35);
+}
+
+.saldo-anterior-choice p {
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+.saldo-anterior-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .drop-zone {
   text-align: center;
   padding: 28px;

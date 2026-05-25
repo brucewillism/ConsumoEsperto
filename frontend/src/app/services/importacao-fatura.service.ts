@@ -26,6 +26,9 @@ export interface ImportacaoFatura {
   itens: ImportacaoFaturaItem[];
   auditorias: string[];
   dataCriacao: string;
+  aguardandoEscolhaSaldoAnterior?: boolean;
+  saldoFaturaAnterior?: number | null;
+  saldoFaturaAtual?: number | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -40,6 +43,14 @@ export class ImportacaoFaturaService {
 
   confirmar(id: number, indices: number[]): Observable<{ criadas: number }> {
     return this.http.post<{ criadas: number }>(`${this.base}/${id}/confirmar`, { indices });
+  }
+
+  escolhaSaldoAnterior(id: number, somar: boolean): Observable<ImportacaoFatura> {
+    return this.http.post<ImportacaoFatura>(
+      `${this.base}/${id}/escolha-saldo-anterior`,
+      null,
+      { params: { somar: String(somar) } }
+    );
   }
 
   upload(file: File): Observable<ImportacaoFatura> {

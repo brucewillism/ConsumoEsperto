@@ -585,6 +585,25 @@ public class JarvisProtocolService {
         return sb.toString();
     }
 
+    /** Pergunta saldo anterior + atual (típico Banco do Brasil) antes da varredura final. */
+    public String formatoEscolhaSaldoAnteriorFatura(
+        String bancoCartao,
+        java.math.BigDecimal saldoAnterior,
+        java.math.BigDecimal saldoAtual,
+        java.math.BigDecimal totalPdf
+    ) {
+        String b = bancoCartao != null && !bancoCartao.isBlank() ? bancoCartao : "Cartão";
+        java.text.NumberFormat brl = java.text.NumberFormat.getCurrencyInstance(java.util.Locale.forLanguageTag("pt-BR"));
+        String ant = saldoAnterior != null ? brl.format(saldoAnterior) : "—";
+        String atu = saldoAtual != null ? brl.format(saldoAtual) : "—";
+        String tot = totalPdf != null ? brl.format(totalPdf) : "—";
+        return "📋 *Fatura " + b + "* — verifiquei que o PDF traz *saldo anterior* de " + ant
+            + " e *saldo desta fatura* de " + atu + " (total no documento: " + tot + ").\n\n"
+            + "Deseja *somar* os dois e importar com esse total combinado?\n"
+            + "• Responda *sim* para somar saldo anterior + saldo atual.\n"
+            + "• Responda *não* para importar *apenas* o saldo desta fatura (sem somar o anterior).";
+    }
+
     /** Resumo de importação de fatura PDF. */
     public String formatoFaturaVarredura(String bancoCartao, int nNaoCatalogados, String listaInconsistenciasBullets, boolean bloquearConciliacaoPorDivergenciaTotal) {
         StringBuilder sb = new StringBuilder();
