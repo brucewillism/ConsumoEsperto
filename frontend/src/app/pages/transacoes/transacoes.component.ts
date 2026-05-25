@@ -30,6 +30,7 @@ import {
 import { FiltroTransacaoComponent } from './components/filtro-transacao/filtro-transacao.component';
 import { ListaTransacaoComponent } from './components/lista-transacao/lista-transacao.component';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError, valorMonetarioBrValidator } from '../../shared/utils/form.utils';
 
 @Component({
@@ -50,7 +51,8 @@ import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError, valorMo
     MatNativeDateModule,
     FiltroTransacaoComponent,
     ListaTransacaoComponent,
-    CeInputMaskDirective
+    CeInputMaskDirective,
+    WhatsappParityHintComponent,
   ],
   templateUrl: './transacoes.component.html',
   styleUrls: ['./transacoes.component.scss']

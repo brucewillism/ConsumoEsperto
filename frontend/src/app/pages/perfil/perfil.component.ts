@@ -8,12 +8,13 @@ import { ToastService } from '../../services/toast.service';
 import { PreferenciaTratamentoJarvis, Usuario } from '../../models/usuario.model';
 import { GoogleCalendarLinkService } from '../../services/google-calendar-link.service';
 import { DespesaFixa, DespesasFixaService } from '../../services/despesas-fixa.service';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
   selector: 'app-perfil',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, WhatsappParityHintComponent],
   templateUrl: './perfil.component.html',
   styleUrl: './perfil.component.scss',
 })

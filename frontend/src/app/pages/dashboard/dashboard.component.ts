@@ -48,6 +48,7 @@ import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 import { LoadingService } from '../../services/loading.service';
 import { DashboardSessionCacheService } from '../../services/dashboard-session-cache.service';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { CartaoCredito } from '../../models/cartao-credito.model';
@@ -128,6 +129,7 @@ interface ChartData {
     LoadingIndicatorComponent,
     ChartMetodologiaComponent,
     JarvisChatPanelComponent,
+    WhatsappParityHintComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'

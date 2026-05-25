@@ -104,6 +104,7 @@ public class WhatsAppCommandService {
     private final CategoriaService categoriaService;
     private final OrcamentoService orcamentoService;
     private final UsuarioSessaoContextoService sessaoContextoService;
+    private final WhatsAppAppParityService whatsAppAppParityService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -152,6 +153,9 @@ public class WhatsAppCommandService {
     private static final Pattern REATIVAR_CARTAO_WHATSAPP = Pattern.compile(
         "(?i)^(reativar|ativar|restaurar)\\s+(?:o\\s+)?(?:cart[aã]o\\s+)?(.+)$");
 
+    private static final Pattern ATUALIZACAO_CARTAO_PARA = Pattern.compile(
+        "(?i)(?:para|em|como)\\s+(?:cart[aã]o\\s+)?(.+)$");
+
     public void processIncomingMessage(String from, String body, String mediaUrl, String mediaContentType) {
         Long userId = null;
         try {
@@ -171,57 +175,7 @@ public class WhatsAppCommandService {
                 return;
             }
             String sourceText = extractText(body, mediaUrl, mediaContentType, userId);
-            Optional<String> metaReply = tryResolveMetaConversation(userId, sourceText);
-            if (metaReply.isPresent()) {
-                sendOutgoingMessage(from, metaReply.get(), userId);
-                return;
-            }
-            Optional<String> parcelaJurosReply = tryResolveParcelaJurosEmbutidos(userId, sourceText);
-            if (parcelaJurosReply.isPresent()) {
-                sendOutgoingMessage(from, parcelaJurosReply.get(), userId);
-                return;
-            }
-            if (isForecastQuestion(sourceText)) {
-                sendOutgoingMessage(from, forecastFinanceiroService.montarRespostaWhatsapp(userId), userId);
-                return;
-            }
-            if (isInvestmentQuestion(sourceText)) {
-                sendOutgoingMessage(from, respostaInvestimento(userId), userId);
-                return;
-            }
-            Optional<String> disp = tryDisponibilidadeRealRelatorio(userId, sourceText);
-            if (disp.isPresent()) {
-                sendOutgoingMessage(from, disp.get(), userId);
-                return;
-            }
-            Optional<String> oracle = tryAnaliseGrandeCompra(userId, sourceText);
-            if (oracle.isPresent()) {
-                sendOutgoingMessage(from, oracle.get(), userId);
-                return;
-            }
-            Optional<String> despesaFixa = tryIniciarDespesaFixaPorTextoLivre(userId, sourceText);
-            if (despesaFixa.isPresent()) {
-                sendOutgoingMessage(from, despesaFixa.get(), userId);
-                return;
-            }
-            Optional<String> metaCreate = tryIniciarCriacaoMetaPorTexto(userId, sourceText);
-            if (metaCreate.isPresent()) {
-                sendOutgoingMessage(from, metaCreate.get(), userId);
-                return;
-            }
-            Optional<String> jarvisNota = tryJarvisAnoteIsso(userId, sourceText);
-            if (jarvisNota.isPresent()) {
-                sendOutgoingMessage(from, jarvisNota.get(), userId);
-                return;
-            }
-            JsonNode parsed = openAiService.parseCommand(sourceText, userId);
-            String response;
-            String act = parsed.path("action").asText("");
-            if ("GENERATE_REPORT".equals(act) || "GERAR_RELATORIO".equals(act)) {
-                response = handleGenerateReport(parsed, userId, from, sourceText, null);
-            } else {
-                response = executeCommand(parsed, userId, sourceText);
-            }
+            String response = processJarvisCommand(userId, sourceText, from, null);
             sendOutgoingIfPresent(from, response, userId);
         } catch (Exception e) {
             log.error("Erro ao processar comando WhatsApp", e);
@@ -234,62 +188,268 @@ public class WhatsAppCommandService {
 
     public String processWebCommand(Long userId, String sourceText) {
         try {
-            String text = sourceText == null ? "" : sourceText.trim();
-            if (text.isBlank()) {
-                return msgErro(userId, "J.A.R.V.I.S.", "Digite uma pergunta ou comando financeiro.");
-            }
-            Optional<String> metaReply = tryResolveMetaConversation(userId, text);
-            if (metaReply.isPresent()) {
-                return metaReply.get();
-            }
-            Optional<String> parcelaJurosReply = tryResolveParcelaJurosEmbutidos(userId, text);
-            if (parcelaJurosReply.isPresent()) {
-                return parcelaJurosReply.get();
-            }
-            Optional<String> importContr = tryImportacaoContrachequeInstrucoes(userId, text);
-            if (importContr.isPresent()) {
-                return importContr.get();
-            }
-            Optional<String> nfce = conciergeNfceUrlService.processarSeUrlFiscal(userId, text, jarvisProtocolService);
-            if (nfce.isPresent()) {
-                return jarvisProtocolService.ensureSigned(nfce.get());
-            }
-            Optional<String> rag = tryRespostaRagAnalitico(userId, text);
-            if (rag.isPresent()) {
-                return jarvisProtocolService.ensureSigned(rag.get());
-            }
-            if (isForecastQuestion(text)) {
-                return forecastFinanceiroService.montarRespostaWhatsapp(userId);
-            }
-            if (isInvestmentQuestion(text)) {
-                return respostaInvestimento(userId);
-            }
-            Optional<String> disp = tryDisponibilidadeRealRelatorio(userId, text);
-            if (disp.isPresent()) {
-                return disp.get();
-            }
-            Optional<String> oracle = tryAnaliseGrandeCompra(userId, text);
-            if (oracle.isPresent()) {
-                return oracle.get();
-            }
-            Optional<String> despesaFixa = tryIniciarDespesaFixaPorTextoLivre(userId, text);
-            if (despesaFixa.isPresent()) {
-                return despesaFixa.get();
-            }
-            Optional<String> jarvisNota = tryJarvisAnoteIsso(userId, text);
-            if (jarvisNota.isPresent()) {
-                return jarvisNota.get();
-            }
-            JsonNode parsed = openAiService.parseCommand(text, userId);
-            String act = parsed.path("action").asText("");
-            if ("GENERATE_REPORT".equals(act) || "GERAR_RELATORIO".equals(act)) {
-                return handleGenerateReport(parsed, userId, null, text, null);
-            }
-            return executeCommand(parsed, userId, text);
+            return processJarvisCommand(userId, sourceText, null, null);
         } catch (Exception e) {
             log.error("Erro ao processar comando Web IA", e);
             return msgErro(userId, "J.A.R.V.I.S.", "Não consegui concluir o comando. Tente reformular a pergunta.");
         }
+    }
+
+    /**
+     * Pipeline único J.A.R.V.I.S. (app, WhatsApp Twilio e Evolution) — mesmos pré-processadores e mesma IA.
+     */
+    public String processJarvisCommand(Long userId, String sourceText, String whatsappFrom, String evolutionInstanceHint) {
+        String text = sourceText == null ? "" : sourceText.trim();
+        if (text.isBlank()) {
+            return msgErro(userId, "J.A.R.V.I.S.", "Digite uma pergunta ou comando financeiro.");
+        }
+
+        Optional<String> pre = executarPreProcessadoresJarvis(userId, text);
+        if (pre.isPresent()) {
+            return pre.get();
+        }
+
+        JsonNode parsed = parseCommandComFallback(userId, text);
+        String act = parsed.path("action").asText("");
+        if ("GENERATE_REPORT".equals(act) || "GERAR_RELATORIO".equals(act)) {
+            return handleGenerateReport(parsed, userId, whatsappFrom, text, evolutionInstanceHint);
+        }
+        return executeCommand(parsed, userId, text);
+    }
+
+    private Optional<String> executarPreProcessadoresJarvis(Long userId, String text) {
+        Optional<String> despesaFixaDia = tryResolveDespesaFixaDiaPendente(userId, text);
+        if (despesaFixaDia.isPresent()) {
+            return despesaFixaDia;
+        }
+        Optional<String> ajuda = tryRespostaAjudaParidade(userId, text);
+        if (ajuda.isPresent()) {
+            return ajuda;
+        }
+        Optional<String> listaCartoes = tryConsultaListaCartoes(userId, text);
+        if (listaCartoes.isPresent()) {
+            return listaCartoes;
+        }
+        Optional<String> atualizaCartao = tryAtualizarCartaoTextoLivre(userId, text);
+        if (atualizaCartao.isPresent()) {
+            return atualizaCartao;
+        }
+        Optional<String> reativar = tryReativarCartaoInativo(userId, text);
+        if (reativar.isPresent()) {
+            return reativar;
+        }
+        Optional<String> metaReply = tryResolveMetaConversation(userId, text);
+        if (metaReply.isPresent()) {
+            return metaReply;
+        }
+        Optional<String> parcelaJurosReply = tryResolveParcelaJurosEmbutidos(userId, text);
+        if (parcelaJurosReply.isPresent()) {
+            return parcelaJurosReply;
+        }
+        Optional<String> importContr = tryImportacaoContrachequeInstrucoes(userId, text);
+        if (importContr.isPresent()) {
+            return importContr;
+        }
+        Optional<String> nfce = conciergeNfceUrlService.processarSeUrlFiscal(userId, text, jarvisProtocolService);
+        if (nfce.isPresent()) {
+            return Optional.of(jarvisProtocolService.ensureSigned(nfce.get()));
+        }
+        Optional<String> rag = tryRespostaRagAnalitico(userId, text);
+        if (rag.isPresent()) {
+            return Optional.of(jarvisProtocolService.ensureSigned(rag.get()));
+        }
+        if (isForecastQuestion(text)) {
+            return Optional.of(forecastFinanceiroService.montarRespostaWhatsapp(userId));
+        }
+        if (isInvestmentQuestion(text)) {
+            return Optional.of(respostaInvestimento(userId));
+        }
+        Optional<String> disp = tryDisponibilidadeRealRelatorio(userId, text);
+        if (disp.isPresent()) {
+            return disp;
+        }
+        Optional<String> oracle = tryAnaliseGrandeCompra(userId, text);
+        if (oracle.isPresent()) {
+            return oracle;
+        }
+        Optional<String> despesaFixa = tryIniciarDespesaFixaPorTextoLivre(userId, text);
+        if (despesaFixa.isPresent()) {
+            return despesaFixa;
+        }
+        Optional<String> metaCreate = tryIniciarCriacaoMetaPorTexto(userId, text);
+        if (metaCreate.isPresent()) {
+            return metaCreate;
+        }
+        Optional<String> jarvisNota = tryJarvisAnoteIsso(userId, text);
+        if (jarvisNota.isPresent()) {
+            return jarvisNota;
+        }
+        return Optional.empty();
+    }
+
+    private JsonNode parseCommandComFallback(Long userId, String text) {
+        try {
+            return openAiService.parseCommand(text, userId);
+        } catch (RuntimeException e) {
+            log.warn("parseCommand indisponível userId={}: {}", userId, e.getMessage());
+            ObjectNode fallback = JsonNodeFactory.instance.objectNode();
+            fallback.put("action", "UNKNOWN");
+            fallback.put("confianca", 0);
+            fallback.put("errorMessage",
+                "Motor de IA temporariamente indisponível. Use comandos diretos: *lista os meus cartões*, "
+                    + "*despesa 50 mercado*, *pix 80 da conta Nubank*, *ajuda*.");
+            if (textoPedeListaCartoes(text)) {
+                fallback.put("action", "LIST_CARDS");
+                fallback.put("confianca", 1);
+                fallback.remove("errorMessage");
+            } else if (textoPedeAtualizacaoCartao(text)) {
+                fallback.put("action", "UPDATE_ENTITY_CONFIG");
+                fallback.put("targetEntity", "CARTAO");
+                fallback.put("confianca", 0.9);
+                fallback.remove("errorMessage");
+            }
+            return fallback;
+        }
+    }
+
+    private boolean textoPedeListaCartoes(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (n.contains("quantos cart") || n.contains("quantas cart")) {
+            return true;
+        }
+        return (n.contains("lista") || n.contains("listar") || n.contains("mostra") || n.contains("mostre")
+            || n.contains("quais") || n.contains("meus") || n.contains("meu "))
+            && n.contains("cart");
+    }
+
+    private boolean textoPedeAtualizacaoCartao(String text) {
+        if (text == null) {
+            return false;
+        }
+        String n = normalize(text);
+        return (n.contains("atualiz") || n.contains("altera") || n.contains("muda") || n.contains("troca"))
+            && (n.contains("cart") || n.contains("banco"));
+    }
+
+    private Optional<String> tryConsultaListaCartoes(Long userId, String text) {
+        if (!textoPedeListaCartoes(text)) {
+            return Optional.empty();
+        }
+        List<CartaoCreditoDTO> ativos = cartaoCreditoService.buscarPorUsuarioId(userId);
+        if (ativos.isEmpty()) {
+            return Optional.of(msgInfo("Cartões",
+                "Não tens cartões *ativos*. Cria em *Cartões* no app ou envia: *cartão Nubank final 1234 vence dia 10*."));
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("Tens *").append(ativos.size()).append("* cartão(ões) ativo(s):\n\n");
+        int i = 1;
+        for (CartaoCreditoDTO c : ativos) {
+            String fin = ultimos4DigitosCartao(c.getNumeroCartao());
+            String banco = c.getBanco() != null && !c.getBanco().isBlank() ? c.getBanco() : "—";
+            sb.append(i++).append(". *").append(c.getNome()).append("* — ").append(banco)
+                .append(", final *").append(fin).append("*, venc. dia *").append(c.getDiaVencimento()).append("*\n");
+        }
+        return Optional.of(msgOk("Os teus cartões", sb.toString().trim()));
+    }
+
+    private Optional<String> tryAtualizarCartaoTextoLivre(Long userId, String text) {
+        if (!textoPedeAtualizacaoCartao(text)) {
+            return Optional.empty();
+        }
+        String destino = extrairDestinoAtualizacaoCartao(text);
+        if (destino.isBlank()) {
+            return Optional.empty();
+        }
+        List<CartaoCreditoDTO> ativos = cartaoCreditoService.buscarPorUsuarioId(userId);
+        if (ativos.isEmpty()) {
+            return Optional.of(msgErro(userId, "Cartão", "Não há cartão ativo para atualizar."));
+        }
+        CartaoCreditoDTO alvo = null;
+        String n = normalize(text);
+        if (n.contains("nao informado") || n.contains("não informado") || n.contains("sem banco")) {
+            alvo = ativos.stream()
+                .filter(c -> bancoCartaoIndefinido(c.getBanco()))
+                .findFirst()
+                .orElse(null);
+        }
+        if (alvo == null && ativos.size() == 1) {
+            alvo = ativos.get(0);
+        }
+        if (alvo == null) {
+            String ref = whatsAppFirstNonBlank(destino, text);
+            CardMatchResult match = findBestCard(userId, ref);
+            if (match.card != null) {
+                alvo = cartaoCreditoService.buscarPorId(match.card.getId(), userId);
+            }
+        }
+        if (alvo == null) {
+            return Optional.of(msgErro(userId, "Cartão",
+                "Há vários cartões. Indica qual (ex.: *atualiza o Itaú para Mercado Pago*) ou o final do cartão."));
+        }
+        String nomeNovo = sanitizeName(capitalizarPalavras(destino));
+        String bancoNovo = nomeNovo;
+        if (destino.toLowerCase(Locale.ROOT).contains("mercado")) {
+            bancoNovo = "Mercado Pago";
+            if (!nomeNovo.toLowerCase(Locale.ROOT).contains("cart")) {
+                nomeNovo = "Cartão Mercado Pago";
+            }
+        }
+        try {
+            CartaoCreditoDTO atualizado = cartaoCreditoService.atualizarConfigPorCartaoId(
+                userId, alvo.getId(), null, null, nomeNovo, bancoNovo, null, null, null);
+            return Optional.of(msgOk("Cartão atualizado",
+                "*" + atualizado.getNome() + "* — banco *" + atualizado.getBanco() + "*, final *"
+                    + ultimos4DigitosCartao(atualizado.getNumeroCartao()) + "*."));
+        } catch (RuntimeException e) {
+            return Optional.of(msgErro(userId, "Cartão", humanizarErroComando(e.getMessage())));
+        }
+    }
+
+    private static boolean bancoCartaoIndefinido(String banco) {
+        if (banco == null || banco.isBlank()) {
+            return true;
+        }
+        String b = normalize(banco);
+        return b.contains("nao informado") || b.equals("banco") || b.equals("na");
+    }
+
+    private static String extrairDestinoAtualizacaoCartao(String text) {
+        Matcher m = ATUALIZACAO_CARTAO_PARA.matcher(text.trim());
+        if (m.find()) {
+            return m.group(1).trim();
+        }
+        return "";
+    }
+
+    private static String ultimos4DigitosCartao(String numero) {
+        if (numero == null || numero.length() < 4) {
+            return numero != null ? numero : "????";
+        }
+        return numero.substring(numero.length() - 4);
+    }
+
+    private static String capitalizarPalavras(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return raw;
+        }
+        String[] parts = raw.trim().split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                sb.append(' ');
+            }
+            String p = parts[i];
+            if (p.length() > 0) {
+                sb.append(Character.toUpperCase(p.charAt(0)));
+                if (p.length() > 1) {
+                    sb.append(p.substring(1).toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        return sb.toString();
     }
 
     /**
@@ -426,71 +586,7 @@ public class WhatsAppCommandService {
                         if ("text".equalsIgnoreCase(resolveEffectiveMediaType(mediaType, sourceText)) && !incoming.isJarvisInstantAckSent()) {
                             sendOutgoingMessage(from, jarvisProtocolService.statusLeituraTextoEmAndamento(), userId, webhookEvolutionInstanceHint);
                         }
-                        Optional<String> metaReply = tryResolveMetaConversation(userId, sourceText);
-                        if (metaReply.isPresent()) {
-                            response = metaReply.get();
-                        } else {
-                            Optional<String> pj = tryResolveParcelaJurosEmbutidos(userId, sourceText);
-                            if (pj.isPresent()) {
-                                response = pj.get();
-                            } else {
-                                Optional<String> nfceEv = conciergeNfceUrlService.processarSeUrlFiscal(userId, sourceText, jarvisProtocolService);
-                                if (nfceEv.isPresent()) {
-                                    response = nfceEv.get();
-                                } else {
-                                    Optional<String> ragEv = tryRespostaRagAnalitico(userId, sourceText);
-                                    if (ragEv.isPresent()) {
-                                        response = ragEv.get();
-                                    } else if (isForecastQuestion(sourceText)) {
-                                        response = forecastFinanceiroService.montarRespostaWhatsapp(userId);
-                                        sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                        return;
-                                    } else if (isInvestmentQuestion(sourceText)) {
-                                        response = respostaInvestimento(userId);
-                                        sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                        return;
-                                    } else {
-                                        Optional<String> dispEv = tryDisponibilidadeRealRelatorio(userId, sourceText);
-                                        if (dispEv.isPresent()) {
-                                            response = dispEv.get();
-                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                            return;
-                                        }
-                                        Optional<String> oracleEv = tryAnaliseGrandeCompra(userId, sourceText);
-                                        if (oracleEv.isPresent()) {
-                                            response = oracleEv.get();
-                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                            return;
-                                        }
-                                        Optional<String> despesaFixaEv = tryIniciarDespesaFixaPorTextoLivre(userId, sourceText);
-                                        if (despesaFixaEv.isPresent()) {
-                                            response = despesaFixaEv.get();
-                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                            return;
-                                        }
-                                        Optional<String> jarvisNotaEv = tryJarvisAnoteIsso(userId, sourceText);
-                                        if (jarvisNotaEv.isPresent()) {
-                                            response = jarvisNotaEv.get();
-                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                            return;
-                                        }
-                                        Optional<String> reativarCartaoEv = tryReativarCartaoInativo(userId, sourceText);
-                                        if (reativarCartaoEv.isPresent()) {
-                                            response = reativarCartaoEv.get();
-                                            sendOutgoingIfPresent(from, response, userId, webhookEvolutionInstanceHint);
-                                            return;
-                                        }
-                                        JsonNode parsed = openAiService.parseCommand(sourceText, userId);
-                                        String actEv = parsed.path("action").asText("");
-                                        if ("GENERATE_REPORT".equals(actEv) || "GERAR_RELATORIO".equals(actEv)) {
-                                            response = handleGenerateReport(parsed, userId, from, sourceText, evolutionInstanceName);
-                                        } else {
-                                            response = executeCommand(parsed, userId, sourceText);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        response = processJarvisCommand(userId, sourceText, from, evolutionInstanceName);
                     }
                 }
             }
@@ -625,7 +721,8 @@ public class WhatsAppCommandService {
     private String executeCommand(JsonNode cmd, Long userId, String sourceText) {
         String action = cmd.path("action").asText("UNKNOWN");
         double confianca = readConfianca(cmd);
-        if (!"GET_INSIGHTS".equals(action) && !"CHECK_CARD_STATUS".equals(action) && !"FORECAST_MONTH".equals(action) && !"SUGERIR_INVESTIMENTO".equals(action) && !"GENERATE_REPORT".equals(action)
+        if (!"GET_INSIGHTS".equals(action) && !"CHECK_CARD_STATUS".equals(action) && !"LIST_CARDS".equals(action)
+            && !"FORECAST_MONTH".equals(action) && !"SUGERIR_INVESTIMENTO".equals(action) && !"GENERATE_REPORT".equals(action)
             && !"GERAR_RELATORIO".equals(action)
             && !"SET_SALARY_CONFIG".equals(action)
             && !"MANAGE_ENTITY".equals(action)
@@ -654,6 +751,8 @@ public class WhatsAppCommandService {
             }
             case "FORECAST_MONTH" -> forecastFinanceiroService.montarRespostaWhatsapp(userId);
             case "SUGERIR_INVESTIMENTO" -> respostaInvestimento(userId);
+            case "LIST_CARDS" -> tryConsultaListaCartoes(userId, sourceText)
+                .orElseGet(() -> msgErro(userId, "Cartões", "Não consegui listar os cartões."));
             case "CHECK_CARD_STATUS" -> handleCheckCardStatus(cmd, userId, sourceText);
             case "SET_SALARY_CONFIG" -> handleSetSalaryConfig(cmd, userId, sourceText);
             case "MANAGE_ENTITY" -> {
@@ -668,8 +767,9 @@ public class WhatsAppCommandService {
                 String errorMessage = cmd.path("errorMessage").asText("");
                 if (errorMessage.isBlank()) {
                     yield msgErro(userId, "Comando não reconhecido",
-                        "Não percebi o pedido. Exemplos:\n• despesa 45,90 mercado\n• receita 3500 salário\n"
-                            + "• cartão Nubank final 1234 vence 10\n• edita limite do Nubank para 5000");
+                        "Não percebi o pedido. Envie *ajuda* ou *menu* para ver o que o app e o WhatsApp fazem juntos.\n"
+                            + "Exemplos:\n• despesa 45,90 mercado\n• pix 80 da conta Nubank\n• receita 3500 salário\n"
+                            + "• cartão Nubank final 1234 vence 10");
                 }
                 yield msgErro(userId, "Dados em falta", errorMessage + "\nReenvia com mais detalhe.");
             }
@@ -854,6 +954,20 @@ public class WhatsAppCommandService {
             return false;
         }
         return data[0] == '%' && data[1] == 'P' && data[2] == 'D' && data[3] == 'F' && data[4] == '-';
+    }
+
+    private Optional<String> tryRespostaAjudaParidade(Long userId, String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return Optional.empty();
+        }
+        String t = sourceText.trim().toLowerCase(Locale.ROOT);
+        if (t.startsWith("ajuda ") || t.startsWith("menu ")) {
+            return Optional.of(msgOk("Ajuda", whatsAppAppParityService.montarMensagemAjudaTema(sourceText)));
+        }
+        if (!whatsAppAppParityService.isPedidoAjudaOuMenu(sourceText)) {
+            return Optional.empty();
+        }
+        return Optional.of(msgOk("Ajuda", whatsAppAppParityService.montarMensagemAjudaWhatsapp()));
     }
 
     private Optional<String> tryImportacaoContrachequeInstrucoes(Long userId, String sourceText) {
@@ -1250,12 +1364,17 @@ public class WhatsAppCommandService {
             log.info("[JARVIS-LOG] RAG: contexto vazio userId={}", userId);
             return Optional.empty();
         }
-        String ans = openAiService.gerarRespostaAnaliticaRag(userId, text, ctx);
-        if (ans == null || ans.isBlank()) {
+        try {
+            String ans = openAiService.gerarRespostaAnaliticaRag(userId, text, ctx);
+            if (ans == null || ans.isBlank()) {
+                return Optional.empty();
+            }
+            log.info("[JARVIS-LOG] RAG resposta gerada userId={}", userId);
+            return Optional.of(ans);
+        } catch (RuntimeException e) {
+            log.warn("RAG analítico indisponível userId={}: {}", userId, e.getMessage());
             return Optional.empty();
         }
-        log.info("[JARVIS-LOG] RAG resposta gerada userId={}", userId);
-        return Optional.of(ans);
     }
 
     private boolean mensagemPareceConsultaAnaliticaRag(String text) {

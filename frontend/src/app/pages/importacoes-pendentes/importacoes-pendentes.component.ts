@@ -7,11 +7,12 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { ImportacaoFatura, ImportacaoFaturaService } from '../../services/importacao-fatura.service';
 import { ToastService } from '../../services/toast.service';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 
 @Component({
   selector: 'app-importacoes-pendentes',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCardModule, MatCheckboxModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatCardModule, MatCheckboxModule, MatIconModule, WhatsappParityHintComponent],
   templateUrl: './importacoes-pendentes.component.html',
   styleUrl: './importacoes-pendentes.component.scss'
 })

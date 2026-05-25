@@ -8,11 +8,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { ContrachequeDto, RendaConfigService } from '../../services/renda-config.service';
 import { ToastService } from '../../services/toast.service';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 
 @Component({
   selector: 'app-renda',
   standalone: true,
-  imports: [CommonModule, BaseChartDirective, MatButtonModule, MatCardModule, MatIconModule, ChartMetodologiaComponent],
+  imports: [CommonModule, BaseChartDirective, MatButtonModule, MatCardModule, MatIconModule, ChartMetodologiaComponent, WhatsappParityHintComponent],
   templateUrl: './renda.component.html',
   styleUrl: './renda.component.scss'
 })

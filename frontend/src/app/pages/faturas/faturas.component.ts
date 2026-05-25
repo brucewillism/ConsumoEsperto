@@ -28,6 +28,7 @@ import { FinancaAlteracaoService } from '../../services/financa-alteracao.servic
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 
 @Component({
@@ -49,6 +50,7 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
     MatDialogModule,
     FormsModule,
     PageLoadingComponent,
+    WhatsappParityHintComponent,
   ],
   templateUrl: './faturas.component.html',
   styleUrls: ['./faturas.component.scss']

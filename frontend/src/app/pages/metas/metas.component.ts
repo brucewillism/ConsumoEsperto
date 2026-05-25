@@ -24,6 +24,7 @@ import { ToastService } from '../../services/toast.service';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { forkJoin } from 'rxjs';
 
 @Component({
@@ -43,6 +44,7 @@ import { forkJoin } from 'rxjs';
     ChartMetodologiaComponent,
     CeInputMaskDirective,
     PageLoadingComponent,
+    WhatsappParityHintComponent,
   ],
   templateUrl: './metas.component.html',
   styleUrl: './metas.component.scss'

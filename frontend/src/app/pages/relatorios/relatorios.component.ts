@@ -30,6 +30,7 @@ import {
 import { CartaoCredito } from '../../models/cartao-credito.model';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 
 @Component({
   selector: 'app-relatorios',
@@ -53,6 +54,7 @@ import { PageLoadingComponent } from '../../shared/page-loading/page-loading.com
     MatTooltipModule,
     ChartMetodologiaComponent,
     PageLoadingComponent,
+    WhatsappParityHintComponent,
   ],
   templateUrl: './relatorios.component.html',
   styleUrl: './relatorios.component.scss',

@@ -19,6 +19,7 @@ import { ForecastFinanceiro, Orcamento, OrcamentoService } from '../../services/
 import { ToastService } from '../../services/toast.service';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 
 @Component({
   selector: 'app-orcamentos',
@@ -37,6 +38,7 @@ import { PageLoadingComponent } from '../../shared/page-loading/page-loading.com
     MatDialogModule,
     ChartMetodologiaComponent,
     PageLoadingComponent,
+    WhatsappParityHintComponent,
   ],
   templateUrl: './orcamentos.component.html',
   styleUrl: './orcamentos.component.scss'

@@ -20,6 +20,7 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { TransferenciaModalComponent } from '../../shared/transferencia-modal/transferencia-modal.component';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
@@ -39,6 +40,7 @@ import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '
     MatDialogModule,
     MatProgressSpinnerModule,
     CeInputMaskDirective,
+    WhatsappParityHintComponent,
   ],
   templateUrl: './contas-bancarias.component.html',
   styleUrl: './contas-bancarias.component.scss',

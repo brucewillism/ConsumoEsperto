@@ -1,13 +1,10 @@
 <app-page-loading *ngIf="carregando" [message]="mensagemCarregamento"></app-page-loading>
 
 <div class="whatsapp-config-container">
-  <div class="card">
+  <div class="card card--narrow">
     <h1>WhatsApp</h1>
     <p class="subtitle">
-      Vincule o número com o qual envia mensagens ao bot. Ao gravar ou atualizar o vínculo, se a Evolution ainda não estiver
-      pareada nesta instância, abre-se um modal onde o QR aparece assim que ficar disponível (com atualização automática).
-      Usa-se <code>EVOLUTION_URL</code> e a chave mestra. A IA (ex.: Groq) pode estar no servidor ou nas definições por utilizador;
-      instância e chave próprias da Evolution, se configuradas na IA, sobrepõem os valores globais.
+      Vincule o número com o qual envia mensagens ao bot. O mesmo utilizador vê os dados no app e no WhatsApp em tempo real.
     </p>
 
     <div class="status-box" [class.linked]="!!numeroAtual">
@@ -36,33 +33,59 @@
     </div>
 
     <div class="tips">
-      <h3>Dicas</h3>
+      <h3>Ligação Evolution</h3>
       <ul>
-        <li>Use o mesmo número que envia mensagens para o bot (texto ou voz).</li>
-        <li>Formato recomendado: +55 DDD número.</li>
-        <li>
-          O servidor chama a Evolution com <code>EVOLUTION_URL</code> e a mesma chave que a Evolution usa
-          (<code>EVOLUTION_APIKEY</code> ou <code>EVOLUTION_API_KEY</code> no Docker / <code>.env</code> — no Spring vira
-          <code>evolution.apikey</code>).
-        </li>
-        <li>
-          Depois de vincular, se aparecer o QR: mantenha o modal aberto — a app verifica a cada 5 s se a instância ficou ligada e
-          fecha quando o pareamento estiver completo.
-        </li>
-        <li>
-          Cada conta recebe uma instância Evolution própria (<code>ce-u[id]</code>). Não partilhe o QR da instância global
-          <code>ConsumoEsperto</code> entre vários utilizadores — isso impede o pareamento e o J.A.R.V.I.S. deixa de responder.
-        </li>
-        <li>
-          Para o bot responder, envie mensagens na conversa <strong>consigo mesmo</strong> (chat “Eu” / número guardado no telemóvel),
-          com o mesmo número que vinculou aqui.
-        </li>
-        <li>
-          Se o WhatsApp disser que <strong>não é possível ligar outro dispositivo</strong>: em
-          <em>Aparelhos ligados</em>, remova sessões antigas (WhatsApp Web, Evolution Manager, testes anteriores) e tente de novo.
-          O limite do WhatsApp é cerca de 4 aparelhos ligados.
-        </li>
+        <li>Use o mesmo número no chat <strong>consigo mesmo</strong> («Eu» no telemóvel).</li>
+        <li>Formato: +55 DDD número. QR no modal após vincular, se ainda não estiver pareado.</li>
+        <li>Instância dedicada <code>ce-u[id]</code> — não partilhe QR da instância global entre contas.</li>
       </ul>
     </div>
+  </div>
+
+  <div class="card card--wide">
+    <h2>O que fazer em cada tela (app ↔ WhatsApp)</h2>
+    <p class="subtitle">
+      Catálogo sincronizado com o servidor. No WhatsApp envie <strong>ajuda</strong>, <strong>menu</strong> ou
+      <strong>ajuda cartões</strong> para ver exemplos na conversa.
+    </p>
+
+    <input
+      type="search"
+      class="parity-search"
+      [(ngModel)]="filtroParidade"
+      placeholder="Filtrar (ex.: pix, fatura, meta…)"
+      [disabled]="paridadeCarregando"
+    />
+
+    <p *ngIf="paridadeCarregando" class="parity-loading">A carregar guia…</p>
+
+    <div class="parity-grid" *ngIf="!paridadeCarregando">
+      <article class="parity-card" *ngFor="let item of paridadeFiltrada">
+        <header class="parity-card__head">
+          <h3>{{ item.titulo }}</h3>
+          <span class="parity-badge">{{ canalLabel(item.canal) }}</span>
+        </header>
+
+        <p class="parity-card__app" *ngIf="item.rotaApp">
+          <i class="fas fa-desktop"></i>
+          App:
+          <a [routerLink]="item.rotaApp">{{ item.menuApp }}</a>
+          <span *ngIf="item.acoesApp?.length"> — {{ item.acoesApp.join(' · ') }}</span>
+        </p>
+
+        <div class="parity-card__wa" *ngIf="item.exemplosWhatsapp?.length">
+          <span class="parity-card__wa-label"><i class="fab fa-whatsapp"></i> Exemplos no WhatsApp</span>
+          <ul>
+            <li *ngFor="let ex of item.exemplosWhatsapp">«{{ ex }}»</li>
+          </ul>
+        </div>
+
+        <p class="parity-card__nota" *ngIf="item.nota">{{ item.nota }}</p>
+      </article>
+    </div>
+
+    <p class="parity-empty" *ngIf="!paridadeCarregando && paridadeFiltrada.length === 0">
+      Nenhum item para este filtro.
+    </p>
   </div>
 </div>

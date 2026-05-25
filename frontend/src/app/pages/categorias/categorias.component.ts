@@ -11,6 +11,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Categoria } from '../../models/categoria.model';
 import { CategoriaService } from '../../services/categoria.service';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
 import {
@@ -31,6 +32,7 @@ import {
     MatInputModule,
     MatSnackBarModule,
     MatDialogModule,
+    WhatsappParityHintComponent,
   ],
   templateUrl: './categorias.component.html',
   styleUrl: './categorias.component.scss',

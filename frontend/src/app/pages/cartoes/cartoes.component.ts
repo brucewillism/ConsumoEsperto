@@ -19,6 +19,7 @@ import { CartaoCredito } from '../../models/cartao-credito.model';
 import { BANCOS_BRASIL } from '../../shared/constants/bancos-brasil';
 import { parseValorBrasileiro, sanitizeCardNumberInput } from '../../shared/utils/form.utils';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 
 @Component({
   selector: 'app-cartoes',
@@ -36,6 +37,7 @@ import { PageLoadingComponent } from '../../shared/page-loading/page-loading.com
     MatDialogModule,
     FormsModule,
     PageLoadingComponent,
+    WhatsappParityHintComponent,
   ],
   templateUrl: './cartoes.component.html',
   styleUrls: ['./cartoes.component.scss']

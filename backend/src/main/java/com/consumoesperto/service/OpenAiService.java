@@ -69,7 +69,7 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
             "description, amount, bank, cardName, cardNumber, dueDay, creditLimit (limite total do cartão, opcional), " +
             "accountName (nome da conta bancária/carteira), accountType (CORRENTE|POUPANCA|DINHEIRO), initialBalance (saldo inicial da conta), " +
@@ -129,6 +129,7 @@ public class OpenAiService {
             "'quanto tempo para geladeira 3500 comprometendo 15% do salário'): action SIMULATE_PURCHASE_GOAL, description = item, " +
             "amount = valor total do bem, percentualComprometimento = percentual informado (número, ex: 10 para 10%).\n" +
             "- Se perguntar sobre recorrência, assinaturas repetidas, gastos fixos mensais (ex: 'tenho recorrência?', 'o que repete?'): action GET_INSIGHTS.\n" +
+            "- Se pedir listar/quantos cartões tem (ex.: 'lista meus cartões', 'quantos cartões eu tenho?'): action LIST_CARDS.\n" +
             "- Se perguntar quanto gastou no cartão, resumo de fatura, limite disponível (ex: 'quanto gastei no Nubank?', 'resumo da fatura do Inter'): " +
             "action CHECK_CARD_STATUS e preencher cardName e/ou bank com o cartão citado.\n" +
             "- Se perguntar como vai fechar o mês, se vai ficar no vermelho, previsão/projeção do mês ou saldo no fim do mês: action FORECAST_MONTH.\n" +

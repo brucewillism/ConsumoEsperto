@@ -1,5 +1,8 @@
 .whatsapp-config-container {
   padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .card {
@@ -9,6 +12,14 @@
   border-radius: 12px;
   padding: 24px;
   color: var(--text-primary, #e5e7eb);
+
+  &--wide {
+    max-width: 1100px;
+  }
+
+  &--narrow {
+    max-width: 760px;
+  }
 }
 
 h1 {
@@ -111,4 +122,101 @@ code {
   background: #1f2937;
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+}
+
+.parity-search {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 16px;
+  background: #111827;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.parity-loading,
+.parity-empty {
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+.parity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.parity-card {
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.parity-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+}
+
+.parity-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #1f2937;
+  color: #9ca3af;
+}
+
+.parity-card__app {
+  font-size: 0.88rem;
+  color: #d1d5db;
+  margin: 0 0 10px;
+
+  a {
+    color: #10b981;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+}
+
+.parity-card__wa-label {
+  display: block;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin-bottom: 6px;
+
+  .fab {
+    color: #25d366;
+    margin-right: 6px;
+  }
+}
+
+.parity-card__wa ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: #e5e7eb;
+}
+
+.parity-card__nota {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
 }

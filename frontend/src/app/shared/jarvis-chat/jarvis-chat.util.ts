@@ -6,8 +6,10 @@ export interface JarvisChatSugestao {
 }
 
 export const JARVIS_CHAT_SUGESTOES: JarvisChatSugestao[] = [
+  { rotulo: 'Listar meus cartões', pergunta: 'Lista os meus cartões' },
   { rotulo: 'Como vou fechar o mês?', pergunta: 'Como vou fechar o mês?' },
   { rotulo: 'Onde invisto meu saldo?', pergunta: 'Onde invisto meu saldo?' },
+  { rotulo: 'Ajuda (menu)', pergunta: 'ajuda' },
 ];
 
 export function vocativoJarvis(usuario: Usuario | null | undefined): string {

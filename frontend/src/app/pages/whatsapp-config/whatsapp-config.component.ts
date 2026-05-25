@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
+import { RouterLink } from '@angular/router';
 import { UsuarioService, VincularWhatsappResponse } from '../../services/usuario.service';
 import { ToastService } from '../../services/toast.service';
 import { Usuario } from '../../models/usuario.model';
@@ -11,11 +12,12 @@ import {
 } from '../../shared/whatsapp-evolution-qr-dialog.component';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
+import { WhatsappParidadeService, WhatsappParityItem } from '../../services/whatsapp-paridade.service';
 
 @Component({
   selector: 'app-whatsapp-config',
   standalone: true,
-  imports: [CommonModule, FormsModule, CeInputMaskDirective, PageLoadingComponent],
+  imports: [CommonModule, FormsModule, CeInputMaskDirective, PageLoadingComponent, RouterLink],
   templateUrl: './whatsapp-config.component.html',
   styleUrl: './whatsapp-config.component.scss'
 })
@@ -25,14 +27,64 @@ export class WhatsappConfigComponent implements OnInit {
   carregando = false;
   mensagemCarregamento = 'Carregando…';
 
+  paridadeItens: WhatsappParityItem[] = [];
+  paridadeCarregando = true;
+  filtroParidade = '';
+
   constructor(
     private usuarioService: UsuarioService,
     private toastService: ToastService,
     private dialog: MatDialog,
+    private paridadeService: WhatsappParidadeService,
   ) {}
 
   ngOnInit(): void {
     this.carregarPerfil();
+    this.carregarParidade();
+  }
+
+  carregarParidade(): void {
+    this.paridadeCarregando = true;
+    this.paridadeService.listarTudo().subscribe({
+      next: (res) => {
+        this.paridadeItens = res.itens ?? [];
+        this.paridadeCarregando = false;
+      },
+      error: () => {
+        this.paridadeCarregando = false;
+      },
+    });
+  }
+
+  get paridadeFiltrada(): WhatsappParityItem[] {
+    const q = this.filtroParidade.trim().toLowerCase();
+    if (!q) {
+      return this.paridadeItens;
+    }
+    return this.paridadeItens.filter((i) => {
+      const blob = [
+        i.titulo,
+        i.menuApp,
+        i.rotaApp,
+        i.nota,
+        ...(i.exemplosWhatsapp ?? []),
+        ...(i.acoesApp ?? []),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return blob.includes(q);
+    });
+  }
+
+  canalLabel(canal: string): string {
+    switch (canal) {
+      case 'WHATSAPP_ONLY':
+        return 'Só WhatsApp';
+      case 'APP_ONLY':
+        return 'Só no app';
+      default:
+        return 'App + WhatsApp';
+    }
   }
 
   carregarPerfil(): void {
@@ -70,7 +122,6 @@ export class WhatsappConfigComponent implements OnInit {
         this.toastService.success(baseMsg);
 
         const faltaEvolution = !response?.evolutionAlreadyConnected;
-        /** Modal com QR ou polling até a Evolution responder (evita só um toast quando o QR vem mais tarde). */
         if (faltaEvolution) {
           const dados: WhatsappEvolutionQrDialogData = {
             qrDataUri: response.evolutionQrCodeDataUri ?? null,

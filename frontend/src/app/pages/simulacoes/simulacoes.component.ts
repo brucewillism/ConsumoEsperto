@@ -18,6 +18,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { SimulacaoService } from '../../services/simulacao.service';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
@@ -40,10 +41,12 @@ import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '
     MatProgressBarModule,
     MatExpansionModule,
     MatSnackBarModule,
-    CeInputMaskDirective
+    CeInputMaskDirective,
+    WhatsappParityHintComponent,
   ],
   template: `
     <div class="simulacoes-container">
+      <app-whatsapp-parity-hint rota="/simulacoes"></app-whatsapp-parity-hint>
       <mat-card>
         <mat-card-header>
           <mat-card-title>Simulações Financeiras</mat-card-title>

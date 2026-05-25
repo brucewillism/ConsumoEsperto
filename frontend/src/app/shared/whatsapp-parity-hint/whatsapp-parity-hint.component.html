@@ -1,0 +1,26 @@
+<section class="parity-hint" *ngIf="!carregando && !erro && itens.length">
+  <button type="button" class="parity-hint__toggle" (click)="expandido = !expandido">
+    <i class="fab fa-whatsapp"></i>
+    <span>Também no WhatsApp</span>
+    <i class="fas" [class.fa-chevron-down]="!expandido" [class.fa-chevron-up]="expandido"></i>
+  </button>
+  <div class="parity-hint__body" *ngIf="expandido">
+    <p class="parity-hint__lead">
+      Os lançamentos feitos aqui aparecem no bot e vice-versa. Exemplos de mensagem:
+    </p>
+    <div class="parity-hint__item" *ngFor="let item of itens">
+      <div class="parity-hint__meta">
+        <strong>{{ item.titulo }}</strong>
+        <span class="parity-hint__badge">{{ canalLabel(item.canal) }}</span>
+      </div>
+      <ul *ngIf="item.exemplosWhatsapp?.length">
+        <li *ngFor="let ex of item.exemplosWhatsapp">«{{ ex }}»</li>
+      </ul>
+      <p class="parity-hint__nota" *ngIf="item.nota">{{ item.nota }}</p>
+    </div>
+    <p class="parity-hint__footer">
+      Envie <strong>ajuda</strong> ou <strong>menu</strong> no WhatsApp — ou
+      <a routerLink="/whatsapp-config">ver guia completo</a>.
+    </p>
+  </div>
+</section>

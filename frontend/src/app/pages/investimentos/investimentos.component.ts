@@ -9,11 +9,12 @@ import { PrevisaoFuturoChartComponent } from '../../components/previsao-futuro-c
 import { OportunidadeInvestimento, ProjecaoDashboardService } from '../../services/projecao-dashboard.service';
 import { ScoreService, UsuarioScore } from '../../services/score.service';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
+import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 
 @Component({
   selector: 'app-investimentos',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatCardModule, MatSliderModule, MatIconModule, PrevisaoFuturoChartComponent, ChartMetodologiaComponent],
+  imports: [CommonModule, FormsModule, MatCardModule, MatSliderModule, MatIconModule, PrevisaoFuturoChartComponent, ChartMetodologiaComponent, WhatsappParityHintComponent],
   templateUrl: './investimentos.component.html',
   styleUrl: './investimentos.component.scss'
 })
