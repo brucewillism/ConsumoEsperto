@@ -13,13 +13,13 @@
   <div class="loading-indicator__content">
     <div class="loading-indicator__visual">
       <img
-        *ngIf="!assetFailed && mode !== 'overlay'"
+        *ngIf="!assetFailed"
         class="loading-indicator__art"
         [class.loading-indicator__art--gif]="isGifAsset"
         [src]="currentAssetUrl"
         alt=""
         (error)="onAssetError()" />
-      <div class="loading-indicator__spinner" *ngIf="assetFailed || mode === 'overlay'" aria-hidden="true">
+      <div class="loading-indicator__spinner" *ngIf="assetFailed" aria-hidden="true">
         <span class="loading-indicator__ring"></span>
         <span class="loading-indicator__core"></span>
       </div>
