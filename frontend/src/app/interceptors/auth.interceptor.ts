@@ -23,21 +23,23 @@ export const AuthInterceptor: HttpInterceptorFn = (request, next) => {
 
   const token = authService.getToken();
 
+  const isMultipart = request.body instanceof FormData;
+
   if (token) {
-    request = request.clone({
-      setHeaders: {
-        Authorization: `Bearer ${token}`,
-        'ngrok-skip-browser-warning': 'true',
-      },
-    });
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      'ngrok-skip-browser-warning': 'true',
+    };
+    request = request.clone({ setHeaders: headers });
   } else {
-    request = request.clone({
-      setHeaders: {
-        'ngrok-skip-browser-warning': 'true',
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-    });
+    const headers: Record<string, string> = {
+      'ngrok-skip-browser-warning': 'true',
+      Accept: 'application/json',
+    };
+    if (!isMultipart) {
+      headers['Content-Type'] = 'application/json';
+    }
+    request = request.clone({ setHeaders: headers });
   }
 
   if (!request.headers.has('ngrok-skip-browser-warning')) {

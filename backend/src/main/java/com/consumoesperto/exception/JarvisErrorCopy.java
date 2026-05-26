@@ -39,6 +39,10 @@ public final class JarvisErrorCopy {
     public static final String CONFLICT_INSTRUCAO =
         "O estado atual não permite esta operação. Atualize a tela ou tente outro caminho.";
 
+    public static final String AI_UNAVAILABLE_INSTRUCAO =
+        "Aguarde cerca de 1–2 horas e tente de novo. Se urgente, envie o PDF pelo WhatsApp quando a IA voltar "
+            + "ou confirme com o administrador a chave GEMINI_API_KEY no servidor.";
+
     private JarvisErrorCopy() {
     }
 }

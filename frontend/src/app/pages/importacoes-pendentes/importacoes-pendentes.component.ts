@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,6 +8,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { ImportacaoFatura, ImportacaoFaturaService } from '../../services/importacao-fatura.service';
 import { ToastService } from '../../services/toast.service';
+import { resolveHttpError } from '../../shared/utils/form.utils';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 
 @Component({
@@ -58,8 +60,8 @@ export class ImportacoesPendentesComponent implements OnInit {
         this.confirmandoId = null;
         this.carregar();
       },
-      error: (e) => {
-        this.toast.error(e?.error?.message || 'Erro ao aplicar escolha do saldo.');
+      error: (e: HttpErrorResponse) => {
+        this.toast.errorFromHttpResponse(e, 'Erro ao aplicar escolha do saldo.');
         this.confirmandoId = null;
       }
     });
@@ -85,8 +87,8 @@ export class ImportacoesPendentesComponent implements OnInit {
         this.confirmandoId = null;
         this.carregar();
       },
-      error: (e) => {
-        this.toast.error(e?.error?.message || 'Erro ao confirmar importação.');
+      error: (e: HttpErrorResponse) => {
+        this.toast.errorFromHttpResponse(e, 'Erro ao confirmar importação.');
         this.confirmandoId = null;
       }
     });
@@ -128,8 +130,8 @@ export class ImportacoesPendentesComponent implements OnInit {
         this.enviandoPdf = false;
         this.carregar();
       },
-      error: (e) => {
-        this.toast.error(e?.error?.message || 'Erro ao processar PDF.');
+      error: (e: HttpErrorResponse) => {
+        this.toast.errorFromHttpResponse(e, resolveHttpError(e, 'Erro ao processar PDF.'));
         this.enviandoPdf = false;
       }
     });

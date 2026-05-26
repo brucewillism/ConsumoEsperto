@@ -49,10 +49,21 @@ export function resolveHttpError(error: unknown, fallback: string): string {
     if (typeof msg === 'string' && msg.trim()) {
       return msg;
     }
+    if (error.status === 503) {
+      const msg503 = error.error?.message;
+      if (typeof msg503 === 'string' && msg503.trim()) {
+        return msg503;
+      }
+      return 'Serviço de IA temporariamente indisponível. Tente novamente em cerca de 1–2 horas.';
+    }
     if (error.status === 409) {
       return 'Este registro já existe ou conflita com outro cadastro.';
     }
     if (error.status === 400) {
+      const msg400 = error.error?.message;
+      if (typeof msg400 === 'string' && msg400.trim()) {
+        return msg400;
+      }
       return 'Verifique os dados informados e tente novamente.';
     }
   }

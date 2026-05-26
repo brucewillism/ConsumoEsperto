@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, timeout } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 export interface ImportacaoFaturaItem {
@@ -53,9 +53,10 @@ export class ImportacaoFaturaService {
     );
   }
 
+  /** PDF + extração IA pode levar vários minutos. */
   upload(file: File): Observable<ImportacaoFatura> {
     const form = new FormData();
     form.append('file', file);
-    return this.http.post<ImportacaoFatura>(`${this.base}/upload`, form);
+    return this.http.post<ImportacaoFatura>(`${this.base}/upload`, form).pipe(timeout(300_000));
   }
 }

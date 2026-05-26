@@ -13,6 +13,7 @@ import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.ImportacaoFaturaCartaoRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.util.AiErroHumanizer;
 import com.consumoesperto.util.BancoBrasilCatalog;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbMeta;
@@ -80,8 +81,21 @@ public class FaturaPdfImportService {
 
     @Transactional
     public ImportacaoFaturaDTO processarPdf(Long usuarioId, byte[] pdfBytes) {
-        JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes);
-        return processarExtracao(usuarioId, extracted);
+        if (pdfBytes == null || pdfBytes.length == 0) {
+            throw new IllegalArgumentException("O PDF está vazio ou não foi recebido.");
+        }
+        try {
+            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes);
+            return processarExtracao(usuarioId, extracted);
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            String human = AiErroHumanizer.humanizar(e.getMessage());
+            if (human != null) {
+                throw new IllegalStateException(human);
+            }
+            throw e;
+        }
     }
 
     @Transactional
@@ -93,7 +107,7 @@ public class FaturaPdfImportService {
 
         String banco = firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText(""));
         CartaoCredito cartao = localizarCartao(usuarioId, banco)
-            .orElseThrow(() -> new IllegalArgumentException("Não encontrei um cartão ativo correspondente a: " + banco));
+            .orElseThrow(() -> new IllegalArgumentException(mensagemCartaoNaoEncontrado(usuarioId, banco)));
 
         List<ImportacaoFaturaItemDTO> itens = parseItens(extracted.path("lancamentos"));
         for (ImportacaoFaturaItemDTO item : itens) {
@@ -346,6 +360,22 @@ public class FaturaPdfImportService {
             .map(i -> i.getValor() != null ? i.getValor() : BigDecimal.ZERO)
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String mensagemCartaoNaoEncontrado(Long usuarioId, String banco) {
+        List<CartaoCredito> ativos = cartaoCreditoRepository.findByUsuarioIdAndAtivoTrue(usuarioId);
+        if (ativos.isEmpty()) {
+            return "Não há cartão de crédito ativo. Cadastre um cartão em *Cartões* antes de importar a fatura.";
+        }
+        String ref = banco == null || banco.isBlank() ? "(banco não identificado no PDF)" : banco;
+        String lista = ativos.stream()
+            .map(c -> c.getNome() + " / " + c.getBanco())
+            .distinct()
+            .limit(6)
+            .collect(Collectors.joining("; "));
+        return "Não encontrei cartão ativo correspondente a «" + ref + "». "
+            + "Seus cartões ativos: " + lista + ". "
+            + "Ajuste o nome ou banco do cartão em *Cartões* para coincidir com a fatura.";
     }
 
     private Optional<CartaoCredito> localizarCartao(Long usuarioId, String banco) {

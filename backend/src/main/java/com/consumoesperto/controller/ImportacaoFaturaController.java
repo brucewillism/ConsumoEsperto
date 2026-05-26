@@ -30,9 +30,28 @@ public class ImportacaoFaturaController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ImportacaoFaturaDTO> upload(
         @AuthenticationPrincipal UserPrincipal user,
-        @RequestPart("file") MultipartFile file
+        @RequestPart(value = "file", required = false) MultipartFile filePart,
+        @RequestParam(value = "file", required = false) MultipartFile fileParam
     ) throws java.io.IOException {
+        MultipartFile file = escolherArquivoMultipart(filePart, fileParam);
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Envie um ficheiro PDF no campo «file».");
+        }
+        String nome = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
+        if (!nome.endsWith(".pdf") && !"application/pdf".equalsIgnoreCase(file.getContentType())) {
+            throw new IllegalArgumentException("O ficheiro deve ser um PDF de fatura de cartão.");
+        }
         return ResponseEntity.ok(faturaPdfImportService.processarPdf(user.getId(), file.getBytes()));
+    }
+
+    private static MultipartFile escolherArquivoMultipart(MultipartFile part, MultipartFile param) {
+        if (part != null && !part.isEmpty()) {
+            return part;
+        }
+        if (param != null && !param.isEmpty()) {
+            return param;
+        }
+        return null;
     }
 
     @PostMapping("/{id}/escolha-saldo-anterior")

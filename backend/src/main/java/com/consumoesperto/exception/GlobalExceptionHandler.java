@@ -1,5 +1,6 @@
 package com.consumoesperto.exception;
 
+import com.consumoesperto.util.AiErroHumanizer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
@@ -245,8 +246,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGenericException(Exception ex, WebRequest request) {
-        log.error("Erro não previsto: {}", ex.getMessage(), ex);
         String path = pathFrom(request);
+        String ia = AiErroHumanizer.humanizar(ex.getMessage());
+        if (ia != null) {
+            log.warn("IA indisponível: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ApiError(
+                "AI_UNAVAILABLE",
+                ia,
+                JarvisErrorCopy.AI_UNAVAILABLE_INSTRUCAO,
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                path
+            ));
+        }
+        log.error("Erro não previsto: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiError(
             "internal_server_error",
             JarvisErrorCopy.SERVER_INSTABILITY_MESSAGE,

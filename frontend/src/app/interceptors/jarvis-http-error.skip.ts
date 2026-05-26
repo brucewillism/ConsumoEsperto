@@ -14,6 +14,7 @@ export const JARVIS_HTTP_ERROR_SKIP_PATH_SUBSTRINGS: readonly string[] = [
   '/projecoes',
   '/renda-config',
   '/score',
+  '/importacoes/faturas',
 ];
 
 export function shouldSkipJarvisHttpError(url: string): boolean {
