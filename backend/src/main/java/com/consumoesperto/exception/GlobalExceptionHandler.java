@@ -228,6 +228,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ));
     }
 
+    @ExceptionHandler(AiUnavailableException.class)
+    public ResponseEntity<ApiError> handleAiUnavailable(AiUnavailableException ex, WebRequest request) {
+        log.warn("IA indisponível: {}", ex.getMessage());
+        String path = pathFrom(request);
+        String msg = ex.getMessage() != null && !ex.getMessage().isBlank()
+            ? ex.getMessage()
+            : "O serviço de IA está temporariamente indisponível.";
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ApiError(
+            "AI_UNAVAILABLE",
+            msg,
+            JarvisErrorCopy.AI_UNAVAILABLE_INSTRUCAO,
+            HttpStatus.SERVICE_UNAVAILABLE.value(),
+            path
+        ));
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleIllegalStateException(IllegalStateException ex, WebRequest request) {
         log.warn("Estado ilegal: {}", ex.getMessage());

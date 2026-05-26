@@ -13,6 +13,7 @@ import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.ImportacaoFaturaCartaoRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.exception.AiUnavailableException;
 import com.consumoesperto.util.AiErroHumanizer;
 import com.consumoesperto.util.BancoBrasilCatalog;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
@@ -92,7 +93,7 @@ public class FaturaPdfImportService {
         } catch (RuntimeException e) {
             String human = AiErroHumanizer.humanizar(e.getMessage());
             if (human != null) {
-                throw new IllegalStateException(human);
+                throw new AiUnavailableException(human);
             }
             throw e;
         }

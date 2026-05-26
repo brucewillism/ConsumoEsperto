@@ -40,8 +40,8 @@ public final class JarvisErrorCopy {
         "O estado atual não permite esta operação. Atualize a tela ou tente outro caminho.";
 
     public static final String AI_UNAVAILABLE_INSTRUCAO =
-        "Aguarde cerca de 1–2 horas e tente de novo. Se urgente, envie o PDF pelo WhatsApp quando a IA voltar "
-            + "ou confirme com o administrador a chave GEMINI_API_KEY no servidor.";
+        "No servidor (VPS), adicione GEMINI_API_KEY no ficheiro .env e reinicie o backend: "
+            + "docker compose up -d backend. O Gemini funciona como reserva quando Groq/OpenAI estão no limite.";
 
     private JarvisErrorCopy() {
     }

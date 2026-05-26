@@ -38,10 +38,8 @@ public final class AiErroHumanizer {
             sb.append(" (quota da OpenAI esgotada)");
         }
         sb.append(".");
-        if (raw.contains("Nao foi possivel gerar JSON via IA")) {
-            sb.append(" Tente novamente mais tarde ou peça ao administrador para configurar GEMINI_API_KEY no servidor.");
-        } else if (semGemini && raw.contains("GEMINI_API_KEY")) {
-            sb.append(" Configure GEMINI_API_KEY no servidor para fallback automático.");
+        if (groqLimite) {
+            sb.append(" Tente novamente em cerca de 1–2 horas.");
         }
         return sb.toString();
     }
