@@ -7,10 +7,24 @@
       Vincule o número com o qual envia mensagens ao bot. O mesmo utilizador vê os dados no app e no WhatsApp em tempo real.
     </p>
 
-    <div class="status-box" [class.linked]="!!numeroAtual">
-      <strong>Status:</strong>
-      <span *ngIf="numeroAtual; else semVinculo">Vinculado: {{ numeroAtual }}</span>
-      <ng-template #semVinculo>Sem número vinculado.</ng-template>
+    <div class="status-box" [class.linked]="evolutionWaConnected === true" [class.partial]="numeroAtual && evolutionWaConnected !== true">
+      <strong>Status</strong>
+      <div class="status-lines">
+        <span *ngIf="numeroAtual; else semNumero">
+          Número na app: <strong>{{ numeroAtual }}</strong>
+        </span>
+        <ng-template #semNumero>Sem número cadastrado na app.</ng-template>
+        <span *ngIf="evolutionWaConnected === true" class="status-ok">
+          Sessão WhatsApp (Evolution): <strong>ligada</strong>
+          <span *ngIf="evolutionInstanceName" class="muted"> — {{ evolutionInstanceName }}</span>
+        </span>
+        <span *ngIf="numeroAtual && evolutionWaConnected === false" class="status-warn">
+          Sessão WhatsApp (Evolution): <strong>desligada</strong> — escaneie o QR ao vincular ou use Desvincular.
+        </span>
+        <span *ngIf="evolutionWaConnected === null && numeroAtual" class="status-muted">
+          A verificar ligação com a Evolution…
+        </span>
+      </div>
     </div>
 
     <label for="whatsappNumero">Número WhatsApp (formato internacional)</label>

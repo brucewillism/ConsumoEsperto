@@ -3,7 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 import { RouterLink } from '@angular/router';
-import { UsuarioService, VincularWhatsappResponse } from '../../services/usuario.service';
+import {
+  UsuarioService,
+  VincularWhatsappResponse,
+} from '../../services/usuario.service';
 import { ToastService } from '../../services/toast.service';
 import { Usuario } from '../../models/usuario.model';
 import {
@@ -24,6 +27,9 @@ import { WhatsappParidadeService, WhatsappParityItem } from '../../services/what
 export class WhatsappConfigComponent implements OnInit {
   numeroWhatsapp = '';
   numeroAtual = '';
+  /** Sessão real na Evolution (GET connectionState), distinto do número gravado na BD. */
+  evolutionWaConnected: boolean | null = null;
+  evolutionInstanceName = '';
   carregando = false;
   mensagemCarregamento = 'Carregando…';
 
@@ -95,11 +101,30 @@ export class WhatsappConfigComponent implements OnInit {
         this.numeroAtual = usuario.whatsappNumero || '';
         this.numeroWhatsapp = this.numeroAtual;
         this.carregando = false;
+        this.atualizarStatusEvolution();
       },
       error: () => {
         this.carregando = false;
         this.toastService.error('Não foi possível carregar os dados do utilizador.');
       }
+    });
+  }
+
+  atualizarStatusEvolution(): void {
+    this.usuarioService.getEvolutionWhatsappConnectionStatus().subscribe({
+      next: (st) => {
+        this.evolutionWaConnected = st.connected === true || st.evolutionWaConnected === true;
+        if (st.instanceName) {
+          this.evolutionInstanceName = st.instanceName;
+        }
+        if (st.whatsappNumero && !this.numeroAtual) {
+          this.numeroAtual = st.whatsappNumero;
+          this.numeroWhatsapp = st.whatsappNumero;
+        }
+      },
+      error: () => {
+        this.evolutionWaConnected = null;
+      },
     });
   }
 
@@ -115,14 +140,17 @@ export class WhatsappConfigComponent implements OnInit {
       next: (response: VincularWhatsappResponse) => {
         this.numeroAtual = response?.whatsappNumero || this.numeroWhatsapp.trim();
         this.numeroWhatsapp = this.numeroAtual;
+        const waOk =
+          response?.evolutionWaConnected === true || response?.evolutionAlreadyConnected === true;
+        this.evolutionWaConnected = waOk;
+        if (response?.evolutionInstanceName) {
+          this.evolutionInstanceName = response.evolutionInstanceName;
+        }
         this.carregando = false;
 
-        const baseMsg =
-          response?.message || 'WhatsApp vinculado com sucesso.';
-        this.toastService.success(baseMsg);
+        this.toastService.success(response?.message || 'WhatsApp vinculado com sucesso.');
 
-        const faltaEvolution = !response?.evolutionAlreadyConnected;
-        if (faltaEvolution) {
+        if (!waOk) {
           const dados: WhatsappEvolutionQrDialogData = {
             qrDataUri: response.evolutionQrCodeDataUri ?? null,
             pairingCode: response.evolutionPairingCode ?? null,
@@ -158,8 +186,10 @@ export class WhatsappConfigComponent implements OnInit {
       next: () => {
         this.numeroAtual = '';
         this.numeroWhatsapp = '';
+        this.evolutionWaConnected = false;
+        this.evolutionInstanceName = '';
         this.carregando = false;
-        this.toastService.success('WhatsApp desvinculado com sucesso.');
+        this.toastService.success('WhatsApp desvinculado. Número e sessão Evolution removidos.');
       },
       error: (error) => {
         this.carregando = false;

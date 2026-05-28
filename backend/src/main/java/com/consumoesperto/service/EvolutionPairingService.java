@@ -110,11 +110,15 @@ public class EvolutionPairingService {
 
         Optional<String> preState = fetchConnectionStateRaw(cred);
         if (preState.isPresent() && interpretAsWaConnected(preState.get())) {
+            log.info("Evolution [{}] connectionState={} — sessão WA activa (sem novo QR)", cred.instanceName, preState.get());
             return EvolutionPairingOutcomeDTO.builder()
                 .resolvedInstanceName(cred.instanceName)
                 .alreadyConnected(true)
                 .hasAlternativePairingHints(false)
                 .build();
+        }
+        if (preState.isPresent()) {
+            log.info("Evolution [{}] connectionState={} — sessão não activa; a pedir QR/connect", cred.instanceName, preState.get());
         }
 
         try {
@@ -642,20 +646,29 @@ public class EvolutionPairingService {
     }
 
     /** Tradução permissiva das variantes vistas em Baileys / Evolution docs. */
+    /**
+     * Só estados explícitos de sessão WA activa — evita falso positivo (ex. substring em "connecting")
+     * e alinha com utilizador que desligou o WhatsApp no telemóvel mas a BD ainda tem número.
+     */
     private boolean interpretAsWaConnected(String state) {
         if (state == null || state.isBlank()) {
             return false;
         }
-        String compact = state.trim().toUpperCase(Locale.ROOT);
-        if (compact.contains("DISCONNECT")) {
+        String s = state.trim().toLowerCase(Locale.ROOT);
+        if (s.contains("disconnect")
+            || s.contains("logout")
+            || s.contains("unpair")
+            || s.contains("close")
+            || s.contains("refused")
+            || s.contains("qrcode")
+            || s.equals("pairing")
+            || s.equals("connecting")) {
             return false;
         }
-        if (compact.equals("CLOSE") || compact.equals("CLOSED")) {
-            return false;
-        }
-        return compact.contains("CONNECTED")
-            || compact.equals("OPEN")
-            || compact.equals("SUCCESS");
+        return s.equals("open")
+            || s.equals("connected")
+            || s.equals("success")
+            || s.equals("online");
     }
 
     private static String nodeText(JsonNode node, String field) {

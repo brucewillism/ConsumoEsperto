@@ -196,25 +196,30 @@ public class UsuarioController {
             evolutionInstanceLifecycleService.resetSessionBeforePairing(
                 usuario.getId(), prep.skipLogoutBeforeConnect());
 
+            evolutionPairingService.invalidatePairingCredCache(usuario.getId());
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(usuario.getId());
+            boolean waConnected = evolutionPairingService.isInstanceConnectedForUser(usuario.getId());
 
             boolean temQrOuCodigo = (pairing.getQrCodeDataUri() != null && !pairing.getQrCodeDataUri().isBlank())
                 || (pairing.getPairingCode() != null && !pairing.getPairingCode().isBlank());
-            boolean pareamentoJaOk = pairing.isAlreadyConnected() || temQrOuCodigo;
 
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("status", "success");
-            String message = pairing.isAlreadyConnected()
-                ? "Numero de WhatsApp vinculado. A Evolution ja estava pareada nesta instancia."
-                : pareamentoJaOk
-                    ? "Numero de WhatsApp vinculado com sucesso. Escaneie o QR quando aparecer ou use pairingCode."
-                    : "Numero gravado na app; a Evolution nao devolveu QR pela REST agora "
-                        + "(problema conhecido em algumas versoes v2). Veja QR no Manager da Evolution ou ajuste "
-                        + "EVOLUTION_SERVER_URL e considere atualizar a Evolution API.";
+            body.put("evolutionWaConnected", waConnected);
+            String message;
+            if (waConnected) {
+                message = "Número vinculado. A sessão WhatsApp está ligada à Evolution nesta instância.";
+            } else if (temQrOuCodigo) {
+                message = "Número gravado na app. Escaneie o QR (ou use o código de pareamento) para ligar o WhatsApp — "
+                    + "a sessão Evolution não está activa.";
+            } else {
+                message = "Número gravado na app. O WhatsApp não está ligado à Evolution — use Desvincular e vincule de novo "
+                    + "ou abra o Manager da Evolution para o QR.";
+            }
             body.put("message", message);
             body.put("usuarioId", atualizado.getId());
             body.put("whatsappNumero", atualizado.getWhatsappNumero());
-            aplicarCamposEvolutionPairing(body, pairing);
+            aplicarCamposEvolutionPairing(body, pairing, waConnected);
             prep.getSetupWarning().ifPresent(w -> appendEvolutionSetupWarning(body, w));
 
             return ResponseEntity.ok(body);
@@ -244,10 +249,13 @@ public class UsuarioController {
             // Sem logout aqui: o modal faz polling a cada 5 s e logout repetido impede o QR de aparecer.
             EvolutionInstanceLifecycleService.PrepareInstanceResult prep =
                 evolutionInstanceLifecycleService.prepareInstanceForPairing(uid);
+            evolutionPairingService.invalidatePairingCredCache(uid);
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(uid);
+            boolean waConnected = evolutionPairingService.isInstanceConnectedForUser(uid);
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("status", "success");
-            aplicarCamposEvolutionPairing(body, pairing);
+            body.put("evolutionWaConnected", waConnected);
+            aplicarCamposEvolutionPairing(body, pairing, waConnected);
             prep.getSetupWarning().ifPresent(w -> appendEvolutionSetupWarning(body, w));
             return ResponseEntity.ok(body);
         } catch (Exception e) {
@@ -270,9 +278,11 @@ public class UsuarioController {
         body.put("evolutionWarning", merged);
     }
 
-    private static void aplicarCamposEvolutionPairing(Map<String, Object> body, EvolutionPairingOutcomeDTO pairing) {
+    private static void aplicarCamposEvolutionPairing(
+        Map<String, Object> body, EvolutionPairingOutcomeDTO pairing, boolean waConnected
+    ) {
         body.put("evolutionInstanceName", pairing.getResolvedInstanceName());
-        body.put("evolutionAlreadyConnected", pairing.isAlreadyConnected());
+        body.put("evolutionAlreadyConnected", waConnected);
         body.put("evolutionHasAlternativePairingHints", pairing.isHasAlternativePairingHints());
         if (pairing.getQrCodeDataUri() != null && !pairing.getQrCodeDataUri().isBlank()) {
             body.put("evolutionQrCodeDataUri", pairing.getQrCodeDataUri());
@@ -342,9 +352,14 @@ public class UsuarioController {
             ));
         }
         Long usuarioId = usuarioOpt.get().getId();
+        evolutionPairingService.invalidatePairingCredCache(usuarioId);
         boolean connected = evolutionPairingService.isInstanceConnectedForUser(usuarioId);
+        String numero = usuarioOpt.get().getWhatsappNumero();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("connected", connected);
+        body.put("evolutionWaConnected", connected);
+        body.put("numeroCadastrado", numero != null && !numero.isBlank());
+        body.put("whatsappNumero", numero != null ? numero : "");
         body.put("instanceName", evolutionPairingService.resolvedInstanceDisplayName(usuarioId));
         return ResponseEntity.ok(body);
     }
@@ -364,10 +379,13 @@ public class UsuarioController {
             evolutionInstanceLifecycleService.releaseInstanceOnUnlink(usuario.getId());
             whatsAppUserMappingService.unlinkWhatsAppNumber(usuario.getId());
 
-            return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "message", "Numero de WhatsApp desvinculado com sucesso"
-            ));
+            evolutionPairingService.invalidatePairingCredCache(usuario.getId());
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("status", "success");
+            out.put("message", "Número removido da app e sessão Evolution encerrada. Pode vincular de novo com QR.");
+            out.put("evolutionWaConnected", false);
+            out.put("numeroCadastrado", false);
+            return ResponseEntity.ok(out);
         } catch (Exception e) {
             log.error("Erro ao desvincular WhatsApp: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of(

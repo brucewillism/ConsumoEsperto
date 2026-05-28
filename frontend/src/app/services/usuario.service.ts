@@ -12,6 +12,8 @@ export interface VincularWhatsappResponse {
   usuarioId?: number;
   evolutionInstanceName?: string;
   evolutionAlreadyConnected?: boolean;
+  /** Sessão WhatsApp realmente ligada à Evolution (connectionState), não só número na BD. */
+  evolutionWaConnected?: boolean;
   evolutionQrCodeDataUri?: string | null;
   evolutionPairingCode?: string | null;
   evolutionWarning?: string | null;
@@ -34,6 +36,9 @@ export type EvolutionPairingRefreshResponse = Pick<
 /** GET /usuarios/whatsapp/evolution-connection-status */
 export interface EvolutionWhatsappConnectionStatusDTO {
   connected: boolean;
+  evolutionWaConnected?: boolean;
+  numeroCadastrado?: boolean;
+  whatsappNumero?: string;
   instanceName?: string;
 }
 
