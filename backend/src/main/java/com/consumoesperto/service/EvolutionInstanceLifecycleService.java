@@ -118,19 +118,54 @@ public class EvolutionInstanceLifecycleService {
      */
     public PrepareInstanceResult prepareInstanceForPairing(Long usuarioId) {
         AssignResult assign = assignInstanceNameTransactional(usuarioId);
+        String instanceName = rotateGhostOpenInstanceIfNeeded(usuarioId, assign.instanceName());
+        boolean nameRotated = !instanceName.equals(assign.instanceName());
         if (!apiConfigured()) {
-            log.warn("Evolution não configurada — instância {} não criada na API", assign.instanceName());
+            log.warn("Evolution não configurada — instância {} não criada na API", instanceName);
             evolutionPairingService.invalidatePairingCredCache(usuarioId);
             return new PrepareInstanceResult(
-                assign.instanceName(),
+                instanceName,
                 true,
                 Optional.of("Evolution API não configurada (evolution.url / evolution.apikey)")
             );
         }
-        EnsureInstanceOutcome ensure = ensureEvolutionInstanceReady(assign.instanceName());
-        boolean skipLogout = assign.newlyAssignedDedicated() || ensure.freshInstance();
+        EnsureInstanceOutcome ensure = ensureEvolutionInstanceReady(instanceName);
+        boolean skipLogout = assign.newlyAssignedDedicated() || nameRotated || ensure.freshInstance();
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
-        return new PrepareInstanceResult(assign.instanceName(), skipLogout, ensure.warning());
+        return new PrepareInstanceResult(instanceName, skipLogout, ensure.warning());
+    }
+
+    /**
+     * Instância com {@code connectionState=open} mas {@code fetchInstances.connectionStatus=close}
+     * não gera QR — apaga ou renomeia (ex. ce-u1 → ce-u1-r1716910000).
+     */
+    @Transactional
+    protected String rotateGhostOpenInstanceIfNeeded(Long usuarioId, String instanceName) {
+        if (!apiConfigured() || usuarioId == null || instanceName == null || instanceName.isBlank()) {
+            return instanceName;
+        }
+        evolutionPairingService.invalidatePairingCredCache(usuarioId);
+        EvolutionPairingService.ResolvedEvolutionCred cred = evolutionPairingService.resolveCredentials(usuarioId);
+        if (!evolutionPairingService.isGhostOpenStaleInstance(cred)) {
+            return instanceName;
+        }
+        log.warn("Evolution instância {} em estado fantasma (open/close) — a recuperar para QR", instanceName);
+        logoutInstanceQuietly(instanceName);
+        boolean deleted = deleteInstance(instanceName);
+        String target = instanceName;
+        if (!deleted) {
+            String base = instanceName.replaceAll("-r\\d+$", "");
+            target = base + "-r" + (System.currentTimeMillis() / 1000L);
+            UsuarioAiConfig cfg = usuarioAiConfigRepository.findByUsuarioId(usuarioId)
+                .orElseGet(() -> newConfigFor(usuarioId));
+            cfg.setEvolutionInstanceName(target);
+            usuarioAiConfigRepository.save(cfg);
+            log.info("Evolution: utilizador {} migrado para instância {}", usuarioId, target);
+        }
+        recreateInstanceForQrPairing(target);
+        evolutionPairingService.invalidatePairingCredCache(usuarioId);
+        evolutionWaSessionRegistry.markInstanceRecreateDone(usuarioId);
+        return target;
     }
 
     /**

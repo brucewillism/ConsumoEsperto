@@ -183,22 +183,18 @@ public class EvolutionPairingService {
         }
 
         boolean sessionSuppressed = evolutionWaSessionRegistry.isUserDisconnected(usuarioId);
-        Optional<String> preState = fetchConnectionStateRaw(cred);
-        if (preState.isPresent() && interpretAsWaConnected(preState.get()) && !sessionSuppressed) {
-            log.info("Evolution [{}] connectionState={} — sessão WA activa (sem novo QR)", cred.instanceName, preState.get());
+        if (!sessionSuppressed && isRealWaSessionOpen(cred)) {
+            log.info("Evolution [{}] sessão WA activa (sem novo QR)", cred.instanceName);
             return EvolutionPairingOutcomeDTO.builder()
                 .resolvedInstanceName(cred.instanceName)
                 .alreadyConnected(true)
                 .hasAlternativePairingHints(false)
                 .build();
         }
-        if (sessionSuppressed && preState.isPresent() && interpretAsWaConnected(preState.get())) {
+        if (sessionSuppressed || isGhostOpenStaleInstance(cred)) {
             log.info(
-                "Evolution [{}] connectionState={} ignorado (utilizador desligou na app) — a pedir QR",
-                cred.instanceName, preState.get());
-        }
-        if (preState.isPresent()) {
-            log.info("Evolution [{}] connectionState={} — sessão não activa; a pedir QR/connect", cred.instanceName, preState.get());
+                "Evolution [{}] a pedir QR (suppressed={} ghostOpen={})",
+                cred.instanceName, sessionSuppressed, isGhostOpenStaleInstance(cred));
         }
 
         try {
@@ -268,9 +264,82 @@ public class EvolutionPairingService {
         if (evolutionWaSessionRegistry.isUserDisconnected(usuarioId)) {
             return false;
         }
-        return fetchConnectionStateForUser(usuarioId)
-            .filter(this::interpretAsWaConnected)
-            .isPresent();
+        ResolvedEvolutionCred cred = pairingCredSnapshot(usuarioId).cred;
+        return isRealWaSessionOpen(cred);
+    }
+
+    /**
+     * {@code fetchInstances.connectionStatus} é mais fiável que {@code /connectionState}
+     * quando a instância ficou em «open» fantasma após logout (ex. ce-u1).
+     */
+    @Transactional(readOnly = true)
+    public boolean isRealWaSessionOpen(ResolvedEvolutionCred cred) {
+        if (cred == null || cred.instanceName == null || cred.instanceName.isBlank()) {
+            return false;
+        }
+        Optional<String> listed = fetchInstancesConnectionStatus(cred.instanceName);
+        if (listed.isPresent()) {
+            if (isListedAsDisconnected(listed.get())) {
+                return false;
+            }
+            if ("open".equalsIgnoreCase(listed.get().trim())) {
+                return true;
+            }
+        }
+        return fetchConnectionStateRaw(cred).filter(this::interpretAsWaConnected).isPresent();
+    }
+
+    public boolean isGhostOpenStaleInstance(ResolvedEvolutionCred cred) {
+        if (cred == null || cred.instanceName == null || cred.instanceName.isBlank()) {
+            return false;
+        }
+        Optional<String> listed = fetchInstancesConnectionStatus(cred.instanceName);
+        if (listed.isEmpty() || !isListedAsDisconnected(listed.get())) {
+            return false;
+        }
+        return fetchConnectionStateRaw(cred).filter(this::interpretAsWaConnected).isPresent();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<String> fetchInstancesConnectionStatus(String instanceName) {
+        if (evolutionUrl == null || evolutionUrl.isBlank()
+            || evolutionApiKey == null || evolutionApiKey.isBlank()
+            || instanceName == null || instanceName.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/fetchInstances");
+            String body = evolutionGet(url, evolutionApiKey.trim());
+            if (body == null || body.isBlank()) {
+                return Optional.empty();
+            }
+            JsonNode root = objectMapper.readTree(body);
+            if (!root.isArray()) {
+                return Optional.empty();
+            }
+            for (JsonNode item : root) {
+                if (item != null && instanceName.equals(item.path("name").asText("").trim())) {
+                    String st = item.path("connectionStatus").asText("").trim();
+                    return st.isBlank() ? Optional.empty() : Optional.of(st);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("fetchInstances connectionStatus [{}]: {}", instanceName, e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isListedAsDisconnected(String connectionStatus) {
+        if (connectionStatus == null || connectionStatus.isBlank()) {
+            return true;
+        }
+        String s = connectionStatus.trim().toLowerCase(Locale.ROOT);
+        return s.equals("close")
+            || s.equals("closed")
+            || s.equals("disconnected")
+            || s.equals("disconnect")
+            || s.equals("refused")
+            || s.equals("logout");
     }
 
     public void markWaSessionDisconnectedByUser(Long usuarioId) {
@@ -473,11 +542,19 @@ public class EvolutionPairingService {
             }
         }
         if (stAfter.isPresent() && interpretAsWaConnected(stAfter.get()) && !sessionSuppressed) {
-            return EvolutionPairingOutcomeDTO.builder()
-                .resolvedInstanceName(instanceName)
-                .alreadyConnected(true)
-                .hasAlternativePairingHints(false)
-                .build();
+            Optional<String> listed = fetchInstancesConnectionStatus(instanceName);
+            boolean ghostOpen = listed.filter(EvolutionPairingService::isListedAsDisconnected).isPresent();
+            if (ghostOpen && !lastAttempt) {
+                log.debug("Evolution [{}] connect open mas fetchInstances=close — nova tentativa", instanceName);
+                return null;
+            }
+            if (!ghostOpen) {
+                return EvolutionPairingOutcomeDTO.builder()
+                    .resolvedInstanceName(instanceName)
+                    .alreadyConnected(true)
+                    .hasAlternativePairingHints(false)
+                    .build();
+            }
         }
 
         String pairing = "";

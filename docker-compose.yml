@@ -129,7 +129,7 @@ services:
     environment:
      # URL publica onde a Evolution e alcancavel (ex.: https://dominio:8585 ou https://dominio/evolution).
      # NUNCA use a URL do frontend (APP_FRONTEND_BASE_URL) — /instance/connect devolve {"count":0} sem QR.
-     - SERVER_URL=${EVOLUTION_SERVER_URL:-http://127.0.0.1:8585}
+     - SERVER_URL=${EVOLUTION_SERVER_URL:-${EVOLUTION_PUBLISH:-http://127.0.0.1:8585}}
      - SERVER_PORT=8585
      - QRCODE_LIMIT=30
      - QRCODE_COLOR=#198754
