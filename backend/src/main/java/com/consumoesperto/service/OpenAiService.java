@@ -37,6 +37,7 @@ public class OpenAiService {
     private final AiProvidersConfigService aiProvidersConfigService;
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
+    private final TokenSuppressorService tokenSuppressorService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${consumoesperto.ai.platform-gemini-api-key:}")
@@ -299,15 +300,46 @@ public class OpenAiService {
 
     private JsonNode gerarJsonInternal(Long userId, String systemPrompt, String userPrompt, boolean documento) {
         AiProvidersConfig cfg = cfgForAi(userId);
+        String targetModel = resolveTargetModelForSuppressor(cfg, documento);
+        String sys = systemPrompt;
+        String usr = userPrompt;
+        if (tokenSuppressorService.isEnabled()) {
+            Optional<TokenSuppressorService.OptimizedPrompt> opt =
+                tokenSuppressorService.tryOptimize(userId, sys, usr, targetModel);
+            if (opt.isPresent()) {
+                sys = opt.get().systemPrompt();
+                usr = opt.get().userPrompt();
+            }
+        }
+        final String systemFinal = sys;
+        final String userFinal = usr;
         return executeAIRequestWithFallback(
             cfg,
             p -> canChatJson(cfg, p),
             (p, c) -> {
                 String model = documento ? chatModelForDocument(p, c) : chatModelFor(p, c);
-                return parseChatJsonForProvider(p, c, model, systemPrompt, userPrompt);
+                return parseChatJsonForProvider(p, c, model, systemFinal, userFinal);
             },
             "Nao foi possivel gerar JSON via IA. Detalhes: "
         );
+    }
+
+    private String resolveTargetModelForSuppressor(AiProvidersConfig cfg, boolean documento) {
+        if (platformGeminiApiKey != null && !platformGeminiApiKey.isBlank()) {
+            return geminiModel != null && !geminiModel.isBlank() ? geminiModel : "gemini-2.5-flash";
+        }
+        GroqSection g = cfg.getGroq();
+        if (g != null) {
+            String m = documento ? groqModelDocument : g.getModelText();
+            if (m != null && !m.isBlank()) {
+                return m;
+            }
+        }
+        OpenaiSection o = cfg.getOpenai();
+        if (o != null && o.getModel() != null && !o.getModel().isBlank()) {
+            return o.getModel();
+        }
+        return "gemini-2.5-flash";
     }
 
     private String chatModelForDocument(AiProviderType p, AiProvidersConfig cfg) {
