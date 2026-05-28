@@ -53,6 +53,19 @@ public class TokenSuppressorService {
      * Otimiza system + user; em falha ou prompt curto devolve vazio (caller usa texto original).
      */
     public Optional<OptimizedPrompt> tryOptimize(Long userId, String systemPrompt, String userPrompt, String targetModel) {
+        return tryOptimize(userId, systemPrompt, userPrompt, targetModel, null);
+    }
+
+    /**
+     * @param strategyOverride estratégia ATS (fast, balanced, code-focused, ultra); null usa config global.
+     */
+    public Optional<OptimizedPrompt> tryOptimize(
+        Long userId,
+        String systemPrompt,
+        String userPrompt,
+        String targetModel,
+        String strategyOverride
+    ) {
         if (!isEnabled()) {
             return Optional.empty();
         }
@@ -79,7 +92,10 @@ public class TokenSuppressorService {
             u.put("role", "user");
             u.put("content", usr.isBlank() ? "." : usr);
 
-            body.put("strategy", strategy != null && !strategy.isBlank() ? strategy : "balanced");
+            String effectiveStrategy = strategyOverride != null && !strategyOverride.isBlank()
+                ? strategyOverride.trim()
+                : (strategy != null && !strategy.isBlank() ? strategy : "balanced");
+            body.put("strategy", effectiveStrategy);
             body.put("user_id", userId != null ? "consumoesperto-" + userId : "consumoesperto");
             body.put("target_model", targetModel != null && !targetModel.isBlank() ? targetModel : "gemini-2.5-flash");
             body.put("use_memory", false);

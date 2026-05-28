@@ -2,6 +2,8 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.ai.AiGatewayPromptContext;
+import com.consumoesperto.service.ai.AiGatewayService;
 import com.consumoesperto.util.AiProviderOrder;
 import com.consumoesperto.service.AiProvidersConfigService.AiProvidersConfig;
 import com.consumoesperto.service.AiProvidersConfigService.GroqSection;
@@ -39,7 +41,7 @@ public class OpenAiService {
     private final AiProvidersConfigService aiProvidersConfigService;
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
-    private final TokenSuppressorService tokenSuppressorService;
+    private final AiGatewayService aiGatewayService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${consumoesperto.ai.platform-gemini-api-key:}")
@@ -235,12 +237,13 @@ public class OpenAiService {
             + ". Total de despesas confirmadas no mês: " + totalDespesasMes.stripTrailingZeros().toPlainString() + ".";
 
         try {
+            PromptPar otimizado = aplicarSuppressorAntesDaIa(userId, systemPrompt, userPrompt, cfg, false);
             String linha = executeAIRequestWithFallback(
                 cfg,
                 p -> canChatJson(cfg, p),
                 (p, c) -> {
                     String model = chatModelFor(p, c);
-                    JsonNode j = parseChatJsonForProvider(p, c, model, systemPrompt, userPrompt);
+                    JsonNode j = parseChatJsonForProvider(p, c, model, otimizado.system(), otimizado.user());
                     return j.path("insight").asText("").trim();
                 },
                 "Insight relatório: "
@@ -296,13 +299,24 @@ public class OpenAiService {
             "cnpj (string, se visível), confianca (0 a 1), erro (string opcional). " +
             "Se não for possível ler com segurança, retorne erro preenchido e confianca baixa.";
 
+        AiGatewayService.GatewayOptimizationResult visionOpt = aiGatewayService.optimizeBeforeProvider(
+            userId,
+            systemPrompt,
+            userPrompt,
+            AiGatewayPromptContext.fromPrompts(systemPrompt, userPrompt, false, true),
+            resolveTargetModelForSuppressor(cfg, false)
+        );
+        final String visionSys = visionOpt.systemPrompt();
+        final String visionUsr = visionOpt.userPrompt();
+
         JsonNode out = executeAIRequestWithFallback(
             cfg,
             p -> canVision(cfg, p),
             (p, c) -> {
                 String model = visionModelFor(p, c);
                 log.info("[VISION-LOG] Provedor={} modelo={} userId={}", p.name(), model, userId);
-                return parseVisionOpenAiCompatible(p.name(), apiKeyFor(p, c), baseUrlFor(p, c), model, systemPrompt, userPrompt, imageSource);
+                return parseVisionOpenAiCompatible(
+                    p.name(), apiKeyFor(p, c), baseUrlFor(p, c), model, visionSys, visionUsr, imageSource);
             },
             "Falha OCR em todos provedores (Groq/OpenAI/Ollama): "
         );
@@ -335,23 +349,26 @@ public class OpenAiService {
         );
     }
 
-    /** Token Suppressor primeiro; depois fallback Groq → OpenAI → Claude → Gemini → DeepSeek → Ollama. */
+    /** AI Gateway (ATS + estratégia AUTO) antes do fallback de providers. */
     private PromptPar aplicarSuppressorAntesDaIa(
         Long userId, String systemPrompt, String userPrompt, AiProvidersConfig cfg, boolean documento
     ) {
         String sys = systemPrompt != null ? systemPrompt : "";
         String usr = userPrompt != null ? userPrompt : "";
-        if (!tokenSuppressorService.isEnabled()) {
-            return new PromptPar(sys, usr);
+        AiGatewayPromptContext ctx = AiGatewayPromptContext.builder()
+            .systemPrompt(sys)
+            .userPrompt(usr)
+            .documentImport(documento)
+            .jsonOutput(true)
+            .build();
+        AiGatewayService.GatewayOptimizationResult opt = aiGatewayService.optimizeBeforeProvider(
+            userId, sys, usr, ctx, resolveTargetModelForSuppressor(cfg, documento));
+        if (opt.optimizedByAts()) {
+            log.info(
+                "[AiGateway] strategy={} saved~{} cache={}",
+                opt.strategyUsed(), opt.tokensSaved(), opt.fromCache());
         }
-        String targetModel = resolveTargetModelForSuppressor(cfg, documento);
-        Optional<TokenSuppressorService.OptimizedPrompt> opt =
-            tokenSuppressorService.tryOptimize(userId, sys, usr, targetModel);
-        if (opt.isPresent()) {
-            log.info("[TokenSuppressor] prompt otimizado antes da IA (saved~{} tokens)", opt.get().tokensSaved());
-            return new PromptPar(opt.get().systemPrompt(), opt.get().userPrompt());
-        }
-        return new PromptPar(sys, usr);
+        return new PromptPar(opt.systemPrompt(), opt.userPrompt());
     }
 
     private record PromptPar(String system, String user) {}
