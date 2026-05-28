@@ -286,7 +286,7 @@ public class UsuarioController {
         body.put("evolutionWarning", merged);
     }
 
-    private static void aplicarCamposEvolutionPairing(
+    private void aplicarCamposEvolutionPairing(
         Map<String, Object> body, EvolutionPairingOutcomeDTO pairing, boolean waConnected
     ) {
         body.put("evolutionInstanceName", pairing.getResolvedInstanceName());
@@ -300,6 +300,10 @@ public class UsuarioController {
         }
         if (pairing.getEvolutionWarning() != null && !pairing.getEvolutionWarning().isBlank()) {
             body.put("evolutionWarning", pairing.getEvolutionWarning());
+        }
+        String mgr = evolutionPairingService.getManagerUrlForInstance(pairing.getResolvedInstanceName());
+        if (mgr != null && !mgr.isBlank()) {
+            body.put("evolutionManagerUrl", mgr);
         }
     }
 

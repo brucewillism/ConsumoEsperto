@@ -81,7 +81,30 @@ public class EvolutionPairingService {
     @Value("${evolution.pairing.log-weak-response:false}")
     private boolean logWeakEvolutionResponses;
 
+    @Value("${consumoesperto.evolution.public-url:}")
+    private String evolutionPublicUrl;
+
+    @Value("${consumoesperto.evolution.manager-url:http://127.0.0.1:8585/manager}")
+    private String evolutionManagerUrl;
+
     private final ConcurrentHashMap<Long, PairingCredCacheEntry> pairingCredCache = new ConcurrentHashMap<>();
+
+    /** QR devolvido em POST /instance/create (TTL curto). */
+    private final ConcurrentHashMap<String, CachedInstancePairing> recentPairingByInstance = new ConcurrentHashMap<>();
+
+    private static final class CachedInstancePairing {
+        final EvolutionPairingOutcomeDTO outcome;
+        final long expiresAtMs;
+
+        CachedInstancePairing(EvolutionPairingOutcomeDTO outcome, long expiresAtMs) {
+            this.outcome = outcome;
+            this.expiresAtMs = expiresAtMs;
+        }
+
+        boolean fresh() {
+            return System.currentTimeMillis() < expiresAtMs;
+        }
+    }
 
     /** Invalida cache de credenciais após mudança de instância Evolution (vínculo/desvínculo). */
     public void invalidatePairingCredCache(Long usuarioId) {
@@ -100,6 +123,51 @@ public class EvolutionPairingService {
     /**
      * Chama Evolution {@code GET /instance/connect/:instance}, para exibir QR no cliente.
      */
+    /** URL do Manager Evolution (painel web) para fallback quando REST não devolve QR. */
+    public String getManagerUrlForInstance(String instanceName) {
+        if (instanceName == null || instanceName.isBlank()) {
+            return "";
+        }
+        String base = evolutionManagerUrl != null ? evolutionManagerUrl.trim() : "";
+        if (base.isBlank()) {
+            return "";
+        }
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base;
+    }
+
+    /**
+     * Guarda QR/código devolvido em POST /instance/create ou connect (TTL ~2 min).
+     */
+    public void ingestPairingJsonFromCreateOrConnect(String instanceName, String jsonBody) {
+        if (instanceName == null || instanceName.isBlank() || jsonBody == null || jsonBody.isBlank()) {
+            return;
+        }
+        try {
+            JsonNode root = unwrapTopLevelEvolutionEnvelope(objectMapper.readTree(jsonBody));
+            EvolutionPairingOutcomeDTO parsed = processConnectBody(root, instanceName, true, true);
+            if (parsed != null && hasUsablePairingMaterial(parsed)) {
+                recentPairingByInstance.put(
+                    instanceName,
+                    new CachedInstancePairing(parsed, System.currentTimeMillis() + 120_000L)
+                );
+                log.info("Evolution [{}] QR/código em cache a partir de create/connect", instanceName);
+            }
+        } catch (Exception e) {
+            log.debug("Evolution ingest pairing JSON [{}]: {}", instanceName, e.getMessage());
+        }
+    }
+
+    private static boolean hasUsablePairingMaterial(EvolutionPairingOutcomeDTO o) {
+        if (o == null || o.isAlreadyConnected()) {
+            return false;
+        }
+        return (o.getQrCodeDataUri() != null && !o.getQrCodeDataUri().isBlank())
+            || (o.getPairingCode() != null && !o.getPairingCode().isBlank());
+    }
+
     @Transactional(readOnly = true)
     public EvolutionPairingOutcomeDTO invokeInstanceConnect(Long usuarioId) {
         PairingCredCacheEntry cached = pairingCredSnapshot(usuarioId);
@@ -107,6 +175,11 @@ public class EvolutionPairingService {
         if (cred.apiKeyHeader.isBlank()
             || evolutionUrl == null || evolutionUrl.isBlank()) {
             return warnOnly(cred.instanceName, "Evolution API não configurada (evolution.url / evolution.apikey)");
+        }
+
+        CachedInstancePairing cachedQr = recentPairingByInstance.get(cred.instanceName);
+        if (cachedQr != null && cachedQr.fresh() && hasUsablePairingMaterial(cachedQr.outcome)) {
+            return cachedQr.outcome;
         }
 
         boolean sessionSuppressed = evolutionWaSessionRegistry.isUserDisconnected(usuarioId);
@@ -138,18 +211,27 @@ public class EvolutionPairingService {
             for (int attempt = 0; attempt < retries; attempt++) {
                 boolean lastAttempt = attempt == retries - 1;
                 String body = evolutionGet(url, cred.apiKeyHeader);
-                if (body == null || body.isBlank()) {
+                EvolutionPairingOutcomeDTO outcome = parseConnectHttpBody(
+                    body, cred.instanceName, lastAttempt, sessionSuppressed);
+                if (outcome == null && !lastAttempt) {
+                    String postBody = evolutionPostConnect(url, cred.apiKeyHeader);
+                    outcome = parseConnectHttpBody(
+                        postBody, cred.instanceName, lastAttempt, sessionSuppressed);
+                }
+                if (outcome == null && (body == null || body.isBlank())) {
                     if (lastAttempt) {
-                        return warnOnly(cred.instanceName, "Resposta vazia de /instance/connect");
+                        return warnOnly(cred.instanceName, "Resposta vazia de /instance/connect" + pairingServerUrlHint());
                     }
                     pauseMillis(safePause());
                     continue;
                 }
-
-                JsonNode root = unwrapTopLevelEvolutionEnvelope(objectMapper.readTree(body));
-                EvolutionPairingOutcomeDTO outcome = processConnectBody(
-                    root, cred.instanceName, lastAttempt, sessionSuppressed);
                 if (outcome != null) {
+                    if (hasUsablePairingMaterial(outcome)) {
+                        recentPairingByInstance.put(
+                            cred.instanceName,
+                            new CachedInstancePairing(outcome, System.currentTimeMillis() + 120_000L)
+                        );
+                    }
                     maybeLogWeakPairingResponse(cred.instanceName, attempt, retries, body, outcome);
                     return outcome;
                 }
@@ -162,7 +244,13 @@ public class EvolutionPairingService {
             }
             return warnOnly(
                 cred.instanceName,
-                "Não foi possível obter o QR pela REST da Evolution após várias tentativas. Veja o Manager ou o websocket da Evolution.");
+                "Não foi possível obter o QR pela REST da Evolution após várias tentativas. "
+                    + "Abra o Manager da Evolution"
+                    + (getManagerUrlForInstance(cred.instanceName).isBlank()
+                        ? ""
+                        : " (" + getManagerUrlForInstance(cred.instanceName) + ")")
+                    + " ou corrija EVOLUTION_SERVER_URL."
+                    + pairingServerUrlHint());
 
         } catch (HttpClientErrorException | HttpServerErrorException e) {
             String msg = summarizeHttpError(e.getRawStatusCode(),
@@ -300,18 +388,57 @@ public class EvolutionPairingService {
     }
 
     private String evolutionGet(String url, String apiKey) {
+        return evolutionHttp(url, apiKey, HttpMethod.GET);
+    }
+
+    private String evolutionPostConnect(String url, String apiKey) {
+        return evolutionHttp(url, apiKey, HttpMethod.POST);
+    }
+
+    private String evolutionHttp(String url, String apiKey, HttpMethod method) {
         if (url == null || url.isBlank()) {
             return null;
         }
-        HttpHeaders headers = new HttpHeaders();
-        if (apiKey != null && !apiKey.isBlank()) {
-            headers.set("apikey", apiKey.trim());
-            /* Alguns deployments EvoAPI tratam Bearer em conjunto ou em alternativa ao header apikey. */
-            headers.setBearerAuth(apiKey.trim());
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            if (apiKey != null && !apiKey.isBlank()) {
+                headers.set("apikey", apiKey.trim());
+                headers.setBearerAuth(apiKey.trim());
+            }
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> resp = restTemplate.exchange(url, method, entity, String.class);
+            return resp.getBody();
+        } catch (HttpClientErrorException | HttpServerErrorException e) {
+            log.debug("Evolution {} {}: HTTP {}", method, url, e.getRawStatusCode());
+            return e.getResponseBodyAsString();
+        } catch (Exception ex) {
+            log.debug("Evolution {} {}: {}", method, url, ex.getMessage());
+            return null;
         }
-        HttpEntity<Void> entity = new HttpEntity<>(headers);
-        ResponseEntity<String> resp = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-        return resp.getBody();
+    }
+
+    private EvolutionPairingOutcomeDTO parseConnectHttpBody(
+        String body, String instanceName, boolean lastAttempt, boolean sessionSuppressed
+    ) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode root = unwrapTopLevelEvolutionEnvelope(objectMapper.readTree(body));
+            return processConnectBody(root, instanceName, lastAttempt, sessionSuppressed);
+        } catch (Exception e) {
+            log.debug("Evolution parse connect [{}]: {}", instanceName, e.getMessage());
+            return lastAttempt ? warnOnly(instanceName, "JSON inválido da Evolution: " + e.getMessage()) : null;
+        }
+    }
+
+    private String pairingServerUrlHint() {
+        String pub = evolutionPublicUrl != null ? evolutionPublicUrl.trim() : "";
+        if (pub.isBlank()) {
+            return " Defina EVOLUTION_SERVER_URL no .env (URL pública da Evolution, ex. https://dominio:8585) "
+                + "e reinicie o contentor evolution_api.";
+        }
+        return " Confira EVOLUTION_SERVER_URL=" + pub + " no contentor evolution_api (deve ser a URL da Evolution, não do frontend).";
     }
 
     /**
@@ -327,6 +454,12 @@ public class EvolutionPairingService {
         if (isEvolutionJsonError(root)) {
             String msg = firstNonBlank(nodeText(root, "message"));
             return warnOnly(instanceName, msg.isBlank() ? "Evolution devolveu erro" : msg);
+        }
+
+        JsonNode countNode = root.get("count");
+        if (countNode != null && countNode.isNumber() && countNode.asInt() == 0 && !lastAttempt) {
+            log.debug("Evolution [{}] connect count=0 — nova tentativa (SERVER_URL / sessão)", instanceName);
+            return null;
         }
 
         List<JsonNode> layers = collectConnectLayers(root);
@@ -383,10 +516,18 @@ public class EvolutionPairingService {
             return null;
         }
 
+        boolean countZero = countNode != null && countNode.isNumber() && countNode.asInt() == 0;
         String warn = connectCode.isPresent()
             ? "Evolution não devolveu PNG base64 nem pairingCode utilizável pela REST neste momento "
                 + "(o código interno WhatsApp existe mas não pode ser convertido a QR pelo servidor). Veja o Manager ou websocket."
-            : "Evolution não devolveu dados de pairing por REST após tentativas repetidas — veja QR no Manager da Evolution.";
+            : countZero
+                ? "Evolution respondeu {count:0} sem QR — quase sempre EVOLUTION_SERVER_URL incorrecto no contentor evolution_api."
+                : "Evolution não devolveu dados de pairing por REST após tentativas repetidas — veja QR no Manager da Evolution.";
+        warn += pairingServerUrlHint();
+        String mgr = getManagerUrlForInstance(instanceName);
+        if (!mgr.isBlank()) {
+            warn += " Manager: " + mgr;
+        }
         return EvolutionPairingOutcomeDTO.builder()
             .resolvedInstanceName(instanceName)
             .alreadyConnected(false)

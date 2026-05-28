@@ -64,6 +64,9 @@ services:
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
       EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-ConsumoEsperto}
       EVOLUTION_DEDICATED_INSTANCE_PER_USER: ${EVOLUTION_DEDICATED_INSTANCE_PER_USER:-true}
+      # URL pública da Evolution (não do frontend) — usada em avisos de QR e Manager
+      EVOLUTION_SERVER_URL: ${EVOLUTION_SERVER_URL:-}
+      EVOLUTION_MANAGER_URL: ${EVOLUTION_MANAGER_URL:-}
 
       APP_FRONTEND_BASE_URL: ${APP_FRONTEND_BASE_URL:-https://consumoesperto.brucew07.com.br}
       CORS_ALLOWED_PATTERNS: ${CORS_ALLOWED_PATTERNS:-http://localhost:8181,http://127.0.0.1:8181,https://consumoesperto.brucew07.com.br}
@@ -124,10 +127,15 @@ services:
     ports:
       - "8585:8585"
     environment:
-     # URL publica onde a Evolution e alcancavel (HTTPS ou host:8585 sem proxy incorrecto).
-     # Sem isto REST /instance/connect costuma responder {"count":0} mesmo com QR no Manager.
-     - SERVER_URL=${EVOLUTION_SERVER_URL:-${APP_FRONTEND_BASE_URL:-http://localhost:8585}}
+     # URL publica onde a Evolution e alcancavel (ex.: https://dominio:8585 ou https://dominio/evolution).
+     # NUNCA use a URL do frontend (APP_FRONTEND_BASE_URL) — /instance/connect devolve {"count":0} sem QR.
+     - SERVER_URL=${EVOLUTION_SERVER_URL:-http://127.0.0.1:8585}
      - SERVER_PORT=8585
+     - QRCODE_LIMIT=30
+     - QRCODE_COLOR=#198754
+     - CONFIG_SESSION_PHONE_VERSION=2.3000.1030831524
+     - CONFIG_SESSION_PHONE_CLIENT=Chrome
+     - CONFIG_SESSION_PHONE_NAME=Chrome
      - DATABASE_PROVIDER=postgresql
      # Atenção: caracteres especiais na password Postgres (@ : / #) devem estar URL-encoded no URI ou o contentor pode cair durante arranque.
      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER:-consumo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-consumo_db}?sslmode=disable

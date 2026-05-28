@@ -20,6 +20,7 @@ export interface VincularWhatsappResponse {
   evolutionHasAlternativePairingHints?: boolean;
   /** Utilizador pediu «Desligar» — a Evolution pode ainda reportar open em cache. */
   sessionMarkedDisconnected?: boolean;
+  evolutionManagerUrl?: string;
 }
 
 /** POST /usuarios/whatsapp/evolution-pairing-refresh — mesmo formato de campos Evolution que vincular (sem dados de perfil). */
@@ -35,6 +36,7 @@ export type EvolutionPairingRefreshResponse = Pick<
   status?: string;
   evolutionWaConnected?: boolean;
   sessionMarkedDisconnected?: boolean;
+  evolutionManagerUrl?: string;
 };
 
 /** GET /usuarios/whatsapp/evolution-connection-status */

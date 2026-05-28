@@ -171,6 +171,7 @@ export class WhatsappConfigComponent implements OnInit {
             pairingCode: response.evolutionPairingCode ?? null,
             instanceName: response.evolutionInstanceName ?? null,
             evolutionWarning: response.evolutionWarning ?? null,
+            evolutionManagerUrl: response.evolutionManagerUrl ?? null,
           };
           this.dialog.open(WhatsappEvolutionQrDialogComponent, {
             width: '480px',

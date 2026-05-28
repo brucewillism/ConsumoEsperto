@@ -19,6 +19,7 @@ export interface WhatsappEvolutionQrDialogData {
   instanceName?: string | null;
   /** Aviso da primeira resposta; pode atualizar‑se até o QR chegar pelo polling */
   evolutionWarning?: string | null;
+  evolutionManagerUrl?: string | null;
 }
 
 @Component({
@@ -34,6 +35,11 @@ export interface WhatsappEvolutionQrDialogData {
       </p>
 
       <p class="warn-banner" *ngIf="safeBanner">{{ safeBanner }}</p>
+
+      <p class="manager-link" *ngIf="managerUrl">
+        <a [href]="managerUrl" target="_blank" rel="noopener noreferrer">Abrir Manager da Evolution</a>
+        (instância <strong>{{ displayInstance }}</strong>) — se o QR não aparecer aqui, leia-o no Manager.
+      </p>
 
       <p class="instructions">
         No telemóvel: WhatsApp → <strong>Aparelhos ligados</strong> → <strong>Ligar um dispositivo</strong>.
@@ -87,6 +93,14 @@ export interface WhatsappEvolutionQrDialogData {
         padding: 0.65rem 0.85rem;
         font-size: 0.88rem;
         line-height: 1.35;
+      }
+      .manager-link {
+        font-size: 0.9rem;
+        line-height: 1.35;
+        margin: 0 0 0.75rem;
+      }
+      .manager-link a {
+        color: #7dd3fc;
       }
       .instructions {
         font-size: 0.92rem;
@@ -142,6 +156,7 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
   /** Estado bruto (object possível vindos da API); use safe* no template */
   displayPairingRaw: unknown = undefined;
   bannerRaw: unknown = null;
+  managerUrl: string | null = null;
 
   get safeBanner(): string | undefined {
     return formatUnknownEvolutionBanner(this.bannerRaw);
@@ -179,6 +194,10 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
     this.displayQr = coerceEvolutionQrDataUri(data.qrDataUri ?? undefined);
     this.displayPairingRaw = data.pairingCode ?? undefined;
     this.bannerRaw = data.evolutionWarning ?? null;
+    this.managerUrl =
+      typeof data.evolutionManagerUrl === 'string' && data.evolutionManagerUrl.trim()
+        ? data.evolutionManagerUrl.trim()
+        : null;
 
     this.pollSub = timer(0, 5000)
       .pipe(
@@ -237,6 +256,9 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
           this.bannerRaw = null;
         } else if (p?.evolutionWarning != null) {
           this.bannerRaw = p.evolutionWarning;
+        }
+        if (p?.evolutionManagerUrl?.trim()) {
+          this.managerUrl = p.evolutionManagerUrl.trim();
         }
       });
   }

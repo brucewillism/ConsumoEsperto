@@ -398,9 +398,11 @@ public class EvolutionInstanceLifecycleService {
         body.putAll(evolutionInstanceSettingsService.privacySettingsForCreate());
 
         try {
-            evolutionPostJson(url, body);
+            String resp = evolutionPostJsonReturning(url, body);
+            ingestCreateResponse(instanceName, resp);
             log.info("Evolution instância criada ou confirmada: {}", instanceName);
         } catch (HttpClientErrorException e) {
+            ingestCreateResponse(instanceName, e.getResponseBodyAsString());
             if (isInstanceAlreadyExistsHttp(e.getRawStatusCode())) {
                 log.debug("Evolution instância {} já existe (HTTP {})", instanceName, e.getRawStatusCode());
                 return;
@@ -411,9 +413,11 @@ public class EvolutionInstanceLifecycleService {
                 altBody.put("integration", "WHATSAPP-BAILEYS");
                 altBody.put("qrcode", true);
                 altBody.putAll(evolutionInstanceSettingsService.privacySettingsForCreate());
-                evolutionPostJson(altUrl, altBody);
+                String altResp = evolutionPostJsonReturning(altUrl, altBody);
+                ingestCreateResponse(instanceName, altResp);
                 log.info("Evolution instância criada via path alternativo: {}", instanceName);
             } catch (HttpClientErrorException e2) {
+                ingestCreateResponse(instanceName, e2.getResponseBodyAsString());
                 if (isInstanceAlreadyExistsHttp(e2.getRawStatusCode())) {
                     log.debug("Evolution instância {} já existe (alt HTTP {})", instanceName, e2.getRawStatusCode());
                 } else {
@@ -423,6 +427,12 @@ public class EvolutionInstanceLifecycleService {
             }
         } catch (Exception ex) {
             log.warn("Evolution create instance [{}] falhou: {}", instanceName, ex.getMessage());
+        }
+    }
+
+    private void ingestCreateResponse(String instanceName, String jsonBody) {
+        if (jsonBody != null && !jsonBody.isBlank()) {
+            evolutionPairingService.ingestPairingJsonFromCreateOrConnect(instanceName, jsonBody);
         }
     }
 
@@ -522,6 +532,13 @@ public class EvolutionInstanceLifecycleService {
 
     private void evolutionPostJson(String url, Map<String, Object> body) {
         evolutionRequest(url, HttpMethod.POST, body);
+    }
+
+    private String evolutionPostJsonReturning(String url, Map<String, Object> body) {
+        HttpHeaders headers = evolutionHeaders();
+        ResponseEntity<String> resp = restTemplate.exchange(
+            url, HttpMethod.POST, new HttpEntity<>(body, headers), String.class);
+        return resp.getBody();
     }
 
     private HttpHeaders evolutionHeaders() {
