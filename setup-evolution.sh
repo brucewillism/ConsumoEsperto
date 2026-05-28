@@ -34,7 +34,12 @@ echo "==> 1) Criando instancia..."
 create_body="$(cat <<EOF
 {
   "instanceName": "${INSTANCE_NAME}",
-  "integration": "WHATSAPP-BAILEYS"
+  "integration": "WHATSAPP-BAILEYS",
+  "qrcode": true,
+  "alwaysOnline": false,
+  "readMessages": false,
+  "readStatus": false,
+  "syncFullHistory": false
 }
 EOF
 )"
@@ -44,6 +49,12 @@ if ! call_json POST "${EVOLUTION_URL}/instance/create" "${create_body}" >/tmp/ev
   call_json POST "${EVOLUTION_URL}/instance/create/${INSTANCE_NAME}" "{}" >/tmp/evo_create.out 2>/tmp/evo_create.err || true
 fi
 cat /tmp/evo_create.out || true
+
+echo ""
+echo "==> 1b) Modo fantasma (sem online forçado / sem leitura automática)..."
+privacy_body='{"rejectCall":false,"groupsIgnore":false,"alwaysOnline":false,"readMessages":false,"readStatus":false,"syncFullHistory":false}'
+call_json POST "${EVOLUTION_URL}/settings/set/${INSTANCE_NAME}" "${privacy_body}" >/tmp/evo_privacy.out 2>/tmp/evo_privacy.err || true
+cat /tmp/evo_privacy.out || true
 
 echo ""
 echo "==> 2) Configurando webhook (MESSAGES_UPSERT + base64)..."

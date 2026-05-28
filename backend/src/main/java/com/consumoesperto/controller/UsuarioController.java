@@ -5,6 +5,7 @@ import com.consumoesperto.dto.PerfilJarvisRequest;
 import com.consumoesperto.dto.PreferenciaTratamentoRequest;
 import com.consumoesperto.dto.UsuarioDTO;
 import com.consumoesperto.service.EvolutionInstanceLifecycleService;
+import com.consumoesperto.service.EvolutionInstanceSettingsService;
 import com.consumoesperto.service.EvolutionPairingService;
 import com.consumoesperto.service.JarvisProtocolService;
 import com.consumoesperto.service.UsuarioService;
@@ -44,6 +45,7 @@ public class UsuarioController {
     private final JarvisProtocolService jarvisProtocolService;
     private final EvolutionPairingService evolutionPairingService;
     private final EvolutionInstanceLifecycleService evolutionInstanceLifecycleService;
+    private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
 
     /**
      * Busca o perfil do usuário autenticado
@@ -286,6 +288,55 @@ public class UsuarioController {
     /**
      * Polling pelo frontend durante o pareamento: consulta Evolution {@code /instance/connectionState/:instance}.
      */
+    /**
+     * Reaplica modo fantasma na instância Evolution do utilizador (readMessages/alwaysOnline/sync off).
+     * Útil quando notificações no telemóvel sumiram ou o perfil fica sempre online.
+     */
+    @PostMapping("/whatsapp/evolution-privacy-settings")
+    public ResponseEntity<Map<String, Object>> applyEvolutionPrivacySettings() {
+        Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
+        if (!usuarioOpt.isPresent()) {
+            return ResponseEntity.status(401).body(Map.of(
+                "status", "error",
+                "message", "Usuario nao autenticado"
+            ));
+        }
+        Long usuarioId = usuarioOpt.get().getId();
+        evolutionInstanceLifecycleService.prepareInstanceForPairing(usuarioId);
+        String instance = evolutionPairingService.resolvedInstanceDisplayName(usuarioId);
+        Optional<String> err = evolutionInstanceSettingsService.applyGhostPrivacySettings(instance);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("instanceName", instance);
+        body.put("settings", evolutionInstanceSettingsService.privacySettingsForCreate());
+        if (err.isEmpty()) {
+            body.put("status", "success");
+            body.put("message",
+                "Modo fantasma aplicado: sem leitura automática, sem online forçado, sem sync de histórico completo.");
+            return ResponseEntity.ok(body);
+        }
+        body.put("status", "error");
+        body.put("message", err.get());
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    /**
+     * Correcção em todas as instâncias conhecidas (Evolution + BD). Operação de manutenção.
+     */
+    @PostMapping("/whatsapp/evolution-privacy-settings-all")
+    public ResponseEntity<Map<String, Object>> applyEvolutionPrivacySettingsAll() {
+        Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
+        if (!usuarioOpt.isPresent()) {
+            return ResponseEntity.status(401).body(Map.of(
+                "status", "error",
+                "message", "Usuario nao autenticado"
+            ));
+        }
+        Map<String, Object> report = evolutionInstanceSettingsService.applyGhostPrivacyToAllKnownInstances();
+        report.put("status", "success");
+        report.put("message", "Correcção de privacidade Evolution aplicada a todas as instâncias listadas.");
+        return ResponseEntity.ok(report);
+    }
+
     @GetMapping("/whatsapp/evolution-connection-status")
     public ResponseEntity<Map<String, Object>> evolutionWhatsAppConnectionStatus() {
         Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();

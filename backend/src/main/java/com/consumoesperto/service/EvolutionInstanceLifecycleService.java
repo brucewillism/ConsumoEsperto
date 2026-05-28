@@ -36,15 +36,18 @@ public class EvolutionInstanceLifecycleService {
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
     private final UsuarioRepository usuarioRepository;
     private final EvolutionPairingService evolutionPairingService;
+    private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
 
     public EvolutionInstanceLifecycleService(
         UsuarioAiConfigRepository usuarioAiConfigRepository,
         UsuarioRepository usuarioRepository,
-        EvolutionPairingService evolutionPairingService
+        EvolutionPairingService evolutionPairingService,
+        EvolutionInstanceSettingsService evolutionInstanceSettingsService
     ) {
         this.usuarioAiConfigRepository = usuarioAiConfigRepository;
         this.usuarioRepository = usuarioRepository;
         this.evolutionPairingService = evolutionPairingService;
+        this.evolutionInstanceSettingsService = evolutionInstanceSettingsService;
     }
 
     private RestTemplate restTemplate;
@@ -228,6 +231,7 @@ public class EvolutionInstanceLifecycleService {
         boolean existed = instanceExistsInEvolution(instanceName);
         createInstanceIfAbsent(instanceName);
         configureInstanceWebhookQuietly(instanceName);
+        applyGhostPrivacySettingsQuietly(instanceName);
         boolean existsNow = instanceExistsInEvolution(instanceName);
         boolean fresh = !existed && existsNow;
         if (!existed && !existsNow) {
@@ -289,6 +293,7 @@ public class EvolutionInstanceLifecycleService {
         body.put("instanceName", instanceName);
         body.put("integration", "WHATSAPP-BAILEYS");
         body.put("qrcode", true);
+        body.putAll(evolutionInstanceSettingsService.privacySettingsForCreate());
 
         try {
             evolutionPostJson(url, body);
@@ -300,7 +305,11 @@ public class EvolutionInstanceLifecycleService {
             }
             String altUrl = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/create/" + instanceName);
             try {
-                evolutionPostJson(altUrl, Map.of("integration", "WHATSAPP-BAILEYS", "qrcode", true));
+                Map<String, Object> altBody = new LinkedHashMap<>();
+                altBody.put("integration", "WHATSAPP-BAILEYS");
+                altBody.put("qrcode", true);
+                altBody.putAll(evolutionInstanceSettingsService.privacySettingsForCreate());
+                evolutionPostJson(altUrl, altBody);
                 log.info("Evolution instância criada via path alternativo: {}", instanceName);
             } catch (HttpClientErrorException e2) {
                 if (isInstanceAlreadyExistsHttp(e2.getRawStatusCode())) {
@@ -313,6 +322,11 @@ public class EvolutionInstanceLifecycleService {
         } catch (Exception ex) {
             log.warn("Evolution create instance [{}] falhou: {}", instanceName, ex.getMessage());
         }
+    }
+
+    private void applyGhostPrivacySettingsQuietly(String instanceName) {
+        evolutionInstanceSettingsService.applyGhostPrivacySettings(instanceName)
+            .ifPresent(msg -> log.debug("Evolution privacy settings [{}]: {}", instanceName, msg));
     }
 
     private void configureInstanceWebhookQuietly(String instanceName) {
