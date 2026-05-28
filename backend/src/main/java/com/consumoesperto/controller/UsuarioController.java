@@ -252,9 +252,10 @@ public class UsuarioController {
                 ));
             }
             Long uid = usuarioOpt.get().getId();
-            // Sem logout aqui: o modal faz polling a cada 5 s e logout repetido impede o QR de aparecer.
+            // Sem logout em cada poll; recria instância no máx. 1×/45 s se sessão «desligada» (open fantasma).
             EvolutionInstanceLifecycleService.PrepareInstanceResult prep =
                 evolutionInstanceLifecycleService.prepareInstanceForPairing(uid);
+            evolutionInstanceLifecycleService.ensureFreshInstanceWhenPairingAfterDisconnect(uid);
             evolutionPairingService.invalidatePairingCredCache(uid);
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(uid);
             boolean waConnected = evolutionPairingService.isInstanceConnectedForUser(uid);

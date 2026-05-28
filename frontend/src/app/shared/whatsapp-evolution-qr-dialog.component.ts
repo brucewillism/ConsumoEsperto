@@ -59,6 +59,10 @@ export interface WhatsappEvolutionQrDialogData {
       <p class="polling" *ngIf="pollingHeartbeat">
         A verificar estado na Evolution a cada 5 s — pode fechar e completar no Manager da Evolution se preferir.
       </p>
+      <p class="polling slow-hint" *ngIf="pollAttempts >= 4 && waitingForQr">
+        Se o QR não aparecer em ~1 minuto, use <strong>Desligar Evolution</strong> e <strong>Atualizar vínculo</strong> de novo,
+        ou abra o Manager da Evolution (instância <code>{{ displayInstance || 'ce-u…' }}</code>).
+      </p>
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
@@ -116,12 +120,21 @@ export interface WhatsappEvolutionQrDialogData {
         opacity: 0.75;
         margin-bottom: 0;
       }
+      .slow-hint {
+        opacity: 0.9;
+        color: #fbbf24;
+        line-height: 1.35;
+      }
+      .slow-hint code {
+        font-size: 0.85em;
+      }
     `,
   ],
 })
 export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
   pollingHeartbeat = true;
   fechando = false;
+  pollAttempts = 0;
 
   displayInstance: string | null | undefined;
   /** Só deve ser um data-uri ou URL string (nunca objeto). */
@@ -187,11 +200,17 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
         )
       )
       .subscribe((outcome) => {
+        this.pollAttempts += 1;
         if (outcome.kind === 'connected') {
           this.finishConnected();
           return;
         }
         if (outcome.kind === 'pair-error') {
+          if (this.pollAttempts <= 2) {
+            this.toastService.warning(
+              'Falha temporária ao pedir QR à Evolution. A tentar de novo…'
+            );
+          }
           return;
         }
         const p = outcome.pair;

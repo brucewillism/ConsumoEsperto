@@ -38,17 +38,20 @@ public class EvolutionInstanceLifecycleService {
     private final UsuarioRepository usuarioRepository;
     private final EvolutionPairingService evolutionPairingService;
     private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
+    private final EvolutionWaSessionRegistry evolutionWaSessionRegistry;
 
     public EvolutionInstanceLifecycleService(
         UsuarioAiConfigRepository usuarioAiConfigRepository,
         UsuarioRepository usuarioRepository,
         EvolutionPairingService evolutionPairingService,
-        EvolutionInstanceSettingsService evolutionInstanceSettingsService
+        EvolutionInstanceSettingsService evolutionInstanceSettingsService,
+        EvolutionWaSessionRegistry evolutionWaSessionRegistry
     ) {
         this.usuarioAiConfigRepository = usuarioAiConfigRepository;
         this.usuarioRepository = usuarioRepository;
         this.evolutionPairingService = evolutionPairingService;
         this.evolutionInstanceSettingsService = evolutionInstanceSettingsService;
+        this.evolutionWaSessionRegistry = evolutionWaSessionRegistry;
     }
 
     private RestTemplate restTemplate;
@@ -160,10 +163,7 @@ public class EvolutionInstanceLifecycleService {
         boolean deleted = deleteInstance(instanceName);
         out.put("instanceDeleted", deleted);
         if (deleted) {
-            pauseMillis(2_000);
-            createInstanceIfAbsent(instanceName);
-            configureInstanceWebhookQuietly(instanceName);
-            applyGhostPrivacySettingsQuietly(instanceName);
+            recreateInstanceForQrPairing(instanceName);
         }
 
         evolutionPairingService.markWaSessionDisconnectedByUser(usuarioId);
@@ -220,11 +220,48 @@ public class EvolutionInstanceLifecycleService {
         if (!suppressed && evolutionPairingService.isInstanceConnectedForUser(usuarioId)) {
             return;
         }
-        logoutInstanceQuietly(instanceName);
-        evolutionPairingService.invalidatePairingCredCache(usuarioId);
         if (suppressed) {
+            recreateInstanceForQrPairing(instanceName);
+            evolutionWaSessionRegistry.markInstanceRecreateDone(usuarioId);
+        } else {
+            logoutInstanceQuietly(instanceName);
             pauseMillis(1_500);
         }
+        evolutionPairingService.invalidatePairingCredCache(usuarioId);
+    }
+
+    /**
+     * Polling do modal QR: recria instância no máximo de 45 em 45 s quando a sessão está «desligada» na app.
+     */
+    public void ensureFreshInstanceWhenPairingAfterDisconnect(Long usuarioId) {
+        if (usuarioId == null || !apiConfigured()) {
+            return;
+        }
+        if (!evolutionPairingService.isWaSessionDisconnectedByUser(usuarioId)) {
+            return;
+        }
+        if (!evolutionWaSessionRegistry.tryAcquireInstanceRecreateForQr(usuarioId, 45_000)) {
+            return;
+        }
+        String instanceName = evolutionPairingService.resolvedInstanceDisplayName(usuarioId);
+        if (instanceName == null || instanceName.isBlank()) {
+            return;
+        }
+        log.info("Evolution QR pairing: recriar instância {} (utilizador {})", instanceName, usuarioId);
+        recreateInstanceForQrPairing(instanceName);
+        evolutionPairingService.invalidatePairingCredCache(usuarioId);
+    }
+
+    /** Logout + delete + create — liberta estado «open» fantasma que impede QR. */
+    private void recreateInstanceForQrPairing(String instanceName) {
+        logoutInstanceQuietly(instanceName);
+        deleteInstance(instanceName);
+        pauseMillis(2_000);
+        createInstanceIfAbsent(instanceName);
+        configureInstanceWebhookQuietly(instanceName);
+        applyGhostPrivacySettingsQuietly(instanceName);
+        evolutionInstanceSettingsService.restartInstance(instanceName);
+        pauseMillis(2_000);
     }
 
     private static final class AssignResult {

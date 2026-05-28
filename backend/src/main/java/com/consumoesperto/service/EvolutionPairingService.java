@@ -132,6 +132,9 @@ public class EvolutionPairingService {
             String urlBase = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/connect/" + cred.instanceName);
             String url = appendNumberQueryIfPresent(urlBase, cached.whatsappDigits);
             int retries = Math.max(1, Math.min(connectRetries, 12));
+            if (sessionSuppressed) {
+                retries = Math.max(retries, 8);
+            }
             for (int attempt = 0; attempt < retries; attempt++) {
                 boolean lastAttempt = attempt == retries - 1;
                 String body = evolutionGet(url, cred.apiKeyHeader);
