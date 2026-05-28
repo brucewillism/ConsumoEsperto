@@ -340,7 +340,7 @@ public class EvolutionInstanceLifecycleService {
         body.put("url", webhook);
         body.put("webhook_by_events", false);
         body.put("webhook_base64", true);
-        body.put("events", List.of("MESSAGES_UPSERT"));
+        body.put("events", List.of("MESSAGES_UPSERT", "CONNECTION_UPDATE"));
         try {
             evolutionPostJson(url, body);
             log.debug("Evolution webhook configurado para {}", instanceName);

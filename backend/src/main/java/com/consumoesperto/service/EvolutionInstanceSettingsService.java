@@ -11,6 +11,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
@@ -27,9 +28,11 @@ import java.util.Set;
 
 /**
  * Modo "fantasma" na Evolution API: não força online, não marca mensagens/status como lidos,
- * não sincroniza histórico completo (evita sessão Web sempre activa e notificações silenciadas no telemóvel).
- *
- * @see <a href="https://doc.evolution-api.com/v2/api-reference/settings/set">POST /settings/set/{instance}</a>
+ * não sincroniza histórico completo.
+ * <p>
+ * Nota: {@code alwaysOnline} / {@code markOnlineOnConnect} só passam a valer após
+ * {@code POST /instance/restart/{instance}}. {@code readMessages} atualiza na sessão activa,
+ * mas reiniciar garante estado limpo.
  */
 @Service
 public class EvolutionInstanceSettingsService {
@@ -70,6 +73,14 @@ public class EvolutionInstanceSettingsService {
     @Value("${consumoesperto.evolution.privacy.sync-full-history:false}")
     private boolean syncFullHistory;
 
+    /** Reinicia a instância após settings/set para recarregar markOnlineOnConnect no Baileys. */
+    @Value("${consumoesperto.evolution.privacy.restart-after-apply:true}")
+    private boolean restartAfterApply;
+
+    /** Após ligar, força presença unavailable (não ficar "online" na lista de contactos). */
+    @Value("${consumoesperto.evolution.privacy.set-unavailable-presence:true}")
+    private boolean setUnavailablePresence;
+
     @PostConstruct
     void initRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -79,11 +90,13 @@ public class EvolutionInstanceSettingsService {
     }
 
     /**
-     * Propriedades para {@code POST /instance/create} (Evolution v2 aceita inline).
+     * Propriedades para {@code POST /instance/create} e {@code POST /settings/set/{instance}}.
+     * {@code msgCall} é obrigatório na API v2 mesmo com {@code rejectCall=false}.
      */
     public Map<String, Object> privacySettingsForCreate() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("rejectCall", false);
+        m.put("msgCall", "");
         m.put("groupsIgnore", false);
         m.put("alwaysOnline", alwaysOnline);
         m.put("readMessages", readMessages);
@@ -93,42 +106,168 @@ public class EvolutionInstanceSettingsService {
     }
 
     /**
-     * Aplica {@code POST /settings/set/{instance}} — corrige instâncias já existentes.
+     * Aplica settings, verifica na Evolution, reinicia instância e tenta presença unavailable.
      */
-    public Optional<String> applyGhostPrivacySettings(String instanceName) {
+    public Map<String, Object> applyGhostPrivacySettingsDetailed(String instanceName) {
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("instance", instanceName);
+        report.put("requested", privacySettingsForCreate());
+
         if (instanceName == null || instanceName.isBlank()) {
-            return Optional.of("Nome da instância Evolution vazio");
+            report.put("status", "error");
+            report.put("message", "Nome da instância Evolution vazio");
+            return report;
         }
         if (!apiConfigured()) {
-            return Optional.of("Evolution API não configurada (evolution.url / evolution.apikey)");
+            report.put("status", "error");
+            report.put("message", "Evolution API não configurada (evolution.url / evolution.apikey)");
+            return report;
         }
-        String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "settings/set/" + instanceName.trim());
+
+        String name = instanceName.trim();
         try {
-            evolutionPostJson(url, privacySettingsForCreate());
-            log.info(
-                "Evolution settings modo fantasma aplicados em {} (alwaysOnline={}, readMessages={}, readStatus={}, syncFullHistory={})",
-                instanceName,
-                alwaysOnline,
-                readMessages,
-                readStatus,
-                syncFullHistory
-            );
-            return Optional.empty();
+            String setUrl = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "settings/set/" + name);
+            evolutionPostJson(setUrl, privacySettingsForCreate());
+            report.put("settingsSet", true);
         } catch (HttpClientErrorException e) {
-            String msg = "HTTP " + e.getRawStatusCode() + " em settings/set: "
-                + abbreviate(e.getResponseBodyAsString(), 180);
-            log.warn("Evolution settings/set [{}]: {}", instanceName, msg);
-            return Optional.of(msg);
+            report.put("status", "error");
+            report.put("message", "settings/set HTTP " + e.getRawStatusCode() + ": "
+                + abbreviate(e.getResponseBodyAsString(), 200));
+            return report;
         } catch (Exception ex) {
-            log.warn("Evolution settings/set [{}]: {}", instanceName, ex.getMessage());
-            return Optional.of(ex.getMessage());
+            report.put("status", "error");
+            report.put("message", "settings/set: " + ex.getMessage());
+            return report;
         }
+
+        Optional<JsonNode> found = fetchSettings(name);
+        found.ifPresent(node -> report.put("settingsInEvolution", node));
+        boolean settingsOk = found.map(this::settingsMatchGhostMode).orElse(false);
+        report.put("settingsVerified", settingsOk);
+        if (!settingsOk && found.isPresent()) {
+            log.warn(
+                "Evolution [{}]: settings/find não reflecte modo fantasma — verifique Manager ou versão da API",
+                name
+            );
+        }
+
+        if (restartAfterApply) {
+            boolean restarted = restartInstanceQuietly(name);
+            report.put("instanceRestarted", restarted);
+        }
+
+        if (setUnavailablePresence) {
+            boolean presence = applyPresenceUnavailable(name);
+            report.put("presenceUnavailable", presence);
+        }
+
+        report.put("status", settingsOk ? "success" : "warning");
+        report.put(
+            "message",
+            settingsOk
+                ? "Modo fantasma aplicado. Se o telemóvel ainda não notificar, desligue e volte a ligar o WhatsApp (novo QR)."
+                : "Settings gravados mas a Evolution não confirmou os valores — reinicie a instância no Manager e escaneie o QR de novo."
+        );
+        log.info("Evolution modo fantasma [{}]: verified={} restart={}", name, settingsOk, restartAfterApply);
+        return report;
+    }
+
+    public Optional<String> applyGhostPrivacySettings(String instanceName) {
+        Map<String, Object> r = applyGhostPrivacySettingsDetailed(instanceName);
+        String status = String.valueOf(r.getOrDefault("status", ""));
+        if ("success".equals(status) || "warning".equals(status)) {
+            return Optional.empty();
+        }
+        return Optional.of(String.valueOf(r.getOrDefault("message", "Falha ao aplicar settings")));
     }
 
     /**
-     * Correcção global: todas as instâncias listadas na Evolution + nomes gravados em {@link UsuarioAiConfig}.
+     * Chamado quando a instância fica {@code open} — mantém presença offline após reconnect.
      */
+    public void onInstanceConnected(String instanceName) {
+        if (!setUnavailablePresence || instanceName == null || instanceName.isBlank() || !apiConfigured()) {
+            return;
+        }
+        applyPresenceUnavailable(instanceName.trim());
+    }
+
     public Map<String, Object> applyGhostPrivacyToAllKnownInstances() {
+        Set<String> names = collectAllInstanceNames();
+        List<Map<String, Object>> results = new ArrayList<>();
+        int ok = 0;
+        int warn = 0;
+        int fail = 0;
+        for (String name : names) {
+            Map<String, Object> row = applyGhostPrivacySettingsDetailed(name);
+            results.add(row);
+            String st = String.valueOf(row.getOrDefault("status", ""));
+            if ("success".equals(st)) {
+                ok++;
+            } else if ("warning".equals(st)) {
+                warn++;
+            } else {
+                fail++;
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("total", names.size());
+        out.put("ok", ok);
+        out.put("warning", warn);
+        out.put("failed", fail);
+        out.put("instances", results);
+        return out;
+    }
+
+    public Optional<JsonNode> fetchSettings(String instanceName) {
+        if (!apiConfigured() || instanceName == null || instanceName.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "settings/find/" + instanceName.trim());
+            HttpHeaders headers = evolutionHeaders();
+            ResponseEntity<String> resp = restTemplate.exchange(
+                url, HttpMethod.GET, new HttpEntity<>(headers), String.class
+            );
+            if (resp.getBody() == null || resp.getBody().isBlank()) {
+                return Optional.empty();
+            }
+            return Optional.of(objectMapper.readTree(resp.getBody()));
+        } catch (Exception ex) {
+            log.debug("settings/find [{}]: {}", instanceName, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public boolean applyPresenceUnavailable(String instanceName) {
+        if (!apiConfigured() || instanceName == null || instanceName.isBlank()) {
+            return false;
+        }
+        try {
+            String url = EvolutionUrlSupport.joinEvolutionPath(
+                evolutionUrl, "instance/setPresence/" + instanceName.trim()
+            );
+            evolutionPostJson(url, Map.of("presence", "unavailable"));
+            log.info("Evolution presença unavailable aplicada em {}", instanceName);
+            return true;
+        } catch (Exception ex) {
+            log.debug("setPresence unavailable [{}]: {}", instanceName, ex.getMessage());
+            return false;
+        }
+    }
+
+    private boolean restartInstanceQuietly(String instanceName) {
+        try {
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/restart/" + instanceName);
+            evolutionPostJson(url, Map.of());
+            log.info("Evolution instância reiniciada para recarregar settings: {}", instanceName);
+            return true;
+        } catch (Exception ex) {
+            log.warn("Evolution restart [{}]: {}", instanceName, ex.getMessage());
+            return false;
+        }
+    }
+
+    private Set<String> collectAllInstanceNames() {
         Set<String> names = new LinkedHashSet<>();
         if (defaultEvolutionInstance != null && !defaultEvolutionInstance.isBlank()) {
             names.add(defaultEvolutionInstance.trim());
@@ -139,30 +278,42 @@ public class EvolutionInstanceSettingsService {
             }
         });
         names.addAll(fetchInstanceNamesFromEvolution());
+        return names;
+    }
 
-        List<Map<String, String>> results = new ArrayList<>();
-        int ok = 0;
-        int fail = 0;
-        for (String name : names) {
-            Optional<String> err = applyGhostPrivacySettings(name);
-            Map<String, String> row = new LinkedHashMap<>();
-            row.put("instance", name);
-            if (err.isEmpty()) {
-                row.put("status", "ok");
-                ok++;
-            } else {
-                row.put("status", "error");
-                row.put("message", err.get());
-                fail++;
-            }
+    private boolean settingsMatchGhostMode(JsonNode root) {
+        JsonNode s = settingsNode(root);
+        if (s == null || s.isMissingNode()) {
+            return false;
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("total", names.size());
-        out.put("ok", ok);
-        out.put("failed", fail);
-        out.put("settings", privacySettingsForCreate());
-        out.put("instances", results);
-        return out;
+        return boolField(s, "readMessages", "read_messages") == readMessages
+            && boolField(s, "alwaysOnline", "always_online") == alwaysOnline
+            && boolField(s, "readStatus", "read_status") == readStatus
+            && boolField(s, "syncFullHistory", "sync_full_history") == syncFullHistory;
+    }
+
+    private JsonNode settingsNode(JsonNode root) {
+        if (root == null) {
+            return null;
+        }
+        if (root.has("readMessages") || root.has("read_messages") || root.has("alwaysOnline")) {
+            return root;
+        }
+        JsonNode inner = root.path("settings");
+        if (inner.has("readMessages") || inner.has("read_messages")) {
+            return inner;
+        }
+        return root.path("setting");
+    }
+
+    private static boolean boolField(JsonNode s, String camel, String snake) {
+        if (s.has(camel)) {
+            return s.path(camel).asBoolean(false);
+        }
+        if (s.has(snake)) {
+            return s.path(snake).asBoolean(false);
+        }
+        return false;
     }
 
     private Set<String> fetchInstanceNamesFromEvolution() {

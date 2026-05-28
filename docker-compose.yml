@@ -144,6 +144,7 @@ services:
      - WEBHOOK_GLOBAL_URL=http://backend:8087/api/public/evolution/webhook
      - WEBHOOK_GLOBAL_COLLECTION_ERRORS=false
      - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+     - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
     depends_on:
       redis:

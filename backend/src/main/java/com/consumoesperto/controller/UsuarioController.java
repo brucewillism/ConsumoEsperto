@@ -304,19 +304,12 @@ public class UsuarioController {
         Long usuarioId = usuarioOpt.get().getId();
         evolutionInstanceLifecycleService.prepareInstanceForPairing(usuarioId);
         String instance = evolutionPairingService.resolvedInstanceDisplayName(usuarioId);
-        Optional<String> err = evolutionInstanceSettingsService.applyGhostPrivacySettings(instance);
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("instanceName", instance);
-        body.put("settings", evolutionInstanceSettingsService.privacySettingsForCreate());
-        if (err.isEmpty()) {
-            body.put("status", "success");
-            body.put("message",
-                "Modo fantasma aplicado: sem leitura automática, sem online forçado, sem sync de histórico completo.");
-            return ResponseEntity.ok(body);
+        Map<String, Object> body = evolutionInstanceSettingsService.applyGhostPrivacySettingsDetailed(instance);
+        String st = String.valueOf(body.getOrDefault("status", "error"));
+        if ("error".equals(st)) {
+            return ResponseEntity.badRequest().body(body);
         }
-        body.put("status", "error");
-        body.put("message", err.get());
-        return ResponseEntity.badRequest().body(body);
+        return ResponseEntity.ok(body);
     }
 
     /**
@@ -332,8 +325,10 @@ public class UsuarioController {
             ));
         }
         Map<String, Object> report = evolutionInstanceSettingsService.applyGhostPrivacyToAllKnownInstances();
-        report.put("status", "success");
-        report.put("message", "Correcção de privacidade Evolution aplicada a todas as instâncias listadas.");
+        report.put(
+            "message",
+            "Correcção aplicada. Confira settingsVerified em cada instância. Se o telemóvel ainda não notificar, desvincule e escaneie o QR de novo."
+        );
         return ResponseEntity.ok(report);
     }
 

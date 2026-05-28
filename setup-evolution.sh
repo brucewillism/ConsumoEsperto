@@ -52,7 +52,7 @@ cat /tmp/evo_create.out || true
 
 echo ""
 echo "==> 1b) Modo fantasma (sem online forçado / sem leitura automática)..."
-privacy_body='{"rejectCall":false,"groupsIgnore":false,"alwaysOnline":false,"readMessages":false,"readStatus":false,"syncFullHistory":false}'
+privacy_body='{"rejectCall":false,"msgCall":"","groupsIgnore":false,"alwaysOnline":false,"readMessages":false,"readStatus":false,"syncFullHistory":false}'
 call_json POST "${EVOLUTION_URL}/settings/set/${INSTANCE_NAME}" "${privacy_body}" >/tmp/evo_privacy.out 2>/tmp/evo_privacy.err || true
 cat /tmp/evo_privacy.out || true
 
@@ -64,7 +64,7 @@ webhook_body="$(cat <<EOF
   "url": "${WEBHOOK_URL}",
   "webhook_by_events": false,
   "webhook_base64": true,
-  "events": ["MESSAGES_UPSERT"]
+  "events": ["MESSAGES_UPSERT", "CONNECTION_UPDATE"]
 }
 EOF
 )"

@@ -3,6 +3,7 @@ package com.consumoesperto.controller;
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.service.AiProvidersConfigService;
+import com.consumoesperto.service.EvolutionInstanceSettingsService;
 import com.consumoesperto.service.EvolutionWebhookAsyncProcessor;
 import com.consumoesperto.service.EvolutionWebhookDedupService;
 import com.consumoesperto.service.EvolutionBotEchoFilterService;
@@ -36,6 +37,7 @@ public class EvolutionWebhookController {
     private final EvolutionWebhookAsyncProcessor evolutionWebhookAsyncProcessor;
     private final WhatsAppCommandService whatsAppCommandService;
     private final EvolutionBotEchoFilterService evolutionBotEchoFilterService;
+    private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
 
     /**
      * Evolution API v2.3+ também POSTa variantes como {@code /webhook/messages-upsert}; o destino nos logs
@@ -53,6 +55,11 @@ public class EvolutionWebhookController {
             payload.path("data").path("event").asText(""),
             payload.path("type").asText("")
         );
+        if (isConnectionUpdateEvent(event)) {
+            handleConnectionUpdate(payload, event);
+            return ResponseEntity.ok(Map.of("status", "ok", "event", event));
+        }
+
         if (!isMessagesUpsertEvent(event)) {
             log.info("Evolution webhook ignorado (nao e mensagem): event='{}'", event);
             return ResponseEntity.ok(Map.of("status", "ignored", "event", event));
@@ -327,6 +334,37 @@ public class EvolutionWebhookController {
         }
         String s = node.asText("").trim().toLowerCase();
         return "true".equals(s) || "1".equals(s) || "yes".equals(s);
+    }
+
+    private void handleConnectionUpdate(JsonNode payload, String event) {
+        JsonNode data = payload.path("data");
+        if (data.isMissingNode() || data.isNull()) {
+            data = payload.path("body").path("data");
+        }
+        String state = firstNonBlank(
+            data.path("state").asText(""),
+            data.path("connection").asText(""),
+            payload.path("state").asText("")
+        );
+        String instance = firstNonBlank(
+            payload.path("instance").asText(""),
+            payload.path("instanceName").asText(""),
+            data.path("instanceName").asText("")
+        );
+        log.info("Evolution CONNECTION_UPDATE event={} instance={} state={}", event, instance, state);
+        if ("open".equalsIgnoreCase(state) && instance != null && !instance.isBlank()) {
+            evolutionInstanceSettingsService.onInstanceConnected(instance.trim());
+        }
+    }
+
+    private static boolean isConnectionUpdateEvent(String event) {
+        if (event == null || event.isBlank()) {
+            return false;
+        }
+        String e = event.trim();
+        return "connection.update".equalsIgnoreCase(e)
+            || "CONNECTION_UPDATE".equals(e)
+            || "connection-update".equalsIgnoreCase(e);
     }
 
     private static boolean isMessagesUpsertEvent(String event) {
