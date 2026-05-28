@@ -756,7 +756,10 @@ public class WhatsAppCommandService {
         }
         sb.append(".\n\n");
         if (semGemini) {
-            sb.append("_Administrador:_ configure `GEMINI_API_KEY` no servidor (`.env` / Docker) para fallback automático quando Groq/OpenAI falharem._");
+            sb.append(
+                "Para voltar a importar PDF pelo WhatsApp *hoje*, o administrador deve colocar "
+                    + "*GEMINI_API_KEY* no `.env` da VPS e reiniciar o backend (`docker compose up -d backend`). "
+                    + "Chave gratuita: Google AI Studio.");
         }
         return sb.toString().trim();
     }

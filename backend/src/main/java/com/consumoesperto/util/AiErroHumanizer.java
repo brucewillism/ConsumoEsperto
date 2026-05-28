@@ -38,7 +38,10 @@ public final class AiErroHumanizer {
             sb.append(" (quota da OpenAI esgotada)");
         }
         sb.append(".");
-        if (groqLimite) {
+        if (semGemini && groqLimite) {
+            sb.append(
+                " Para importar já: configure GEMINI_API_KEY no .env do servidor (Google AI Studio) e reinicie o backend.");
+        } else if (groqLimite) {
             sb.append(" Tente novamente em cerca de 1–2 horas.");
         }
         return sb.toString();

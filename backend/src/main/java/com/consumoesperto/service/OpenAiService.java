@@ -313,8 +313,10 @@ public class OpenAiService {
         }
         final String systemFinal = sys;
         final String userFinal = usr;
+        List<AiProviderType> order = documento ? orderedProvidersDocumentoFirst(cfg) : orderedProviders(cfg);
         return executeAIRequestWithFallback(
             cfg,
+            order,
             p -> canChatJson(cfg, p),
             (p, c) -> {
                 String model = documento ? chatModelForDocument(p, c) : chatModelFor(p, c);
@@ -322,6 +324,22 @@ public class OpenAiService {
             },
             "Nao foi possivel gerar JSON via IA. Detalhes: "
         );
+    }
+
+    /** PDF/fatura: tenta Gemini antes de Groq (evita gastar quota Groq quando Gemini está configurado). */
+    private List<AiProviderType> orderedProvidersDocumentoFirst(AiProvidersConfig cfg) {
+        List<AiProviderType> base = orderedProviders(cfg);
+        if (!canChatJson(cfg, AiProviderType.GEMINI)) {
+            return base;
+        }
+        List<AiProviderType> out = new ArrayList<>();
+        out.add(AiProviderType.GEMINI);
+        for (AiProviderType p : base) {
+            if (p != AiProviderType.GEMINI) {
+                out.add(p);
+            }
+        }
+        return out;
     }
 
     private String resolveTargetModelForSuppressor(AiProvidersConfig cfg, boolean documento) {
@@ -420,8 +438,18 @@ public class OpenAiService {
         FallbackAttempt<T> attempt,
         String failureMessagePrefix
     ) {
+        return executeAIRequestWithFallback(cfg, orderedProviders(cfg), canUseProvider, attempt, failureMessagePrefix);
+    }
+
+    private <T> T executeAIRequestWithFallback(
+        AiProvidersConfig cfg,
+        List<AiProviderType> providerOrder,
+        Predicate<AiProviderType> canUseProvider,
+        FallbackAttempt<T> attempt,
+        String failureMessagePrefix
+    ) {
         List<String> errors = new ArrayList<>();
-        for (AiProviderType provider : orderedProviders(cfg)) {
+        for (AiProviderType provider : providerOrder) {
             if (!canUseProvider.test(provider)) {
                 continue;
             }
@@ -434,7 +462,14 @@ public class OpenAiService {
             }
         }
         if (errors.isEmpty()) {
-            throw new RuntimeException(failureMessagePrefix + "nenhum provedor elegível (credenciais/URL ausentes).");
+            String geminiHint = canChatJson(cfg, AiProviderType.GEMINI)
+                ? ""
+                : " GEMINI: chave ausente — defina GEMINI_API_KEY no .env do servidor.";
+            throw new RuntimeException(
+                failureMessagePrefix + "nenhum provedor elegível (credenciais/URL ausentes)." + geminiHint);
+        }
+        if (!canChatJson(cfg, AiProviderType.GEMINI)) {
+            errors.add("GEMINI: GEMINI_API_KEY não configurada no servidor");
         }
         throw new RuntimeException(failureMessagePrefix + String.join(" | ", errors));
     }
