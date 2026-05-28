@@ -116,7 +116,8 @@ class AiGateway:
           "use_rag": False,
           "use_hierarchical_memory": False,
           "use_semantic_cache": True,
-          "check_semantic_loss": True,
+          "check_semantic_loss": False,
+          "use_ollama": strategy in ("ultra", "balanced", "aggressive"),
       }
 
       last_err: Optional[Exception] = None

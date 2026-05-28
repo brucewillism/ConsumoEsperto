@@ -14,7 +14,9 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Envia prompts ao AI Token Suppressor ({@code POST /api/optimize}) antes das chamadas Groq/Gemini/OpenAI.
@@ -23,6 +25,9 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class TokenSuppressorService {
+
+    /** Estratégias ATS em que o suppressor pode usar Ollama (evita latência em {@code fast}). */
+    private static final Set<String> STRATEGIES_WITH_OLLAMA = Set.of("ultra", "balanced", "aggressive");
 
     private final ObjectMapper objectMapper;
 
@@ -102,7 +107,8 @@ public class TokenSuppressorService {
             body.put("use_rag", false);
             body.put("use_hierarchical_memory", false);
             body.put("use_semantic_cache", true);
-            body.put("check_semantic_loss", true);
+            body.put("check_semantic_loss", false);
+            body.put("use_ollama", shouldUseOllamaForStrategy(effectiveStrategy));
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -129,8 +135,10 @@ public class TokenSuppressorService {
             int saved = root.path("tokens_saved").asInt(0);
             int before = root.path("tokens_before").asInt(0);
             int after = root.path("tokens_after").asInt(0);
-            log.info("[TokenSuppressor] userId={} tokens {}→{} saved={} ops={}",
-                userId, before, after, saved, root.path("operations_applied"));
+            log.info(
+                "[TokenSuppressor] userId={} strategy={} use_ollama={} tokens {}→{} saved={} ops={}",
+                userId, effectiveStrategy, shouldUseOllamaForStrategy(effectiveStrategy),
+                before, after, saved, root.path("operations_applied"));
 
             String outSys = parsed.systemPrompt().isBlank() ? sys : parsed.systemPrompt();
             String outUsr = parsed.userPrompt().isBlank() ? usr : parsed.userPrompt();
@@ -139,6 +147,16 @@ public class TokenSuppressorService {
             log.warn("[TokenSuppressor] indisponível, usando prompt original: {}", e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * Ollama só em estratégias pesadas — {@code fast} / {@code code-focused} ficam mais rápidos.
+     */
+    static boolean shouldUseOllamaForStrategy(String effectiveStrategy) {
+        if (effectiveStrategy == null || effectiveStrategy.isBlank()) {
+            return false;
+        }
+        return STRATEGIES_WITH_OLLAMA.contains(effectiveStrategy.trim().toLowerCase(Locale.ROOT));
     }
 
     private RestTemplate restTemplateWithTimeout() {
