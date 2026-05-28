@@ -196,9 +196,13 @@ public class UsuarioController {
             evolutionInstanceLifecycleService.resetSessionBeforePairing(
                 usuario.getId(), prep.skipLogoutBeforeConnect());
 
+            evolutionPairingService.clearWaSessionDisconnectedByUser(usuario.getId());
             evolutionPairingService.invalidatePairingCredCache(usuario.getId());
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(usuario.getId());
             boolean waConnected = evolutionPairingService.isInstanceConnectedForUser(usuario.getId());
+            if (waConnected) {
+                evolutionPairingService.clearWaSessionDisconnectedByUser(usuario.getId());
+            }
 
             boolean temQrOuCodigo = (pairing.getQrCodeDataUri() != null && !pairing.getQrCodeDataUri().isBlank())
                 || (pairing.getPairingCode() != null && !pairing.getPairingCode().isBlank());
@@ -377,11 +381,13 @@ public class UsuarioController {
         Long usuarioId = usuarioOpt.get().getId();
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
         Optional<String> rawState = evolutionPairingService.fetchConnectionStateForUser(usuarioId);
-        boolean connected = evolutionPairingService.isInstanceConnectedForUser(usuarioId);
+        boolean suppressed = evolutionPairingService.isWaSessionDisconnectedByUser(usuarioId);
+        boolean connected = !suppressed && evolutionPairingService.isInstanceConnectedForUser(usuarioId);
         String numero = usuarioOpt.get().getWhatsappNumero();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("connected", connected);
         body.put("evolutionWaConnected", connected);
+        body.put("sessionMarkedDisconnected", suppressed);
         rawState.ifPresent(s -> body.put("connectionState", s));
         body.put("numeroCadastrado", numero != null && !numero.isBlank());
         body.put("whatsappNumero", numero != null ? numero : "");
@@ -404,6 +410,7 @@ public class UsuarioController {
             evolutionInstanceLifecycleService.releaseInstanceOnUnlink(usuario.getId());
             whatsAppUserMappingService.unlinkWhatsAppNumber(usuario.getId());
 
+            evolutionPairingService.clearWaSessionDisconnectedByUser(usuario.getId());
             evolutionPairingService.invalidatePairingCredCache(usuario.getId());
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("status", "success");

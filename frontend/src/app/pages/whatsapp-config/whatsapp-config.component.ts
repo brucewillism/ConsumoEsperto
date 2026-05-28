@@ -184,15 +184,11 @@ export class WhatsappConfigComponent implements OnInit {
     this.usuarioService.desligarEvolutionWhatsapp().subscribe({
       next: (res) => {
         this.carregando = false;
-        this.evolutionWaConnected = res.evolutionWaConnected === true;
+        this.evolutionWaConnected = false;
         if (res.instanceName) {
           this.evolutionInstanceName = res.instanceName;
         }
-        if (res.status === 'warning') {
-          this.toastService.warning(res.message || 'Evolution ainda reporta ligada.');
-        } else {
-          this.toastService.success(res.message || 'Sessão Evolution desligada.');
-        }
+        this.toastService.success(res.message || 'Sessão Evolution desligada na app.');
         this.atualizarStatusEvolution();
       },
       error: (error) => {

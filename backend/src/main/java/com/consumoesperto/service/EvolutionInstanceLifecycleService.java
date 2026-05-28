@@ -22,6 +22,7 @@ import org.springframework.web.client.RestTemplate;
 import javax.annotation.PostConstruct;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -156,21 +157,36 @@ public class EvolutionInstanceLifecycleService {
         boolean restarted = evolutionInstanceSettingsService.restartInstance(instanceName);
         out.put("instanceRestarted", restarted);
 
-        evolutionPairingService.invalidatePairingCredCache(usuarioId);
+        boolean deleted = deleteInstance(instanceName);
+        out.put("instanceDeleted", deleted);
+        if (deleted) {
+            pauseMillis(2_000);
+            createInstanceIfAbsent(instanceName);
+            configureInstanceWebhookQuietly(instanceName);
+            applyGhostPrivacySettingsQuietly(instanceName);
+        }
+
+        evolutionPairingService.markWaSessionDisconnectedByUser(usuarioId);
+        out.put("sessionMarkedDisconnected", true);
+
         Optional<String> after = evolutionPairingService.fetchConnectionStateForUser(usuarioId);
         after.ifPresent(s -> out.put("connectionStateAfter", s));
-        boolean connected = evolutionPairingService.isInstanceConnectedForUser(usuarioId);
-        out.put("evolutionWaConnected", connected);
-        out.put("status", connected ? "warning" : "success");
+        boolean apiStillOpen = after.filter(this::connectionStateLooksConnected).isPresent();
+        out.put("evolutionApiReportsOpen", apiStillOpen);
+
+        out.put("evolutionWaConnected", false);
+        out.put("status", "success");
         out.put(
             "message",
-            connected
-                ? "Pedido de desligar enviado, mas a Evolution ainda reporta sessão ligada ("
-                    + after.orElse("estado desconhecido")
-                    + "). Tente Desvincular ou reinicie o contentor evolution_api."
-                : "Sessão Evolution desligada. Pode escanear o QR em Atualizar vínculo."
+            apiStillOpen
+                ? "Sessão desligada na app. A Evolution ainda pode mostrar «open» no servidor (cache) — "
+                    + "use Atualizar vínculo e escaneie o QR para ligar de novo."
+                : "Sessão Evolution desligada. Use Atualizar vínculo e escaneie o QR para ligar de novo."
         );
-        log.info("Evolution disconnect userId={} instance={} connectedAfter={}", usuarioId, instanceName, connected);
+        log.info(
+            "Evolution disconnect userId={} instance={} deleted={} apiStillOpen={}",
+            usuarioId, instanceName, deleted, apiStillOpen
+        );
         return out;
     }
 
@@ -400,6 +416,41 @@ public class EvolutionInstanceLifecycleService {
 
     private void logoutInstanceQuietly(String instanceName) {
         logoutInstance(instanceName);
+    }
+
+    private static void pauseMillis(long ms) {
+        try {
+            Thread.sleep(Math.max(0, ms));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private boolean connectionStateLooksConnected(String state) {
+        if (state == null || state.isBlank()) {
+            return false;
+        }
+        String s = state.trim().toLowerCase(Locale.ROOT);
+        return s.equals("open") || s.equals("connected") || s.equals("online");
+    }
+
+    private boolean deleteInstance(String instanceName) {
+        for (HttpMethod method : new HttpMethod[] { HttpMethod.DELETE, HttpMethod.POST }) {
+            try {
+                String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/delete/" + instanceName);
+                evolutionRequest(url, method, null);
+                log.info("Evolution delete instance ({}) {}", method, instanceName);
+                return true;
+            } catch (HttpClientErrorException e) {
+                if (e.getRawStatusCode() == 404) {
+                    return true;
+                }
+                log.debug("Evolution delete [{}] {}: HTTP {}", instanceName, method, e.getRawStatusCode());
+            } catch (Exception ex) {
+                log.debug("Evolution delete [{}] {}: {}", instanceName, method, ex.getMessage());
+            }
+        }
+        return false;
     }
 
     private boolean logoutInstance(String instanceName) {

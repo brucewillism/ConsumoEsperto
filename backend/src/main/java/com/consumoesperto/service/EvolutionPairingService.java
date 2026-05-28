@@ -51,6 +51,7 @@ public class EvolutionPairingService {
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
     private final UsuarioRepository usuarioRepository;
     private final ObjectMapper objectMapper;
+    private final EvolutionWaSessionRegistry evolutionWaSessionRegistry;
 
     private RestTemplate restTemplate;
 
@@ -166,9 +167,26 @@ public class EvolutionPairingService {
 
     @Transactional(readOnly = true)
     public boolean isInstanceConnectedForUser(Long usuarioId) {
+        if (evolutionWaSessionRegistry.isUserDisconnected(usuarioId)) {
+            return false;
+        }
         return fetchConnectionStateForUser(usuarioId)
             .filter(this::interpretAsWaConnected)
             .isPresent();
+    }
+
+    public void markWaSessionDisconnectedByUser(Long usuarioId) {
+        evolutionWaSessionRegistry.markUserDisconnected(usuarioId);
+        invalidatePairingCredCache(usuarioId);
+    }
+
+    public void clearWaSessionDisconnectedByUser(Long usuarioId) {
+        evolutionWaSessionRegistry.clearUserDisconnected(usuarioId);
+        invalidatePairingCredCache(usuarioId);
+    }
+
+    public boolean isWaSessionDisconnectedByUser(Long usuarioId) {
+        return evolutionWaSessionRegistry.isUserDisconnected(usuarioId);
     }
 
     /** Estado bruto devolvido por {@code GET /instance/connectionState/{instance}} (para UI/diagnóstico). */
