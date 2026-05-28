@@ -4,6 +4,9 @@ import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.service.AiProvidersConfigService;
 import com.consumoesperto.service.EvolutionInstanceSettingsService;
+import com.consumoesperto.service.EvolutionPairingService;
+import com.consumoesperto.repository.UsuarioAiConfigRepository;
+import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.service.EvolutionWebhookAsyncProcessor;
 import com.consumoesperto.service.EvolutionWebhookDedupService;
 import com.consumoesperto.service.EvolutionBotEchoFilterService;
@@ -38,6 +41,8 @@ public class EvolutionWebhookController {
     private final WhatsAppCommandService whatsAppCommandService;
     private final EvolutionBotEchoFilterService evolutionBotEchoFilterService;
     private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
+    private final EvolutionPairingService evolutionPairingService;
+    private final UsuarioAiConfigRepository usuarioAiConfigRepository;
 
     /**
      * Evolution API v2.3+ também POSTa variantes como {@code /webhook/messages-upsert}; o destino nos logs
@@ -353,7 +358,13 @@ public class EvolutionWebhookController {
         );
         log.info("Evolution CONNECTION_UPDATE event={} instance={} state={}", event, instance, state);
         if ("open".equalsIgnoreCase(state) && instance != null && !instance.isBlank()) {
-            evolutionInstanceSettingsService.onInstanceConnected(instance.trim());
+            String inst = instance.trim();
+            evolutionInstanceSettingsService.onInstanceConnected(inst);
+            usuarioAiConfigRepository.findByEvolutionInstanceNameIgnoreCase(inst)
+                .map(UsuarioAiConfig::getUsuario)
+                .filter(u -> u != null && u.getId() != null)
+                .map(Usuario::getId)
+                .ifPresent(evolutionPairingService::clearWaSessionDisconnectedByUser);
         }
     }
 

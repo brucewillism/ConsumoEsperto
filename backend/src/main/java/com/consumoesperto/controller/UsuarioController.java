@@ -196,12 +196,13 @@ public class UsuarioController {
             evolutionInstanceLifecycleService.resetSessionBeforePairing(
                 usuario.getId(), prep.skipLogoutBeforeConnect());
 
-            evolutionPairingService.clearWaSessionDisconnectedByUser(usuario.getId());
             evolutionPairingService.invalidatePairingCredCache(usuario.getId());
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(usuario.getId());
             boolean waConnected = evolutionPairingService.isInstanceConnectedForUser(usuario.getId());
+            boolean sessionMarkedDisconnected = evolutionPairingService.isWaSessionDisconnectedByUser(usuario.getId());
             if (waConnected) {
                 evolutionPairingService.clearWaSessionDisconnectedByUser(usuario.getId());
+                sessionMarkedDisconnected = false;
             }
 
             boolean temQrOuCodigo = (pairing.getQrCodeDataUri() != null && !pairing.getQrCodeDataUri().isBlank())
@@ -210,6 +211,7 @@ public class UsuarioController {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("status", "success");
             body.put("evolutionWaConnected", waConnected);
+            body.put("sessionMarkedDisconnected", sessionMarkedDisconnected);
             String message;
             if (waConnected) {
                 message = "Número vinculado. A sessão WhatsApp está ligada à Evolution nesta instância.";
@@ -259,6 +261,7 @@ public class UsuarioController {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("status", "success");
             body.put("evolutionWaConnected", waConnected);
+            body.put("sessionMarkedDisconnected", evolutionPairingService.isWaSessionDisconnectedByUser(uid));
             aplicarCamposEvolutionPairing(body, pairing, waConnected);
             prep.getSetupWarning().ifPresent(w -> appendEvolutionSetupWarning(body, w));
             return ResponseEntity.ok(body);

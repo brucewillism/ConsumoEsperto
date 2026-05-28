@@ -109,14 +109,20 @@ public class EvolutionPairingService {
             return warnOnly(cred.instanceName, "Evolution API não configurada (evolution.url / evolution.apikey)");
         }
 
+        boolean sessionSuppressed = evolutionWaSessionRegistry.isUserDisconnected(usuarioId);
         Optional<String> preState = fetchConnectionStateRaw(cred);
-        if (preState.isPresent() && interpretAsWaConnected(preState.get())) {
+        if (preState.isPresent() && interpretAsWaConnected(preState.get()) && !sessionSuppressed) {
             log.info("Evolution [{}] connectionState={} — sessão WA activa (sem novo QR)", cred.instanceName, preState.get());
             return EvolutionPairingOutcomeDTO.builder()
                 .resolvedInstanceName(cred.instanceName)
                 .alreadyConnected(true)
                 .hasAlternativePairingHints(false)
                 .build();
+        }
+        if (sessionSuppressed && preState.isPresent() && interpretAsWaConnected(preState.get())) {
+            log.info(
+                "Evolution [{}] connectionState={} ignorado (utilizador desligou na app) — a pedir QR",
+                cred.instanceName, preState.get());
         }
         if (preState.isPresent()) {
             log.info("Evolution [{}] connectionState={} — sessão não activa; a pedir QR/connect", cred.instanceName, preState.get());
@@ -138,7 +144,8 @@ public class EvolutionPairingService {
                 }
 
                 JsonNode root = unwrapTopLevelEvolutionEnvelope(objectMapper.readTree(body));
-                EvolutionPairingOutcomeDTO outcome = processConnectBody(root, cred.instanceName, lastAttempt);
+                EvolutionPairingOutcomeDTO outcome = processConnectBody(
+                    root, cred.instanceName, lastAttempt, sessionSuppressed);
                 if (outcome != null) {
                     maybeLogWeakPairingResponse(cred.instanceName, attempt, retries, body, outcome);
                     return outcome;
@@ -307,7 +314,9 @@ public class EvolutionPairingService {
     /**
      * Interpreta JSON de {@code /instance/connect}. Devolve {@code null} quando convém novo GET após espera curta (QR ainda não preenchido na Evolution).
      */
-    private EvolutionPairingOutcomeDTO processConnectBody(JsonNode root, String instanceName, boolean lastAttempt) {
+    private EvolutionPairingOutcomeDTO processConnectBody(
+        JsonNode root, String instanceName, boolean lastAttempt, boolean sessionSuppressed
+    ) {
         if (root == null || root.isNull()) {
             return lastAttempt ? warnOnly(instanceName, "Resposta JSON invalida da Evolution.") : null;
         }
@@ -327,7 +336,7 @@ public class EvolutionPairingService {
                 break;
             }
         }
-        if (stAfter.isPresent() && interpretAsWaConnected(stAfter.get())) {
+        if (stAfter.isPresent() && interpretAsWaConnected(stAfter.get()) && !sessionSuppressed) {
             return EvolutionPairingOutcomeDTO.builder()
                 .resolvedInstanceName(instanceName)
                 .alreadyConnected(true)
@@ -367,7 +376,7 @@ public class EvolutionPairingService {
             }
         }
 
-        if (!lastAttempt && evolutionMayStillProduceQr(root, layers)) {
+        if (!lastAttempt && evolutionMayStillProduceQr(root, layers, sessionSuppressed)) {
             return null;
         }
 
@@ -567,7 +576,7 @@ public class EvolutionPairingService {
     /**
      * Mantém vários GETs espaçados quando a Evolution ainda pode preencher QR/pairing.
      */
-    private boolean evolutionMayStillProduceQr(JsonNode root, List<JsonNode> layers) {
+    private boolean evolutionMayStillProduceQr(JsonNode root, List<JsonNode> layers, boolean sessionSuppressed) {
         if (isEvolutionJsonError(root)) {
             return false;
         }
@@ -584,7 +593,7 @@ public class EvolutionPairingService {
         }
         for (JsonNode layer : layers) {
             Optional<String> stOpt = extractStateFromPayload(layer);
-            if (stOpt.isPresent() && interpretAsWaConnected(stOpt.get())) {
+            if (stOpt.isPresent() && interpretAsWaConnected(stOpt.get()) && !sessionSuppressed) {
                 return false;
             }
         }

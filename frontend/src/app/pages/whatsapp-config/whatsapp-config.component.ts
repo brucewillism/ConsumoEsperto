@@ -113,7 +113,11 @@ export class WhatsappConfigComponent implements OnInit {
   atualizarStatusEvolution(): void {
     this.usuarioService.getEvolutionWhatsappConnectionStatus().subscribe({
       next: (st) => {
-        this.evolutionWaConnected = st.connected === true || st.evolutionWaConnected === true;
+        const phantomOpen =
+          st.sessionMarkedDisconnected === true && (st.connected === true || st.evolutionWaConnected === true);
+        this.evolutionWaConnected = phantomOpen
+          ? false
+          : st.connected === true || st.evolutionWaConnected === true;
         if (st.instanceName) {
           this.evolutionInstanceName = st.instanceName;
         }
@@ -140,15 +144,26 @@ export class WhatsappConfigComponent implements OnInit {
       next: (response: VincularWhatsappResponse) => {
         this.numeroAtual = response?.whatsappNumero || this.numeroWhatsapp.trim();
         this.numeroWhatsapp = this.numeroAtual;
-        const waOk =
-          response?.evolutionWaConnected === true || response?.evolutionAlreadyConnected === true;
+        const waOk = response?.evolutionWaConnected === true;
+        const temQr =
+          !!(response?.evolutionQrCodeDataUri?.trim() || response?.evolutionPairingCode?.trim());
         this.evolutionWaConnected = waOk;
         if (response?.evolutionInstanceName) {
           this.evolutionInstanceName = response.evolutionInstanceName;
         }
         this.carregando = false;
 
-        this.toastService.success(response?.message || 'WhatsApp vinculado com sucesso.');
+        if (waOk) {
+          this.toastService.success(response?.message || 'WhatsApp vinculado com sucesso.');
+        } else if (temQr) {
+          this.toastService.info(
+            response?.message || 'Escaneie o QR para ligar o WhatsApp à Evolution.'
+          );
+        } else {
+          this.toastService.warning(
+            response?.message || 'Número gravado; aguarde o QR ou tente de novo.'
+          );
+        }
 
         if (!waOk) {
           const dados: WhatsappEvolutionQrDialogData = {
@@ -161,6 +176,7 @@ export class WhatsappConfigComponent implements OnInit {
             width: '480px',
             maxWidth: '95vw',
             data: dados,
+            disableClose: false,
           });
         } else if (response?.evolutionWarning) {
           this.toastService.warning(response.evolutionWarning);
@@ -189,7 +205,6 @@ export class WhatsappConfigComponent implements OnInit {
           this.evolutionInstanceName = res.instanceName;
         }
         this.toastService.success(res.message || 'Sessão Evolution desligada na app.');
-        this.atualizarStatusEvolution();
       },
       error: (error) => {
         this.carregando = false;

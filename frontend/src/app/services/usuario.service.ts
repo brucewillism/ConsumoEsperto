@@ -18,6 +18,8 @@ export interface VincularWhatsappResponse {
   evolutionPairingCode?: string | null;
   evolutionWarning?: string | null;
   evolutionHasAlternativePairingHints?: boolean;
+  /** Utilizador pediu «Desligar» — a Evolution pode ainda reportar open em cache. */
+  sessionMarkedDisconnected?: boolean;
 }
 
 /** POST /usuarios/whatsapp/evolution-pairing-refresh — mesmo formato de campos Evolution que vincular (sem dados de perfil). */
@@ -31,12 +33,15 @@ export type EvolutionPairingRefreshResponse = Pick<
   | 'evolutionHasAlternativePairingHints'
 > & {
   status?: string;
+  evolutionWaConnected?: boolean;
+  sessionMarkedDisconnected?: boolean;
 };
 
 /** GET /usuarios/whatsapp/evolution-connection-status */
 export interface EvolutionWhatsappConnectionStatusDTO {
   connected: boolean;
   evolutionWaConnected?: boolean;
+  sessionMarkedDisconnected?: boolean;
   numeroCadastrado?: boolean;
   whatsappNumero?: string;
   instanceName?: string;

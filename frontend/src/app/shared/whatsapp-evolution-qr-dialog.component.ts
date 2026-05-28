@@ -172,7 +172,10 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
         switchMap(() =>
           this.usuarioService.getEvolutionWhatsappConnectionStatus().pipe(
             switchMap((status) => {
-              if (status?.connected) {
+              const reallyConnected =
+                (status?.connected === true || status?.evolutionWaConnected === true) &&
+                status?.sessionMarkedDisconnected !== true;
+              if (reallyConnected) {
                 return of({ kind: 'connected' as const });
               }
               return this.usuarioService.refreshEvolutionPairing().pipe(
@@ -195,7 +198,10 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
         if (p?.evolutionInstanceName) {
           this.displayInstance = p.evolutionInstanceName;
         }
-        if (p?.evolutionAlreadyConnected) {
+        const refreshConnected =
+          p?.evolutionWaConnected === true &&
+          p?.sessionMarkedDisconnected !== true;
+        if (refreshConnected) {
           this.finishConnected();
           return;
         }

@@ -216,11 +216,15 @@ public class EvolutionInstanceLifecycleService {
         if (instanceName == null || instanceName.isBlank()) {
             return;
         }
-        if (evolutionPairingService.isInstanceConnectedForUser(usuarioId)) {
+        boolean suppressed = evolutionPairingService.isWaSessionDisconnectedByUser(usuarioId);
+        if (!suppressed && evolutionPairingService.isInstanceConnectedForUser(usuarioId)) {
             return;
         }
         logoutInstanceQuietly(instanceName);
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
+        if (suppressed) {
+            pauseMillis(1_500);
+        }
     }
 
     private static final class AssignResult {
