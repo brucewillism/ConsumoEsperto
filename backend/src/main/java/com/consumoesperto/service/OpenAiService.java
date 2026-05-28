@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.util.AiProviderOrder;
 import com.consumoesperto.service.AiProvidersConfigService.AiProvidersConfig;
 import com.consumoesperto.service.AiProvidersConfigService.GroqSection;
 import com.consumoesperto.service.AiProvidersConfigService.OllamaSection;
@@ -23,6 +24,7 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,6 +53,24 @@ public class OpenAiService {
 
     @Value("${consumoesperto.ai.groq-model-document:llama-3.1-8b-instant}")
     private String groqModelDocument;
+
+    @Value("${consumoesperto.ai.platform-claude-api-key:}")
+    private String platformClaudeApiKey;
+
+    @Value("${consumoesperto.ai.claude-base-url:https://api.anthropic.com}")
+    private String claudeBaseUrl;
+
+    @Value("${consumoesperto.ai.claude-model:claude-3-5-haiku-20241022}")
+    private String claudeModel;
+
+    @Value("${consumoesperto.ai.platform-deepseek-api-key:}")
+    private String platformDeepseekApiKey;
+
+    @Value("${consumoesperto.ai.deepseek-base-url:https://api.deepseek.com/v1}")
+    private String deepseekBaseUrl;
+
+    @Value("${consumoesperto.ai.deepseek-model:deepseek-chat}")
+    private String deepseekModel;
 
     /** Modelo exclusivo OpenAI / endpoint compatível {@code /v1/embeddings}. */
     @Value("${consumoesperto.ai.embedding-model:text-embedding-3-small}")
@@ -159,14 +179,15 @@ public class OpenAiService {
             "- amount deve ser número decimal sem símbolo de moeda.\n" +
             "- Sempre retornar o campo confianca com valor entre 0 e 1.";
 
+        PromptPar otimizado = aplicarSuppressorAntesDaIa(userId, systemPrompt, userPrompt, cfg, false);
         return executeAIRequestWithFallback(
             cfg,
             p -> canChatJson(cfg, p),
             (p, c) -> {
                 String model = chatModelFor(p, c);
-                return parseChatJsonForProvider(p, c, model, systemPrompt, userPrompt);
+                return parseChatJsonForProvider(p, c, model, otimizado.system(), otimizado.user());
             },
-            "Nao foi possivel processar IA (Groq/Gemini/OpenAI/Ollama). Detalhes: "
+            "Nao foi possivel processar IA (Groq/OpenAI/Claude/Gemini/DeepSeek/Ollama). Detalhes: "
         );
     }
 
@@ -300,23 +321,11 @@ public class OpenAiService {
 
     private JsonNode gerarJsonInternal(Long userId, String systemPrompt, String userPrompt, boolean documento) {
         AiProvidersConfig cfg = cfgForAi(userId);
-        String targetModel = resolveTargetModelForSuppressor(cfg, documento);
-        String sys = systemPrompt;
-        String usr = userPrompt;
-        if (tokenSuppressorService.isEnabled()) {
-            Optional<TokenSuppressorService.OptimizedPrompt> opt =
-                tokenSuppressorService.tryOptimize(userId, sys, usr, targetModel);
-            if (opt.isPresent()) {
-                sys = opt.get().systemPrompt();
-                usr = opt.get().userPrompt();
-            }
-        }
-        final String systemFinal = sys;
-        final String userFinal = usr;
-        List<AiProviderType> order = documento ? orderedProvidersDocumentoFirst(cfg) : orderedProviders(cfg);
+        PromptPar otimizado = aplicarSuppressorAntesDaIa(userId, systemPrompt, userPrompt, cfg, documento);
+        final String systemFinal = otimizado.system();
+        final String userFinal = otimizado.user();
         return executeAIRequestWithFallback(
             cfg,
-            order,
             p -> canChatJson(cfg, p),
             (p, c) -> {
                 String model = documento ? chatModelForDocument(p, c) : chatModelFor(p, c);
@@ -326,38 +335,40 @@ public class OpenAiService {
         );
     }
 
-    /** PDF/fatura: tenta Gemini antes de Groq (evita gastar quota Groq quando Gemini está configurado). */
-    private List<AiProviderType> orderedProvidersDocumentoFirst(AiProvidersConfig cfg) {
-        List<AiProviderType> base = orderedProviders(cfg);
-        if (!canChatJson(cfg, AiProviderType.GEMINI)) {
-            return base;
+    /** Token Suppressor primeiro; depois fallback Groq → OpenAI → Claude → Gemini → DeepSeek → Ollama. */
+    private PromptPar aplicarSuppressorAntesDaIa(
+        Long userId, String systemPrompt, String userPrompt, AiProvidersConfig cfg, boolean documento
+    ) {
+        String sys = systemPrompt != null ? systemPrompt : "";
+        String usr = userPrompt != null ? userPrompt : "";
+        if (!tokenSuppressorService.isEnabled()) {
+            return new PromptPar(sys, usr);
         }
-        List<AiProviderType> out = new ArrayList<>();
-        out.add(AiProviderType.GEMINI);
-        for (AiProviderType p : base) {
-            if (p != AiProviderType.GEMINI) {
-                out.add(p);
-            }
+        String targetModel = resolveTargetModelForSuppressor(cfg, documento);
+        Optional<TokenSuppressorService.OptimizedPrompt> opt =
+            tokenSuppressorService.tryOptimize(userId, sys, usr, targetModel);
+        if (opt.isPresent()) {
+            log.info("[TokenSuppressor] prompt otimizado antes da IA (saved~{} tokens)", opt.get().tokensSaved());
+            return new PromptPar(opt.get().systemPrompt(), opt.get().userPrompt());
         }
-        return out;
+        return new PromptPar(sys, usr);
     }
 
+    private record PromptPar(String system, String user) {}
+
     private String resolveTargetModelForSuppressor(AiProvidersConfig cfg, boolean documento) {
-        if (platformGeminiApiKey != null && !platformGeminiApiKey.isBlank()) {
-            return geminiModel != null && !geminiModel.isBlank() ? geminiModel : "gemini-2.5-flash";
-        }
-        GroqSection g = cfg.getGroq();
-        if (g != null) {
-            String m = documento ? groqModelDocument : g.getModelText();
-            if (m != null && !m.isBlank()) {
-                return m;
+        for (AiProviderType p : AiProviderOrder.canonicalTypes()) {
+            if (!canChatJson(cfg, p)) {
+                continue;
             }
+            if (p == AiProviderType.GROQ && documento) {
+                return chatModelForDocument(p, cfg);
+            }
+            return chatModelFor(p, cfg);
         }
-        OpenaiSection o = cfg.getOpenai();
-        if (o != null && o.getModel() != null && !o.getModel().isBlank()) {
-            return o.getModel();
-        }
-        return "gemini-2.5-flash";
+        return documento && groqModelDocument != null && !groqModelDocument.isBlank()
+            ? groqModelDocument
+            : "llama-3.1-8b-instant";
     }
 
     private String chatModelForDocument(AiProviderType p, AiProvidersConfig cfg) {
@@ -468,9 +479,7 @@ public class OpenAiService {
             throw new RuntimeException(
                 failureMessagePrefix + "nenhum provedor elegível (credenciais/URL ausentes)." + geminiHint);
         }
-        if (!canChatJson(cfg, AiProviderType.GEMINI)) {
-            errors.add("GEMINI: GEMINI_API_KEY não configurada no servidor");
-        }
+        appendMissingPlatformProviders(cfg, errors);
         throw new RuntimeException(failureMessagePrefix + String.join(" | ", errors));
     }
 
@@ -480,41 +489,32 @@ public class OpenAiService {
     }
 
     private List<AiProviderType> orderedProviders(AiProvidersConfig cfg) {
-        List<AiProviderType> out = new ArrayList<>();
-        if (cfg.getProviderOrder() != null) {
-            for (String raw : cfg.getProviderOrder()) {
-                AiProviderType t = AiProviderType.fromString(raw);
-                if (t != null && !out.contains(t)) {
-                    out.add(t);
-                }
-            }
-        }
-        for (AiProviderType t : AiProviderType.values()) {
-            if (!out.contains(t)) {
-                out.add(t);
-            }
-        }
-        return out;
+        return AiProviderOrder.canonicalTypes();
     }
 
     private boolean canChatJson(AiProvidersConfig cfg, AiProviderType p) {
         return switch (p) {
             case GROQ -> hasKey(groq(cfg)) && hasUrl(groq(cfg).getBaseUrl());
-            case GEMINI -> platformGeminiApiKey != null && !platformGeminiApiKey.isBlank() && hasUrl(geminiBaseUrl);
             case OPENAI -> hasKey(openai(cfg)) && hasUrl(openai(cfg).getBaseUrl());
+            case CLAUDE -> platformClaudeApiKey != null && !platformClaudeApiKey.isBlank() && hasUrl(claudeBaseUrl);
+            case GEMINI -> platformGeminiApiKey != null && !platformGeminiApiKey.isBlank() && hasUrl(geminiBaseUrl);
+            case DEEPSEEK -> platformDeepseekApiKey != null && !platformDeepseekApiKey.isBlank() && hasUrl(deepseekBaseUrl);
             case OLLAMA -> hasUrl(ollama(cfg).getBaseUrl());
         };
     }
 
     private boolean canVision(AiProvidersConfig cfg, AiProviderType p) {
-        return p != AiProviderType.GEMINI && canChatJson(cfg, p);
+        return switch (p) {
+            case GROQ, OPENAI, OLLAMA -> canChatJson(cfg, p);
+            case CLAUDE, GEMINI, DEEPSEEK -> false;
+        };
     }
 
     private boolean canTranscribe(AiProvidersConfig cfg, AiProviderType p) {
         return switch (p) {
             case GROQ -> hasKey(groq(cfg)) && hasUrl(groq(cfg).getBaseUrl());
-            case GEMINI -> false;
             case OPENAI -> hasKey(openai(cfg)) && hasUrl(openai(cfg).getBaseUrl());
+            case CLAUDE, GEMINI, DEEPSEEK -> false;
             case OLLAMA -> hasUrl(ollama(cfg).getBaseUrl());
         };
     }
@@ -522,8 +522,10 @@ public class OpenAiService {
     private String chatModelFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getModelText();
-            case GEMINI -> geminiModel;
             case OPENAI -> openai(cfg).getModel();
+            case CLAUDE -> claudeModel != null && !claudeModel.isBlank() ? claudeModel : "claude-3-5-haiku-20241022";
+            case GEMINI -> geminiModel;
+            case DEEPSEEK -> deepseekModel != null && !deepseekModel.isBlank() ? deepseekModel : "deepseek-chat";
             case OLLAMA -> ollama(cfg).getModel();
         };
     }
@@ -531,7 +533,9 @@ public class OpenAiService {
     private String visionModelFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getModelVision();
+            case CLAUDE -> claudeModel;
             case GEMINI -> geminiModel;
+            case DEEPSEEK -> deepseekModel;
             case OPENAI -> {
                 String m = openai(cfg).getModel();
                 if (m != null && !m.isBlank()
@@ -547,8 +551,8 @@ public class OpenAiService {
     private String whisperModelFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getWhisperModel();
-            case GEMINI -> geminiModel;
             case OPENAI -> openai(cfg).getWhisperModel();
+            case CLAUDE, GEMINI, DEEPSEEK -> "";
             case OLLAMA -> ollama(cfg).getModel();
         };
     }
@@ -556,8 +560,10 @@ public class OpenAiService {
     private String apiKeyFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getApiKey();
-            case GEMINI -> platformGeminiApiKey;
             case OPENAI -> openai(cfg).getApiKey();
+            case CLAUDE -> platformClaudeApiKey;
+            case GEMINI -> platformGeminiApiKey;
+            case DEEPSEEK -> platformDeepseekApiKey;
             case OLLAMA -> null;
         };
     }
@@ -565,8 +571,10 @@ public class OpenAiService {
     private String baseUrlFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
             case GROQ -> groq(cfg).getBaseUrl();
-            case GEMINI -> geminiBaseUrl;
             case OPENAI -> openai(cfg).getBaseUrl();
+            case CLAUDE -> claudeBaseUrl;
+            case GEMINI -> geminiBaseUrl;
+            case DEEPSEEK -> deepseekBaseUrl;
             case OLLAMA -> ollama(cfg).getBaseUrl();
         };
     }
@@ -637,13 +645,61 @@ public class OpenAiService {
         return raw.trim();
     }
 
+    private void appendMissingPlatformProviders(AiProvidersConfig cfg, List<String> errors) {
+        if (!canChatJson(cfg, AiProviderType.GEMINI)) {
+            errors.add("GEMINI: GEMINI_API_KEY não configurada no servidor");
+        }
+        if (!canChatJson(cfg, AiProviderType.CLAUDE)) {
+            errors.add("CLAUDE: CLAUDE_API_KEY não configurada no servidor");
+        }
+        if (!canChatJson(cfg, AiProviderType.DEEPSEEK)) {
+            errors.add("DEEPSEEK: DEEPSEEK_API_KEY não configurada no servidor");
+        }
+    }
+
     private JsonNode parseChatJsonForProvider(AiProviderType provider, AiProvidersConfig cfg, String model,
                                                String systemPrompt, String userPrompt) {
-        if (provider == AiProviderType.GEMINI) {
-            return parseGeminiJson(model, systemPrompt, userPrompt);
+        return switch (provider) {
+            case GEMINI -> parseGeminiJson(model, systemPrompt, userPrompt);
+            case CLAUDE -> parseClaudeJson(model, systemPrompt, userPrompt);
+            default -> parseCommandOpenAiCompatible(provider.name(), apiKeyFor(provider, cfg), baseUrlFor(provider, cfg),
+                model, systemPrompt, userPrompt);
+        };
+    }
+
+    private JsonNode parseClaudeJson(String model, String systemPrompt, String userPrompt) {
+        if (platformClaudeApiKey == null || platformClaudeApiKey.isBlank()) {
+            throw new RuntimeException("CLAUDE_API_KEY não configurada");
         }
-        return parseCommandOpenAiCompatible(provider.name(), apiKeyFor(provider, cfg), baseUrlFor(provider, cfg),
-            model, systemPrompt, userPrompt);
+        ensureBaseUrl("CLAUDE", claudeBaseUrl);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("model", model);
+        payload.put("max_tokens", 8192);
+        payload.put("system", systemPrompt);
+        payload.put("messages", List.of(Map.of("role", "user", "content", userPrompt)));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("x-api-key", platformClaudeApiKey.trim());
+        headers.set("anthropic-version", "2023-06-01");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+        String url = trimTrailingSlash(claudeBaseUrl) + "/v1/messages";
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        try {
+            JsonNode root = objectMapper.readTree(response.getBody());
+            String content = root.path("content").path(0).path("text").asText("");
+            if (content.isBlank()) {
+                throw new RuntimeException("CLAUDE retornou conteúdo vazio");
+            }
+            log.info("IA processada via CLAUDE (json)");
+            return objectMapper.readTree(stripJsonFence(content).getBytes(StandardCharsets.UTF_8));
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Falha ao interpretar resposta JSON de CLAUDE", e);
+        }
     }
 
     private JsonNode parseGeminiJson(String model, String systemPrompt, String userPrompt) {
@@ -794,7 +850,7 @@ public class OpenAiService {
         aiProvidersConfigService.applyGroqMasterFallback(cfg);
         aiProvidersConfigService.applyOpenaiMasterFallback(cfg);
         aiProvidersConfigService.applyOllamaMasterFallback(cfg);
-        aiProvidersConfigService.ensureGeminiInProviderOrder(cfg);
+        cfg.setProviderOrder(AiProviderOrder.canonicalNamesCopy());
         return cfg;
     }
 }

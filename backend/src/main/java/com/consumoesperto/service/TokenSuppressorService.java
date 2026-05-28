@@ -38,7 +38,8 @@ public class TokenSuppressorService {
     @Value("${consumoesperto.ai.token-suppressor.strategy:balanced}")
     private String strategy;
 
-    @Value("${consumoesperto.ai.token-suppressor.min-chars:1200}")
+    /** 0 = sempre otimiza quando enabled (suppressor antes de qualquer chamada de IA). */
+    @Value("${consumoesperto.ai.token-suppressor.min-chars:0}")
     private int minChars;
 
     @Value("${consumoesperto.ai.token-suppressor.timeout-ms:120000}")
@@ -58,8 +59,11 @@ public class TokenSuppressorService {
         String sys = systemPrompt != null ? systemPrompt : "";
         String usr = userPrompt != null ? userPrompt : "";
         int totalLen = sys.length() + usr.length();
-        if (totalLen < minChars) {
-            log.debug("[TokenSuppressor] prompt curto ({} chars), skip", totalLen);
+        if (minChars > 0 && totalLen < minChars) {
+            log.debug("[TokenSuppressor] prompt curto ({} chars < {}), skip", totalLen, minChars);
+            return Optional.empty();
+        }
+        if (totalLen == 0) {
             return Optional.empty();
         }
 

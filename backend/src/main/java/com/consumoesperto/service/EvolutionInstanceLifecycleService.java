@@ -262,7 +262,7 @@ public class EvolutionInstanceLifecycleService {
             .orElseThrow(() -> new RuntimeException("Usuario nao encontrado"));
         UsuarioAiConfig c = new UsuarioAiConfig();
         c.setUsuario(u);
-        c.setProviderOrderJson("[\"GROQ\",\"GEMINI\",\"OPENAI\",\"OLLAMA\"]");
+        c.setProviderOrderJson("[\"GROQ\",\"OPENAI\",\"CLAUDE\",\"GEMINI\",\"DEEPSEEK\",\"OLLAMA\"]");
         return c;
     }
 

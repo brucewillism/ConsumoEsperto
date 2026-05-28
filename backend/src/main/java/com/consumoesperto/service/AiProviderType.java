@@ -4,8 +4,10 @@ import java.util.Locale;
 
 public enum AiProviderType {
     GROQ,
-    GEMINI,
     OPENAI,
+    CLAUDE,
+    GEMINI,
+    DEEPSEEK,
     OLLAMA;
 
     public static AiProviderType fromString(String raw) {

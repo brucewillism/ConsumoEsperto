@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.security.SecurityService;
+import com.consumoesperto.util.AiProviderOrder;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
@@ -49,36 +50,6 @@ public class AiProvidersConfigService {
 
     @Value("${consumoesperto.ai.platform-gemini-api-key:}")
     private String platformGeminiApiKey;
-
-    /**
-     * Garante GEMINI na ordem de fallback quando a chave da plataforma existe (utilizadores antigos
-     * tinham só GROQ/OPENAI/OLLAMA e nunca tentavam Gemini antes do fim da cadeia).
-     */
-    public void ensureGeminiInProviderOrder(AiProvidersConfig cfg) {
-        if (cfg == null || platformGeminiApiKey == null || platformGeminiApiKey.isBlank()) {
-            return;
-        }
-        List<String> order = cfg.getProviderOrder();
-        if (order == null) {
-            order = new ArrayList<>();
-        } else {
-            order = new ArrayList<>(order);
-        }
-        boolean hasGemini = order.stream().anyMatch(s -> "GEMINI".equalsIgnoreCase(s != null ? s.trim() : ""));
-        if (hasGemini) {
-            cfg.setProviderOrder(order);
-            return;
-        }
-        int insertAt = 0;
-        for (int i = 0; i < order.size(); i++) {
-            if ("GROQ".equalsIgnoreCase(order.get(i) != null ? order.get(i).trim() : "")) {
-                insertAt = i + 1;
-                break;
-            }
-        }
-        order.add(insertAt, "GEMINI");
-        cfg.setProviderOrder(order);
-    }
 
     /**
      * Preenche a chave Groq em memória: prioridade à chave do utilizador; se vazia, usa a mestra do servidor.
@@ -242,9 +213,9 @@ public class AiProvidersConfigService {
         c.setOllamaBaseUrl(l.getBaseUrl());
         c.setOllamaModel(l.getModel());
         try {
-            c.setProviderOrderJson(objectMapper.writeValueAsString(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA")));
+            c.setProviderOrderJson(objectMapper.writeValueAsString(AiProviderOrder.canonicalNamesCopy()));
         } catch (Exception e) {
-            c.setProviderOrderJson("[\"GROQ\",\"GEMINI\",\"OPENAI\",\"OLLAMA\"]");
+            c.setProviderOrderJson("[\"GROQ\",\"OPENAI\",\"CLAUDE\",\"GEMINI\",\"DEEPSEEK\",\"OLLAMA\"]");
         }
     }
 
@@ -330,13 +301,13 @@ public class AiProvidersConfigService {
 
     private List<String> readProviderOrder(String json) {
         if (json == null || json.isBlank()) {
-            return new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA"));
+            return AiProviderOrder.canonicalNamesCopy();
         }
         try {
             List<String> list = objectMapper.readValue(json, new TypeReference<>() { });
-            return list != null && !list.isEmpty() ? new ArrayList<>(list) : new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA"));
+            return list != null && !list.isEmpty() ? new ArrayList<>(list) : AiProviderOrder.canonicalNamesCopy();
         } catch (Exception e) {
-            return new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA"));
+            return AiProviderOrder.canonicalNamesCopy();
         }
     }
 
@@ -376,7 +347,7 @@ public class AiProvidersConfigService {
 
     private static AiProvidersConfig normalize(AiProvidersConfig c) {
         if (c.getProviderOrder() == null || c.getProviderOrder().isEmpty()) {
-            c.setProviderOrder(new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA")));
+            c.setProviderOrder(AiProviderOrder.canonicalNamesCopy());
         }
         if (c.getGroq() == null) {
             c.setGroq(defaultGroq());
@@ -392,7 +363,7 @@ public class AiProvidersConfigService {
 
     private static AiProvidersConfig defaults() {
         AiProvidersConfig c = new AiProvidersConfig();
-        c.setProviderOrder(new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA")));
+        c.setProviderOrder(AiProviderOrder.canonicalNamesCopy());
         c.setGroq(defaultGroq());
         c.setOpenai(defaultOpenai());
         c.setOllama(defaultOllama());
@@ -440,7 +411,7 @@ public class AiProvidersConfigService {
     }
 
     public static class AiProvidersConfig {
-        private List<String> providerOrder = new ArrayList<>(List.of("GROQ", "GEMINI", "OPENAI", "OLLAMA"));
+        private List<String> providerOrder = AiProviderOrder.canonicalNamesCopy();
         /** Nome da instância Evolution vinculada a este usuário (webhook). */
         private String evolutionInstanceName;
         private String whatsappOwnerPhone;
