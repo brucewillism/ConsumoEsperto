@@ -96,6 +96,22 @@ input {
   margin-top: 16px;
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn.outline {
+  background: transparent;
+  border: 1px solid #f59e0b;
+  color: #fcd34d;
+}
+
+.btn.outline:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.btn.outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn {

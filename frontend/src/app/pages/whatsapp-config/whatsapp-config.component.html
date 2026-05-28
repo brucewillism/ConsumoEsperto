@@ -41,10 +41,23 @@
       <button class="btn primary" (click)="vincular()" [disabled]="carregando">
         {{ numeroAtual ? 'Atualizar vínculo' : 'Vincular número' }}
       </button>
+      <button
+        class="btn outline"
+        type="button"
+        (click)="desligarEvolution()"
+        [disabled]="carregando || !numeroAtual"
+        title="Encerra a sessão WhatsApp na Evolution (logout). O número continua na app."
+      >
+        Desligar Evolution
+      </button>
       <button class="btn danger" (click)="desvincular()" [disabled]="carregando || !numeroAtual">
-        Desvincular
+        Desvincular tudo
       </button>
     </div>
+    <p class="hint" *ngIf="numeroAtual">
+      <strong>Desligar Evolution</strong> — só fecha a sessão na API (útil se aparecer «ligada» sem estar).
+      <strong>Desvincular tudo</strong> — remove o número da app e faz logout.
+    </p>
 
     <div class="tips">
       <h3>Ligação Evolution</h3>

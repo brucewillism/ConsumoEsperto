@@ -130,6 +130,51 @@ public class EvolutionInstanceLifecycleService {
     }
 
     /**
+     * Desliga só a sessão WhatsApp na Evolution (logout + presença unavailable + restart).
+     * Mantém o número gravado na app — diferente de {@link #releaseInstanceOnUnlink}.
+     */
+    public Map<String, Object> disconnectEvolutionSession(Long usuarioId) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        evolutionPairingService.invalidatePairingCredCache(usuarioId);
+        String instanceName = evolutionPairingService.resolvedInstanceDisplayName(usuarioId);
+        out.put("instanceName", instanceName);
+
+        if (!apiConfigured() || instanceName == null || instanceName.isBlank()) {
+            out.put("status", "error");
+            out.put("message", "Evolution API não configurada.");
+            out.put("evolutionWaConnected", false);
+            return out;
+        }
+
+        evolutionPairingService.fetchConnectionStateForUser(usuarioId)
+            .ifPresent(s -> out.put("connectionStateBefore", s));
+
+        boolean logoutOk = logoutInstance(instanceName);
+        out.put("logoutRequested", logoutOk);
+        evolutionInstanceSettingsService.applyPresenceUnavailable(instanceName);
+        out.put("presenceUnavailable", true);
+        boolean restarted = evolutionInstanceSettingsService.restartInstance(instanceName);
+        out.put("instanceRestarted", restarted);
+
+        evolutionPairingService.invalidatePairingCredCache(usuarioId);
+        Optional<String> after = evolutionPairingService.fetchConnectionStateForUser(usuarioId);
+        after.ifPresent(s -> out.put("connectionStateAfter", s));
+        boolean connected = evolutionPairingService.isInstanceConnectedForUser(usuarioId);
+        out.put("evolutionWaConnected", connected);
+        out.put("status", connected ? "warning" : "success");
+        out.put(
+            "message",
+            connected
+                ? "Pedido de desligar enviado, mas a Evolution ainda reporta sessão ligada ("
+                    + after.orElse("estado desconhecido")
+                    + "). Tente Desvincular ou reinicie o contentor evolution_api."
+                : "Sessão Evolution desligada. Pode escanear o QR em Atualizar vínculo."
+        );
+        log.info("Evolution disconnect userId={} instance={} connectedAfter={}", usuarioId, instanceName, connected);
+        return out;
+    }
+
+    /**
      * Ao desvincular: encerra sessão WhatsApp na instância (libera slot para novo QR).
      */
     @Transactional
@@ -354,12 +399,16 @@ public class EvolutionInstanceLifecycleService {
     }
 
     private void logoutInstanceQuietly(String instanceName) {
+        logoutInstance(instanceName);
+    }
+
+    private boolean logoutInstance(String instanceName) {
         for (HttpMethod method : new HttpMethod[] { HttpMethod.DELETE, HttpMethod.POST }) {
             try {
                 String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/logout/" + instanceName);
                 evolutionRequest(url, method, null);
                 log.info("Evolution logout ({}) para instância {}", method, instanceName);
-                return;
+                return true;
             } catch (HttpClientErrorException e) {
                 if (e.getRawStatusCode() == 404) {
                     continue;
@@ -369,6 +418,7 @@ public class EvolutionInstanceLifecycleService {
                 log.debug("Evolution logout [{}] {}: {}", instanceName, method, ex.getMessage());
             }
         }
+        return false;
     }
 
     private String evolutionGet(String url) {

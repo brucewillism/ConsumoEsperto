@@ -132,4 +132,20 @@ export class UsuarioService {
   desvincularWhatsapp(): Observable<any> {
     return this.http.post(`${this.apiUrl}/whatsapp/desvincular`, {});
   }
+
+  /** Logout na Evolution sem apagar o número na app. */
+  desligarEvolutionWhatsapp(): Observable<EvolutionDesligarResponse> {
+    return this.http.post<EvolutionDesligarResponse>(`${this.apiUrl}/whatsapp/evolution-desligar`, {});
+  }
+}
+
+export interface EvolutionDesligarResponse {
+  status?: string;
+  message?: string;
+  instanceName?: string;
+  evolutionWaConnected?: boolean;
+  connectionStateBefore?: string;
+  connectionStateAfter?: string;
+  logoutRequested?: boolean;
+  instanceRestarted?: boolean;
 }

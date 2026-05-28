@@ -7,6 +7,7 @@ export const JARVIS_HTTP_ERROR_SKIP_PATH_SUBSTRINGS: readonly string[] = [
   '/usuarios/preferencia-tratamento',
   '/usuarios/whatsapp/vincular',
   '/usuarios/whatsapp/desvincular',
+  '/usuarios/whatsapp/evolution-desligar',
   '/usuarios/whatsapp/evolution-pairing-refresh',
   '/auth/google',
   '/notificacoes',

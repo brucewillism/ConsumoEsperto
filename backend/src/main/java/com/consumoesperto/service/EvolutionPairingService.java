@@ -166,10 +166,17 @@ public class EvolutionPairingService {
 
     @Transactional(readOnly = true)
     public boolean isInstanceConnectedForUser(Long usuarioId) {
-        ResolvedEvolutionCred cred = pairingCredSnapshot(usuarioId).cred;
-        return fetchConnectionStateRaw(cred)
+        return fetchConnectionStateForUser(usuarioId)
             .filter(this::interpretAsWaConnected)
             .isPresent();
+    }
+
+    /** Estado bruto devolvido por {@code GET /instance/connectionState/{instance}} (para UI/diagnóstico). */
+    @Transactional(readOnly = true)
+    public Optional<String> fetchConnectionStateForUser(Long usuarioId) {
+        invalidatePairingCredCache(usuarioId);
+        ResolvedEvolutionCred cred = pairingCredSnapshot(usuarioId).cred;
+        return fetchConnectionStateRaw(cred);
     }
 
     @Transactional(readOnly = true)

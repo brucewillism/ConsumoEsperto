@@ -342,6 +342,29 @@ public class UsuarioController {
         return ResponseEntity.ok(report);
     }
 
+    /**
+     * Desliga a sessão WhatsApp na Evolution (logout) sem remover o número da app.
+     */
+    @PostMapping("/whatsapp/evolution-desligar")
+    public ResponseEntity<Map<String, Object>> desligarEvolutionWhatsapp() {
+        Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
+        if (!usuarioOpt.isPresent()) {
+            return ResponseEntity.status(401).body(Map.of(
+                "status", "error",
+                "message", "Usuario nao autenticado"
+            ));
+        }
+        Map<String, Object> body = evolutionInstanceLifecycleService.disconnectEvolutionSession(usuarioOpt.get().getId());
+        String st = String.valueOf(body.getOrDefault("status", "error"));
+        if ("error".equals(st)) {
+            return ResponseEntity.badRequest().body(body);
+        }
+        if ("warning".equals(st)) {
+            return ResponseEntity.ok(body);
+        }
+        return ResponseEntity.ok(body);
+    }
+
     @GetMapping("/whatsapp/evolution-connection-status")
     public ResponseEntity<Map<String, Object>> evolutionWhatsAppConnectionStatus() {
         Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
@@ -353,11 +376,13 @@ public class UsuarioController {
         }
         Long usuarioId = usuarioOpt.get().getId();
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
+        Optional<String> rawState = evolutionPairingService.fetchConnectionStateForUser(usuarioId);
         boolean connected = evolutionPairingService.isInstanceConnectedForUser(usuarioId);
         String numero = usuarioOpt.get().getWhatsappNumero();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("connected", connected);
         body.put("evolutionWaConnected", connected);
+        rawState.ifPresent(s -> body.put("connectionState", s));
         body.put("numeroCadastrado", numero != null && !numero.isBlank());
         body.put("whatsappNumero", numero != null ? numero : "");
         body.put("instanceName", evolutionPairingService.resolvedInstanceDisplayName(usuarioId));

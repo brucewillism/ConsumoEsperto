@@ -238,6 +238,11 @@ public class EvolutionInstanceSettingsService {
         }
     }
 
+    /** Reinicia instância na Evolution (limpa estado “open” fantasma após logout). */
+    public boolean restartInstance(String instanceName) {
+        return restartInstanceQuietly(instanceName);
+    }
+
     public boolean applyPresenceUnavailable(String instanceName) {
         if (!apiConfigured() || instanceName == null || instanceName.isBlank()) {
             return false;

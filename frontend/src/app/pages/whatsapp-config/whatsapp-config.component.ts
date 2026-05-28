@@ -174,6 +174,34 @@ export class WhatsappConfigComponent implements OnInit {
     });
   }
 
+  desligarEvolution(): void {
+    if (!this.numeroAtual) {
+      this.toastService.info('Cadastre um número antes de desligar a Evolution.');
+      return;
+    }
+    this.mensagemCarregamento = 'A desligar sessão Evolution…';
+    this.carregando = true;
+    this.usuarioService.desligarEvolutionWhatsapp().subscribe({
+      next: (res) => {
+        this.carregando = false;
+        this.evolutionWaConnected = res.evolutionWaConnected === true;
+        if (res.instanceName) {
+          this.evolutionInstanceName = res.instanceName;
+        }
+        if (res.status === 'warning') {
+          this.toastService.warning(res.message || 'Evolution ainda reporta ligada.');
+        } else {
+          this.toastService.success(res.message || 'Sessão Evolution desligada.');
+        }
+        this.atualizarStatusEvolution();
+      },
+      error: (error) => {
+        this.carregando = false;
+        this.toastService.error(error?.error?.message || 'Falha ao desligar Evolution.');
+      },
+    });
+  }
+
   desvincular(): void {
     if (!this.numeroAtual) {
       this.toastService.info('Nenhum número vinculado para remover.');
