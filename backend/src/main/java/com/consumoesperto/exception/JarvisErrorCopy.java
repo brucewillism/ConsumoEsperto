@@ -40,8 +40,9 @@ public final class JarvisErrorCopy {
         "O estado atual não permite esta operação. Atualize a tela ou tente outro caminho.";
 
     public static final String AI_UNAVAILABLE_INSTRUCAO =
-        "No servidor (VPS), adicione GEMINI_API_KEY no ficheiro .env e reinicie o backend: "
-            + "docker compose up -d backend. O Gemini funciona como reserva quando Groq/OpenAI estão no limite.";
+        "No servidor (VPS), confirme no .env pelo menos um provedor de reserva (GEMINI_API_KEY ou DEEPSEEK_API_KEY), "
+            + "faça git pull, rebuild e reinicie: docker compose build backend && docker compose up -d backend. "
+            + "A ordem é Groq → OpenAI → Claude → Gemini → DeepSeek → Ollama.";
 
     private JarvisErrorCopy() {
     }
