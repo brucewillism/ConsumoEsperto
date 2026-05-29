@@ -43,8 +43,8 @@ export interface WhatsappEvolutionQrDialogData {
 
       <p class="instructions">
         No telemóvel: WhatsApp → <strong>Aparelhos ligados</strong> → <strong>Ligar um dispositivo</strong>.
-        Leia este QR (ou use o código abaixo). Se aparecer «não é possível ligar outro dispositivo», remova aparelhos antigos
-        na lista e tente outra vez.
+        Leia este QR em até ~30 s (renova-se ao atualizar). Use o <strong>código de associação</strong> abaixo se o scan falhar.
+        Se aparecer «não é possível ligar outro dispositivo», remova aparelhos antigos na lista e aguarde algumas horas — é limite do WhatsApp, não desta app.
       </p>
       <p class="instructions jarvis-hint">
         Depois do pareamento, fale com o J.A.R.V.I.S. na conversa <strong>consigo mesmo</strong> (chat «Eu»), com o número que vinculou na app.

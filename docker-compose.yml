@@ -132,7 +132,8 @@ services:
      - SERVER_URL=${EVOLUTION_SERVER_URL:-${EVOLUTION_PUBLISH:-http://127.0.0.1:8585}}
      - SERVER_PORT=8585
      - QRCODE_LIMIT=30
-     - QRCODE_COLOR=#198754
+     # Preto padrão — #198754 (verde) confundia utilizadores e alguns leitores preferem alto contraste
+     - QRCODE_COLOR=#000000
      - CONFIG_SESSION_PHONE_VERSION=2.3000.1030831524
      - CONFIG_SESSION_PHONE_CLIENT=Chrome
      - CONFIG_SESSION_PHONE_NAME=Chrome

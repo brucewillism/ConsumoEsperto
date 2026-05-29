@@ -561,7 +561,15 @@ public class EvolutionPairingService {
         for (JsonNode layer : layers) {
             pairing = firstNonBlank(pairing, extractPairingFields(layer));
         }
-        Optional<String> qrUri = resolveQrAcrossLayers(layers);
+        Optional<String> connectCode = Optional.empty();
+        for (JsonNode layer : layers) {
+            connectCode = connectCode.or(() -> firstMeaningfulCodeOne(layer));
+        }
+        // Preferir QR preto gerado localmente a partir do campo "code" — a Evolution pinta o PNG com QRCODE_COLOR (ex. verde).
+        Optional<String> qrUri = connectCode.flatMap(this::qrPngFromString);
+        if (qrUri.isEmpty()) {
+            qrUri = resolveQrAcrossLayers(layers);
+        }
 
         EvolutionPairingOutcomeDTO.EvolutionPairingOutcomeDTOBuilder b = EvolutionPairingOutcomeDTO.builder()
             .resolvedInstanceName(instanceName)
@@ -576,17 +584,6 @@ public class EvolutionPairingService {
 
         if (!pairing.isBlank()) {
             return b.hasAlternativePairingHints(true).build();
-        }
-
-        Optional<String> connectCode = Optional.empty();
-        for (JsonNode layer : layers) {
-            connectCode = connectCode.or(() -> firstMeaningfulCodeOne(layer));
-        }
-        if (connectCode.isPresent()) {
-            Optional<String> generated = qrPngFromString(connectCode.get());
-            if (generated.isPresent()) {
-                return b.qrCodeDataUri(generated.get()).hasAlternativePairingHints(false).build();
-            }
         }
 
         if (!lastAttempt && evolutionMayStillProduceQr(root, layers, sessionSuppressed)) {
