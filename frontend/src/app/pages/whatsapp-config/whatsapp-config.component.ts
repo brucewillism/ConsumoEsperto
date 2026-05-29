@@ -176,6 +176,7 @@ export class WhatsappConfigComponent implements OnInit {
           this.dialog.open(WhatsappEvolutionQrDialogComponent, {
             width: '480px',
             maxWidth: '95vw',
+            panelClass: 'ce-whatsapp-qr-dialog',
             data: dados,
             disableClose: false,
           });

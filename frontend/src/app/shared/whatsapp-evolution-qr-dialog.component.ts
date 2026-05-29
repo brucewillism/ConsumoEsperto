@@ -115,15 +115,23 @@ export interface WhatsappEvolutionQrDialogData {
         min-height: 10rem;
       }
       .qr-wrap {
-        margin: 1rem 0;
+        margin: 1rem 0 1.25rem;
         text-align: center;
+        display: inline-block;
+        width: 100%;
       }
       .qr {
         max-width: 100%;
         width: min(288px, 90vw);
         height: auto;
+        display: block;
+        margin: 0 auto;
         border-radius: 8px;
-        border: 1px solid rgba(0, 0, 0, 0.12);
+        border: none;
+        background: #fff;
+        padding: 8px;
+        box-sizing: content-box;
+        image-rendering: pixelated;
       }
       .pairing {
         word-break: break-all;
@@ -244,7 +252,7 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
           return;
         }
         const qrImg = coerceEvolutionQrDataUri(p?.evolutionQrCodeDataUri ?? undefined);
-        if (qrImg) {
+        if (qrImg && qrImg !== this.displayQr) {
           this.displayQr = qrImg;
         }
         const pairTxt =

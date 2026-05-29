@@ -653,6 +653,26 @@ a {
   color: var(--text-secondary);
 }
 
+/* Modal QR WhatsApp — evita linha cyan do divisor de scroll do Material a cortar o QR */
+.cdk-overlay-pane.ce-whatsapp-qr-dialog {
+  .mat-mdc-dialog-content,
+  .mdc-dialog__content {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .mdc-dialog--scrollable .mdc-dialog__title,
+  .mdc-dialog--scrollable .mat-mdc-dialog-title {
+    border-bottom: none !important;
+    box-shadow: none !important;
+  }
+
+  .mdc-dialog--scrollable .mat-mdc-dialog-actions,
+  .mdc-dialog--scrollable .mdc-dialog__actions {
+    border-top-color: var(--exec-border) !important;
+  }
+}
+
 .mat-mdc-dialog-container .mat-mdc-dialog-actions {
   padding-top: 12px;
   margin-top: 4px;
