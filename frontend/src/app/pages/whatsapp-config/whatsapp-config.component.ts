@@ -202,11 +202,25 @@ export class WhatsappConfigComponent implements OnInit {
     this.usuarioService.desligarEvolutionWhatsapp().subscribe({
       next: (res) => {
         this.carregando = false;
-        this.evolutionWaConnected = false;
         if (res.instanceName) {
           this.evolutionInstanceName = res.instanceName;
         }
-        this.toastService.success(res.message || 'Sessão Evolution desligada na app.');
+        const parcial =
+          res.status === 'warning' ||
+          res.evolutionApiReportsOpen === true ||
+          res.instanceDeleted === false ||
+          res.instanceRotated === true;
+        if (parcial) {
+          this.evolutionWaConnected = false;
+          this.toastService.warning(
+            res.message ||
+              'Sessão marcada como desligada na app; a Evolution pode precisar de Atualizar vínculo + QR novo.'
+          );
+        } else {
+          this.evolutionWaConnected = false;
+          this.toastService.success(res.message || 'Sessão Evolution desligada na app.');
+        }
+        this.atualizarStatusEvolution();
       },
       error: (error) => {
         this.carregando = false;
@@ -231,6 +245,7 @@ export class WhatsappConfigComponent implements OnInit {
         this.evolutionInstanceName = '';
         this.carregando = false;
         this.toastService.success('WhatsApp desvinculado. Número e sessão Evolution removidos.');
+        this.atualizarStatusEvolution();
       },
       error: (error) => {
         this.carregando = false;

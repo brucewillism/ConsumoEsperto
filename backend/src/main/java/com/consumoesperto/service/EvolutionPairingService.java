@@ -300,6 +300,18 @@ public class EvolutionPairingService {
         return fetchConnectionStateRaw(cred).filter(this::interpretAsWaConnected).isPresent();
     }
 
+    /** Sessão WA real (não «open» fantasma após logout). Usado no webhook CONNECTION_UPDATE. */
+    public boolean isVerifiedConnectedInstance(String instanceName) {
+        if (instanceName == null || instanceName.isBlank()) {
+            return false;
+        }
+        ResolvedEvolutionCred cred = new ResolvedEvolutionCred(
+            instanceName.trim(),
+            evolutionApiKey != null ? evolutionApiKey : ""
+        );
+        return isRealWaSessionOpen(cred) && !isGhostOpenStaleInstance(cred);
+    }
+
     @Transactional(readOnly = true)
     public Optional<String> fetchInstancesConnectionStatus(String instanceName) {
         if (evolutionUrl == null || evolutionUrl.isBlank()

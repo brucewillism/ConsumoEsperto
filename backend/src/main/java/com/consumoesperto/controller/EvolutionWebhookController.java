@@ -360,11 +360,18 @@ public class EvolutionWebhookController {
         if ("open".equalsIgnoreCase(state) && instance != null && !instance.isBlank()) {
             String inst = instance.trim();
             evolutionInstanceSettingsService.onInstanceConnected(inst);
-            usuarioAiConfigRepository.findByEvolutionInstanceNameIgnoreCase(inst)
-                .map(UsuarioAiConfig::getUsuario)
-                .filter(u -> u != null && u.getId() != null)
-                .map(Usuario::getId)
-                .ifPresent(evolutionPairingService::clearWaSessionDisconnectedByUser);
+            if (evolutionPairingService.isVerifiedConnectedInstance(inst)) {
+                usuarioAiConfigRepository.findByEvolutionInstanceNameIgnoreCase(inst)
+                    .map(UsuarioAiConfig::getUsuario)
+                    .filter(u -> u != null && u.getId() != null)
+                    .map(Usuario::getId)
+                    .ifPresent(evolutionPairingService::clearWaSessionDisconnectedByUser);
+            } else {
+                log.info(
+                    "Evolution CONNECTION_UPDATE open ignorado para limpar «desligado» (instância {} — sessão fantasma ou não confirmada)",
+                    inst
+                );
+            }
         }
     }
 

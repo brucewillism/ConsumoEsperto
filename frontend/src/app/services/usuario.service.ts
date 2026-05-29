@@ -151,8 +151,13 @@ export interface EvolutionDesligarResponse {
   message?: string;
   instanceName?: string;
   evolutionWaConnected?: boolean;
+  sessionMarkedDisconnected?: boolean;
   connectionStateBefore?: string;
   connectionStateAfter?: string;
   logoutRequested?: boolean;
+  instanceDeleted?: boolean;
+  instanceRotated?: boolean;
+  ghostInstanceDetected?: boolean;
+  evolutionApiReportsOpen?: boolean;
   instanceRestarted?: boolean;
 }

@@ -150,21 +150,37 @@ public class EvolutionInstanceLifecycleService {
             return instanceName;
         }
         log.warn("Evolution instância {} em estado fantasma (open/close) — a recuperar para QR", instanceName);
+        return recycleStaleInstance(usuarioId, instanceName, true);
+    }
+
+    /**
+     * Logout + delete; se delete falhar ou for preciso nome novo, grava {@code ce-uN-r<epoch>} e recria instância.
+     */
+    @Transactional
+    protected String recycleStaleInstance(Long usuarioId, String instanceName, boolean forceRename) {
+        if (!apiConfigured() || instanceName == null || instanceName.isBlank()) {
+            return instanceName;
+        }
         logoutInstanceQuietly(instanceName);
+        pauseMillis(1_500);
         boolean deleted = deleteInstance(instanceName);
         String target = instanceName;
-        if (!deleted) {
+        if (!deleted || forceRename) {
             String base = instanceName.replaceAll("-r\\d+$", "");
             target = base + "-r" + (System.currentTimeMillis() / 1000L);
-            UsuarioAiConfig cfg = usuarioAiConfigRepository.findByUsuarioId(usuarioId)
-                .orElseGet(() -> newConfigFor(usuarioId));
-            cfg.setEvolutionInstanceName(target);
-            usuarioAiConfigRepository.save(cfg);
-            log.info("Evolution: utilizador {} migrado para instância {}", usuarioId, target);
+            if (usuarioId != null && !target.equals(instanceName)) {
+                UsuarioAiConfig cfg = usuarioAiConfigRepository.findByUsuarioId(usuarioId)
+                    .orElseGet(() -> newConfigFor(usuarioId));
+                cfg.setEvolutionInstanceName(target);
+                usuarioAiConfigRepository.save(cfg);
+                log.info("Evolution: utilizador {} migrado para instância {}", usuarioId, target);
+            }
         }
         recreateInstanceForQrPairing(target);
-        evolutionPairingService.invalidatePairingCredCache(usuarioId);
-        evolutionWaSessionRegistry.markInstanceRecreateDone(usuarioId);
+        if (usuarioId != null) {
+            evolutionPairingService.invalidatePairingCredCache(usuarioId);
+            evolutionWaSessionRegistry.markInstanceRecreateDone(usuarioId);
+        }
         return target;
     }
 
@@ -172,6 +188,7 @@ public class EvolutionInstanceLifecycleService {
      * Desliga só a sessão WhatsApp na Evolution (logout + presença unavailable + restart).
      * Mantém o número gravado na app — diferente de {@link #releaseInstanceOnUnlink}.
      */
+    @Transactional
     public Map<String, Object> disconnectEvolutionSession(Long usuarioId) {
         Map<String, Object> out = new LinkedHashMap<>();
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
@@ -194,33 +211,60 @@ public class EvolutionInstanceLifecycleService {
         out.put("presenceUnavailable", true);
         boolean restarted = evolutionInstanceSettingsService.restartInstance(instanceName);
         out.put("instanceRestarted", restarted);
+        pauseMillis(1_500);
 
         boolean deleted = deleteInstance(instanceName);
         out.put("instanceDeleted", deleted);
-        if (deleted) {
+
+        EvolutionPairingService.ResolvedEvolutionCred credAfterLogout =
+            evolutionPairingService.resolveCredentials(usuarioId);
+        boolean ghost = evolutionPairingService.isGhostOpenStaleInstance(credAfterLogout);
+        out.put("ghostInstanceDetected", ghost);
+
+        String finalInstance = instanceName;
+        boolean rotated = false;
+        if (!deleted || ghost) {
+            finalInstance = recycleStaleInstance(usuarioId, instanceName, !deleted || ghost);
+            rotated = !finalInstance.equals(instanceName);
+            out.put("instanceRotated", rotated);
+            out.put("instanceName", finalInstance);
+            deleted = instanceExistsInEvolution(finalInstance);
+            out.put("instanceDeleted", deleted);
+        } else {
             recreateInstanceForQrPairing(instanceName);
+            out.put("instanceRotated", false);
         }
 
         evolutionPairingService.markWaSessionDisconnectedByUser(usuarioId);
         out.put("sessionMarkedDisconnected", true);
 
+        evolutionPairingService.invalidatePairingCredCache(usuarioId);
         Optional<String> after = evolutionPairingService.fetchConnectionStateForUser(usuarioId);
         after.ifPresent(s -> out.put("connectionStateAfter", s));
-        boolean apiStillOpen = after.filter(this::connectionStateLooksConnected).isPresent();
+        EvolutionPairingService.ResolvedEvolutionCred credFinal =
+            evolutionPairingService.resolveCredentials(usuarioId);
+        boolean apiStillOpen = evolutionPairingService.isRealWaSessionOpen(credFinal)
+            || after.filter(this::connectionStateLooksConnected).isPresent();
         out.put("evolutionApiReportsOpen", apiStillOpen);
 
         out.put("evolutionWaConnected", false);
-        out.put("status", "success");
-        out.put(
-            "message",
-            apiStillOpen
-                ? "Sessão desligada na app. A Evolution ainda pode mostrar «open» no servidor (cache) — "
-                    + "use Atualizar vínculo e escaneie o QR para ligar de novo."
-                : "Sessão Evolution desligada. Use Atualizar vínculo e escaneie o QR para ligar de novo."
-        );
+        boolean needsWarning = apiStillOpen || ghost || rotated || !Boolean.TRUE.equals(out.get("logoutRequested"));
+        out.put("status", needsWarning ? "warning" : "success");
+        StringBuilder msg = new StringBuilder("Sessão marcada como desligada na app.");
+        if (rotated) {
+            msg.append(" Instância migrada para ").append(finalInstance).append(" (a anterior estava bloqueada na Evolution).");
+        } else if (!deleted && !rotated) {
+            msg.append(" A Evolution não apagou a instância antiga — tente Atualizar vínculo para obter QR numa instância nova.");
+        }
+        if (apiStillOpen) {
+            msg.append(" O servidor ainda reporta sessão activa: use Atualizar vínculo e escaneie o QR novo.");
+        } else {
+            msg.append(" Use Atualizar vínculo e escaneie o QR para ligar de novo.");
+        }
+        out.put("message", msg.toString());
         log.info(
-            "Evolution disconnect userId={} instance={} deleted={} apiStillOpen={}",
-            usuarioId, instanceName, deleted, apiStillOpen
+            "Evolution disconnect userId={} instance={} final={} deleted={} rotated={} ghost={} apiStillOpen={}",
+            usuarioId, instanceName, finalInstance, deleted, rotated, ghost, apiStillOpen
         );
         return out;
     }
@@ -230,10 +274,10 @@ public class EvolutionInstanceLifecycleService {
      */
     @Transactional
     public void releaseInstanceOnUnlink(Long usuarioId) {
-        String instanceName = evolutionPairingService.resolvedInstanceDisplayName(usuarioId);
-        if (apiConfigured() && instanceName != null && !instanceName.isBlank()) {
-            logoutInstanceQuietly(instanceName);
+        if (usuarioId == null) {
+            return;
         }
+        disconnectEvolutionSession(usuarioId);
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
     }
 
@@ -521,20 +565,49 @@ public class EvolutionInstanceLifecycleService {
     }
 
     private boolean deleteInstance(String instanceName) {
+        if (instanceName == null || instanceName.isBlank()) {
+            return true;
+        }
+        String trimmed = instanceName.trim();
+        if (!instanceExistsInEvolution(trimmed)) {
+            return true;
+        }
+        logoutInstanceQuietly(trimmed);
+        pauseMillis(800);
         for (HttpMethod method : new HttpMethod[] { HttpMethod.DELETE, HttpMethod.POST }) {
             try {
-                String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/delete/" + instanceName);
+                String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/delete/" + trimmed);
                 evolutionRequest(url, method, null);
-                log.info("Evolution delete instance ({}) {}", method, instanceName);
-                return true;
+                pauseMillis(500);
+                if (!instanceExistsInEvolution(trimmed)) {
+                    log.info("Evolution delete instance ({}) {}", method, trimmed);
+                    return true;
+                }
             } catch (HttpClientErrorException e) {
                 if (e.getRawStatusCode() == 404) {
                     return true;
                 }
-                log.debug("Evolution delete [{}] {}: HTTP {}", instanceName, method, e.getRawStatusCode());
+                log.debug("Evolution delete [{}] {}: HTTP {}", trimmed, method, e.getRawStatusCode());
             } catch (Exception ex) {
-                log.debug("Evolution delete [{}] {}: {}", instanceName, method, ex.getMessage());
+                log.debug("Evolution delete [{}] {}: {}", trimmed, method, ex.getMessage());
             }
+        }
+        try {
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/delete");
+            Map<String, Object> body = Map.of("instanceName", trimmed);
+            evolutionRequest(url, HttpMethod.DELETE, body);
+            pauseMillis(500);
+            if (!instanceExistsInEvolution(trimmed)) {
+                log.info("Evolution delete instance (DELETE body) {}", trimmed);
+                return true;
+            }
+        } catch (HttpClientErrorException e) {
+            if (e.getRawStatusCode() == 404) {
+                return true;
+            }
+            log.debug("Evolution delete [{}] DELETE+body: HTTP {}", trimmed, e.getRawStatusCode());
+        } catch (Exception ex) {
+            log.debug("Evolution delete [{}] DELETE+body: {}", trimmed, ex.getMessage());
         }
         return false;
     }
