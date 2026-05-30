@@ -294,8 +294,16 @@ public class EvolutionPairingService {
         clearPairingMaterialCache(global);
         ResolvedEvolutionCred globalCred = new ResolvedEvolutionCred(global, cred.apiKeyHeader);
         try {
+            boolean forceQr = fetchInstancesConnectionStatus(global)
+                .filter(EvolutionPairingService::isListedAsDisconnected)
+                .isPresent()
+                || isGhostOpenStaleInstance(globalCred);
             EvolutionPairingOutcomeDTO outcome = invokeConnectForCred(
-                globalCred, cached.whatsappDigits, sessionSuppressed);
+                globalCred, cached.whatsappDigits, forceQr || sessionSuppressed);
+            if (outcome != null && outcome.isAlreadyConnected() && !hasUsablePairingMaterial(outcome)) {
+                clearPairingMaterialCache(global);
+                outcome = invokeConnectForCred(globalCred, cached.whatsappDigits, true);
+            }
             if (!hasUsablePairingMaterial(outcome)) {
                 return null;
             }
