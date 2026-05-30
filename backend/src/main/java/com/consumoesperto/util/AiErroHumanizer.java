@@ -38,6 +38,10 @@ public final class AiErroHumanizer {
         boolean semDeepseek = raw.contains("DEEPSEEK: DEEPSEEK_API_KEY não configurada")
             || raw.contains("DEEPSEEK_API_KEY não configurada");
         boolean deepseekFalhou = raw.contains("DEEPSEEK:") && !semDeepseek;
+        boolean ollamaFalhou = raw.contains("OLLAMA:");
+        boolean ollamaConn = ollamaFalhou && (raw.contains("Connection refused")
+            || raw.contains("Failed to connect") || raw.contains("connect timed out"));
+        boolean ollamaModelo = ollamaFalhou && (raw.contains("not found") || raw.contains("model"));
 
         StringBuilder sb = new StringBuilder();
         sb.append("O serviço de IA está temporariamente indisponível");
@@ -54,14 +58,24 @@ public final class AiErroHumanizer {
             sb.append(" O DeepSeek também falhou — verifique saldo/chave ou tente mais tarde.");
         } else if (!semDeepseek) {
             sb.append(" Tente novamente; o sistema deve usar DeepSeek como reserva.");
-        } else if (semGemini && semClaude && (groqLimite || openaiQuota)) {
+        }
+        if (ollamaFalhou) {
+            sb.append(" O Ollama (último fallback) não respondeu");
+            if (ollamaConn) {
+                sb.append(": contentor parado ou URL errada (use OLLAMA_BASE_URL=http://ollama:11434 no Docker).");
+            } else if (ollamaModelo) {
+                sb.append(": modelo não instalado — na VPS: docker exec consumo_ollama ollama pull llama3.2");
+            } else {
+                sb.append(" (PDF grande pode exceder capacidade do modelo local).");
+            }
+        } else if (semGemini && (groqLimite || openaiQuota || deepseekFalhou)) {
             sb.append(
-                " Configure no .env da VPS pelo menos uma reserva: GEMINI_API_KEY (Google AI Studio)"
-                    + " ou DEEPSEEK_API_KEY, depois reinicie: docker compose up -d backend.");
-        } else if (semGemini && groqLimite) {
-            sb.append(" Configure GEMINI_API_KEY ou DEEPSEEK_API_KEY no .env da VPS e reinicie o backend.");
-        } else if (groqLimite || openaiQuota) {
-            sb.append(" Tente novamente em cerca de 1–2 horas ou ative um provedor de reserva no .env.");
+                " Configure GEMINI_API_KEY no .env (Google AI Studio) para reserva na nuvem antes do Ollama.");
+        }
+        if (groqLimite || openaiQuota) {
+            if (!ollamaFalhou && !deepseekFalhou) {
+                sb.append(" Tente novamente em cerca de 1–2 horas.");
+            }
         }
         return sb.toString();
     }

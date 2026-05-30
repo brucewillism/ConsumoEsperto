@@ -20,7 +20,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
+import javax.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -42,7 +44,13 @@ public class OpenAiService {
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
     private final AiGatewayService aiGatewayService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private RestTemplate restTemplate;
+
+    @Value("${consumoesperto.ai.http.connect-timeout-ms:15000}")
+    private int aiHttpConnectTimeoutMs;
+
+    @Value("${consumoesperto.ai.http.read-timeout-ms:300000}")
+    private int aiHttpReadTimeoutMs;
 
     @Value("${consumoesperto.ai.platform-gemini-api-key:}")
     private String platformGeminiApiKey;
@@ -77,6 +85,14 @@ public class OpenAiService {
     /** Modelo exclusivo OpenAI / endpoint compatível {@code /v1/embeddings}. */
     @Value("${consumoesperto.ai.embedding-model:text-embedding-3-small}")
     private String embeddingModel;
+
+    @PostConstruct
+    void initAiRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Math.max(5_000, aiHttpConnectTimeoutMs));
+        factory.setReadTimeout(Math.max(30_000, aiHttpReadTimeoutMs));
+        restTemplate = new RestTemplate(factory);
+    }
 
     public String transcribeAudio(byte[] audioBytes, String filename, String contentType, Long userId) {
         AiProvidersConfig cfg = cfgForAi(userId);
@@ -752,16 +768,8 @@ public class OpenAiService {
     private JsonNode parseCommandOpenAiCompatible(String providerName, String key, String providerBaseUrl, String model,
                                                     String systemPrompt, String userPrompt) {
         ensureOpenAiCompatibleConfigured(providerName, key, providerBaseUrl);
-        Map<String, Object> payload = Map.of(
-            "model", model,
-            "temperature", 0.1,
-            "response_format", Map.of("type", "json_object"),
-            "messages", List.of(
-                Map.of("role", "system", "content", systemPrompt),
-                Map.of("role", "user", "content", userPrompt)
-            )
-        );
-
+        boolean ollama = AiProviderType.OLLAMA.name().equalsIgnoreCase(providerName);
+        Map<String, Object> payload = buildChatJsonPayload(model, systemPrompt, userPrompt, !ollama);
         ResponseEntity<String> response = callOpenAiCompatible(providerBaseUrl, key, payload);
         return extractJsonFromOpenAiCompatibleResponse(response.getBody(), providerName, "comando");
     }
@@ -769,11 +777,44 @@ public class OpenAiService {
     private JsonNode parseVisionOpenAiCompatible(String providerName, String key, String providerBaseUrl, String model,
                                                  String systemPrompt, String userPrompt, String imageSource) {
         ensureOpenAiCompatibleConfigured(providerName, key, providerBaseUrl);
-        Map<String, Object> payload = Map.of(
-            "model", model,
-            "temperature", 0.1,
-            "response_format", Map.of("type", "json_object"),
-            "messages", List.of(
+        boolean ollama = AiProviderType.OLLAMA.name().equalsIgnoreCase(providerName);
+        Map<String, Object> payload = buildVisionJsonPayload(model, systemPrompt, userPrompt, imageSource, !ollama);
+        ResponseEntity<String> response = callOpenAiCompatible(providerBaseUrl, key, payload);
+        return extractJsonFromOpenAiCompatibleResponse(response.getBody(), providerName, "ocr");
+    }
+
+    /** Ollama: sem {@code response_format} (mais estável); outros provedores usam JSON mode OpenAI. */
+    private static Map<String, Object> buildChatJsonPayload(
+        String model, String systemPrompt, String userPrompt, boolean useOpenAiJsonMode
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("model", model);
+        payload.put("temperature", 0.1);
+        if (useOpenAiJsonMode) {
+            payload.put("response_format", Map.of("type", "json_object"));
+        }
+        payload.put(
+            "messages",
+            List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)
+            )
+        );
+        return payload;
+    }
+
+    private static Map<String, Object> buildVisionJsonPayload(
+        String model, String systemPrompt, String userPrompt, String imageSource, boolean useOpenAiJsonMode
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("model", model);
+        payload.put("temperature", 0.1);
+        if (useOpenAiJsonMode) {
+            payload.put("response_format", Map.of("type", "json_object"));
+        }
+        payload.put(
+            "messages",
+            List.of(
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of(
                     "role", "user",
@@ -784,8 +825,7 @@ public class OpenAiService {
                 )
             )
         );
-        ResponseEntity<String> response = callOpenAiCompatible(providerBaseUrl, key, payload);
-        return extractJsonFromOpenAiCompatibleResponse(response.getBody(), providerName, "ocr");
+        return payload;
     }
 
     private ResponseEntity<String> callOpenAiCompatible(String providerBaseUrl, String key, Map<String, Object> payload) {
@@ -801,7 +841,7 @@ public class OpenAiService {
     private JsonNode extractJsonFromOpenAiCompatibleResponse(String body, String providerName, String operation) {
         try {
             JsonNode root = objectMapper.readTree(body);
-            String content = root.path("choices").path(0).path("message").path("content").asText("");
+            String content = stripJsonFence(root.path("choices").path(0).path("message").path("content").asText(""));
             if (content.isBlank()) {
                 throw new RuntimeException(providerName + " retornou " + operation + " vazio");
             }

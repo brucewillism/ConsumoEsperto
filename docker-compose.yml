@@ -103,6 +103,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      ollama:
+        condition: service_started
     # Evita proxy reverso Apache/Nginx dar 502 enquanto o Spring Boot ainda arranca (Flyway + contexto pode levar > 30 s).
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8087/api/auth/status > /dev/null"]

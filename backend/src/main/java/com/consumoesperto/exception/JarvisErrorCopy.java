@@ -40,9 +40,10 @@ public final class JarvisErrorCopy {
         "O estado atual não permite esta operação. Atualize a tela ou tente outro caminho.";
 
     public static final String AI_UNAVAILABLE_INSTRUCAO =
-        "No servidor (VPS), confirme no .env pelo menos um provedor de reserva (GEMINI_API_KEY ou DEEPSEEK_API_KEY), "
-            + "faça git pull, rebuild e reinicie: docker compose build backend && docker compose up -d backend. "
-            + "A ordem é Groq → OpenAI → Claude → Gemini → DeepSeek → Ollama.";
+        "Ordem: Groq → OpenAI → Claude → Gemini → DeepSeek → Ollama. "
+            + "Confirme GEMINI_API_KEY e/ou Ollama ativo (docker compose up -d ollama; "
+            + "docker exec consumo_ollama ollama pull llama3.2). "
+            + "Depois: git pull, docker compose build backend && docker compose up -d backend.";
 
     private JarvisErrorCopy() {
     }
