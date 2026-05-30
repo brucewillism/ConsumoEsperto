@@ -387,11 +387,12 @@ public class UsuarioController {
             ));
         }
         Long usuarioId = usuarioOpt.get().getId();
+        Optional<String> numeroReparado = whatsAppUserMappingService.repairStoredWhatsappNumeroIfNeeded(usuarioId);
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
         Optional<String> rawState = evolutionPairingService.fetchConnectionStateForUser(usuarioId);
+        boolean connected = evolutionPairingService.isInstanceConnectedForUser(usuarioId);
         boolean suppressed = evolutionPairingService.isWaSessionDisconnectedByUser(usuarioId);
-        boolean connected = !suppressed && evolutionPairingService.isInstanceConnectedForUser(usuarioId);
-        String numero = usuarioOpt.get().getWhatsappNumero();
+        String numero = numeroReparado.orElseGet(() -> usuarioOpt.get().getWhatsappNumero());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("connected", connected);
         body.put("evolutionWaConnected", connected);

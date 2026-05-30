@@ -112,7 +112,7 @@ public class EvolutionWebhookController {
         Long userId = null;
         try {
             if (instance != null && !instance.isBlank()) {
-                Optional<Long> tenantOpt = aiProvidersConfigService.resolveUsuarioIdByEvolutionInstance(instance);
+                Optional<Long> tenantOpt = evolutionPairingService.resolveUsuarioIdForEvolutionWebhook(instance);
                 if (tenantOpt.isPresent()) {
                     userId = tenantOpt.get();
                     resolution = WhatsAppWebhookPolicyService.TenantResolution.BY_EVOLUTION_INSTANCE;
@@ -361,11 +361,7 @@ public class EvolutionWebhookController {
             String inst = instance.trim();
             evolutionInstanceSettingsService.onInstanceConnected(inst);
             if (evolutionPairingService.isVerifiedConnectedInstance(inst)) {
-                usuarioAiConfigRepository.findByEvolutionInstanceNameIgnoreCase(inst)
-                    .map(UsuarioAiConfig::getUsuario)
-                    .filter(u -> u != null && u.getId() != null)
-                    .map(Usuario::getId)
-                    .ifPresent(evolutionPairingService::clearWaSessionDisconnectedByUser);
+                evolutionPairingService.onVerifiedInstanceConnected(inst);
             } else {
                 log.info(
                     "Evolution CONNECTION_UPDATE open ignorado para limpar «desligado» (instância {} — sessão fantasma ou não confirmada)",

@@ -173,10 +173,20 @@ public class WhatsAppBotAllowlist {
         return s.replaceAll("\\D", "");
     }
 
+    /** Perfil gravado como +819… (sem 55) passa a comparar com JID 5581… da Evolution. */
+    private static String normalizeBrazilMsisdnDigits(String digits) {
+        if (digits == null || digits.isBlank()) {
+            return "";
+        }
+        return WhatsAppUserMappingService.applyBrazilCountryCodeIfNational(digits);
+    }
+
     /**
      * Igualdade de MSISDN; se ambos começam com 55 (BR), aceita troca do nono dígito do móvel.
      */
     private static boolean brMsisdnMatches(String aDigits, String bDigits) {
+        aDigits = normalizeBrazilMsisdnDigits(aDigits);
+        bDigits = normalizeBrazilMsisdnDigits(bDigits);
         if (aDigits.equals(bDigits)) {
             return true;
         }

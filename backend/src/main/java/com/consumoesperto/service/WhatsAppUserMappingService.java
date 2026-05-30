@@ -79,6 +79,33 @@ public class WhatsAppUserMappingService {
     }
 
     @Transactional
+    public Optional<String> repairStoredWhatsappNumeroIfNeeded(Long usuarioId) {
+        if (usuarioId == null) {
+            return Optional.empty();
+        }
+        Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
+        if (usuario == null) {
+            return Optional.empty();
+        }
+        String stored = usuario.getWhatsappNumero();
+        if (stored == null || stored.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            String fixed = normalize(stored);
+            if (!fixed.equals(stored)) {
+                usuario.setWhatsappNumero(fixed);
+                usuarioRepository.save(usuario);
+                log.info("WhatsApp do utilizador id={} corrigido de {} para {}", usuarioId, stored, fixed);
+            }
+            return Optional.of(fixed);
+        } catch (RuntimeException e) {
+            log.debug("Correcção automática do número WhatsApp ignorada (userId={}): {}", usuarioId, e.getMessage());
+            return Optional.of(stored);
+        }
+    }
+
+    @Transactional
     public Usuario unlinkWhatsAppNumber(Long usuarioId) {
         Usuario usuario = usuarioRepository.findById(usuarioId)
             .orElseThrow(() -> new RuntimeException("Usuario nao encontrado"));
@@ -103,6 +130,7 @@ public class WhatsAppUserMappingService {
         }
 
         String onlyDigits = digits.replace("+", "");
+        onlyDigits = applyBrazilCountryCodeIfNational(onlyDigits);
         if (onlyDigits.length() < 10 || onlyDigits.length() > 15) {
             throw new RuntimeException("Numero de WhatsApp invalido. Use formato internacional, ex: +5511999999999");
         }
@@ -110,11 +138,31 @@ public class WhatsAppUserMappingService {
         return "+" + onlyDigits;
     }
 
+    /**
+     * Números BR sem código do país (ex. 81986561809 ou +81986561809) são tratados como DDD+número, não como +81 (Japão).
+     */
+    static String applyBrazilCountryCodeIfNational(String onlyDigits) {
+        if (onlyDigits == null || onlyDigits.isBlank()) {
+            return onlyDigits;
+        }
+        String d = onlyDigits.replace("+", "").trim();
+        if (d.startsWith("55")) {
+            return d;
+        }
+        if (d.length() == 10 || d.length() == 11) {
+            return "55" + d;
+        }
+        return d;
+    }
+
     private List<String> buildLookupCandidates(String normalized) {
         Set<String> candidates = new LinkedHashSet<>();
         candidates.add(normalized);
 
         String digits = normalized.replace("+", "");
+        if (!digits.startsWith("55") && (digits.length() == 10 || digits.length() == 11)) {
+            candidates.add("+55" + digits);
+        }
         // BR: +55 + DDD(2) + numero(8|9). Algumas fontes removem/adicionam o nono digito.
         if (digits.startsWith("55")) {
             String national = digits.substring(2);

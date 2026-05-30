@@ -417,11 +417,160 @@ public class EvolutionPairingService {
 
     @Transactional(readOnly = true)
     public boolean isInstanceConnectedForUser(Long usuarioId) {
-        if (evolutionWaSessionRegistry.isUserDisconnected(usuarioId)) {
+        ResolvedEvolutionCred cred = pairingCredSnapshot(usuarioId).cred;
+        if (isRealWaSessionOpen(cred)) {
+            if (evolutionWaSessionRegistry.isUserDisconnected(usuarioId)) {
+                clearWaSessionDisconnectedByUser(usuarioId);
+            }
+            return true;
+        }
+        if (pairingFallbackToGlobalInstance && isDedicatedEvolutionInstance(cred.instanceName)) {
+            ResolvedEvolutionCred globalCred = globalInstanceCred();
+            if (isRealWaSessionOpen(globalCred)) {
+                adoptGlobalInstanceForPairing(usuarioId);
+                clearWaSessionDisconnectedByUser(usuarioId);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private ResolvedEvolutionCred globalInstanceCred() {
+        String global = globalInstanceName();
+        String api = evolutionApiKey != null ? evolutionApiKey.trim() : "";
+        return new ResolvedEvolutionCred(global, api);
+    }
+
+    /**
+     * Webhook Evolution: instância global (ex. ConsumoEsperto no Manager) pode não estar em {@link UsuarioAiConfig}
+     * se o utilizador ainda tiver {@code ce-u*} na BD.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> resolveUsuarioIdForEvolutionWebhook(String instanceName) {
+        if (instanceName == null || instanceName.isBlank()) {
+            return Optional.empty();
+        }
+        String inst = instanceName.trim();
+        Optional<Long> byCfg = usuarioAiConfigRepository.findByEvolutionInstanceNameIgnoreCase(inst)
+            .map(c -> c.getUsuario())
+            .filter(u -> u != null && u.getId() != null)
+            .map(Usuario::getId);
+        if (byCfg.isPresent()) {
+            return byCfg;
+        }
+        if (!globalInstanceName().equalsIgnoreCase(inst)) {
+            return Optional.empty();
+        }
+        Optional<String> ownerDigits = fetchInstanceOwnerDigits(inst);
+        List<Usuario> linked = usuarioRepository.findAllWithWhatsappLinked();
+        if (ownerDigits.isPresent()) {
+            String owner = ownerDigits.get();
+            for (Usuario u : linked) {
+                if (u.getWhatsappNumero() != null
+                    && msisdnDigitsMatch(owner, digitsOnly(u.getWhatsappNumero()))) {
+                    return Optional.of(u.getId());
+                }
+            }
+        }
+        if (linked.size() == 1) {
+            return Optional.of(linked.get(0).getId());
+        }
+        return Optional.empty();
+    }
+
+    /** Após CONNECTION_UPDATE open na instância global: adopt + limpar «desligado» na app. */
+    @Transactional
+    public void onVerifiedInstanceConnected(String instanceName) {
+        if (instanceName == null || instanceName.isBlank() || !isVerifiedConnectedInstance(instanceName)) {
+            return;
+        }
+        String inst = instanceName.trim();
+        usuarioAiConfigRepository.findByEvolutionInstanceNameIgnoreCase(inst)
+            .map(UsuarioAiConfig::getUsuario)
+            .filter(u -> u != null && u.getId() != null)
+            .map(Usuario::getId)
+            .ifPresent(this::clearWaSessionDisconnectedByUser);
+        if (globalInstanceName().equalsIgnoreCase(inst)) {
+            resolveUsuarioIdForEvolutionWebhook(inst).ifPresent(uid -> {
+                adoptGlobalInstanceForPairing(uid);
+                clearWaSessionDisconnectedByUser(uid);
+            });
+        }
+    }
+
+    public Optional<String> fetchInstanceOwnerDigits(String instanceName) {
+        if (evolutionUrl == null || evolutionUrl.isBlank()
+            || evolutionApiKey == null || evolutionApiKey.isBlank()
+            || instanceName == null || instanceName.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/fetchInstances");
+            String body = evolutionGet(url, evolutionApiKey.trim());
+            if (body == null || body.isBlank()) {
+                return Optional.empty();
+            }
+            JsonNode root = objectMapper.readTree(body);
+            if (!root.isArray()) {
+                return Optional.empty();
+            }
+            for (JsonNode item : root) {
+                if (item == null || !instanceName.equals(item.path("name").asText("").trim())) {
+                    continue;
+                }
+                String owner = firstNonBlankJson(
+                    item.path("ownerJid").asText(""),
+                    item.path("owner").asText(""),
+                    item.path("number").asText("")
+                );
+                if (owner.isBlank()) {
+                    return Optional.empty();
+                }
+                String d = owner.replaceAll("\\D", "");
+                if (d.length() >= 10) {
+                    return Optional.of(WhatsAppUserMappingService.applyBrazilCountryCodeIfNational(d));
+                }
+            }
+        } catch (Exception e) {
+            log.debug("fetchInstanceOwnerDigits [{}]: {}", instanceName, e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    private static String firstNonBlankJson(String... parts) {
+        for (String p : parts) {
+            if (p != null && !p.isBlank()) {
+                return p.trim();
+            }
+        }
+        return "";
+    }
+
+    private static String digitsOnly(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replaceAll("\\D", "");
+    }
+
+    private static boolean msisdnDigitsMatch(String a, String b) {
+        String na = WhatsAppUserMappingService.applyBrazilCountryCodeIfNational(digitsOnly(a));
+        String nb = WhatsAppUserMappingService.applyBrazilCountryCodeIfNational(digitsOnly(b));
+        if (na.equals(nb)) {
+            return true;
+        }
+        if (!na.startsWith("55") || !nb.startsWith("55") || na.length() < 12 || nb.length() < 12) {
             return false;
         }
-        ResolvedEvolutionCred cred = pairingCredSnapshot(usuarioId).cred;
-        return isRealWaSessionOpen(cred);
+        String naNat = na.substring(2);
+        String nbNat = nb.substring(2);
+        if (naNat.length() == 10 && nbNat.length() == 11 && nbNat.charAt(2) == '9') {
+            return naNat.equals(nbNat.substring(0, 2) + nbNat.substring(3));
+        }
+        if (nbNat.length() == 10 && naNat.length() == 11 && naNat.charAt(2) == '9') {
+            return nbNat.equals(naNat.substring(0, 2) + naNat.substring(3));
+        }
+        return false;
     }
 
     /**

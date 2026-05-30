@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -91,4 +92,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
      * @return true se ja existe vinculo
      */
     boolean existsByWhatsappNumero(String whatsappNumero);
+
+    @Query("SELECT u FROM Usuario u WHERE u.whatsappNumero IS NOT NULL AND TRIM(u.whatsappNumero) <> ''")
+    List<Usuario> findAllWithWhatsappLinked();
 }
