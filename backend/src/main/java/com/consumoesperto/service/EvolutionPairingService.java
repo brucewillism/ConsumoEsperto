@@ -52,6 +52,7 @@ public class EvolutionPairingService {
     private final UsuarioRepository usuarioRepository;
     private final ObjectMapper objectMapper;
     private final EvolutionWaSessionRegistry evolutionWaSessionRegistry;
+    private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
 
     private RestTemplate restTemplate;
 
@@ -86,6 +87,12 @@ public class EvolutionPairingService {
 
     @Value("${consumoesperto.evolution.manager-url:http://127.0.0.1:8585/manager}")
     private String evolutionManagerUrl;
+
+    /**
+     * Se {@code ce-u*} não gera QR válido, usa {@code ConsumoEsperto} (mesma instância do Evolution Manager).
+     */
+    @Value("${consumoesperto.evolution.pairing.fallback-to-global-instance:true}")
+    private boolean pairingFallbackToGlobalInstance;
 
     private final ConcurrentHashMap<Long, PairingCredCacheEntry> pairingCredCache = new ConcurrentHashMap<>();
 
@@ -175,7 +182,7 @@ public class EvolutionPairingService {
             || (o.getPairingCode() != null && !o.getPairingCode().isBlank());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public EvolutionPairingOutcomeDTO invokeInstanceConnect(Long usuarioId) {
         PairingCredCacheEntry cached = pairingCredSnapshot(usuarioId);
         ResolvedEvolutionCred cred = cached.cred;
@@ -198,6 +205,13 @@ public class EvolutionPairingService {
                 .hasAlternativePairingHints(false)
                 .build();
         }
+
+        EvolutionPairingOutcomeDTO managerQr = tryConnectViaGlobalManagerInstance(
+            usuarioId, cred, cached, sessionSuppressed, true);
+        if (managerQr != null) {
+            return managerQr;
+        }
+
         if (sessionSuppressed || isGhostOpenStaleInstance(cred)) {
             log.info(
                 "Evolution [{}] a pedir QR (suppressed={} ghostOpen={})",
@@ -205,65 +219,192 @@ public class EvolutionPairingService {
         }
 
         try {
-            String urlBase = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/connect/" + cred.instanceName);
-            String url = appendNumberQueryIfPresent(urlBase, cached.whatsappDigits);
-            int retries = Math.max(1, Math.min(connectRetries, 12));
-            if (sessionSuppressed) {
-                retries = Math.max(retries, 8);
+            EvolutionPairingOutcomeDTO primary = invokeConnectForCred(
+                cred, cached.whatsappDigits, sessionSuppressed);
+            if (hasUsablePairingMaterial(primary)) {
+                return primary;
             }
-            for (int attempt = 0; attempt < retries; attempt++) {
-                boolean lastAttempt = attempt == retries - 1;
-                String body = evolutionGet(url, cred.apiKeyHeader);
-                EvolutionPairingOutcomeDTO outcome = parseConnectHttpBody(
-                    body, cred.instanceName, lastAttempt, sessionSuppressed);
-                if (outcome == null && !lastAttempt) {
-                    String postBody = evolutionPostConnect(url, cred.apiKeyHeader);
-                    outcome = parseConnectHttpBody(
-                        postBody, cred.instanceName, lastAttempt, sessionSuppressed);
-                }
-                if (outcome == null && (body == null || body.isBlank())) {
-                    if (lastAttempt) {
-                        return warnOnly(cred.instanceName, "Resposta vazia de /instance/connect" + pairingServerUrlHint());
-                    }
-                    pauseMillis(safePause());
-                    continue;
-                }
-                if (outcome != null) {
-                    if (hasUsablePairingMaterial(outcome)) {
-                        recentPairingByInstance.put(
-                            cred.instanceName,
-                            new CachedInstancePairing(outcome, System.currentTimeMillis() + 120_000L)
-                        );
-                    }
-                    maybeLogWeakPairingResponse(cred.instanceName, attempt, retries, body, outcome);
-                    return outcome;
-                }
-                if (!lastAttempt) {
-                    log.debug(
-                        "/instance/connect ainda sem QR pareado (instancia={}); nova tentativa após espera ({}/{})",
-                        cred.instanceName, attempt + 1, retries - 1);
-                    pauseMillis(safePause());
-                }
+            EvolutionPairingOutcomeDTO fallback = tryConnectViaGlobalManagerInstance(
+                usuarioId, cred, cached, sessionSuppressed, false);
+            if (fallback != null) {
+                return fallback;
+            }
+            if (primary != null) {
+                return primary;
             }
             return warnOnly(
                 cred.instanceName,
                 "Não foi possível obter o QR pela REST da Evolution após várias tentativas. "
                     + "Abra o Manager da Evolution"
-                    + (getManagerUrlForInstance(cred.instanceName).isBlank()
+                    + (getManagerUrlForInstance(globalInstanceName()).isBlank()
                         ? ""
-                        : " (" + getManagerUrlForInstance(cred.instanceName) + ")")
-                    + " ou corrija EVOLUTION_SERVER_URL."
+                        : " (" + getManagerUrlForInstance(globalInstanceName()) + ")")
+                    + " — instância «" + globalInstanceName() + "»."
                     + pairingServerUrlHint());
 
         } catch (HttpClientErrorException | HttpServerErrorException e) {
             String msg = summarizeHttpError(e.getRawStatusCode(),
                 e.getResponseBodyAsString() != null ? e.getResponseBodyAsString() : e.getMessage());
             log.warn("Evolution /instance/connect falhou [{}]: {}", cred.instanceName, msg);
+            EvolutionPairingOutcomeDTO fallback = tryConnectViaGlobalManagerInstance(
+                usuarioId, cred, cached, sessionSuppressed, false);
+            if (fallback != null) {
+                return fallback;
+            }
             return warnOnly(cred.instanceName, msg);
         } catch (Exception ex) {
             log.warn("Evolution /instance/connect erro [{}]: {}", cred.instanceName, ex.getMessage());
             return warnOnly(cred.instanceName, ex.getMessage() != null ? ex.getMessage() : "Erro Evolution");
         }
+    }
+
+    /**
+     * Mesmo QR do Evolution Manager ({@code EVOLUTION_INSTANCE}, ex. ConsumoEsperto) quando {@code ce-u*} falha.
+     */
+    private EvolutionPairingOutcomeDTO tryConnectViaGlobalManagerInstance(
+        Long usuarioId,
+        ResolvedEvolutionCred cred,
+        PairingCredCacheEntry cached,
+        boolean sessionSuppressed,
+        boolean onlyWhenDedicatedWeak
+    ) {
+        if (!pairingFallbackToGlobalInstance || usuarioId == null) {
+            return null;
+        }
+        String global = globalInstanceName();
+        if (global.equalsIgnoreCase(cred.instanceName) || !isDedicatedEvolutionInstance(cred.instanceName)) {
+            return null;
+        }
+        if (onlyWhenDedicatedWeak) {
+            Optional<String> listed = fetchInstancesConnectionStatus(cred.instanceName);
+            boolean weak = listed
+                .map(s -> "connecting".equalsIgnoreCase(s.trim()) || isListedAsDisconnected(s))
+                .orElse(true);
+            if (!weak) {
+                return null;
+            }
+        }
+        log.info(
+            "Evolution: a usar instância global {} (Manager) em vez de {}",
+            global,
+            cred.instanceName
+        );
+        evolutionInstanceSettingsService.restartInstance(global);
+        pauseMillis(2_000);
+        clearPairingMaterialCache(global);
+        ResolvedEvolutionCred globalCred = new ResolvedEvolutionCred(global, cred.apiKeyHeader);
+        try {
+            EvolutionPairingOutcomeDTO outcome = invokeConnectForCred(
+                globalCred, cached.whatsappDigits, sessionSuppressed);
+            if (!hasUsablePairingMaterial(outcome)) {
+                return null;
+            }
+            adoptGlobalInstanceForPairing(usuarioId);
+            return withExtraWarning(
+                outcome,
+                "QR da instância «" + global + "» (igual ao Evolution Manager). Mensagens usarão esta instância."
+            );
+        } catch (Exception e) {
+            log.warn("Evolution fallback global [{}]: {}", global, e.getMessage());
+            return null;
+        }
+    }
+
+    private EvolutionPairingOutcomeDTO invokeConnectForCred(
+        ResolvedEvolutionCred cred,
+        Optional<String> whatsappDigits,
+        boolean sessionSuppressed
+    ) {
+        String urlBase = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/connect/" + cred.instanceName);
+        String url = appendNumberQueryIfPresent(urlBase, whatsappDigits);
+        int retries = Math.max(1, Math.min(connectRetries, 12));
+        if (sessionSuppressed) {
+            retries = Math.max(retries, 8);
+        }
+        EvolutionPairingOutcomeDTO lastOutcome = null;
+        for (int attempt = 0; attempt < retries; attempt++) {
+            boolean lastAttempt = attempt == retries - 1;
+            String body = evolutionGet(url, cred.apiKeyHeader);
+            EvolutionPairingOutcomeDTO outcome = parseConnectHttpBody(
+                body, cred.instanceName, lastAttempt, sessionSuppressed);
+            if (outcome == null && !lastAttempt) {
+                String postBody = evolutionPostConnect(url, cred.apiKeyHeader);
+                outcome = parseConnectHttpBody(
+                    postBody, cred.instanceName, lastAttempt, sessionSuppressed);
+            }
+            if (outcome == null && (body == null || body.isBlank())) {
+                if (lastAttempt) {
+                    return warnOnly(cred.instanceName, "Resposta vazia de /instance/connect" + pairingServerUrlHint());
+                }
+                pauseMillis(safePause());
+                continue;
+            }
+            if (outcome != null) {
+                lastOutcome = outcome;
+                if (hasUsablePairingMaterial(outcome)) {
+                    recentPairingByInstance.put(
+                        cred.instanceName,
+                        new CachedInstancePairing(outcome, System.currentTimeMillis() + 120_000L)
+                    );
+                    maybeLogWeakPairingResponse(cred.instanceName, attempt, retries, body, outcome);
+                    return outcome;
+                }
+                if (!lastAttempt) {
+                    log.debug(
+                        "/instance/connect ainda sem QR (instancia={}); tentativa {}/{}",
+                        cred.instanceName, attempt + 1, retries - 1);
+                    pauseMillis(safePause());
+                }
+            }
+        }
+        return lastOutcome;
+    }
+
+    @Transactional
+    protected void adoptGlobalInstanceForPairing(Long usuarioId) {
+        String global = globalInstanceName();
+        usuarioAiConfigRepository.findByUsuarioId(usuarioId).ifPresent(cfg -> {
+            if (!global.equalsIgnoreCase(cfg.getEvolutionInstanceName())) {
+                cfg.setEvolutionInstanceName(global);
+                usuarioAiConfigRepository.save(cfg);
+                log.info("Utilizador {} passou a usar instância Evolution {}", usuarioId, global);
+            }
+        });
+        invalidatePairingCredCache(usuarioId);
+        clearPairingMaterialCache(global);
+    }
+
+    private static boolean isDedicatedEvolutionInstance(String instanceName) {
+        return instanceName != null && instanceName.matches("(?i)ce-u\\d+(-r\\d+)?");
+    }
+
+    private String globalInstanceName() {
+        return (defaultEvolutionInstance != null && !defaultEvolutionInstance.trim().isEmpty())
+            ? defaultEvolutionInstance.trim()
+            : "ConsumoEsperto";
+    }
+
+    private static EvolutionPairingOutcomeDTO withExtraWarning(
+        EvolutionPairingOutcomeDTO outcome,
+        String extra
+    ) {
+        if (outcome == null) {
+            return null;
+        }
+        String merged = outcome.getEvolutionWarning();
+        if (merged == null || merged.isBlank()) {
+            merged = extra;
+        } else if (!merged.contains(extra)) {
+            merged = merged + " " + extra;
+        }
+        return EvolutionPairingOutcomeDTO.builder()
+            .resolvedInstanceName(outcome.getResolvedInstanceName())
+            .qrCodeDataUri(outcome.getQrCodeDataUri())
+            .pairingCode(outcome.getPairingCode())
+            .alreadyConnected(outcome.isAlreadyConnected())
+            .evolutionWarning(merged)
+            .hasAlternativePairingHints(outcome.isHasAlternativePairingHints())
+            .build();
     }
 
     @Transactional(readOnly = true)

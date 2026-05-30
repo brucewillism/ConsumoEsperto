@@ -38,7 +38,8 @@ export interface WhatsappEvolutionQrDialogData {
 
       <p class="manager-link" *ngIf="managerUrl">
         <a [href]="managerUrl" target="_blank" rel="noopener noreferrer">Abrir Manager da Evolution</a>
-        (instância <strong>{{ displayInstance }}</strong>) — se o QR não aparecer aqui, leia-o no Manager.
+        (instância <strong>{{ displayInstance }}</strong>).
+        O QR desta app é o mesmo pedido REST do Manager — se lá ligar e aqui não, use <strong>Desligar Evolution</strong> e <strong>Atualizar vínculo</strong>.
       </p>
 
       <p class="instructions">
