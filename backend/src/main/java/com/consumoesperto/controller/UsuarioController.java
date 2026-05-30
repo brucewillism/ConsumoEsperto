@@ -191,10 +191,10 @@ public class UsuarioController {
             com.consumoesperto.model.Usuario usuario = usuarioOpt.get();
             com.consumoesperto.model.Usuario atualizado = whatsAppUserMappingService.linkWhatsAppNumber(usuario.getId(), numero);
 
+            evolutionPairingService.clearWaSessionDisconnectedByUser(usuario.getId());
             EvolutionInstanceLifecycleService.PrepareInstanceResult prep =
                 evolutionInstanceLifecycleService.prepareInstanceForPairing(usuario.getId());
-            evolutionInstanceLifecycleService.resetSessionBeforePairing(
-                usuario.getId(), prep.skipLogoutBeforeConnect());
+            evolutionInstanceLifecycleService.primeInstanceForQrConnect(usuario.getId());
 
             evolutionPairingService.invalidatePairingCredCache(usuario.getId());
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(usuario.getId());
@@ -252,10 +252,10 @@ public class UsuarioController {
                 ));
             }
             Long uid = usuarioOpt.get().getId();
-            // Sem logout em cada poll; recria instância no máx. 1×/45 s se sessão «desligada» (open fantasma).
+            evolutionPairingService.clearWaSessionDisconnectedByUser(uid);
             EvolutionInstanceLifecycleService.PrepareInstanceResult prep =
                 evolutionInstanceLifecycleService.prepareInstanceForPairing(uid);
-            evolutionInstanceLifecycleService.ensureFreshInstanceWhenPairingAfterDisconnect(uid);
+            evolutionInstanceLifecycleService.primeInstanceForQrConnect(uid);
             evolutionPairingService.invalidatePairingCredCache(uid);
             EvolutionPairingOutcomeDTO pairing = evolutionPairingService.invokeInstanceConnect(uid);
             boolean waConnected = evolutionPairingService.isInstanceConnectedForUser(uid);

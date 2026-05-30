@@ -223,6 +223,9 @@ public class EvolutionInstanceLifecycleService {
 
         String finalInstance = instanceName;
         boolean rotated = false;
+        evolutionInstanceSettingsService.restartInstance(instanceName);
+        pauseMillis(2_000);
+        evolutionPairingService.clearPairingMaterialCache(instanceName);
         if (!deleted || ghost) {
             finalInstance = recycleStaleInstance(usuarioId, instanceName, !deleted || ghost);
             rotated = !finalInstance.equals(instanceName);
@@ -231,7 +234,6 @@ public class EvolutionInstanceLifecycleService {
             deleted = instanceExistsInEvolution(finalInstance);
             out.put("instanceDeleted", deleted);
         } else {
-            recreateInstanceForQrPairing(instanceName);
             out.put("instanceRotated", false);
         }
 
@@ -282,31 +284,48 @@ public class EvolutionInstanceLifecycleService {
     }
 
     /**
-     * Reinicia sessão antes de novo QR — apenas no vínculo inicial, não no polling do modal
-     * (logout repetido impede a Evolution de gerar o QR).
-     *
-     * @param skipLogout quando true (instância nova), não chama {@code /instance/logout}
+     * Prepara a instância para novo QR: restart se estiver {@code connecting}/{@code close}
+     * (evita logout destrutivo que invalidava o scan após «Desligar Evolution»).
      */
-    public void resetSessionBeforePairing(Long usuarioId, boolean skipLogout) {
-        if (skipLogout || !apiConfigured()) {
+    public void primeInstanceForQrConnect(Long usuarioId) {
+        if (!apiConfigured() || usuarioId == null) {
             return;
         }
+        evolutionPairingService.invalidatePairingCredCache(usuarioId);
         String instanceName = evolutionPairingService.resolvedInstanceDisplayName(usuarioId);
         if (instanceName == null || instanceName.isBlank()) {
             return;
         }
-        boolean suppressed = evolutionPairingService.isWaSessionDisconnectedByUser(usuarioId);
-        if (!suppressed && evolutionPairingService.isInstanceConnectedForUser(usuarioId)) {
+        if (evolutionPairingService.isInstanceConnectedForUser(usuarioId)) {
             return;
         }
-        if (suppressed) {
-            recreateInstanceForQrPairing(instanceName);
-            evolutionWaSessionRegistry.markInstanceRecreateDone(usuarioId);
-        } else {
-            logoutInstanceQuietly(instanceName);
-            pauseMillis(1_500);
+        Optional<String> listed = evolutionPairingService.fetchInstancesConnectionStatus(instanceName);
+        String st = listed.orElse("").trim().toLowerCase(Locale.ROOT);
+        boolean stuck = st.isEmpty()
+            || "connecting".equals(st)
+            || "close".equals(st)
+            || "closed".equals(st)
+            || "disconnected".equals(st)
+            || "disconnect".equals(st)
+            || "refused".equals(st)
+            || "logout".equals(st);
+        if (stuck) {
+            log.info("Evolution [{}] estado {} — restart antes do QR", instanceName, st.isBlank() ? "?" : st);
+            evolutionInstanceSettingsService.restartInstance(instanceName);
+            pauseMillis(2_500);
+            evolutionPairingService.clearPairingMaterialCache(instanceName);
         }
-        evolutionPairingService.invalidatePairingCredCache(usuarioId);
+    }
+
+    /**
+     * @deprecated Preferir {@link #primeInstanceForQrConnect}; mantido para compatibilidade interna.
+     */
+    @Deprecated
+    public void resetSessionBeforePairing(Long usuarioId, boolean skipLogout) {
+        if (skipLogout || !apiConfigured()) {
+            return;
+        }
+        primeInstanceForQrConnect(usuarioId);
     }
 
     /**

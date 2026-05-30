@@ -112,6 +112,13 @@ public class EvolutionPairingService {
             pairingCredCache.remove(usuarioId);
         }
     }
+
+    /** Força novo GET /instance/connect (ex. após restart da instância na Evolution). */
+    public void clearPairingMaterialCache(String instanceName) {
+        if (instanceName != null && !instanceName.isBlank()) {
+            recentPairingByInstance.remove(instanceName.trim());
+        }
+    }
     @PostConstruct
     void initRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();

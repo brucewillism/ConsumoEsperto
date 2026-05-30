@@ -134,8 +134,8 @@ services:
      - QRCODE_LIMIT=${EVOLUTION_QRCODE_LIMIT:-90}
      # Preto padrão — #198754 (verde) confundia utilizadores e alguns leitores preferem alto contraste
      - QRCODE_COLOR=#000000
-     # Vazio = Evolution busca versão WA recente (fixo costuma impedir pareamento após update do WhatsApp)
-     - CONFIG_SESSION_PHONE_VERSION=${CONFIG_SESSION_PHONE_VERSION:-}
+     # Vazio = auto; se o scan falhar, defina no .env a versão do fundo do menu WhatsApp Web (ex. 2.3000.1033893291)
+     - CONFIG_SESSION_PHONE_VERSION=${CONFIG_SESSION_PHONE_VERSION:-2.3000.1033893291}
      - CONFIG_SESSION_PHONE_CLIENT=${CONFIG_SESSION_PHONE_CLIENT:-Chrome}
      - CONFIG_SESSION_PHONE_NAME=${CONFIG_SESSION_PHONE_NAME:-Chrome}
      - NODE_OPTIONS=--dns-result-order=ipv4first
