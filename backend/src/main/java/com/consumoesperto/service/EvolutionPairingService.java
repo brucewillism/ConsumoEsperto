@@ -422,6 +422,7 @@ public class EvolutionPairingService {
             if (evolutionWaSessionRegistry.isUserDisconnected(usuarioId)) {
                 clearWaSessionDisconnectedByUser(usuarioId);
             }
+            evolutionInstanceSettingsService.ensurePhoneFriendlyOnConnect(cred.instanceName);
             return true;
         }
         if (pairingFallbackToGlobalInstance && isDedicatedEvolutionInstance(cred.instanceName)) {
@@ -429,6 +430,7 @@ public class EvolutionPairingService {
             if (isRealWaSessionOpen(globalCred)) {
                 adoptGlobalInstanceForPairing(usuarioId);
                 clearWaSessionDisconnectedByUser(usuarioId);
+                evolutionInstanceSettingsService.ensurePhoneFriendlyOnConnect(globalCred.instanceName);
                 return true;
             }
         }
@@ -496,6 +498,7 @@ public class EvolutionPairingService {
                 clearWaSessionDisconnectedByUser(uid);
             });
         }
+        evolutionInstanceSettingsService.ensurePhoneFriendlyOnConnect(inst);
     }
 
     public Optional<String> fetchInstanceOwnerDigits(String instanceName) {

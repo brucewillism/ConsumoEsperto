@@ -1,0 +1,30 @@
+package com.consumoesperto.service;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+/**
+ * Mantém presença {@code unavailable} nas instâncias Evolution ligadas — evita status «online» permanente
+ * e notificações silenciadas no telemóvel (comportamento conhecido do Baileys/Evolution).
+ */
+@Component
+public class EvolutionPrivacyMaintenanceScheduler {
+
+    private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
+
+    @Value("${consumoesperto.evolution.privacy.presence-refresh-enabled:true}")
+    private boolean presenceRefreshEnabled;
+
+    public EvolutionPrivacyMaintenanceScheduler(EvolutionInstanceSettingsService evolutionInstanceSettingsService) {
+        this.evolutionInstanceSettingsService = evolutionInstanceSettingsService;
+    }
+
+    @Scheduled(fixedDelayString = "${consumoesperto.evolution.privacy.presence-refresh-interval-ms:60000}")
+    public void refreshPresenceForOpenInstances() {
+        if (!presenceRefreshEnabled) {
+            return;
+        }
+        evolutionInstanceSettingsService.refreshPresenceForConnectedInstances();
+    }
+}

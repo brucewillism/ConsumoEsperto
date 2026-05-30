@@ -12,11 +12,15 @@ import org.springframework.stereotype.Service;
 public class EvolutionWebhookAsyncProcessor {
 
     private final WhatsAppCommandService whatsAppCommandService;
+    private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
 
     @Async("whatsappWebhookExecutor")
     public void processEvolutionMessageAsync(EvolutionIncomingMessageDTO incoming, Long userId, String evolutionInstanceName) {
         try {
             whatsAppCommandService.processIncomingEvolutionMessage(incoming, userId, evolutionInstanceName);
+            if (evolutionInstanceName != null && !evolutionInstanceName.isBlank()) {
+                evolutionInstanceSettingsService.schedulePresenceRefreshAfterActivity(evolutionInstanceName);
+            }
         } catch (Throwable t) {
             log.error("[WhatsAppFilter] Erro assíncrono ao processar Evolution userId={} remoteJid={}: {}",
                 userId, incoming != null ? incoming.getFromJid() : null, t.getMessage(), t);

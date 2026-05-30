@@ -311,7 +311,7 @@ public class UsuarioController {
      * Polling pelo frontend durante o pareamento: consulta Evolution {@code /instance/connectionState/:instance}.
      */
     /**
-     * Reaplica modo fantasma na instância Evolution do utilizador (readMessages/alwaysOnline/sync off).
+     * Reaplica privacidade na Evolution (alwaysOnline/readMessages off + presença unavailable) para notificações no telemóvel.
      * Útil quando notificações no telemóvel sumiram ou o perfil fica sempre online.
      */
     @PostMapping("/whatsapp/evolution-privacy-settings")
@@ -391,6 +391,11 @@ public class UsuarioController {
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
         Optional<String> rawState = evolutionPairingService.fetchConnectionStateForUser(usuarioId);
         boolean connected = evolutionPairingService.isInstanceConnectedForUser(usuarioId);
+        if (connected) {
+            evolutionInstanceSettingsService.ensurePhoneFriendlyOnConnect(
+                evolutionPairingService.resolvedInstanceDisplayName(usuarioId)
+            );
+        }
         boolean suppressed = evolutionPairingService.isWaSessionDisconnectedByUser(usuarioId);
         String numero = numeroReparado.orElseGet(() -> usuarioOpt.get().getWhatsappNumero());
         Map<String, Object> body = new LinkedHashMap<>();

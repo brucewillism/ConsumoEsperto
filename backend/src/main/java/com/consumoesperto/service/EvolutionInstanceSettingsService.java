@@ -17,7 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import org.springframework.scheduling.TaskScheduler;
+
 import javax.annotation.PostConstruct;
+import java.time.Instant;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -25,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 
 /**
  * Modo "fantasma" na Evolution API: não força online, não marca mensagens/status como lidos,
@@ -41,16 +47,23 @@ public class EvolutionInstanceSettingsService {
 
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
     private final ObjectMapper objectMapper;
+    private final TaskScheduler taskScheduler;
 
     public EvolutionInstanceSettingsService(
         UsuarioAiConfigRepository usuarioAiConfigRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        TaskScheduler taskScheduler
     ) {
         this.usuarioAiConfigRepository = usuarioAiConfigRepository;
         this.objectMapper = objectMapper;
+        this.taskScheduler = taskScheduler;
     }
 
     private RestTemplate restTemplate;
+
+    private static final long CONNECT_PRIVACY_DEBOUNCE_MS = 120_000L;
+    private final ConcurrentHashMap<String, Long> lastConnectPrivacyApplyMs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> presenceAfterActivityTasks = new ConcurrentHashMap<>();
 
     @Value("${evolution.url:}")
     private String evolutionUrl;
@@ -77,9 +90,16 @@ public class EvolutionInstanceSettingsService {
     @Value("${consumoesperto.evolution.privacy.restart-after-apply:true}")
     private boolean restartAfterApply;
 
+    /** Reinicia ao detectar ligação se settings não reflectirem alwaysOnline/readMessages off. */
+    @Value("${consumoesperto.evolution.privacy.restart-on-connect:true}")
+    private boolean restartOnConnect;
+
     /** Após ligar, força presença unavailable (não ficar "online" na lista de contactos). */
     @Value("${consumoesperto.evolution.privacy.set-unavailable-presence:true}")
     private boolean setUnavailablePresence;
+
+    @Value("${consumoesperto.evolution.privacy.presence-refresh-after-message-ms:60000}")
+    private long presenceRefreshAfterMessageMs;
 
     @PostConstruct
     void initRestTemplate() {
@@ -165,10 +185,10 @@ public class EvolutionInstanceSettingsService {
         report.put(
             "message",
             settingsOk
-                ? "Modo fantasma aplicado. Se o telemóvel ainda não notificar, desligue e volte a ligar o WhatsApp (novo QR)."
-                : "Settings gravados mas a Evolution não confirmou os valores — reinicie a instância no Manager e escaneie o QR de novo."
+                ? "Privacidade aplicada (sem alwaysOnline/readMessages). Notificações no telemóvel devem voltar em ~1 min."
+                : "Settings gravados mas a Evolution não confirmou os valores — reinicie a instância no Manager ou aguarde o job automático."
         );
-        log.info("Evolution modo fantasma [{}]: verified={} restart={}", name, settingsOk, restartAfterApply);
+        log.info("Evolution privacidade [{}]: verified={} restart={}", name, settingsOk, restartAfterApply);
         return report;
     }
 
@@ -182,13 +202,157 @@ public class EvolutionInstanceSettingsService {
     }
 
     /**
-     * Chamado quando a instância fica {@code open} — mantém presença offline após reconnect.
+     * Chamado quando a instância fica {@code open}: desliga alwaysOnline/readMessages na Evolution
+     * (preserva notificações no telemóvel) e força presença unavailable.
      */
     public void onInstanceConnected(String instanceName) {
+        ensurePhoneFriendlyOnConnect(instanceName);
+    }
+
+    /**
+     * Garante settings de privacidade + presença unavailable após QR/conexão (debounce 2 min por instância).
+     */
+    public void ensurePhoneFriendlyOnConnect(String instanceName) {
+        if (instanceName == null || instanceName.isBlank() || !apiConfigured()) {
+            return;
+        }
+        String name = instanceName.trim();
+        long now = System.currentTimeMillis();
+        Long last = lastConnectPrivacyApplyMs.get(name);
+        boolean debounced = last != null && now - last < CONNECT_PRIVACY_DEBOUNCE_MS;
+        if (!debounced) {
+            lastConnectPrivacyApplyMs.put(name, now);
+            applyPrivacySettingsQuietly(name);
+            Optional<JsonNode> found = fetchSettings(name);
+            boolean settingsOk = found.map(this::settingsMatchGhostMode).orElse(false);
+            if (!settingsOk && restartOnConnect) {
+                restartInstanceQuietly(name);
+                applyPrivacySettingsQuietly(name);
+            }
+        }
+        if (setUnavailablePresence) {
+            applyPresenceUnavailable(name);
+            schedulePresenceRetries(name);
+        }
+    }
+
+    /**
+     * Após actividade do bot (webhook), WhatsApp volta a «online» — reagenda unavailable (~1 min).
+     */
+    public void schedulePresenceRefreshAfterActivity(String instanceName) {
         if (!setUnavailablePresence || instanceName == null || instanceName.isBlank() || !apiConfigured()) {
             return;
         }
-        applyPresenceUnavailable(instanceName.trim());
+        if (taskScheduler == null) {
+            applyPresenceUnavailable(instanceName.trim());
+            return;
+        }
+        String name = instanceName.trim();
+        long delay = Math.max(5_000L, presenceRefreshAfterMessageMs);
+        ScheduledFuture<?> prev = presenceAfterActivityTasks.remove(name);
+        if (prev != null) {
+            prev.cancel(false);
+        }
+        ScheduledFuture<?> scheduled = taskScheduler.schedule(
+            () -> {
+                presenceAfterActivityTasks.remove(name);
+                applyPresenceUnavailable(name);
+            },
+            Instant.now().plusMillis(delay)
+        );
+        presenceAfterActivityTasks.put(name, scheduled);
+    }
+
+    /** Job periódico: instâncias open voltam a presença unavailable (notificações no telemóvel). */
+    public void refreshPresenceForConnectedInstances() {
+        if (!setUnavailablePresence || !apiConfigured()) {
+            return;
+        }
+        for (String name : fetchConnectedInstanceNames()) {
+            applyPresenceUnavailable(name);
+        }
+    }
+
+    private void applyPrivacySettingsQuietly(String instanceName) {
+        try {
+            String setUrl = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "settings/set/" + instanceName);
+            evolutionPostJson(setUrl, privacySettingsForCreate());
+        } catch (Exception ex) {
+            log.warn("Evolution settings/set [{}] on connect: {}", instanceName, ex.getMessage());
+        }
+    }
+
+    private void schedulePresenceRetries(String instanceName) {
+        if (taskScheduler == null) {
+            return;
+        }
+        long[] delaysMs = {5_000L, 45_000L, 120_000L};
+        for (long delay : delaysMs) {
+            taskScheduler.schedule(
+                () -> applyPresenceUnavailable(instanceName),
+                Instant.now().plusMillis(delay)
+            );
+        }
+    }
+
+    private Set<String> fetchConnectedInstanceNames() {
+        Set<String> out = new LinkedHashSet<>();
+        if (!apiConfigured()) {
+            return out;
+        }
+        try {
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/fetchInstances");
+            HttpHeaders headers = evolutionHeaders();
+            String body = restTemplate.exchange(
+                url, HttpMethod.GET, new HttpEntity<>(headers), String.class
+            ).getBody();
+            if (body == null || body.isBlank()) {
+                return out;
+            }
+            JsonNode root = objectMapper.readTree(body);
+            collectConnectedInstanceNames(root, out);
+        } catch (Exception ex) {
+            log.debug("fetchInstances for presence refresh: {}", ex.getMessage());
+        }
+        return out;
+    }
+
+    private void collectConnectedInstanceNames(JsonNode node, Set<String> out) {
+        if (node == null || node.isNull()) {
+            return;
+        }
+        if (node.isArray()) {
+            for (JsonNode item : node) {
+                collectConnectedInstanceNames(item, out);
+            }
+            return;
+        }
+        if (!node.isObject()) {
+            return;
+        }
+        String name = node.path("name").asText("").trim();
+        if (name.isBlank()) {
+            name = node.path("instanceName").asText("").trim();
+        }
+        if (name.isBlank()) {
+            name = node.path("instance").path("instanceName").asText("").trim();
+        }
+        String status = node.path("connectionStatus").asText("").trim();
+        if (status.isBlank()) {
+            status = node.path("state").asText("").trim();
+        }
+        if (!name.isBlank() && isConnectionOpen(status)) {
+            out.add(name);
+        }
+        node.fields().forEachRemaining(e -> collectConnectedInstanceNames(e.getValue(), out));
+    }
+
+    private static boolean isConnectionOpen(String status) {
+        if (status == null || status.isBlank()) {
+            return false;
+        }
+        String s = status.trim().toLowerCase(Locale.ROOT);
+        return "open".equals(s) || "connected".equals(s);
     }
 
     public Map<String, Object> applyGhostPrivacyToAllKnownInstances() {
