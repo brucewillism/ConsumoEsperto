@@ -131,12 +131,14 @@ services:
      # NUNCA use a URL do frontend (APP_FRONTEND_BASE_URL) — /instance/connect devolve {"count":0} sem QR.
      - SERVER_URL=${EVOLUTION_SERVER_URL:-${EVOLUTION_PUBLISH:-http://127.0.0.1:8585}}
      - SERVER_PORT=8585
-     - QRCODE_LIMIT=30
+     - QRCODE_LIMIT=${EVOLUTION_QRCODE_LIMIT:-90}
      # Preto padrão — #198754 (verde) confundia utilizadores e alguns leitores preferem alto contraste
      - QRCODE_COLOR=#000000
-     - CONFIG_SESSION_PHONE_VERSION=2.3000.1030831524
-     - CONFIG_SESSION_PHONE_CLIENT=Chrome
-     - CONFIG_SESSION_PHONE_NAME=Chrome
+     # Vazio = Evolution busca versão WA recente (fixo costuma impedir pareamento após update do WhatsApp)
+     - CONFIG_SESSION_PHONE_VERSION=${CONFIG_SESSION_PHONE_VERSION:-}
+     - CONFIG_SESSION_PHONE_CLIENT=${CONFIG_SESSION_PHONE_CLIENT:-Chrome}
+     - CONFIG_SESSION_PHONE_NAME=${CONFIG_SESSION_PHONE_NAME:-Chrome}
+     - NODE_OPTIONS=--dns-result-order=ipv4first
      - DATABASE_PROVIDER=postgresql
      # Atenção: caracteres especiais na password Postgres (@ : / #) devem estar URL-encoded no URI ou o contentor pode cair durante arranque.
      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER:-consumo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-consumo_db}?sslmode=disable

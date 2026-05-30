@@ -577,10 +577,10 @@ public class EvolutionPairingService {
         for (JsonNode layer : layers) {
             connectCode = connectCode.or(() -> firstMeaningfulCodeOne(layer));
         }
-        // Preferir QR preto gerado localmente a partir do campo "code" — a Evolution pinta o PNG com QRCODE_COLOR (ex. verde).
-        Optional<String> qrUri = connectCode.flatMap(this::qrPngFromString);
+        // PNG da Evolution é o QR correcto para o Baileys; ZXing só se não houver raster e o "code" for payload WA (2@…).
+        Optional<String> qrUri = resolveQrAcrossLayers(layers);
         if (qrUri.isEmpty()) {
-            qrUri = resolveQrAcrossLayers(layers);
+            qrUri = connectCode.filter(EvolutionPairingService::looksLikeBaileysQrPayload).flatMap(this::qrPngFromString);
         }
 
         EvolutionPairingOutcomeDTO.EvolutionPairingOutcomeDTOBuilder b = EvolutionPairingOutcomeDTO.builder()
@@ -1012,6 +1012,29 @@ public class EvolutionPairingService {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    /**
+     * Payload de referência Baileys (ex. {@code 2@…}). Se for só base64/metadata, ZXing gera QR inválido.
+     */
+    private static boolean looksLikeBaileysQrPayload(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return false;
+        }
+        String p = payload.trim();
+        if (p.startsWith("data:") || p.startsWith("http")) {
+            return false;
+        }
+        if (p.startsWith("2@")) {
+            return true;
+        }
+        if (p.length() < 24 || p.length() > 800) {
+            return false;
+        }
+        if (!p.contains("@") && p.matches("^[A-Za-z0-9+/=_-]+$")) {
+            return false;
+        }
+        return p.contains(",") && p.contains("@");
     }
 
     private Optional<String> qrPngFromString(String whatsappQrPayload) {

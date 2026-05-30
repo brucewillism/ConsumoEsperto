@@ -42,9 +42,8 @@ export interface WhatsappEvolutionQrDialogData {
       </p>
 
       <p class="instructions">
-        No telemóvel: WhatsApp → <strong>Aparelhos ligados</strong> → <strong>Ligar um dispositivo</strong>.
-        Leia este QR em até ~30 s (renova-se ao atualizar). Use o <strong>código de associação</strong> abaixo se o scan falhar.
-        Se aparecer «não é possível ligar outro dispositivo», remova aparelhos antigos na lista e aguarde algumas horas — é limite do WhatsApp, não desta app.
+        No telemóvel: WhatsApp → <strong>Aparelhos ligados</strong> → <strong>Ligar um dispositivo</strong> (não use o menu do WhatsApp Web no PC).
+        Leia este QR em até ~90 s sem fechar o modal. Se o scan falhar, use <strong>Ligar com número de telefone</strong> e o código abaixo.
       </p>
       <p class="instructions jarvis-hint">
         Depois do pareamento, fale com o J.A.R.V.I.S. na conversa <strong>consigo mesmo</strong> (chat «Eu»), com o número que vinculou na app.
@@ -63,7 +62,7 @@ export interface WhatsappEvolutionQrDialogData {
       </p>
 
       <p class="polling" *ngIf="pollingHeartbeat">
-        A verificar estado na Evolution a cada 5 s — pode fechar e completar no Manager da Evolution se preferir.
+        A verificar ligação a cada 5 s (o QR mantém-se ~30 s). Pode completar no Manager da Evolution se preferir.
       </p>
       <p class="polling slow-hint" *ngIf="pollAttempts >= 4 && waitingForQr">
         Se o QR não aparecer em ~1 minuto, use <strong>Desligar Evolution</strong> e <strong>Atualizar vínculo</strong> de novo,
@@ -207,6 +206,7 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
         ? data.evolutionManagerUrl.trim()
         : null;
 
+    // Estado WA a cada 5 s; novo QR só se ainda não houver imagem ou a cada ~30 s (evita invalidar QR a meio do scan).
     this.pollSub = timer(0, 5000)
       .pipe(
         switchMap(() =>
@@ -217,6 +217,13 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
                 status?.sessionMarkedDisconnected !== true;
               if (reallyConnected) {
                 return of({ kind: 'connected' as const });
+              }
+              const needPairingRefresh =
+                !this.safeQrSrc && !this.safePairing
+                  ? true
+                  : this.pollAttempts > 0 && this.pollAttempts % 6 === 0;
+              if (!needPairingRefresh) {
+                return of({ kind: 'waiting' as const });
               }
               return this.usuarioService.refreshEvolutionPairing().pipe(
                 map((pair) => ({ kind: 'pair' as const, pair })),
