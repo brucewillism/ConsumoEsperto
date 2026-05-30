@@ -248,6 +248,9 @@ export class WhatsappEvolutionQrDialogComponent implements OnDestroy {
           }
           return;
         }
+        if (outcome.kind === 'waiting') {
+          return;
+        }
         const p = outcome.pair;
         if (p?.evolutionInstanceName) {
           this.displayInstance = p.evolutionInstanceName;
