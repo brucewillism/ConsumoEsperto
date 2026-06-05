@@ -223,8 +223,27 @@ public class ContencaoJarvisService {
             sugestaoRepository.save(e);
         }
         if (importacaoId != null) {
-            recarregarFilaWhatsApp(usuarioId, importacaoId);
+            // Fila WhatsApp só após o utilizador confirmar a importação (ver ativarFilaWhatsAppAposConfirmacao).
         }
+    }
+
+    /** Ativa fila *sim/não* dos protocolos de contenção — chamar depois de confirmar a fatura no WhatsApp. */
+    public void ativarFilaWhatsAppAposConfirmacao(Long usuarioId, Long importacaoId) {
+        if (usuarioId == null || importacaoId == null) {
+            return;
+        }
+        recarregarFilaWhatsApp(usuarioId, importacaoId);
+    }
+
+    /** Texto opcional após importação confirmada, se houver sugestões de teto na fila. */
+    @Transactional(readOnly = true)
+    public Optional<String> blocoConviteConfirmacaoWhatsApp(Long usuarioId) {
+        if (pollSugestaoIdParaConfirmacaoWhatsApp(usuarioId).isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(
+            "\n\n_Sobre os tetos sugeridos acima: responda *sim* para ativar o 1.º protocolo ou *não* para recusar._"
+        );
     }
 
     /** Recria fila apenas com sugestões desta importação (no máx. 2). */
@@ -277,6 +296,9 @@ public class ContencaoJarvisService {
         }
         Long catId = s.getCategoria() != null ? s.getCategoria().getId()
             : resolverCategoriaPreferida(usuarioId, s.getTipoHabito());
+        if (catId == null) {
+            catId = criarCategoriaPadraoParaTipoHabito(usuarioId, s.getTipoHabito());
+        }
         if (catId == null) {
             throw new IllegalArgumentException(
                 "Crie no app uma categoria para "
@@ -453,6 +475,30 @@ public class ContencaoJarvisService {
             }
         }
         return null;
+    }
+
+    private Long criarCategoriaPadraoParaTipoHabito(Long usuarioId, SugestaoContencaoJarvis.TipoHabito tipo) {
+        String nome = switch (tipo) {
+            case COMBUSTIVEL -> "Combustível";
+            case MERCADO -> "Alimentação";
+            case RESTAURANTE -> "Restaurante";
+            default -> "Despesas variáveis";
+        };
+        Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
+        if (usuario == null) {
+            return null;
+        }
+        Optional<Categoria> dup = categoriaRepository.findByUsuarioIdOrderByNome(usuarioId).stream()
+            .filter(c -> norm(c.getNome()).equals(norm(nome)))
+            .findFirst();
+        if (dup.isPresent()) {
+            return dup.get().getId();
+        }
+        Categoria c = new Categoria();
+        c.setUsuario(usuario);
+        c.setNome(nome);
+        log.info("ContencaoJarvis: categoria «{}» criada automaticamente para userId={}", nome, usuarioId);
+        return categoriaRepository.save(c).getId();
     }
 
     private static String nomeMacroCategoriaJarvis(SugestaoContencaoJarvis.TipoHabito tipo) {

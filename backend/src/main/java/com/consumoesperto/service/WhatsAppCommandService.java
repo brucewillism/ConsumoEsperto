@@ -2539,8 +2539,7 @@ public class WhatsAppCommandService {
             }
             return Optional.of(msgInfo("Sugestão", "Sem outras sugestões na fila. Pode acompanhar ou aceitar novas metas no app."));
         }
-        return Optional.of(msgInfo("Protocolo J.A.R.V.I.S.",
-            "Responda *sim*, *pode ser* ou *configure* para ativar o teto sugerido, ou *não* para recusar."));
+        return Optional.empty();
     }
 
     private Optional<String> tryResolveModoViagemProtocolo(Long userId, String sourceText) {
@@ -2593,6 +2592,48 @@ public class WhatsAppCommandService {
         Optional<String> gestao = whatsAppGestaoProativaService.tentarConsumirResposta(userId, text);
         if (gestao.isPresent()) {
             return gestao;
+        }
+        if (awaitingFaturaSaldoAnteriorChoice.containsKey(userId)) {
+            Long importId = awaitingFaturaSaldoAnteriorChoice.get(userId);
+            if (isAffirmativeSaveReply(text) || isNegativeReply(text)) {
+                boolean somar = isAffirmativeSaveReply(text);
+                awaitingFaturaSaldoAnteriorChoice.remove(userId);
+                try {
+                    ImportacaoFaturaDTO imp = faturaPdfImportService.aplicarEscolhaSaldoAnteriorBb(userId, importId, somar);
+                    String intro = somar
+                        ? msgOk("Saldo da fatura", "Vou considerar saldo anterior + saldo desta fatura no total.")
+                        : msgOk("Saldo da fatura", "Vou importar só o saldo desta fatura (sem somar o anterior).");
+                    return Optional.of(intro + "\n\n" + mensagemVarreduraFaturaAposProcessamento(userId, imp));
+                } catch (Exception e) {
+                    return Optional.of(msgErro(userId, "Fatura", e.getMessage()));
+                }
+            }
+            return Optional.of(msgInfo("Saldo anterior na fatura",
+                "Responda *sim* para somar saldo anterior + saldo atual, ou *não* para importar apenas o saldo desta fatura."));
+        }
+        if (awaitingFaturaImportConfirm.containsKey(userId)) {
+            Long importId = awaitingFaturaImportConfirm.get(userId);
+            if (isAffirmativeSaveReply(text)) {
+                awaitingFaturaImportConfirm.remove(userId);
+                try {
+                    FaturaPdfImportService.ResultadoConfirmacaoFatura resultado =
+                        faturaPdfImportService.confirmarTodosComResumo(userId, importId, false);
+                    contencaoJarvisService.ativarFilaWhatsAppAposConfirmacao(userId, importId);
+                    String resposta = msgOk("Fatura importada",
+                        faturaPdfImportService.mensagemResumoImportacao(resultado)
+                            + " O cartão e o dashboard foram atualizados.");
+                    resposta += contencaoJarvisService.blocoConviteConfirmacaoWhatsApp(userId).orElse("");
+                    return Optional.of(resposta);
+                } catch (Exception e) {
+                    return Optional.of(msgErro(userId, "Importação de fatura", "Não consegui confirmar: " + e.getMessage()));
+                }
+            }
+            if (isNegativeReply(text)) {
+                awaitingFaturaImportConfirm.remove(userId);
+                return Optional.of(msgInfo("Importação pendente",
+                    "Não adicionei os lançamentos agora. A importação segue disponível no Dashboard em *Importações Pendentes*."));
+            }
+            return Optional.empty();
         }
         Optional<String> contencao = tryResolveContencaoProtocolo(userId, text);
         if (contencao.isPresent()) {
@@ -2654,45 +2695,6 @@ public class WhatsAppCommandService {
                 return Optional.of(msgInfo("Cupom / foto", "Não guardei o lançamento. Podes enviar outra foto quando quiseres."));
             }
             return Optional.of(msgInfo("Cupom / foto", "Responde *sim* para lançar a despesa do cupom ou *não* para cancelar."));
-        }
-        if (awaitingFaturaSaldoAnteriorChoice.containsKey(userId)) {
-            Long importId = awaitingFaturaSaldoAnteriorChoice.get(userId);
-            if (isAffirmativeSaveReply(text) || isNegativeReply(text)) {
-                boolean somar = isAffirmativeSaveReply(text);
-                awaitingFaturaSaldoAnteriorChoice.remove(userId);
-                try {
-                    ImportacaoFaturaDTO imp = faturaPdfImportService.aplicarEscolhaSaldoAnteriorBb(userId, importId, somar);
-                    String intro = somar
-                        ? msgOk("Saldo da fatura", "Vou considerar saldo anterior + saldo desta fatura no total.")
-                        : msgOk("Saldo da fatura", "Vou importar só o saldo desta fatura (sem somar o anterior).");
-                    return Optional.of(intro + "\n\n" + mensagemVarreduraFaturaAposProcessamento(userId, imp));
-                } catch (Exception e) {
-                    return Optional.of(msgErro(userId, "Fatura", e.getMessage()));
-                }
-            }
-            return Optional.of(msgInfo("Saldo anterior na fatura",
-                "Responda *sim* para somar saldo anterior + saldo atual, ou *não* para importar apenas o saldo desta fatura."));
-        }
-        if (awaitingFaturaImportConfirm.containsKey(userId)) {
-            Long importId = awaitingFaturaImportConfirm.get(userId);
-            if (isAffirmativeSaveReply(text)) {
-                awaitingFaturaImportConfirm.remove(userId);
-                try {
-                    FaturaPdfImportService.ResultadoConfirmacaoFatura resultado =
-                        faturaPdfImportService.confirmarTodosComResumo(userId, importId, false);
-                    return Optional.of(msgOk("Fatura importada",
-                        faturaPdfImportService.mensagemResumoImportacao(resultado)
-                            + " O cartão e o dashboard foram atualizados."));
-                } catch (Exception e) {
-                    return Optional.of(msgErro(userId, "Importação de fatura", "Não consegui confirmar: " + e.getMessage()));
-                }
-            }
-            if (isNegativeReply(text)) {
-                awaitingFaturaImportConfirm.remove(userId);
-                return Optional.of(msgInfo("Importação pendente",
-                    "Não adicionei os lançamentos agora. A importação segue disponível no Dashboard em *Importações Pendentes*."));
-            }
-            return Optional.of(msgInfo("Importação de fatura", "Responde *sim* para adicionar todos os lançamentos ou *não* para deixar pendente."));
         }
         if (awaitingContrachequeImportConfirm.containsKey(userId)) {
             Long importId = awaitingContrachequeImportConfirm.get(userId);
