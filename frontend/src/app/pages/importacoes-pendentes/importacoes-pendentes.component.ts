@@ -83,7 +83,9 @@ export class ImportacoesPendentesComponent implements OnInit {
     this.confirmandoId = imp.id;
     this.importacaoService.confirmar(imp.id, indices).subscribe({
       next: (res) => {
-        this.toast.success(`${res.criadas} lançamento(s) importado(s).`);
+        this.toast.success(
+          `${res.criadas} lançamento(s) importado(s). Veja no Dashboard se há protocolos de teto sugeridos.`
+        );
         this.confirmandoId = null;
         this.carregar();
       },

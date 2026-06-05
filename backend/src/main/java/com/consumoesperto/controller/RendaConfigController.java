@@ -6,6 +6,7 @@ import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.ContrachequeImportService;
 import com.consumoesperto.service.RendaConfigService;
+import com.consumoesperto.service.WhatsAppCommandService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.MediaType;
@@ -21,6 +22,7 @@ public class RendaConfigController {
 
     private final RendaConfigService rendaConfigService;
     private final ContrachequeImportService contrachequeImportService;
+    private final WhatsAppCommandService whatsAppCommandService;
 
     @GetMapping
     public ResponseEntity<RendaConfigDTO> obter(@AuthenticationPrincipal UserPrincipal currentUser) {
@@ -60,6 +62,8 @@ public class RendaConfigController {
         @AuthenticationPrincipal UserPrincipal currentUser,
         @PathVariable Long id
     ) {
-        return ResponseEntity.ok(contrachequeImportService.confirmar(currentUser.getId(), id));
+        ContrachequeDTO dto = contrachequeImportService.confirmar(currentUser.getId(), id);
+        whatsAppCommandService.sincronizarContrachequeResolvidoNoApp(currentUser.getId(), id);
+        return ResponseEntity.ok(dto);
     }
 }

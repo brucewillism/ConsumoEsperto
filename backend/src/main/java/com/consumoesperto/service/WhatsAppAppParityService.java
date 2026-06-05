@@ -82,6 +82,11 @@ public class WhatsAppAppParityService {
             List.of("Configurar salário e descontos", "Dia de pagamento", "Importar holerite PDF"),
             null
         ),
+        item("modo-viagem", "Modo Viagem (Cronos)", "/dashboard", "Dashboard", "BOTH",
+            List.of("responda sim após sugestão de teto para viagem no WhatsApp"),
+            List.of("Painel Modo Viagem no dashboard", "Vincular Google Calendar no Perfil", "Aceitar ou ignorar teto sugerido"),
+            "Deteção de eventos no calendário; confirmação no WhatsApp ou no dashboard."
+        ),
         item("despesas-fixas", "Despesas fixas (recorrentes)", "/perfil", "Perfil", "BOTH",
             List.of("salve essa despesa fixa de 250 para internet dia 10", "tenho recorrência?"),
             List.of("Secção Despesas fixas no Perfil", "Dia de vencimento e valor"),

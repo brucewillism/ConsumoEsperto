@@ -251,9 +251,12 @@ public class FaturaPdfImportService {
             faturaService.sincronizarValorFaturaComTransacoes(fatura.getId());
         }
         scoreService.registrarEvento(usuarioId, ScoreService.EventoScore.IMPORTACAO_CONSISTENTE, "Fatura PDF importada em dia");
+        contencaoJarvisService.ativarFilaWhatsAppAposConfirmacao(usuarioId, importacaoId);
         ResultadoConfirmacaoFatura resultado = new ResultadoConfirmacaoFatura(criadas, conciliadas, futuras);
         if (enviarNotificacaoFinal) {
-            whatsAppNotificationService.enviarParaUsuario(usuarioId, mensagemResumoImportacao(resultado));
+            String msg = mensagemResumoImportacao(resultado);
+            msg += contencaoJarvisService.blocoConviteConfirmacaoWhatsApp(usuarioId).orElse("");
+            whatsAppNotificationService.enviarParaUsuario(usuarioId, msg);
         }
         return resultado;
     }

@@ -35,6 +35,7 @@ import { ScoreService, UsuarioScore } from '../../services/score.service';
 import { InboxNotification, NotificacaoInboxService } from '../../services/notificacao-inbox.service';
 import { JarvisChatPanelComponent } from '../../shared/jarvis-chat/jarvis-chat-panel.component';
 import { ContencaoJarvisService, SugestaoContencaoJarvis } from '../../services/contencao-jarvis.service';
+import { ModoViagemJarvis, ModoViagemJarvisService } from '../../services/modo-viagem-jarvis.service';
 import { JarvisMemoriaService, JarvisMemoriaTimelineItem } from '../../services/jarvis-memoria.service';
 import { JarvisFeedbackService } from '../../services/jarvis-feedback.service';
 import { AuthService } from '../../services/auth.service';
@@ -293,6 +294,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /** Metas de contenção sugeridas pelo J.A.R.V.I.S. (hábito / pós-importação). */
   sugestoesContencaoJarvis: SugestaoContencaoJarvis[] = [];
   sugestaoContencaoEmAcao: number | null = null;
+  sugestoesModoViagemJarvis: ModoViagemJarvis[] = [];
+  modoViagemEmAcao = false;
   userPerfilJarvis: Usuario | null = null;
   showJarvisTratamentoWizard = false;
   /** Só avalia o wizard após GET /perfil (evita localStorage antigo sem jarvisConfigurado). */
@@ -327,6 +330,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private scoreService: ScoreService,
     private notificacaoInbox: NotificacaoInboxService,
     private contencaoJarvisService: ContencaoJarvisService,
+    private modoViagemJarvisService: ModoViagemJarvisService,
     private jarvisMemoriaService: JarvisMemoriaService,
     private jarvisFeedbackService: JarvisFeedbackService,
     private authService: AuthService,
@@ -506,6 +510,47 @@ export class DashboardComponent implements OnInit, OnDestroy {
         error: () => {
           this.sugestaoContencaoEmAcao = null;
           this.snackBar.open('Não foi possível ativar o protocolo. Tente novamente.', 'Fechar', { duration: 4000 });
+        },
+      });
+  }
+
+  aceitarModoViagemJarvis(s: ModoViagemJarvis): void {
+    this.modoViagemEmAcao = true;
+    this.modoViagemJarvisService
+      .aceitar()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.modoViagemEmAcao = false;
+          this.snackBar.open(
+            'Modo Viagem ativo. Meta temporária registada — acompanhe em Metas.',
+            'Fechar',
+            { duration: 6000 }
+          );
+          this.sugestoesModoViagemJarvis = this.sugestoesModoViagemJarvis.filter((x) => x !== s);
+          this.financaAlteracao.notificar();
+        },
+        error: () => {
+          this.modoViagemEmAcao = false;
+          this.snackBar.open('Não foi possível ativar o Modo Viagem.', 'Fechar', { duration: 4000 });
+        },
+      });
+  }
+
+  recusarModoViagemJarvis(s: ModoViagemJarvis): void {
+    this.modoViagemEmAcao = true;
+    this.modoViagemJarvisService
+      .recusar()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.modoViagemEmAcao = false;
+          this.snackBar.open('Sugestão de viagem ignorada.', 'Fechar', { duration: 3000 });
+          this.sugestoesModoViagemJarvis = this.sugestoesModoViagemJarvis.filter((x) => x !== s);
+        },
+        error: () => {
+          this.modoViagemEmAcao = false;
+          this.snackBar.open('Não foi possível ignorar agora.', 'Fechar', { duration: 4000 });
         },
       });
   }
@@ -1413,6 +1458,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Sugestões contenção',
         15_000
       ),
+      sugestoesModoViagem: this.wrapDashboardRequest(
+        this.modoViagemJarvisService.listarPendentes(),
+        [] as ModoViagemJarvis[],
+        'Sugestões Modo Viagem',
+        15_000
+      ),
       oportunidadeInvestimento: this.wrapDashboardRequest(
         this.dashboardService.oportunidadeInvestimento(),
         null,
@@ -1425,6 +1476,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
         next: (extra) => {
           this.sugestoesContencaoJarvis = Array.isArray(extra.sugestoesContencao)
             ? extra.sugestoesContencao
+            : [];
+          this.sugestoesModoViagemJarvis = Array.isArray(extra.sugestoesModoViagem)
+            ? extra.sugestoesModoViagem
             : [];
           this.aplicarResumoProjecao(extra.resumoProjecao);
           this.usuarioScore = extra.usuarioScore || this.usuarioScore;
@@ -1569,7 +1623,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return !!(
       this.previsaoFuturoChart?.projecaoNegativa ||
       this.previsaoFuturoChart?.protocoloOtimizacaoRecomendado ||
-      (this.sugestoesContencaoJarvis?.length ?? 0) > 0
+      (this.sugestoesContencaoJarvis?.length ?? 0) > 0 ||
+      (this.sugestoesModoViagemJarvis?.length ?? 0) > 0
     );
   }
 

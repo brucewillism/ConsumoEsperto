@@ -4,6 +4,7 @@ import com.consumoesperto.dto.ConfirmarImportacaoFaturaRequest;
 import com.consumoesperto.dto.ImportacaoFaturaDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.FaturaPdfImportService;
+import com.consumoesperto.service.WhatsAppCommandService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,6 +22,7 @@ import java.util.Map;
 public class ImportacaoFaturaController {
 
     private final FaturaPdfImportService faturaPdfImportService;
+    private final WhatsAppCommandService whatsAppCommandService;
 
     @GetMapping("/pendentes")
     public ResponseEntity<List<ImportacaoFaturaDTO>> pendentes(@AuthenticationPrincipal UserPrincipal user) {
@@ -60,7 +62,9 @@ public class ImportacaoFaturaController {
         @PathVariable Long id,
         @RequestParam boolean somar
     ) {
-        return ResponseEntity.ok(faturaPdfImportService.aplicarEscolhaSaldoAnteriorBb(user.getId(), id, somar));
+        ImportacaoFaturaDTO dto = faturaPdfImportService.aplicarEscolhaSaldoAnteriorBb(user.getId(), id, somar);
+        whatsAppCommandService.sincronizarEscolhaSaldoAnteriorFaturaNoApp(user.getId());
+        return ResponseEntity.ok(dto);
     }
 
     @PostMapping("/{id}/confirmar")
@@ -71,6 +75,7 @@ public class ImportacaoFaturaController {
     ) {
         FaturaPdfImportService.ResultadoConfirmacaoFatura resultado =
             faturaPdfImportService.confirmarComResumo(user.getId(), id, request, true);
+        whatsAppCommandService.sincronizarFaturaResolvidaNoApp(user.getId());
         return ResponseEntity.ok(Map.of(
             "criadas", resultado.criadas(),
             "conciliadas", resultado.conciliadas(),

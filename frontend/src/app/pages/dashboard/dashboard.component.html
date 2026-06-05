@@ -258,7 +258,7 @@
 
     <section
       class="hud-bottom-deck hud-animate"
-      *ngIf="!errorMessage && (insightsFeed.length || sugestoesContencaoJarvis.length || categoriaRanking.length || rendaConfig)"
+      *ngIf="!errorMessage && (insightsFeed.length || sugestoesContencaoJarvis.length || sugestoesModoViagemJarvis.length || categoriaRanking.length || rendaConfig)"
       [style.--stagger]="6">
       <div class="hud-bottom-grid">
         <div class="hud-bottom-col">
@@ -290,6 +290,41 @@
                   (click)="enviarFeedbackNotificacao(item, false)"
                   matTooltip="Recalibrar — menos deste protocolo">
                   <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="hud-card hud-glass hud-jarvis" *ngIf="sugestoesModoViagemJarvis.length">
+            <div class="hud-feed-head">
+              <div>
+                <p class="hud-eyebrow-row"><i class="fas fa-plane-departure" aria-hidden="true"></i> Cronos · Modo Viagem</p>
+                <h3 class="hud-panel-title">Viagem detectada na agenda</h3>
+                <span class="hud-panel-sub">Teto temporário sugerido com base no seu histórico.</span>
+              </div>
+              <i class="fas fa-suitcase-rolling hud-feed-icon" aria-hidden="true"></i>
+            </div>
+            <div class="hud-jarvis-item" *ngFor="let s of sugestoesModoViagemJarvis">
+              <p class="hud-jarvis-texto">{{ s.mensagemResumo || s.titulo }}</p>
+              <div class="hud-jarvis-meta" *ngIf="s.tetoSugerido != null">
+                <span>Teto sugerido: <strong>{{ formatCurrency(s.tetoSugerido) }}</strong></span>
+                <span *ngIf="s.dataEvento"> · evento {{ s.dataEvento | dateFormat }}</span>
+              </div>
+              <div class="hud-sys-actions">
+                <button
+                  type="button"
+                  class="hud-sys-link hud-sys-link-muted"
+                  (click)="recusarModoViagemJarvis(s)"
+                  [disabled]="modoViagemEmAcao">
+                  [&nbsp;Ignorar&nbsp;]
+                </button>
+                <button
+                  type="button"
+                  class="hud-sys-link hud-sys-link-primary"
+                  (click)="aceitarModoViagemJarvis(s)"
+                  [disabled]="modoViagemEmAcao">
+                  <mat-spinner *ngIf="modoViagemEmAcao" diameter="16" class="btn-inline-spinner"></mat-spinner>
+                  <span *ngIf="!modoViagemEmAcao">[&nbsp;Ativar Modo Viagem&nbsp;]</span>
                 </button>
               </div>
             </div>

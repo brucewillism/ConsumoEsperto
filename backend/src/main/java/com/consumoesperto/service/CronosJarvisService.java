@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dto.ModoViagemJarvisDTO;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
@@ -16,6 +17,7 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -67,6 +69,26 @@ public class CronosJarvisService {
                 filaModoViagemWhatsApp.remove(usuarioId);
             }
         }
+    }
+
+    public List<ModoViagemJarvisDTO> listarPendentesApp(Long usuarioId) {
+        ArrayDeque<ModoViagemPending> q = filaModoViagemWhatsApp.get(usuarioId);
+        if (q == null || q.isEmpty()) {
+            return List.of();
+        }
+        String voc = jarvisProtocolService.resolveVocative(usuarioId, usuarioRepository);
+        List<ModoViagemJarvisDTO> out = new ArrayList<>();
+        for (ModoViagemPending p : q) {
+            ModoViagemJarvisDTO dto = new ModoViagemJarvisDTO();
+            dto.setEventIdGoogle(p.eventIdGoogle());
+            dto.setTitulo(p.titulo());
+            dto.setDataEvento(p.dataEvento());
+            dto.setTetoSugerido(p.tetoSugerido());
+            dto.setMensagemResumo(jarvisProtocolService.proativoModoViagemSugestao(
+                voc, p.titulo(), BRL.format(p.tetoSugerido())));
+            out.add(dto);
+        }
+        return out;
     }
 
     public boolean tentarReservarNotificacao(Long usuarioId, String fingerprint) {

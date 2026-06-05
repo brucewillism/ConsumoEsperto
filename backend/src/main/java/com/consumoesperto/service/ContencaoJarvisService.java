@@ -261,11 +261,33 @@ public class ContencaoJarvisService {
     }
 
     public Optional<Long> pollSugestaoIdParaConfirmacaoWhatsApp(Long usuarioId) {
+        sincronizarFilaComBanco(usuarioId);
         ArrayDeque<Long> q = filaConfirmacaoWhatsApp.get(usuarioId);
         if (q == null || q.isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(q.peek());
+    }
+
+    /** Remove da fila WA sugestões já aceitas/recusadas no app (evita bloquear «sim»). */
+    public void sincronizarFilaComBanco(Long usuarioId) {
+        ArrayDeque<Long> q = filaConfirmacaoWhatsApp.get(usuarioId);
+        if (q == null || q.isEmpty()) {
+            return;
+        }
+        while (!q.isEmpty()) {
+            Long id = q.peek();
+            boolean pendente = sugestaoRepository.findByIdAndUsuarioId(id, usuarioId)
+                .map(s -> s.getStatus() == SugestaoContencaoJarvis.Status.PENDENTE)
+                .orElse(false);
+            if (pendente) {
+                break;
+            }
+            q.poll();
+        }
+        if (q.isEmpty()) {
+            filaConfirmacaoWhatsApp.remove(usuarioId);
+        }
     }
 
     public void descartarTopoFilaWhatsApp(Long usuarioId) {

@@ -2564,8 +2564,7 @@ public class WhatsAppCommandService {
             return Optional.of(msgInfo("Modo Viagem",
                 "Sem o teto temporário por ora. Pode ativar mais tarde ou ajustar no app."));
         }
-        return Optional.of(msgInfo("Modo Viagem",
-            "Responda *sim* para ativar o *Modo Viagem* com o teto sugerido ou *não* para recusar."));
+        return Optional.empty();
     }
 
     private boolean isAffirmativeContencaoReply(String raw) {
@@ -2618,7 +2617,6 @@ public class WhatsAppCommandService {
                 try {
                     FaturaPdfImportService.ResultadoConfirmacaoFatura resultado =
                         faturaPdfImportService.confirmarTodosComResumo(userId, importId, false);
-                    contencaoJarvisService.ativarFilaWhatsAppAposConfirmacao(userId, importId);
                     String resposta = msgOk("Fatura importada",
                         faturaPdfImportService.mensagemResumoImportacao(resultado)
                             + " O cartão e o dashboard foram atualizados.");
@@ -2634,14 +2632,6 @@ public class WhatsAppCommandService {
                     "Não adicionei os lançamentos agora. A importação segue disponível no Dashboard em *Importações Pendentes*."));
             }
             return Optional.empty();
-        }
-        Optional<String> contencao = tryResolveContencaoProtocolo(userId, text);
-        if (contencao.isPresent()) {
-            return contencao;
-        }
-        Optional<String> cronos = tryResolveModoViagemProtocolo(userId, text);
-        if (cronos.isPresent()) {
-            return cronos;
         }
         if (awaitingSalaryAutoConfirm.contains(userId)) {
             if (isAffirmativeSaveReply(text)) {
@@ -2665,8 +2655,7 @@ public class WhatsAppCommandService {
                 return Optional.of(msgInfo("Receita automática",
                     "Sem lançamento automático. O *Saldo atual* no app segue a soma de receitas menos despesas *confirmadas*."));
             }
-            return Optional.of(msgInfo("Receita automática",
-                "Responde *sim* para activar o lançamento no dia de pagamento ou *não* para manter só manual."));
+            return Optional.empty();
         }
         if (awaitingCupomConfirm.containsKey(userId)) {
             if (isAffirmativeSaveReply(text)) {
@@ -2694,7 +2683,7 @@ public class WhatsAppCommandService {
                 log.info("[VISION-LOG] Utilizador cancelou cupom userId={}", userId);
                 return Optional.of(msgInfo("Cupom / foto", "Não guardei o lançamento. Podes enviar outra foto quando quiseres."));
             }
-            return Optional.of(msgInfo("Cupom / foto", "Responde *sim* para lançar a despesa do cupom ou *não* para cancelar."));
+            return Optional.empty();
         }
         if (awaitingContrachequeImportConfirm.containsKey(userId)) {
             Long importId = awaitingContrachequeImportConfirm.get(userId);
@@ -2714,7 +2703,15 @@ public class WhatsAppCommandService {
                 return Optional.of(msgInfo("Contracheque pendente",
                     "Não atualizei a renda agora. O contracheque segue disponível no histórico de renda para conferência."));
             }
-            return Optional.of(msgInfo("Contracheque", "Responde *sim* para atualizar renda e lançar receita ou *não* para deixar pendente."));
+            return Optional.empty();
+        }
+        Optional<String> contencao = tryResolveContencaoProtocolo(userId, text);
+        if (contencao.isPresent()) {
+            return contencao;
+        }
+        Optional<String> cronos = tryResolveModoViagemProtocolo(userId, text);
+        if (cronos.isPresent()) {
+            return cronos;
         }
         if (awaitingSaveConfirm.containsKey(userId)) {
             if (isAffirmativeSaveReply(text)) {
@@ -2735,7 +2732,7 @@ public class WhatsAppCommandService {
                 awaitingSaveConfirm.remove(userId);
                 return Optional.of(msgInfo("Meta", "Não guardei a meta. Podes pedir a simulação outra vez quando quiseres."));
             }
-            return Optional.of(msgInfo("Meta", "Responde *sim* para guardar esta meta no app ou *não* para cancelar."));
+            return Optional.empty();
         }
         if (awaitingMetaPercentual.containsKey(userId)) {
             MetaDraft draft = awaitingMetaPercentual.get(userId);
@@ -3477,6 +3474,23 @@ public class WhatsAppCommandService {
         BigDecimal valor;
         String descricao;
         Integer diaVencimento;
+    }
+
+    /** Limpa estados WhatsApp quando o utilizador confirma a importação no app. */
+    public void sincronizarFaturaResolvidaNoApp(Long userId) {
+        awaitingFaturaImportConfirm.remove(userId);
+        awaitingFaturaSaldoAnteriorChoice.remove(userId);
+    }
+
+    public void sincronizarEscolhaSaldoAnteriorFaturaNoApp(Long userId) {
+        awaitingFaturaSaldoAnteriorChoice.remove(userId);
+    }
+
+    public void sincronizarContrachequeResolvidoNoApp(Long userId, Long importId) {
+        Long pendente = awaitingContrachequeImportConfirm.get(userId);
+        if (pendente != null && pendente.equals(importId)) {
+            awaitingContrachequeImportConfirm.remove(userId);
+        }
     }
 
     private static class MetaDraft {
