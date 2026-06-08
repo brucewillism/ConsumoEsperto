@@ -1,5 +1,5 @@
-import { ApplicationConfig } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { ApplicationConfig, ErrorHandler } from '@angular/core';
+import { provideRouter, withNavigationErrorHandler } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
@@ -13,6 +13,11 @@ import { routes } from './app.routes';
 import { AuthInterceptor } from './interceptors/auth.interceptor';
 import { ErrorInterceptor } from './interceptors/error.interceptor';
 import { LoadingInterceptor } from './interceptors/loading.interceptor';
+import {
+  ChunkErrorHandler,
+  isChunkLoadError,
+  recarregarPorChunkDesatualizado,
+} from './shared/chunk-error.handler';
 
 /**
  * Configuração principal da aplicação Angular ConsumoEsperto
@@ -32,8 +37,18 @@ import { LoadingInterceptor } from './interceptors/loading.interceptor';
  */
 export const appConfig: ApplicationConfig = {
   providers: [
-    // Configura o roteamento da aplicação usando as rotas definidas
-    provideRouter(routes),
+    // Configura o roteamento da aplicação usando as rotas definidas.
+    // Se a navegação falhar por chunk lazy desatualizado (deploy novo), recarrega
+    // para o navegador buscar o index.html e os chunks atuais.
+    provideRouter(
+      routes,
+      withNavigationErrorHandler((evento: unknown) => {
+        const erro = (evento as { error?: unknown })?.error ?? evento;
+        if (isChunkLoadError(erro)) {
+          recarregarPorChunkDesatualizado();
+        }
+      })
+    ),
     
     // Configura o cliente HTTP com interceptors personalizados
     // - AuthInterceptor: adiciona automaticamente token JWT nas requisições
@@ -65,6 +80,9 @@ export const appConfig: ApplicationConfig = {
     },
 
     // Chart.js (ng2-charts v8) — registra controllers/plugins (line, doughnut, filler…)
-    provideCharts(withDefaultRegisterables())
+    provideCharts(withDefaultRegisterables()),
+
+    // Erros de chunk fora do fluxo de navegação também forçam reload controlado.
+    { provide: ErrorHandler, useClass: ChunkErrorHandler }
   ]
 };

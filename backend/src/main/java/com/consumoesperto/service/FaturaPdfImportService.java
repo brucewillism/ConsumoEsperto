@@ -4,6 +4,7 @@ import com.consumoesperto.dto.ConfirmarImportacaoFaturaRequest;
 import com.consumoesperto.dto.ImportacaoFaturaDTO;
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.exception.DivergenciaFaturaException;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.ImportacaoFaturaCartao;
@@ -236,10 +237,11 @@ public class FaturaPdfImportService {
             ? new HashSet<>(request.getIndices())
             : null;
         List<ImportacaoFaturaItemDTO> itensSelecionados = itensSelecionados(itens, indices);
+        boolean ignorarDivergencia = request != null && request.isIgnorarDivergencia();
         Optional<String> divergencia = validarSomaParaConfirmacao(imp.getValorTotal(), itensSelecionados, readAuditorias(imp.getAuditoriaJson()));
-        if (divergencia.isPresent()) {
-            throw new IllegalArgumentException(divergencia.get()
-                + " Não confirmei para não gravar uma fatura incorreta. Reimporte o PDF ou revise os itens na tela de importações.");
+        if (divergencia.isPresent() && !ignorarDivergencia) {
+            throw new DivergenciaFaturaException(divergencia.get()
+                + " Você pode confirmar mesmo assim e completar os lançamentos faltantes depois, ou reimportar o PDF.");
         }
         Fatura fatura = resolverFatura(imp);
         Set<Long> faturasParaSincronizar = new HashSet<>();

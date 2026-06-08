@@ -202,6 +202,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ));
     }
 
+    @ExceptionHandler(DivergenciaFaturaException.class)
+    public ResponseEntity<ApiError> handleDivergenciaFatura(DivergenciaFaturaException ex, WebRequest request) {
+        log.info("Divergência de fatura na confirmação: {}", ex.getMessage());
+        String path = pathFrom(request);
+        String msg = ex.getMessage() != null && !ex.getMessage().isBlank()
+            ? ex.getMessage()
+            : "A soma dos lançamentos não bate com o total da fatura.";
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(new ApiError(
+            "FATURA_DIVERGENCIA",
+            msg,
+            "Confirme mesmo assim para importar os lançamentos encontrados, ou reimporte o PDF.",
+            HttpStatus.UNPROCESSABLE_ENTITY.value(),
+            path
+        ));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
         log.warn("Argumento ilegal: {}", ex.getMessage());

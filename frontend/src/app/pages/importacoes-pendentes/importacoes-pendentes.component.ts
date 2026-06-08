@@ -141,8 +141,12 @@ export class ImportacoesPendentesComponent implements OnInit {
       this.toast.warning('Selecione pelo menos um lançamento novo.');
       return;
     }
+    this.executarConfirmacao(imp, indices, false);
+  }
+
+  private executarConfirmacao(imp: ImportacaoFatura, indices: number[], ignorarDivergencia: boolean): void {
     this.confirmandoId = imp.id;
-    this.importacaoService.confirmar(imp.id, indices).subscribe({
+    this.importacaoService.confirmar(imp.id, indices, ignorarDivergencia).subscribe({
       next: (res) => {
         this.toast.success(
           `${res.criadas} lançamento(s) importado(s). Veja no Dashboard se há protocolos de teto sugeridos.`
@@ -151,8 +155,23 @@ export class ImportacoesPendentesComponent implements OnInit {
         this.carregar();
       },
       error: (e: HttpErrorResponse) => {
-        this.toast.errorFromHttpResponse(e, 'Erro ao confirmar importação.');
         this.confirmandoId = null;
+        // 422 = soma dos lançamentos não bate com o total: avisa e deixa confirmar mesmo assim.
+        if (e.status === 422) {
+          const msg = (e.error && (e.error.message || e.error.error)) || 'A soma dos lançamentos não bate com o total da fatura.';
+          this.confirmDialog.ask({
+            title: 'Soma não bate com o total',
+            message: `${msg}\n\nDeseja importar mesmo assim os lançamentos selecionados? Você pode completar/ajustar os faltantes depois.`,
+            confirmLabel: 'Importar mesmo assim',
+            cancelLabel: 'Revisar',
+          }).subscribe((ok) => {
+            if (ok) {
+              this.executarConfirmacao(imp, indices, true);
+            }
+          });
+          return;
+        }
+        this.toast.errorFromHttpResponse(e, 'Erro ao confirmar importação.');
       }
     });
   }
