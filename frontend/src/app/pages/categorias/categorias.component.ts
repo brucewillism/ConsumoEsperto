@@ -10,7 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Categoria } from '../../models/categoria.model';
 import { CategoriaService } from '../../services/categoria.service';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { markAllControlsTouched, resolveHttpError } from '../../shared/utils/form.utils';
@@ -60,7 +60,8 @@ export class CategoriasComponent implements OnInit {
     private fb: FormBuilder,
     private categoriaService: CategoriaService,
     private snackBar: MatSnackBar,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private confirmDialog: ConfirmDialogService
   ) {
     this.form = this.fb.group({
       nome: ['', [Validators.required, Validators.maxLength(100)]],
@@ -139,16 +140,12 @@ export class CategoriasComponent implements OnInit {
     if (!categoria.id) {
       return;
     }
-    this.dialog
-      .open(ConfirmDialogComponent, {
-        data: {
-          title: 'Excluir categoria',
-          message: `Excluir "${categoria.nome}"? Transações existentes podem ficar sem categoria.`,
-          confirmText: 'Excluir',
-        },
-      })
-      .afterClosed()
-      .subscribe((ok) => {
+    this.confirmDialog.ask({
+      title: 'Excluir categoria',
+      message: `Excluir "${categoria.nome}"? Transações existentes podem ficar sem categoria.`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+    }).subscribe((ok) => {
         if (!ok) {
           return;
         }

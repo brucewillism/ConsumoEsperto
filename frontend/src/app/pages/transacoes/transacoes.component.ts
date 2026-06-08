@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { ParcelamentoDeleteChoiceDialogComponent } from '../../shared/parcelamento-delete-choice-dialog.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
@@ -91,6 +91,7 @@ export class TransacoesComponent implements OnInit {
     private readonly categoriaService: CategoriaService,
     private readonly contaBancariaService: ContaBancariaService,
     private readonly dialog: MatDialog,
+    private readonly confirmDialog: ConfirmDialogService,
     private readonly snackBar: MatSnackBar,
     private readonly financaAlteracao: FinancaAlteracaoService
   ) {
@@ -260,16 +261,12 @@ export class TransacoesComponent implements OnInit {
       return;
     }
 
-    const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Excluir transação',
-        message: 'Tem certeza que deseja excluir esta transação?',
-        confirmLabel: 'Excluir',
-        destructive: true
-      }
-    });
-    ref.afterClosed().subscribe((ok) => {
+    this.confirmDialog.ask({
+      title: 'Excluir transação',
+      message: 'Tem certeza que deseja excluir esta transação?',
+      confirmLabel: 'Excluir',
+      destructive: true,
+    }).subscribe((ok) => {
       if (!ok) {
         return;
       }

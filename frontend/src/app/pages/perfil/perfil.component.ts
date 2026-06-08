@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { UsuarioService } from '../../services/usuario.service';
 import { AuthService } from '../../services/auth.service';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { PreferenciaTratamentoJarvis, Usuario } from '../../models/usuario.model';
 import { GoogleCalendarLinkService } from '../../services/google-calendar-link.service';
@@ -50,6 +51,7 @@ export class PerfilComponent implements OnInit {
     private usuarioService: UsuarioService,
     private authService: AuthService,
     private toastService: ToastService,
+    private confirmDialog: ConfirmDialogService,
     private googleCalendarLink: GoogleCalendarLinkService,
     private despesasFixaService: DespesasFixaService
   ) {}
@@ -202,18 +204,25 @@ export class PerfilComponent implements OnInit {
     if (f.id == null) {
       return;
     }
-    if (!confirm(`Remover "${f.descricao}" das obrigações fixas?`)) {
-      return;
-    }
-    this.carregandoFixas = true;
-    this.despesasFixaService.excluir(f.id).subscribe({
-      next: () => {
-        this.toastService.success('Removido.');
-        this.carregarFixas();
-      },
-      error: () => {
-        this.carregandoFixas = false;
-      },
+    this.confirmDialog.ask({
+      title: 'Remover obrigação fixa',
+      message: `Remover "${f.descricao}" das suas obrigações fixas?`,
+      confirmLabel: 'Remover',
+      destructive: true,
+    }).subscribe((ok) => {
+      if (!ok) {
+        return;
+      }
+      this.carregandoFixas = true;
+      this.despesasFixaService.excluir(f.id!).subscribe({
+        next: () => {
+          this.toastService.success('Removido.');
+          this.carregarFixas();
+        },
+        error: () => {
+          this.carregandoFixas = false;
+        },
+      });
     });
   }
 

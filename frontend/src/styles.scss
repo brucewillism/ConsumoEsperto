@@ -639,6 +639,22 @@ a {
   max-width: 96vw !important;
 }
 
+/* Confirmação J.A.R.V.I.S. (substitui window.confirm) */
+.cdk-overlay-pane.jarvis-confirm-dialog {
+  .mat-mdc-dialog-surface {
+    border-radius: 16px !important;
+    padding: 20px 22px 16px !important;
+    box-shadow:
+      0 0 0 1px rgba(0, 229, 255, 0.25),
+      0 0 28px rgba(0, 229, 255, 0.18),
+      0 18px 40px rgba(0, 0, 0, 0.55) !important;
+  }
+
+  .mat-mdc-dialog-actions {
+    border-top-color: rgba(0, 229, 255, 0.15) !important;
+  }
+}
+
 .mat-mdc-dialog-container .mdc-dialog__title,
 .mat-mdc-dialog-container h2[mat-dialog-title] {
   padding: 0 !important;

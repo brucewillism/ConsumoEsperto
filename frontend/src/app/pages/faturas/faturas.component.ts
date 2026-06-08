@@ -29,7 +29,7 @@ import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 
 @Component({
   selector: 'app-faturas',
@@ -90,6 +90,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
     private cartaoCreditoService: CartaoCreditoService,
     private orcamentoService: OrcamentoService,
     private dialog: MatDialog,
+    private confirmDialog: ConfirmDialogService,
     private snackBar: MatSnackBar,
     private financaAlteracao: FinancaAlteracaoService
   ) {}
@@ -193,18 +194,12 @@ export class FaturasComponent implements OnInit, OnDestroy {
     }
 
     const banco = this.getBancoNome(fatura.bankName);
-    const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      maxWidth: '96vw',
-      data: {
-        title: 'Excluir fatura',
-        message: `Deseja excluir a fatura de ${banco}? Esta ação não pode ser desfeita.`,
-        confirmLabel: 'Excluir',
-        destructive: true,
-      },
-    });
-
-    ref.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((ok) => {
+    this.confirmDialog.ask({
+      title: 'Excluir fatura',
+      message: `Deseja excluir a fatura de ${banco}? Esta ação não pode ser desfeita.`,
+      confirmLabel: 'Excluir',
+      destructive: true,
+    }).pipe(takeUntil(this.destroy$)).subscribe((ok) => {
       if (!ok) {
         return;
       }

@@ -7,6 +7,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { ImportacaoFatura, ImportacaoFaturaService } from '../../services/importacao-fatura.service';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
@@ -29,7 +30,8 @@ export class ImportacoesPendentesComponent implements OnInit {
 
   constructor(
     private importacaoService: ImportacaoFaturaService,
-    private toast: ToastService
+    private toast: ToastService,
+    private confirmDialog: ConfirmDialogService
   ) {}
 
   ngOnInit(): void {
@@ -73,42 +75,56 @@ export class ImportacoesPendentesComponent implements OnInit {
     if (!this.importacoes.length || this.apagandoTodas) {
       return;
     }
-    if (!confirm('Apagar todas as importações pendentes? Os lançamentos ainda não foram gravados no sistema.')) {
-      return;
-    }
-    this.apagandoTodas = true;
-    this.importacaoService.excluirTodasPendentes().subscribe({
-      next: (res) => {
-        this.toast.success(
-          res.removidas > 0
-            ? `${res.removidas} importação(ões) pendente(s) removida(s).`
-            : 'Nenhuma importação pendente para remover.'
-        );
-        this.apagandoTodas = false;
-        this.carregar();
-      },
-      error: (e: HttpErrorResponse) => {
-        this.toast.errorFromHttpResponse(e, 'Erro ao apagar importações pendentes.');
-        this.apagandoTodas = false;
+    this.confirmDialog.ask({
+      title: 'Apagar todas as importações',
+      message: 'Os lançamentos ainda não foram gravados no sistema. Esta ação não pode ser desfeita.',
+      confirmLabel: 'Apagar todas',
+      destructive: true,
+    }).subscribe((ok) => {
+      if (!ok) {
+        return;
       }
+      this.apagandoTodas = true;
+      this.importacaoService.excluirTodasPendentes().subscribe({
+        next: (res) => {
+          this.toast.success(
+            res.removidas > 0
+              ? `${res.removidas} importação(ões) pendente(s) removida(s).`
+              : 'Nenhuma importação pendente para remover.'
+          );
+          this.apagandoTodas = false;
+          this.carregar();
+        },
+        error: (e: HttpErrorResponse) => {
+          this.toast.errorFromHttpResponse(e, 'Erro ao apagar importações pendentes.');
+          this.apagandoTodas = false;
+        },
+      });
     });
   }
 
   apagarUma(imp: ImportacaoFatura): void {
-    if (!confirm(`Descartar a importação de ${imp.bancoCartao}? Os lançamentos não serão gravados.`)) {
-      return;
-    }
-    this.apagandoId = imp.id;
-    this.importacaoService.excluirPendente(imp.id).subscribe({
-      next: () => {
-        this.toast.success('Importação pendente removida.');
-        this.apagandoId = null;
-        this.carregar();
-      },
-      error: (e: HttpErrorResponse) => {
-        this.toast.errorFromHttpResponse(e, 'Erro ao remover importação.');
-        this.apagandoId = null;
+    this.confirmDialog.ask({
+      title: `Descartar importação — ${imp.bancoCartao}`,
+      message: 'Os lançamentos desta fatura não serão gravados no sistema.',
+      confirmLabel: 'Descartar',
+      destructive: true,
+    }).subscribe((ok) => {
+      if (!ok) {
+        return;
       }
+      this.apagandoId = imp.id;
+      this.importacaoService.excluirPendente(imp.id).subscribe({
+        next: () => {
+          this.toast.success('Importação pendente removida.');
+          this.apagandoId = null;
+          this.carregar();
+        },
+        error: (e: HttpErrorResponse) => {
+          this.toast.errorFromHttpResponse(e, 'Erro ao remover importação.');
+          this.apagandoId = null;
+        },
+      });
     });
   }
 

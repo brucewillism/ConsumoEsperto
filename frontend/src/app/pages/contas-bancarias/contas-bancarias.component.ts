@@ -16,7 +16,7 @@ import { TransferenciaConta } from '../../models/transferencia.model';
 import { ContaBancariaService } from '../../services/conta-bancaria.service';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { TransferenciaService } from '../../services/transferencia.service';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { TransferenciaModalComponent } from '../../shared/transferencia-modal/transferencia-modal.component';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
@@ -63,6 +63,7 @@ export class ContasBancariasComponent implements OnInit {
     private contaService: ContaBancariaService,
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
+    private confirmDialog: ConfirmDialogService,
     private financaAlteracao: FinancaAlteracaoService,
     private transferenciaService: TransferenciaService
   ) {
@@ -197,16 +198,12 @@ export class ContasBancariasComponent implements OnInit {
     if (!conta.id) {
       return;
     }
-    this.dialog
-      .open(ConfirmDialogComponent, {
-        data: {
-          title: 'Inativar conta',
-          message: `Inativar "${conta.nome}"? O histórico de transações permanece.`,
-          confirmText: 'Inativar',
-        },
-      })
-      .afterClosed()
-      .subscribe((ok) => {
+    this.confirmDialog.ask({
+      title: 'Inativar conta',
+      message: `Inativar "${conta.nome}"? O histórico de transações permanece.`,
+      confirmLabel: 'Inativar',
+      destructive: true,
+    }).subscribe((ok) => {
         if (!ok) {
           return;
         }

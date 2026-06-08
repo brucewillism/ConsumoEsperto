@@ -11,7 +11,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { NovoCartaoDialogComponent } from '../../shared/novo-cartao-dialog/novo-cartao-dialog.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
@@ -60,6 +60,7 @@ export class CartoesComponent implements OnInit {
     private cartaoCreditoService: CartaoCreditoService,
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
+    private confirmDialog: ConfirmDialogService,
     private financaAlteracao: FinancaAlteracaoService
   ) {}
 
@@ -199,16 +200,12 @@ export class CartoesComponent implements OnInit {
       });
       return;
     }
-    const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Excluir cartão',
-        message: 'O cartão será desativado. Continuar?',
-        confirmLabel: 'Excluir',
-        destructive: true
-      }
-    });
-    ref.afterClosed().subscribe((ok) => {
+    this.confirmDialog.ask({
+      title: 'Excluir cartão',
+      message: 'O cartão será desativado. Continuar?',
+      confirmLabel: 'Excluir',
+      destructive: true,
+    }).subscribe((ok) => {
       if (!ok) {
         return;
       }

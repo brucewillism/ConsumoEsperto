@@ -9,7 +9,7 @@ import { MatSliderModule } from '@angular/material/slider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { NovaMetaDialogComponent } from '../../shared/nova-meta-dialog/nova-meta-dialog.component';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
@@ -78,6 +78,7 @@ export class MetasComponent implements OnInit {
     private metaService: MetaFinanceiraService,
     private toast: ToastService,
     private dialog: MatDialog,
+    private confirmDialog: ConfirmDialogService,
     private financaAlteracao: FinancaAlteracaoService
   ) {}
 
@@ -229,16 +230,12 @@ export class MetasComponent implements OnInit {
   }
 
   excluir(id: number): void {
-    const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Excluir meta',
-        message: 'Remover esta meta permanentemente?',
-        confirmLabel: 'Excluir',
-        destructive: true
-      }
-    });
-    ref.afterClosed().subscribe((ok) => {
+    this.confirmDialog.ask({
+      title: 'Excluir meta',
+      message: 'Remover esta meta permanentemente?',
+      confirmLabel: 'Excluir',
+      destructive: true,
+    }).subscribe((ok) => {
       if (!ok) {
         return;
       }
