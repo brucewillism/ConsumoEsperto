@@ -307,6 +307,16 @@ public class JarvisProtocolService {
             .orElse("Senhor");
     }
 
+    /** Tratamento conversacional resolvido pelo id (ex.: "chefe", "senhor", primeiro nome). Cai para "Senhor". */
+    public String resolveTratamento(Long userId, UsuarioRepository usuarioRepository) {
+        if (userId == null || usuarioRepository == null) {
+            return "Senhor";
+        }
+        return usuarioRepository.findById(userId)
+            .map(this::tratamentoConversacional)
+            .orElse("Senhor");
+    }
+
     /** Resposta canónica após comando “Jarvis, anote isso: …”. */
     public String confirmacaoMemoriaNucleo(String vocativoCompleto) {
         String v = vocativoCompleto == null || vocativoCompleto.isBlank() ? "Senhor" : vocativoCompleto.trim();
@@ -477,6 +487,35 @@ public class JarvisProtocolService {
     public String formatExpenseCatalogued(String vocativo, String valorFormatadoBrl) {
         String v = blankToSenhor(vocativo);
         return "Feito, " + v + ". Já lancei *" + valorFormatadoBrl + "* para você.";
+    }
+
+    /**
+     * Linha de status do teto da categoria, anexada à confirmação da despesa (tom 2ª pessoa, com aviso conforme o nível).
+     * Devolve já com a quebra de linha inicial para concatenar ao corpo da mensagem.
+     */
+    public String linhaOrcamentoPosDespesa(String categoriaNome, BigDecimal gastoAtual, BigDecimal limite, BigDecimal pctUso) {
+        String nome = categoriaNome == null || categoriaNome.isBlank() ? "essa categoria" : categoriaNome;
+        String pct = pctUso != null ? pctUso.stripTrailingZeros().toPlainString() : "0";
+        String gasto = BRL.format(gastoAtual != null ? gastoAtual : BigDecimal.ZERO);
+        String lim = BRL.format(limite != null ? limite : BigDecimal.ZERO);
+        double p = pctUso != null ? pctUso.doubleValue() : 0.0;
+        if (p >= 100.0) {
+            return "\n\n⚠️ Mas preciso te avisar: você já *estourou* o orçamento de *" + nome + "* ("
+                + pct + "% — " + gasto + " de " + lim + "). Quer que eu ajuste o teto ou prefere deixar assim por enquanto?";
+        }
+        if (p >= 80.0) {
+            return "\n\n_Atenção: *" + nome + "* já está em " + pct + "% do orçamento mensal ("
+                + gasto + " de " + lim + ") — ficamos perto do limite._";
+        }
+        return "\n\n_*" + nome + "* segue dentro do planejado: " + pct + "% do orçamento ("
+            + gasto + " de " + lim + ")._";
+    }
+
+    /** Sugestão (quando não há teto cadastrado para a categoria da despesa). */
+    public String linhaSemOrcamentoPosDespesa(String categoriaNome) {
+        String nome = categoriaNome == null || categoriaNome.isBlank() ? "essa categoria" : categoriaNome;
+        return "\n\nVocê ainda não tem um orçamento definido para *" + nome
+            + "*. Quer que eu crie um agora para acompanharmos o teto?";
     }
 
     public String formatOrcamentoAlert(Orcamento orcamento, int marco, BigDecimal gastoAtual, BigDecimal pctUso) {

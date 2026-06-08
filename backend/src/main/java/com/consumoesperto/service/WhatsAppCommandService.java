@@ -1667,7 +1667,7 @@ public class WhatsAppCommandService {
             String invoiceMessage = pagamentoEmConta
                 ? ""
                 : vincularNaFatura(matchResult, amount, userId);
-            String vocExpense = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+            String vocExpense = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
             String jarvisLinha = jarvisProtocolService.formatExpenseCatalogued(vocExpense, BRL.format(created.getValor()));
             String orcamentoLinha = blocoStatusOrcamentoPosDespesa(userId, created);
             if (matchResult.card != null && !pagamentoEmConta) {
@@ -1710,28 +1710,11 @@ public class WhatsAppCommandService {
                 if (catFallback == null || catFallback.isBlank()) {
                     return "";
                 }
-                return "\n\nVocê ainda não tem um orçamento definido para *" + catFallback
-                    + "*. Quer que eu crie um agora para acompanharmos o teto?";
+                return jarvisProtocolService.linhaSemOrcamentoPosDespesa(catFallback);
             }
             OrcamentoService.StatusOrcamentoCategoria s = statusOpt.get();
             String nome = s.categoriaNome() != null && !s.categoriaNome().isBlank() ? s.categoriaNome() : catFallback;
-            if (nome == null || nome.isBlank()) {
-                nome = "essa categoria";
-            }
-            String pct = s.pctUso() != null ? s.pctUso().stripTrailingZeros().toPlainString() : "0";
-            String gasto = BRL.format(s.gastoAtual());
-            String limite = BRL.format(s.limite());
-            double p = s.pctUso() != null ? s.pctUso().doubleValue() : 0.0;
-            if (p >= 100.0) {
-                return "\n\n⚠️ Mas preciso te avisar: você já *estourou* o orçamento de *" + nome + "* ("
-                    + pct + "% — " + gasto + " de " + limite + "). Quer que eu ajuste o teto ou prefere deixar assim por enquanto?";
-            }
-            if (p >= 80.0) {
-                return "\n\n_Atenção: *" + nome + "* já está em " + pct + "% do orçamento mensal ("
-                    + gasto + " de " + limite + ") — ficamos perto do limite._";
-            }
-            return "\n\n_*" + nome + "* segue dentro do planejado: " + pct + "% do orçamento ("
-                + gasto + " de " + limite + ")._";
+            return jarvisProtocolService.linhaOrcamentoPosDespesa(nome, s.gastoAtual(), s.limite(), s.pctUso());
         } catch (RuntimeException e) {
             log.debug("Status de orçamento pós-despesa indisponível userId={}: {}", userId, e.getMessage());
             return "";
