@@ -800,11 +800,40 @@ public class FaturaPdfImportService {
             item.setParcelaAtual(readPositiveInt(n.path("parcelaAtual")));
             item.setTotalParcelas(readPositiveInt(n.path("totalParcelas")));
             aplicarParcelamentoDaDescricao(item);
-            if (item.getValor() != null && item.getValor().compareTo(BigDecimal.ZERO) > 0) {
-                out.add(item);
+            if (item.getValor() == null || item.getValor().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
             }
+            // Pagamentos recebidos, estornos e saldo de fatura anterior não são despesas novas:
+            // não devem virar lançamento, nem entrar no checksum (senão a soma estoura o total da fatura).
+            if (pareceCreditoOuAjusteFatura(item.getDescricao())) {
+                continue;
+            }
+            out.add(item);
         }
         return out;
+    }
+
+    /**
+     * Linhas de crédito/ajuste que aparecem na lista de lançamentos mas não são compras:
+     * pagamento recebido, estorno, reembolso, devolução e saldo remanescente da fatura anterior.
+     */
+    private static boolean pareceCreditoOuAjusteFatura(String descricao) {
+        String n = norm(descricao);
+        if (n.isBlank()) {
+            return false;
+        }
+        return n.startsWith("pagamento")
+            || n.contains("pagamento recebido")
+            || n.contains("pagamento efetuado")
+            || n.contains("pagamento de fatura")
+            || n.contains("pagamento em")
+            || n.contains("pgto")
+            || n.contains("estorno")
+            || n.contains("reembolso")
+            || n.contains("devolucao")
+            || n.contains("saldo restante da fatura anterior")
+            || n.contains("saldo da fatura anterior")
+            || n.contains("saldo fatura anterior");
     }
 
     private List<ImportacaoFaturaItemDTO> readItens(String json) {

@@ -298,7 +298,9 @@ public class DocumentoIAContextService {
             + "Confira a soma dos lançamentos contra o valorTotal informado pela fatura e contra subtotais do PDF (ex.: 'Lançamentos no cartão', 'Total dos lançamentos atuais'); se não bater, revise linhas de parcela N/N e duplicatas. "
             + "Em faturas Banco do Brasil (bb), se o PDF mostrar saldo da fatura anterior e total desta fatura, preencha saldoFaturaAnterior (valor do saldo anterior) "
             + "e saldoFaturaAtual (total desta fatura / lançamentos do mês, SEM incluir o saldo anterior de novo); "
-            + "valorTotal = total a pagar no PDF. A linha «SALDO FATURA ANTERIOR» nos lançamentos NÃO é despesa nova — é remanescente. ";
+            + "valorTotal = total a pagar no PDF. A linha «SALDO FATURA ANTERIOR» nos lançamentos NÃO é despesa nova — é remanescente. "
+            + "NÃO inclua em \"lancamentos\" linhas de crédito/ajuste que não são compras: 'Pagamento recebido', 'Pagamento em DD MMM', 'Pagamento de fatura', estornos, reembolsos, devoluções e 'Saldo restante da fatura anterior'. "
+            + "Essas linhas reduzem o saldo e não são despesas; ignore-as para que a soma dos lançamentos bata com o valorTotal. ";
     }
 
     private static String auditoriaFinanceiraHumanaLinhas() {
