@@ -42,6 +42,17 @@
   font-size: 36px;
 }
 
+.forecast-card--loading {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.85;
+}
+
+.forecast-card--loading small {
+  margin: 0;
+}
+
 .form-card,
 .forecast-detail,
 .budget-card {

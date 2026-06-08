@@ -11,6 +11,10 @@
       <strong>{{ forecast.probabilidadeVermelho }}%</strong>
       <small>{{ forecast.nivelRisco }} · saldo projetado {{ brl(forecast.saldoProjetado) }}</small>
     </div>
+    <div class="forecast-card forecast-card--loading" *ngIf="!forecast && carregandoForecast">
+      <mat-spinner diameter="22"></mat-spinner>
+      <small>Calculando previsão do mês…</small>
+    </div>
     <button mat-raised-button color="primary" type="button" (click)="abrirNovoOrcamento()" [disabled]="carregando">
       <mat-icon>add</mat-icon>
       Novo orçamento

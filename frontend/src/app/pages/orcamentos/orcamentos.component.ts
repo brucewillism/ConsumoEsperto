@@ -11,6 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { forkJoin } from 'rxjs';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { NovoOrcamentoDialogComponent } from '../../shared/novo-orcamento-dialog/novo-orcamento-dialog.component';
 import { Categoria } from '../../models/categoria.model';
@@ -36,6 +37,7 @@ import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/w
     MatSelectModule,
     MatCheckboxModule,
     MatDialogModule,
+    MatProgressSpinnerModule,
     ChartMetodologiaComponent,
     PageLoadingComponent,
     WhatsappParityHintComponent,
@@ -48,6 +50,7 @@ export class OrcamentosComponent implements OnInit {
   categorias: Categoria[] = [];
   forecast: ForecastFinanceiro | null = null;
   carregando = true;
+  carregandoForecast = false;
   mes = new Date().getMonth() + 1;
   ano = new Date().getFullYear();
 
@@ -63,21 +66,35 @@ export class OrcamentosComponent implements OnInit {
   }
 
   carregar(): void {
+    // Lista + categorias são rápidas: liberam a página de imediato.
     this.carregando = true;
     forkJoin({
       orcamentos: this.orcamentoService.listar(this.mes, this.ano),
-      categorias: this.categoriaService.buscarPorUsuario(),
-      forecast: this.orcamentoService.forecast()
+      categorias: this.categoriaService.buscarPorUsuario()
     }).subscribe({
-      next: ({ orcamentos, categorias, forecast }) => {
+      next: ({ orcamentos, categorias }) => {
         this.orcamentos = orcamentos;
         this.categorias = categorias;
-        this.forecast = forecast;
         this.carregando = false;
       },
       error: () => {
         this.toast.error('Erro ao carregar orçamentos.');
         this.carregando = false;
+      }
+    });
+    // Forecast usa IA e pode demorar: carrega à parte, sem prender a página.
+    this.carregarForecast();
+  }
+
+  private carregarForecast(): void {
+    this.carregandoForecast = true;
+    this.orcamentoService.forecast().subscribe({
+      next: (forecast) => {
+        this.forecast = forecast;
+        this.carregandoForecast = false;
+      },
+      error: () => {
+        this.carregandoForecast = false;
       }
     });
   }
