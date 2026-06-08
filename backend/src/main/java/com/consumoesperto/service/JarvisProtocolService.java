@@ -30,9 +30,12 @@ public class JarvisProtocolService {
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.british-persona:false}")
     private boolean britishPersona;
 
-    public static final String SIGNATURE_LINE = "J.A.R.V.I.S. | ConsumoEsperto 🚀";
-    /** Sem emoji — substring comum nas mensagens assinadas pelo stack. */
-    public static final String SIGNATURE_MARKER = "J.A.R.V.I.S. | ConsumoEsperto";
+    public static final String SIGNATURE_LINE = "J.A.R.V.I.S. | Seu Conselheiro Financeiro 🚀";
+    /** Substring estável presente em qualquer variante da assinatura (atual e legada). Usada na deteção de eco. */
+    public static final String SIGNATURE_MARKER = "J.A.R.V.I.S. |";
+
+    /** Marca a primeira mensagem do dia por utilizador (assinatura condicional). */
+    private final java.util.Map<Long, java.time.LocalDate> ultimaAssinaturaPorUsuario = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** Tratamento curto para prompts e vocativo neutro (male/female/unknown ou preferência manual). */
     public String getTratamentoEstrategico(Usuario usuario) {
@@ -172,41 +175,127 @@ public class JarvisProtocolService {
         return "Protocolos de tratamento estabilizados, " + v + ". Sistemas personalizados para o seu perfil.";
     }
 
-    /** Camada de persona antes das instruções técnicas de JSON/comando. */
-    public String jarvisPersonaSystemLayer(String vocativo) {
-        String v = vocativo == null || vocativo.isBlank() ? "Senhor" : vocativo.trim();
-        boolean formal = v.startsWith("Senhor") || v.startsWith("Senhora") || v.startsWith("Doutor") || v.startsWith("Doutora");
-        String objeto = formal ? "do " + v : "do utilizador " + v;
-        return "Você é o J.A.R.V.I.S., o mordomo digital e assistente financeiro de elite " + objeto + ". "
-            + "Seja educado; use termos como «sistemas online» ou «protocolos ativos». "
-            + "Sua missão é proteger o patrimônio e elevar o Score de Saúde Financeira " + objeto + ". "
-            + "Responda em português claro e cortês.\n\n";
+    /**
+     * Termo de tratamento conversacional (minúsculo no fluxo, ex.: "chefe", "senhor", "Ana").
+     * Usa a preferência configurada no perfil; cai para o primeiro nome e, por fim, "você".
+     */
+    public String tratamentoConversacional(Usuario usuario) {
+        if (forceVocative != null && !forceVocative.isBlank()) {
+            return forceVocative.trim();
+        }
+        if (usuario == null) {
+            return "você";
+        }
+        if (Boolean.TRUE.equals(usuario.getJarvisConfigurado())) {
+            String t = usuario.getTratamento();
+            if (t != null && !t.isBlank()) {
+                return t.trim();
+            }
+            String pn = extrairPrimeiroNome(usuario);
+            return pn.isBlank() ? "você" : pn;
+        }
+        Usuario.PreferenciaTratamentoJarvis p = preferenciaJarvis(usuario);
+        String pn = extrairPrimeiroNome(usuario);
+        switch (p) {
+            case NENHUM:
+                return pn.isBlank() ? "você" : pn;
+            case SENHOR:
+                return "senhor";
+            case SENHORA:
+                return "senhora";
+            case DOUTOR:
+                return "doutor";
+            case DOUTORA:
+                return "doutora";
+            case AUTOMATICO:
+            default:
+                break;
+        }
+        Usuario.GeneroUsuario g = usuario.getGenero() != null ? usuario.getGenero() : Usuario.GeneroUsuario.UNKNOWN;
+        if (g == Usuario.GeneroUsuario.MALE) {
+            return "senhor";
+        }
+        if (g == Usuario.GeneroUsuario.FEMALE) {
+            return "senhora";
+        }
+        return pn.isBlank() ? "você" : pn;
     }
 
     /**
-     * Persona + interlocutor para prompts de IA (vocative forçado opcional, tom britânico opcional).
+     * System prompt global da persona J.A.R.V.I.S. como conselheiro financeiro em 2ª pessoa.
+     * Interpola nome e tratamento; nunca deixa placeholders {@code {{ }}} chegarem ao modelo.
+     *
+     * @param contextoAtual bloco "CONTEXTO ATUAL" já formatado (pode ser vazio).
      */
-    public String camadaPersonaCompletaParaIa(Usuario usuario) {
-        String voc;
-        if (forceVocative != null && !forceVocative.isBlank()) {
-            voc = forceVocative.trim();
-        } else if (usuario == null) {
-            voc = "Senhor";
-        } else {
-            voc = montarVocativoCompleto(usuario);
+    public String construirPersonaSystemPrompt(Usuario usuario, String contextoAtual) {
+        String nome = extrairPrimeiroNome(usuario);
+        if (nome.isBlank()) {
+            nome = "o usuário";
         }
-        String instr;
-        if (forceVocative != null && !forceVocative.isBlank()) {
-            instr = "Trate o utilizador exclusamente pelo vocativo \"" + forceVocative.trim()
-                + "\" em todas as respostas cordiais.\n\n";
-        } else {
-            instr = usuario != null ? instrucaoInterlocutorJarvis(usuario) : "";
-        }
-        String layer = jarvisPersonaSystemLayer(voc);
+        String trat = tratamentoConversacional(usuario);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Você é J.A.R.V.I.S., o conselheiro financeiro pessoal de ").append(nome).append(".\n\n");
+
+        sb.append("IDENTIDADE E VOZ\n");
+        sb.append("- Você é uma entidade própria, não um espelho do usuário. Você executa ordens, não as repete.\n");
+        sb.append("- Fale sempre em segunda pessoa (\"você\", \"seu\", \"sua\"). Nunca diga \"você fez X\" — diga \"registrei X para você\".\n");
+        sb.append("- Tom inteligente, focado, levemente irônico e sagaz, mas profundamente comprometido com o dinheiro de ")
+            .append(nome).append(".\n");
+        sb.append("- Trate o usuário por \"").append(trat).append("\". Se não fizer sentido, use o primeiro nome.\n\n");
+
+        sb.append("CONFIRMAÇÕES DE AÇÃO\n");
+        sb.append("- Deixe claro que VOCÊ executou a ação. Errado: \"Despesa de R$ 50 criada.\" ");
+        sb.append("Certo: \"Feito, ").append(trat).append(". Já registrei os R$ 50,00 na categoria para você.\"\n");
+        sb.append("- Use verbos na 1ª pessoa do singular: registrei, anotei, lancei, guardei, ativei, criei.\n\n");
+
+        sb.append("PROATIVIDADE E ALERTAS\n");
+        sb.append("- Após registrar um gasto, consulte o CONTEXTO ATUAL e reaja:\n");
+        sb.append("  • orçamento da categoria acima de 80%: avise com atenção leve, sem alarme;\n");
+        sb.append("  • orçamento estourado: avise com tom direto e sugira uma ação concreta;\n");
+        sb.append("  • receita ou meta atingida: parabenize de forma breve e genuína;\n");
+        sb.append("  • sem orçamento para a categoria: registre e sugira criar um, sem bloquear o fluxo.\n\n");
+
+        sb.append("SITUAÇÕES CRÍTICAS\n");
+        sb.append("- Saldo do mês negativo ou déficit: abandone a ironia, seja sóbrio, direto e propositivo, ");
+        sb.append("com uma ação concreta (ex.: \"posso criar um protocolo de contenção agora?\").\n");
+        sb.append("- Gasto atípico (muito acima da média histórica da categoria): sinalize a anomalia antes de confirmar e peça confirmação.\n");
+        sb.append("- Nunca minimize problemas financeiros reais com humor.\n\n");
+
+        sb.append("QUANDO NÃO ENTENDER\n");
+        sb.append("- Não invente interpretação. Faça uma única pergunta objetiva (ex.: \"Foram R$ 45 ou R$ 450?\").\n");
+        sb.append("- Não liste várias interpretações; escolha a mais provável e confirme apenas ela.\n\n");
+
+        sb.append("DADOS AUSENTES\n");
+        sb.append("- Categoria inexistente: ofereça criar agora ou usar \"Outros\".\n");
+        sb.append("- Conta/cartão ambíguo: pergunte qual usar.\n");
+        sb.append("- Valor vago (ex.: \"uns 50\"): assuma R$ 50,00 e avise que pode corrigir.\n\n");
+
+        sb.append("LIMITES\n");
+        sb.append("- Sem dados suficientes, não dê conselho de investimento específico; diga o que falta.\n");
+        sb.append("- Fora do escopo do ConsumoEsperto, redirecione gentilmente para as finanças do usuário.\n\n");
+
         if (britishPersona) {
-            layer += "Adote postura de assistente britânico: calmo, analítico, understatement cortês; mantenha respostas em português.\n\n";
+            sb.append("Mantenha postura de assistente britânico: calmo, analítico, understatement cortês; sempre em português.\n\n");
         }
-        return instr + layer;
+
+        if (contextoAtual != null && !contextoAtual.isBlank()) {
+            sb.append(contextoAtual.trim()).append("\n\n");
+        } else {
+            sb.append("CONTEXTO ATUAL\n- Usuário: ").append(nome)
+                .append("\n- Tratamento: ").append(trat)
+                .append("\n- (Contexto financeiro detalhado indisponível nesta interação.)\n\n");
+        }
+        return sb.toString();
+    }
+
+    /** Compatibilidade: persona sem bloco de contexto financeiro. */
+    public String camadaPersonaCompletaParaIa(Usuario usuario) {
+        return construirPersonaSystemPrompt(usuario, "");
+    }
+
+    /** Persona + bloco de contexto financeiro atual (saldo, orçamentos críticos/estourados). */
+    public String camadaPersonaCompletaParaIa(Usuario usuario, String contextoAtual) {
+        return construirPersonaSystemPrompt(usuario, contextoAtual);
     }
 
     public String resolveVocative(Long userId, UsuarioRepository usuarioRepository) {
@@ -221,7 +310,7 @@ public class JarvisProtocolService {
     /** Resposta canónica após comando “Jarvis, anote isso: …”. */
     public String confirmacaoMemoriaNucleo(String vocativoCompleto) {
         String v = vocativoCompleto == null || vocativoCompleto.isBlank() ? "Senhor" : vocativoCompleto.trim();
-        return "Entendido, " + v + ". Guardei este evento no meu núcleo de memória. Usarei isso para calibrar futuras projeções.";
+        return "Guardado com segurança, " + v + ". Vou deixar isso no meu radar e te lembro de provisionar esse valor quando fizer sentido.";
     }
 
     /** Efeito dominó — alerta quando o primeiro gasto da sequência dispara o protocolo de hábito. */
@@ -261,22 +350,75 @@ public class JarvisProtocolService {
         return t + "\n\n" + SIGNATURE_LINE;
     }
 
+    /**
+     * Assinatura condicional: a assinatura formal só aparece na *primeira* mensagem do dia ao utilizador,
+     * em confirmações formais (importação de PDF, contracheque), e em relatórios. Respostas conversacionais
+     * curtas, erros e pedidos de esclarecimento ficam sem assinatura.
+     */
+    public String assinaturaCondicional(Long userId, String message) {
+        if (message == null || message.isBlank()) {
+            return message;
+        }
+        String t = message.trim();
+        if (t.contains(SIGNATURE_MARKER)) {
+            return t;
+        }
+        if (ehErroOuEsclarecimento(t)) {
+            return t;
+        }
+        boolean formal = ehMensagemFormalParaAssinatura(t);
+        boolean primeiraDoDia = marcarPrimeiraInteracaoDoDia(userId);
+        if (formal || primeiraDoDia) {
+            return t + "\n\n" + SIGNATURE_LINE;
+        }
+        return t;
+    }
+
+    private boolean marcarPrimeiraInteracaoDoDia(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        java.time.LocalDate hoje = java.time.LocalDate.now();
+        java.time.LocalDate anterior = ultimaAssinaturaPorUsuario.put(userId, hoje);
+        return !hoje.equals(anterior);
+    }
+
+    private static boolean ehErroOuEsclarecimento(String message) {
+        String t = message.trim();
+        return t.startsWith("🛡️") || t.startsWith("❓");
+    }
+
+    private static boolean ehMensagemFormalParaAssinatura(String message) {
+        String n = Normalizer.normalize(message, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+        return n.contains("fatura importada")
+            || n.contains("varredura de fatura")
+            || n.contains("varredura concluida")
+            || n.contains("protocolo de renda")
+            || n.contains("contracheque")
+            || n.contains("relatorio")
+            || n.contains("protocolo de otimiza")
+            || n.contains("protocolo sentinela")
+            || n.contains("revisao semanal");
+    }
+
     /** ACK imediato após o filtro do webhook (antes do processamento pesado). */
     public String ackForIncoming(String effectiveMediaType, String mimeType) {
         String mt = effectiveMediaType != null ? effectiveMediaType.trim().toLowerCase(Locale.ROOT) : "";
         if ("audio".equals(mt)) {
-            return "Sistemas ativos. Analisando sua mensagem de voz, Senhor...";
+            return "Já estou ouvindo sua mensagem de voz e analisando o conteúdo para você...";
         }
         if ("document".equals(mt)) {
             if (mimeType != null && mimeType.toLowerCase(Locale.ROOT).contains("pdf")) {
-                return "Recebi o arquivo. Iniciando extração de dados fiscais...";
+                return "Recebi o arquivo. Já comecei a extração de dados fiscais para você...";
             }
-            return "Recebi o arquivo, Senhor. Um instante enquanto processo o documento...";
+            return "Recebi o arquivo. Um instante enquanto processo o documento para você...";
         }
         if ("image".equals(mt)) {
-            return "Recebi a imagem, Senhor. Analisando o conteúdo...";
+            return "Recebi a imagem. Já estou analisando o conteúdo para você...";
         }
-        return "Compreendido, Senhor. Analisando sua mensagem...";
+        return "Deixe comigo. Já estou analisando sua mensagem...";
     }
 
     /** Texto enviado pelo nosso backend (assinatura J.A.R.V.I.S.) — o webhook Evolution reenvia como novo upsert; não ACK de novo. */
@@ -298,13 +440,19 @@ public class JarvisProtocolService {
         String n = Normalizer.normalize(text.trim(), Normalizer.Form.NFD)
             .replaceAll("\\p{M}", "")
             .toLowerCase(Locale.ROOT);
-        if (n.contains("compreendido") && n.contains("analisando sua mensagem")) {
+        if (n.contains("analisando sua mensagem")) {
             return true;
         }
-        if (n.contains("sistemas ativos") && n.contains("mensagem de voz")) {
+        if (n.contains("compreendido") && n.contains("analisando")) {
             return true;
         }
-        if (n.contains("recebi a imagem") && n.contains("senhor")) {
+        if (n.contains("deixe comigo") && n.contains("analisando")) {
+            return true;
+        }
+        if ((n.contains("sistemas ativos") || n.contains("ouvindo sua mensagem de voz")) && n.contains("mensagem de voz")) {
+            return true;
+        }
+        if (n.contains("recebi a imagem")) {
             return true;
         }
         if (n.contains("recebi o documento") && n.contains("protocolos de extracao")) {
@@ -319,11 +467,16 @@ public class JarvisProtocolService {
         if (n.contains("sistemas online") && n.contains("processando a sua mensagem")) {
             return true;
         }
+        if (n.contains("processando a sua mensagem")) {
+            return true;
+        }
         return false;
     }
 
-    public String formatExpenseCatalogued(String valorFormatadoBrl) {
-        return "Gasto de *" + valorFormatadoBrl + "* catalogado com sucesso, Senhor. Sistemas atualizados.";
+    /** Confirmação de despesa em 2ª pessoa (J.A.R.V.I.S. executou a ação por você). */
+    public String formatExpenseCatalogued(String vocativo, String valorFormatadoBrl) {
+        String v = blankToSenhor(vocativo);
+        return "Feito, " + v + ". Já lancei *" + valorFormatadoBrl + "* para você.";
     }
 
     public String formatOrcamentoAlert(Orcamento orcamento, int marco, BigDecimal gastoAtual, BigDecimal pctUso) {
@@ -331,17 +484,17 @@ public class JarvisProtocolService {
         String gasto = gastoAtual != null ? BRL.format(gastoAtual) : "?";
         String lim = orcamento.getValorLimite() != null ? BRL.format(orcamento.getValorLimite()) : "?";
         String sujeito = orcamento.isCompartilhado()
-            ? "o orçamento partilhado da categoria *" + cat + "*"
-            : "o orçamento planejado na categoria *" + cat + "*";
-        return "Senhor, detectei um *desvio* em " + sujeito + " (" + marco + "% do limite). "
-            + "Recomendo cautela.\n\n"
-            + "Gasto atual: *" + gasto + "* de *" + lim + "* "
-            + "(" + pctUso.stripTrailingZeros().toPlainString() + "% utilizado).";
+            ? "o seu orçamento partilhado de *" + cat + "*"
+            : "o seu orçamento de *" + cat + "*";
+        return "Atenção: " + sujeito + " já chegou a *" + marco + "%* do limite. "
+            + "Fico de olho para você não passar do teto.\n\n"
+            + "Você já usou *" + gasto + "* de *" + lim + "* "
+            + "(" + pctUso.stripTrailingZeros().toPlainString() + "% do limite).";
     }
 
     /** Mensagem de celebração quando há métrica positiva (ex.: relatório proactivo). */
     public String formatMonthlyEconomyBeat(int percentualMeta) {
-        return "Relatório de economia mensal gerado. O Senhor superou as metas em *" + percentualMeta + "%*.";
+        return "Boa! Você superou as suas metas em *" + percentualMeta + "%* este mês. Continuo de olho para manter o ritmo.";
     }
 
     /** Fechamento de fatura — saldo cobre o valor (avisos programados). */
@@ -504,19 +657,19 @@ public class JarvisProtocolService {
 
     /** PDF em processamento no fluxo Evolution (antes da extração IA). */
     public String statusLeituraPdfExtracaoFiscal() {
-        return "Recebi o documento, Senhor. Iniciando os protocolos de extração de dados fiscais...";
+        return "Recebi o documento. Já comecei a extração de dados fiscais para você...";
     }
 
     /** Texto livre em processamento antes do comando IA. */
     public String statusLeituraTextoEmAndamento() {
-        return "🤖 Sistemas online. Processando a sua mensagem, Senhor...";
+        return "🤖 Deixe comigo. Processando a sua mensagem...";
     }
 
     /** Cupom fiscal analisado por OCR — aguardando confirmação. */
     public String formatoCupomOcrSucesso(String valorFmt, String descricaoEstabelecimento, String categoriaNome) {
-        return "📸 Relatório visual concluído, Senhor. Identifiquei um desembolso de *" + valorFmt + "* no estabelecimento *"
-            + descricaoEstabelecimento + "*. Devo catalogar na categoria *" + categoriaNome + "*? Aguardo sua autorização.\n\n"
-            + "Responda *sim* para confirmar ou *não* para cancelar.";
+        return "📸 Já li o seu cupom. Identifiquei um gasto de *" + valorFmt + "* em *"
+            + descricaoEstabelecimento + "*. Quer que eu registre na categoria *" + categoriaNome + "* para você?\n\n"
+            + "Responda *sim* para eu lançar ou *não* para cancelar.";
     }
 
     /**
@@ -607,11 +760,11 @@ public class JarvisProtocolService {
     /** Resumo de importação de fatura PDF. */
     public String formatoFaturaVarredura(String bancoCartao, int nNaoCatalogados, String listaInconsistenciasBullets, boolean bloquearConciliacaoPorDivergenciaTotal) {
         StringBuilder sb = new StringBuilder();
-        sb.append("📊 *Varredura de fatura Stark* — cartão *").append(bancoCartao).append("*. ");
-        sb.append("*").append(nNaoCatalogados).append("* lançamentos ainda não espelhados no arsenal. ");
-        sb.append("Painel de inconsistências:\n");
+        sb.append("📊 *Varredura concluída* — cartão *").append(bancoCartao).append("*. ");
+        sb.append("Encontrei *").append(nNaoCatalogados).append("* lançamentos que ainda não estão nos seus registros. ");
+        sb.append("O que chamou minha atenção:\n");
         if (listaInconsistenciasBullets == null || listaInconsistenciasBullets.isBlank()) {
-            sb.append("• Nenhuma anomalia prioritária registada.\n");
+            sb.append("• Nada fora do comum por aqui.\n");
         } else {
             sb.append(listaInconsistenciasBullets);
             if (!listaInconsistenciasBullets.endsWith("\n")) {
@@ -619,9 +772,9 @@ public class JarvisProtocolService {
             }
         }
         if (bloquearConciliacaoPorDivergenciaTotal) {
-            sb.append("\nConciliação barrada: o total da fatura diverge do sintetizado nos lançamentos. Reenvie o PDF ou utilize *Importações pendentes*.");
+            sb.append("\nNão vou gravar ainda: o total da fatura diverge da soma dos lançamentos. Me reenvie o PDF ou ajuste em *Importações pendentes*.");
         } else {
-            sb.append("\nAutoriza a gravação nos livros? Responda *sim* ou *não*.");
+            sb.append("\n*Autoriza que eu registre tudo nos seus livros agora?* Responda *sim* ou *não*.");
         }
         return sb.toString();
     }

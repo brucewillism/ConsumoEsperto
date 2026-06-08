@@ -255,11 +255,11 @@ public class WhatsAppCommandService {
         }
         Optional<String> nfce = conciergeNfceUrlService.processarSeUrlFiscal(userId, text, jarvisProtocolService);
         if (nfce.isPresent()) {
-            return Optional.of(jarvisProtocolService.ensureSigned(nfce.get()));
+            return nfce;
         }
         Optional<String> rag = tryRespostaRagAnalitico(userId, text);
         if (rag.isPresent()) {
-            return Optional.of(jarvisProtocolService.ensureSigned(rag.get()));
+            return rag;
         }
         if (isForecastQuestion(text)) {
             return Optional.of(forecastFinanceiroService.montarRespostaWhatsapp(userId));
@@ -1667,23 +1667,74 @@ public class WhatsAppCommandService {
             String invoiceMessage = pagamentoEmConta
                 ? ""
                 : vincularNaFatura(matchResult, amount, userId);
-            String jarvisLinha = jarvisProtocolService.formatExpenseCatalogued(BRL.format(created.getValor()));
+            String vocExpense = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+            String jarvisLinha = jarvisProtocolService.formatExpenseCatalogued(vocExpense, BRL.format(created.getValor()));
+            String orcamentoLinha = blocoStatusOrcamentoPosDespesa(userId, created);
             if (matchResult.card != null && !pagamentoEmConta) {
                 String detalhe = jarvisLinha + "\n\n*" + created.getDescricao() + "* no cartão *"
                     + matchResult.card.getNome() + "*.\n" + invoiceMessage.trim();
                 if (matchResult.pendingReview) {
                     detalhe += "\n⚠️ Ficou *pendente de conferência* (há mais do que um cartão parecido com o nome que disseste).";
                 }
-                return msgOk("Despesa registada", detalhe);
+                return msgOk("Despesa registada", detalhe + orcamentoLinha);
             }
             String contaInfo = created.getContaBancariaNome() != null && !created.getContaBancariaNome().isBlank()
                 ? " na conta *" + created.getContaBancariaNome() + "*"
                 : "";
             return msgOk("Despesa registada",
-                jarvisLinha + "\n\n*" + created.getDescricao() + "*" + contaInfo + " (sem cartão associado).\n" + invoiceMessage.trim());
+                jarvisLinha + "\n\n*" + created.getDescricao() + "*" + contaInfo + " (sem cartão associado).\n"
+                    + invoiceMessage.trim() + orcamentoLinha);
         } catch (RuntimeException e) {
             log.info("WhatsApp despesa: {}", e.getMessage());
             return msgErro(userId, "Despesa", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    /**
+     * Linha dinâmica com o status do teto da categoria, anexada à confirmação da despesa.
+     * Se houver orçamento: mostra % usado (com tom de alerta conforme o nível). Se não houver: sugere criar um.
+     * Nunca lança — qualquer falha resulta em string vazia.
+     */
+    private String blocoStatusOrcamentoPosDespesa(Long userId, TransacaoDTO created) {
+        try {
+            if (created == null || created.getCategoriaId() == null) {
+                return "";
+            }
+            YearMonth ym = created.getDataTransacao() != null
+                ? YearMonth.from(created.getDataTransacao())
+                : YearMonth.now();
+            Optional<OrcamentoService.StatusOrcamentoCategoria> statusOpt =
+                orcamentoService.statusOrcamentoCategoria(userId, created.getCategoriaId(), ym);
+            String catFallback = created.getCategoriaNome();
+            if (statusOpt.isEmpty()) {
+                if (catFallback == null || catFallback.isBlank()) {
+                    return "";
+                }
+                return "\n\nVocê ainda não tem um orçamento definido para *" + catFallback
+                    + "*. Quer que eu crie um agora para acompanharmos o teto?";
+            }
+            OrcamentoService.StatusOrcamentoCategoria s = statusOpt.get();
+            String nome = s.categoriaNome() != null && !s.categoriaNome().isBlank() ? s.categoriaNome() : catFallback;
+            if (nome == null || nome.isBlank()) {
+                nome = "essa categoria";
+            }
+            String pct = s.pctUso() != null ? s.pctUso().stripTrailingZeros().toPlainString() : "0";
+            String gasto = BRL.format(s.gastoAtual());
+            String limite = BRL.format(s.limite());
+            double p = s.pctUso() != null ? s.pctUso().doubleValue() : 0.0;
+            if (p >= 100.0) {
+                return "\n\n⚠️ Mas preciso te avisar: você já *estourou* o orçamento de *" + nome + "* ("
+                    + pct + "% — " + gasto + " de " + limite + "). Quer que eu ajuste o teto ou prefere deixar assim por enquanto?";
+            }
+            if (p >= 80.0) {
+                return "\n\n_Atenção: *" + nome + "* já está em " + pct + "% do orçamento mensal ("
+                    + gasto + " de " + limite + ") — ficamos perto do limite._";
+            }
+            return "\n\n_*" + nome + "* segue dentro do planejado: " + pct + "% do orçamento ("
+                + gasto + " de " + limite + ")._";
+        } catch (RuntimeException e) {
+            log.debug("Status de orçamento pós-despesa indisponível userId={}: {}", userId, e.getMessage());
+            return "";
         }
     }
 
@@ -2358,11 +2409,17 @@ public class WhatsAppCommandService {
             || normalized.contains("segue o pdf acima")
             || normalized.contains("relatorio_export")
             || normalized.contains("compreendido, senhor")
+            || normalized.contains("deixe comigo. ja estou analisando")
+            || normalized.contains("deixe comigo. processando")
             || normalized.contains("ouvindo seu audio")
+            || normalized.contains("ouvindo sua mensagem de voz")
             || normalized.contains("recebi o arquivo")
+            || normalized.contains("recebi a imagem")
             || normalized.contains("extracao de dados fiscais")
+            || normalized.contains("ja comecei a extracao de dados fiscais")
             || normalized.contains("analisando sua mensagem")
             || normalized.contains("jarvis | consumoesperto")
+            || normalized.contains("jarvis | seu conselheiro financeiro")
             || normalized.contains("revisao semanal")
             || normalized.contains("identifiquei que a fatura")
             || normalized.contains("identifiquei o fechamento da fatura")
@@ -2402,7 +2459,7 @@ public class WhatsAppCommandService {
      * @param webhookEvolutionInstanceHint instância que recebeu o evento Evolution; usada apenas se não houver nome na {@link UsuarioAiConfig}.
      */
     private void sendOutgoingMessage(String to, String message, Long userId, String webhookEvolutionInstanceHint) {
-        String body = jarvisProtocolService.ensureSigned(message);
+        String body = jarvisProtocolService.assinaturaCondicional(userId, message);
         String normalizedEvolution = evolutionApiService.normalizeToNumber(to);
         String instance = resolveEvolutionInstanceForSend(userId, webhookEvolutionInstanceHint);
         boolean evolutionOk = evolutionApiService.enviarMensagem(normalizedEvolution, body, instance);

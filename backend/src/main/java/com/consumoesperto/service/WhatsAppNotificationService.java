@@ -36,7 +36,7 @@ public class WhatsAppNotificationService {
             .filter(s -> s != null && !s.isBlank())
             .orElse(null);
         try {
-            String body = jarvisProtocolService.ensureSigned(mensagem);
+            String body = jarvisProtocolService.assinaturaCondicional(usuarioId, mensagem);
             boolean ok = evolutionApiService.enviarMensagem(destino, body, instance);
             if (!ok) {
                 log.warn("[J.A.R.V.I.S. Offline] Notificação Evolution não enviada para usuário {}.", usuarioId);

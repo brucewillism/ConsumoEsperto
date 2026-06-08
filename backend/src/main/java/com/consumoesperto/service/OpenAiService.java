@@ -44,6 +44,12 @@ public class OpenAiService {
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
     private final AiGatewayService aiGatewayService;
+
+    /** Injeção lazy para quebrar o ciclo OpenAiService → Contexto → SaldoService → OpenAiService. */
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private JarvisContextoFinanceiroService jarvisContextoFinanceiroService;
+
     private RestTemplate restTemplate;
 
     @Value("${consumoesperto.ai.http.connect-timeout-ms:15000}")
@@ -104,11 +110,25 @@ public class OpenAiService {
         );
     }
 
+    /** Monta o bloco de contexto financeiro da persona; nunca lança nem deixa placeholder literal. */
+    private String montarContextoFinanceiroSeguro(Long userId) {
+        if (userId == null || jarvisContextoFinanceiroService == null) {
+            return "";
+        }
+        try {
+            return jarvisContextoFinanceiroService.montarBlocoContexto(userId);
+        } catch (Exception e) {
+            log.debug("Contexto financeiro J.A.R.V.I.S. indisponível userId={}: {}", userId, e.getMessage());
+            return "";
+        }
+    }
+
     public JsonNode parseCommand(String inputText, Long userId) {
         AiProvidersConfig cfg = cfgForAi(userId);
         Optional<Usuario> ou = userId == null ? Optional.empty() : usuarioRepository.findById(userId);
         Usuario uEnt = ou.orElse(null);
-        String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt);
+        String contextoFinanceiro = montarContextoFinanceiroSeguro(userId);
+        String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt, contextoFinanceiro);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
             "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
@@ -218,7 +238,8 @@ public class OpenAiService {
             return "";
         }
         Usuario u = usuarioRepository.findById(userId).orElse(null);
-        String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(u);
+        String contextoFinanceiro = montarContextoFinanceiroSeguro(userId);
+        String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(u, contextoFinanceiro);
         String system = persona
             + "Com base *somente* nos trechos de transações fornecidos, responda à pergunta com análise útil "
             + "(totais, padrões, tendências). Se os trechos não forem suficientes, indique-o com franqueza. "

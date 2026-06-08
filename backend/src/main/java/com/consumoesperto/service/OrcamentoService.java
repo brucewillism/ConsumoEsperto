@@ -151,6 +151,42 @@ public class OrcamentoService {
         return Optional.of(alerta);
     }
 
+    /**
+     * Status atual do orçamento da categoria (para anexar à confirmação de despesa no WhatsApp).
+     * Considera orçamento próprio e, em fallback, orçamento partilhado do grupo familiar pela mesma categoria.
+     *
+     * @return vazio se não existir orçamento com limite válido para a categoria no mês.
+     */
+    @Transactional(readOnly = true)
+    public Optional<StatusOrcamentoCategoria> statusOrcamentoCategoria(Long usuarioId, Long categoriaId, YearMonth ym) {
+        if (usuarioId == null || categoriaId == null || ym == null) {
+            return Optional.empty();
+        }
+        Optional<Orcamento> opt = orcamentoRepository.findByUsuarioIdAndCategoriaIdAndMesAndAno(
+            usuarioId, categoriaId, ym.getMonthValue(), ym.getYear());
+        if (opt.isEmpty()) {
+            opt = categoriaRepository.findById(categoriaId).flatMap(cat ->
+                grupoFamiliarService.grupoAceitoDoUsuario(usuarioId).stream()
+                    .flatMap(g -> orcamentoRepository.findCompartilhadosByGrupoIdAndMesAndAno(
+                        g.getId(), ym.getMonthValue(), ym.getYear()).stream())
+                    .filter(o -> o.getCategoria() != null
+                        && normalizar(o.getCategoria().getNome()).equals(normalizar(cat.getNome())))
+                    .findFirst());
+        }
+        if (opt.isEmpty()) {
+            return Optional.empty();
+        }
+        Orcamento o = opt.get();
+        BigDecimal limite = o.getValorLimite();
+        if (limite == null || limite.compareTo(BigDecimal.ZERO) <= 0) {
+            return Optional.empty();
+        }
+        BigDecimal gasto = gastoOrcamento(o, ym);
+        BigDecimal pct = percentual(gasto, limite);
+        String nome = o.getCategoria() != null ? o.getCategoria().getNome() : null;
+        return Optional.of(new StatusOrcamentoCategoria(nome, nz(gasto), nz(limite), pct));
+    }
+
     public OrcamentoDTO toDto(Orcamento o) {
         OrcamentoDTO dto = new OrcamentoDTO();
         dto.setId(o.getId());
@@ -246,6 +282,8 @@ public class OrcamentoService {
             .toLowerCase()
             .replaceAll("[^a-z0-9]", "");
     }
+
+    public record StatusOrcamentoCategoria(String categoriaNome, BigDecimal gastoAtual, BigDecimal limite, BigDecimal pctUso) {}
 
     public record AlertaOrcamento(Orcamento orcamento, BigDecimal gastoAtual, BigDecimal percentualUso, int marco) {
     }

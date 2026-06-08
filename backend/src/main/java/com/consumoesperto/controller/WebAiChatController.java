@@ -29,7 +29,7 @@ public class WebAiChatController {
         @RequestBody Map<String, String> body
     ) {
         String resposta = whatsAppCommandService.processWebCommand(user.getId(), body.getOrDefault("mensagem", ""));
-        String assinada = resposta != null ? jarvisProtocolService.ensureSigned(resposta) : "";
+        String assinada = resposta != null ? jarvisProtocolService.assinaturaCondicional(user.getId(), resposta) : "";
         return ResponseEntity.ok(Map.of("resposta", assinada != null ? assinada : ""));
     }
 }
