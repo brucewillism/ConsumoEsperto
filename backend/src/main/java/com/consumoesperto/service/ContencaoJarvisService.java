@@ -246,6 +246,30 @@ public class ContencaoJarvisService {
         );
     }
 
+    /** Remove sugestões de contenção e entradas da fila WhatsApp ligadas a uma importação descartada. */
+    @Transactional
+    public void removerSugestoesDaImportacao(Long usuarioId, Long importacaoId) {
+        if (usuarioId == null || importacaoId == null) {
+            return;
+        }
+        List<SugestaoContencaoJarvis> sugestoes =
+            sugestaoRepository.findByUsuarioIdAndImportacaoFaturaCartaoId(usuarioId, importacaoId);
+        if (sugestoes.isEmpty()) {
+            return;
+        }
+        java.util.Set<Long> ids = sugestoes.stream()
+            .map(SugestaoContencaoJarvis::getId)
+            .collect(Collectors.toSet());
+        sugestaoRepository.deleteAll(sugestoes);
+        ArrayDeque<Long> q = filaConfirmacaoWhatsApp.get(usuarioId);
+        if (q != null) {
+            q.removeIf(ids::contains);
+            if (q.isEmpty()) {
+                filaConfirmacaoWhatsApp.remove(usuarioId);
+            }
+        }
+    }
+
     /** Recria fila apenas com sugestões desta importação (no máx. 2). */
     public void recarregarFilaWhatsApp(Long usuarioId, Long importacaoId) {
         List<SugestaoContencaoJarvis> p = sugestaoRepository

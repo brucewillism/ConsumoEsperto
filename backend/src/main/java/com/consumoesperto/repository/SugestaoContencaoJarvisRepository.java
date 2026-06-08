@@ -19,6 +19,8 @@ public interface SugestaoContencaoJarvisRepository extends JpaRepository<Sugesta
         SugestaoContencaoJarvis.Status status
     );
 
+    List<SugestaoContencaoJarvis> findByUsuarioIdAndImportacaoFaturaCartaoId(Long usuarioId, Long importacaoId);
+
     Optional<SugestaoContencaoJarvis> findByIdAndUsuarioId(Long id, Long usuarioId);
 
     long countByUsuarioIdAndStatus(Long usuarioId, SugestaoContencaoJarvis.Status status);

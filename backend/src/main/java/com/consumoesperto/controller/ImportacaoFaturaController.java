@@ -29,6 +29,23 @@ public class ImportacaoFaturaController {
         return ResponseEntity.ok(faturaPdfImportService.listarPendentes(user.getId()));
     }
 
+    @DeleteMapping("/pendentes")
+    public ResponseEntity<Map<String, Integer>> excluirTodasPendentes(@AuthenticationPrincipal UserPrincipal user) {
+        int removidas = faturaPdfImportService.excluirTodasPendentes(user.getId());
+        whatsAppCommandService.sincronizarFaturaResolvidaNoApp(user.getId());
+        return ResponseEntity.ok(Map.of("removidas", removidas));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> excluirPendente(
+        @AuthenticationPrincipal UserPrincipal user,
+        @PathVariable Long id
+    ) {
+        faturaPdfImportService.excluirPendente(user.getId(), id);
+        whatsAppCommandService.sincronizarFaturaResolvidaNoApp(user.getId());
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ImportacaoFaturaDTO> upload(
         @AuthenticationPrincipal UserPrincipal user,

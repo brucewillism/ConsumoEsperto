@@ -6,10 +6,16 @@
       <h1>Importações Pendentes</h1>
       <span>Revise os lançamentos extraídos das faturas antes de gravar no banco.</span>
     </div>
-    <button mat-raised-button color="primary" (click)="carregar()">
-      <mat-icon>refresh</mat-icon>
-      Atualizar
-    </button>
+    <div class="hero-actions">
+      <button mat-stroked-button color="warn" (click)="apagarTodas()" [disabled]="!importacoes.length || apagandoTodas || carregando">
+        <mat-icon>delete_sweep</mat-icon>
+        {{ apagandoTodas ? 'Apagando...' : 'Apagar todas' }}
+      </button>
+      <button mat-raised-button color="primary" (click)="carregar()">
+        <mat-icon>refresh</mat-icon>
+        Atualizar
+      </button>
+    </div>
   </section>
 
   <mat-card
@@ -74,8 +80,11 @@
     </div>
 
     <div class="actions">
-      <button mat-raised-button color="primary" (click)="confirmar(imp)" [disabled]="confirmandoId === imp.id || imp.aguardandoEscolhaSaldoAnterior">
+      <button mat-raised-button color="primary" (click)="confirmar(imp)" [disabled]="confirmandoId === imp.id || imp.aguardandoEscolhaSaldoAnterior || apagandoId === imp.id">
         Confirmar selecionados
+      </button>
+      <button mat-stroked-button color="warn" (click)="apagarUma(imp)" [disabled]="confirmandoId === imp.id || apagandoId === imp.id">
+        Descartar
       </button>
     </div>
   </mat-card>

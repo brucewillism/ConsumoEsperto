@@ -93,6 +93,19 @@ public class TransacaoService {
     }
 
     public TransacaoDTO criarTransacao(TransacaoDTO transacaoDTO, Long usuarioId, boolean executarProativos) {
+        return criarTransacao(transacaoDTO, usuarioId, executarProativos, true);
+    }
+
+    /**
+     * @param sincronizarFaturaImediata quando {@code false}, adia o recálculo do total da fatura
+     *        (útil em importação em lote — sincronize uma vez ao final).
+     */
+    public TransacaoDTO criarTransacao(
+        TransacaoDTO transacaoDTO,
+        Long usuarioId,
+        boolean executarProativos,
+        boolean sincronizarFaturaImediata
+    ) {
         // Cria uma nova instância de transação a partir dos dados do DTO
         Transacao transacao = new Transacao();
         transacao.setDescricao(transacaoDTO.getDescricao());
@@ -150,7 +163,7 @@ public class TransacaoService {
         Transacao transacaoSalva = transacaoRepository.save(transacao);
         saldoMovimentacaoService.aplicarCriacao(transacaoSalva);
         transacaoSemanticaIndexService.agendarIndexacao(transacaoSalva.getId());
-        if (transacaoSalva.getFatura() != null) {
+        if (sincronizarFaturaImediata && transacaoSalva.getFatura() != null) {
             faturaService.sincronizarValorFaturaComTransacoes(transacaoSalva.getFatura().getId());
         }
         saldoService.notificarAlteracaoSaldo(usuarioId);

@@ -24,6 +24,8 @@ export class ImportacoesPendentesComponent implements OnInit {
   confirmandoId: number | null = null;
   dragOver = false;
   enviandoPdf = false;
+  apagandoTodas = false;
+  apagandoId: number | null = null;
 
   constructor(
     private importacaoService: ImportacaoFaturaService,
@@ -63,6 +65,49 @@ export class ImportacoesPendentesComponent implements OnInit {
       error: (e: HttpErrorResponse) => {
         this.toast.errorFromHttpResponse(e, 'Erro ao aplicar escolha do saldo.');
         this.confirmandoId = null;
+      }
+    });
+  }
+
+  apagarTodas(): void {
+    if (!this.importacoes.length || this.apagandoTodas) {
+      return;
+    }
+    if (!confirm('Apagar todas as importações pendentes? Os lançamentos ainda não foram gravados no sistema.')) {
+      return;
+    }
+    this.apagandoTodas = true;
+    this.importacaoService.excluirTodasPendentes().subscribe({
+      next: (res) => {
+        this.toast.success(
+          res.removidas > 0
+            ? `${res.removidas} importação(ões) pendente(s) removida(s).`
+            : 'Nenhuma importação pendente para remover.'
+        );
+        this.apagandoTodas = false;
+        this.carregar();
+      },
+      error: (e: HttpErrorResponse) => {
+        this.toast.errorFromHttpResponse(e, 'Erro ao apagar importações pendentes.');
+        this.apagandoTodas = false;
+      }
+    });
+  }
+
+  apagarUma(imp: ImportacaoFatura): void {
+    if (!confirm(`Descartar a importação de ${imp.bancoCartao}? Os lançamentos não serão gravados.`)) {
+      return;
+    }
+    this.apagandoId = imp.id;
+    this.importacaoService.excluirPendente(imp.id).subscribe({
+      next: () => {
+        this.toast.success('Importação pendente removida.');
+        this.apagandoId = null;
+        this.carregar();
+      },
+      error: (e: HttpErrorResponse) => {
+        this.toast.errorFromHttpResponse(e, 'Erro ao remover importação.');
+        this.apagandoId = null;
       }
     });
   }

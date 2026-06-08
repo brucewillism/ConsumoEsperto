@@ -27,6 +27,13 @@
   margin: 0 0 6px;
 }
 
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
 .import-card {
   background: #111827;
   color: #e5e7eb;
@@ -135,6 +142,8 @@ em.old {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .empty {

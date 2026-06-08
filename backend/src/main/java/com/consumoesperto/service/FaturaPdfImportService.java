@@ -179,6 +179,34 @@ public class FaturaPdfImportService {
             .collect(Collectors.toList());
     }
 
+    /** Remove uma importação pendente (e sugestões de protocolo vinculadas). */
+    @Transactional
+    public void excluirPendente(Long usuarioId, Long importacaoId) {
+        ImportacaoFaturaCartao imp = importacaoRepository.findByIdAndUsuarioId(importacaoId, usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Importação não encontrada"));
+        if (imp.getStatus() != ImportacaoFaturaCartao.Status.PENDENTE) {
+            throw new IllegalArgumentException("Só é possível apagar importações pendentes.");
+        }
+        contencaoJarvisService.removerSugestoesDaImportacao(usuarioId, importacaoId);
+        importacaoRepository.delete(imp);
+        log.info("Importação pendente removida importacaoId={} userId={}", importacaoId, usuarioId);
+    }
+
+    /** Remove todas as importações pendentes do utilizador. */
+    @Transactional
+    public int excluirTodasPendentes(Long usuarioId) {
+        List<ImportacaoFaturaCartao> pendentes = importacaoRepository
+            .findByUsuarioIdAndStatusOrderByDataCriacaoDesc(usuarioId, ImportacaoFaturaCartao.Status.PENDENTE);
+        for (ImportacaoFaturaCartao imp : pendentes) {
+            contencaoJarvisService.removerSugestoesDaImportacao(usuarioId, imp.getId());
+            importacaoRepository.delete(imp);
+        }
+        if (!pendentes.isEmpty()) {
+            log.info("Removidas {} importação(ões) pendente(s) userId={}", pendentes.size(), usuarioId);
+        }
+        return pendentes.size();
+    }
+
     @Transactional
     public int confirmar(Long usuarioId, Long importacaoId, ConfirmarImportacaoFaturaRequest request) {
         return confirmarComResumo(usuarioId, importacaoId, request, true).criadas();
@@ -202,6 +230,8 @@ public class FaturaPdfImportService {
                     + "ou importar *apenas* o saldo atual (responda *sim* ou *não* no WhatsApp ou use os botões em Importações pendentes).");
         }
         List<ImportacaoFaturaItemDTO> itens = readItens(imp.getItensJson());
+        log.info("Confirmando importação fatura importacaoId={} userId={} itens={} novos={}",
+            importacaoId, usuarioId, itens.size(), imp.getNovosDetectados());
         Set<Integer> indices = request != null && request.getIndices() != null && !request.getIndices().isEmpty()
             ? new HashSet<>(request.getIndices())
             : null;
@@ -212,6 +242,8 @@ public class FaturaPdfImportService {
                 + " Não confirmei para não gravar uma fatura incorreta. Reimporte o PDF ou revise os itens na tela de importações.");
         }
         Fatura fatura = resolverFatura(imp);
+        Set<Long> faturasParaSincronizar = new HashSet<>();
+        faturasParaSincronizar.add(fatura.getId());
         int criadas = 0;
         int conciliadas = 0;
         int futuras = 0;
@@ -221,7 +253,7 @@ public class FaturaPdfImportService {
             List<com.consumoesperto.model.Transacao> existentes = buscarExistentes(usuarioId, item);
             if (!existentes.isEmpty()) {
                 conciliadas += conciliarExistentesComFatura(existentes, fatura, item);
-                futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item);
+                futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item, faturasParaSincronizar);
                 continue;
             }
             if (!selecionado || !item.isNovo()) {
@@ -239,16 +271,16 @@ public class FaturaPdfImportService {
                 dto.setTotalParcelas(item.getTotalParcelas());
                 dto.setGrupoParcelaId(parcelGroupId(imp, item));
             }
-            transacaoService.criarTransacao(dto, usuarioId, false);
-            futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item);
+            transacaoService.criarTransacao(dto, usuarioId, false, false);
+            futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item, faturasParaSincronizar);
             criadas++;
         }
         imp.setFatura(fatura);
         imp.setStatus(ImportacaoFaturaCartao.Status.CONFIRMADA);
         imp.setDataConfirmacao(LocalDateTime.now());
         importacaoRepository.save(imp);
-        if (conciliadas > 0) {
-            faturaService.sincronizarValorFaturaComTransacoes(fatura.getId());
+        for (Long faturaId : faturasParaSincronizar) {
+            faturaService.sincronizarValorFaturaComTransacoes(faturaId);
         }
         scoreService.registrarEvento(usuarioId, ScoreService.EventoScore.IMPORTACAO_CONSISTENTE, "Fatura PDF importada em dia");
         contencaoJarvisService.ativarFilaWhatsAppAposConfirmacao(usuarioId, importacaoId);
@@ -444,7 +476,13 @@ public class FaturaPdfImportService {
         return count;
     }
 
-    private int criarParcelasFuturasSeNecessario(Long usuarioId, ImportacaoFaturaCartao imp, Fatura faturaAtual, ImportacaoFaturaItemDTO item) {
+    private int criarParcelasFuturasSeNecessario(
+        Long usuarioId,
+        ImportacaoFaturaCartao imp,
+        Fatura faturaAtual,
+        ImportacaoFaturaItemDTO item,
+        Set<Long> faturasParaSincronizar
+    ) {
         if (item.getParcelaAtual() == null || item.getTotalParcelas() == null || item.getTotalParcelas() <= 1) {
             return 0;
         }
@@ -474,7 +512,8 @@ public class FaturaPdfImportService {
             dto.setGrupoParcelaId(grupo);
             dto.setParcelaAtual(parcela);
             dto.setTotalParcelas(item.getTotalParcelas());
-            transacaoService.criarTransacao(dto, usuarioId, false);
+            transacaoService.criarTransacao(dto, usuarioId, false, false);
+            faturasParaSincronizar.add(faturaFutura.getId());
             criadas++;
         }
         return criadas;
@@ -493,6 +532,10 @@ public class FaturaPdfImportService {
 
     private Fatura resolverFatura(ImportacaoFaturaCartao imp) {
         CartaoCredito cartao = imp.getCartaoCredito();
+        if (cartao == null || cartao.getId() == null) {
+            throw new IllegalArgumentException(
+                "Esta importação não está vinculada a um cartão válido. Cadastre o cartão no app e reimporte o PDF.");
+        }
         String numero = (imp.getDataVencimento() != null ? YearMonth.from(imp.getDataVencimento()).toString() : "importada-" + imp.getId())
             + "-" + cartao.getId();
         return faturaRepository.findByCartaoCreditoIdAndNumeroFatura(cartao.getId(), numero).orElseGet(() -> {

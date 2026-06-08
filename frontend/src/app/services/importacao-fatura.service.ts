@@ -41,8 +41,16 @@ export class ImportacaoFaturaService {
     return this.http.get<ImportacaoFatura[]>(`${this.base}/pendentes`);
   }
 
+  excluirTodasPendentes(): Observable<{ removidas: number }> {
+    return this.http.delete<{ removidas: number }>(`${this.base}/pendentes`);
+  }
+
+  excluirPendente(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${id}`);
+  }
+
   confirmar(id: number, indices: number[]): Observable<{ criadas: number }> {
-    return this.http.post<{ criadas: number }>(`${this.base}/${id}/confirmar`, { indices });
+    return this.http.post<{ criadas: number }>(`${this.base}/${id}/confirmar`, { indices }).pipe(timeout(300_000));
   }
 
   escolhaSaldoAnterior(id: number, somar: boolean): Observable<ImportacaoFatura> {

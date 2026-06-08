@@ -274,7 +274,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 path
             ));
         }
-        log.error("Erro não previsto: {}", ex.getMessage(), ex);
+        log.error("Erro não previsto path={}: {}", pathFrom(request), ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiError(
             "internal_server_error",
             JarvisErrorCopy.SERVER_INSTABILITY_MESSAGE,
