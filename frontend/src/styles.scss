@@ -1218,3 +1218,14 @@ app-root {
     margin: 0;
   }
 }
+
+/* Modal de transações da fatura — evita vazamento visual do HUD */
+.fatura-transacoes-dialog .mat-mdc-dialog-container,
+.fatura-transacoes-dialog .mdc-dialog__surface {
+  overflow: hidden;
+  background: #0d0e12;
+}
+
+.fatura-transacoes-dialog .mat-mdc-dialog-container {
+  padding: 0;
+}

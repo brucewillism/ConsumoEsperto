@@ -113,9 +113,10 @@ public class FaturaPdfImportService {
             throw new IllegalArgumentException("O PDF parece ser um extrato de conta, não uma fatura de cartão.");
         }
 
-        String banco = firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText(""));
-        CartaoCredito cartao = localizarCartao(usuarioId, banco)
-            .orElseThrow(() -> new IllegalArgumentException(mensagemCartaoNaoEncontrado(usuarioId, banco)));
+        String bancoExtraido = firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText(""));
+        CartaoCredito cartao = localizarCartao(usuarioId, bancoExtraido)
+            .orElseThrow(() -> new IllegalArgumentException(mensagemCartaoNaoEncontrado(usuarioId, bancoExtraido)));
+        String banco = BancoBrasilCatalog.nomeExibicao(bancoExtraido);
 
         List<ImportacaoFaturaItemDTO> itens = parseItens(extracted.path("lancamentos"));
         for (ImportacaoFaturaItemDTO item : itens) {
@@ -290,6 +291,7 @@ public class FaturaPdfImportService {
         for (Long faturaId : faturasParaSincronizar) {
             faturaService.sincronizarValorFaturaComTransacoes(faturaId);
         }
+        descartarPrevistasObsoletasDoMes(imp.getCartaoCredito().getId(), fatura);
         scoreService.registrarEvento(usuarioId, ScoreService.EventoScore.IMPORTACAO_CONSISTENTE, "Fatura PDF importada em dia");
         contencaoJarvisService.ativarFilaWhatsAppAposConfirmacao(usuarioId, importacaoId);
         ResultadoConfirmacaoFatura resultado = new ResultadoConfirmacaoFatura(criadas, conciliadas, futuras);
@@ -361,6 +363,7 @@ public class FaturaPdfImportService {
         ImportacaoFaturaDTO dto = new ImportacaoFaturaDTO();
         dto.setId(imp.getId());
         dto.setCartaoCreditoId(imp.getCartaoCredito() != null ? imp.getCartaoCredito().getId() : null);
+        dto.setCartaoCreditoNome(imp.getCartaoCredito() != null ? imp.getCartaoCredito().getNome() : null);
         dto.setBancoCartao(imp.getBancoCartao());
         dto.setDataVencimento(imp.getDataVencimento());
         dto.setDataFechamento(imp.getDataFechamento());
@@ -544,23 +547,102 @@ public class FaturaPdfImportService {
             throw new IllegalArgumentException(
                 "Esta importação não está vinculada a um cartão válido. Cadastre o cartão no app e reimporte o PDF.");
         }
-        String numero = (imp.getDataVencimento() != null ? YearMonth.from(imp.getDataVencimento()).toString() : "importada-" + imp.getId())
-            + "-" + cartao.getId();
-        return faturaRepository.findByCartaoCreditoIdAndNumeroFatura(cartao.getId(), numero).orElseGet(() -> {
-            Fatura f = new Fatura();
-            f.setCartaoCredito(cartao);
-            f.setUsuario(imp.getUsuario());
-            f.setNumeroFatura(numero);
-            f.setValorTotal(nz(imp.getValorTotal()));
-            f.setValorFatura(nz(imp.getValorTotal()));
-            f.setValorMinimo(nz(imp.getPagamentoMinimo()));
-            f.setValorPago(BigDecimal.ZERO);
-            f.setPaga(false);
-            f.setStatusFatura(Fatura.StatusFatura.ABERTA);
-            f.setDataVencimento(imp.getDataVencimento() != null ? imp.getDataVencimento() : LocalDateTime.now().plusDays(10));
-            f.setDataFechamento(imp.getDataFechamento() != null ? imp.getDataFechamento() : LocalDateTime.now());
-            return faturaRepository.save(f);
-        });
+        YearMonth ymVencimento = imp.getDataVencimento() != null
+            ? YearMonth.from(imp.getDataVencimento())
+            : (imp.getDataFechamento() != null ? YearMonth.from(imp.getDataFechamento()) : YearMonth.now());
+        String numeroCanonico = ymVencimento + "-" + cartao.getId();
+
+        Optional<Fatura> porNumero = faturaRepository.findByCartaoCreditoIdAndNumeroFatura(cartao.getId(), numeroCanonico);
+        if (porNumero.isPresent()) {
+            return atualizarFaturaParaImportacao(porNumero.get(), imp, numeroCanonico);
+        }
+
+        Optional<Fatura> existenteMes = faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartao.getId()).stream()
+            .filter(f -> f.getDataVencimento() != null && YearMonth.from(f.getDataVencimento()).equals(ymVencimento))
+            .filter(f -> f.getStatusFatura() != Fatura.StatusFatura.PAGA
+                && f.getStatusFatura() != Fatura.StatusFatura.CANCELADA)
+            .min(java.util.Comparator.comparingInt(f -> prioridadeFaturaParaImportacao(f.getStatusFatura())));
+        if (existenteMes.isPresent()) {
+            log.info("Importação PDF reutiliza fatura existente id={} status={} cartaoId={} mes={}",
+                existenteMes.get().getId(), existenteMes.get().getStatusFatura(), cartao.getId(), ymVencimento);
+            return atualizarFaturaParaImportacao(existenteMes.get(), imp, numeroCanonico);
+        }
+
+        Fatura f = new Fatura();
+        f.setCartaoCredito(cartao);
+        f.setUsuario(imp.getUsuario());
+        f.setNumeroFatura(numeroCanonico);
+        f.setValorTotal(nz(imp.getValorTotal()));
+        f.setValorFatura(nz(imp.getValorTotal()));
+        f.setValorMinimo(nz(imp.getPagamentoMinimo()));
+        f.setValorPago(BigDecimal.ZERO);
+        f.setPaga(false);
+        f.setStatusFatura(Fatura.StatusFatura.ABERTA);
+        f.setDataVencimento(imp.getDataVencimento() != null ? imp.getDataVencimento() : LocalDateTime.now().plusDays(10));
+        f.setDataFechamento(imp.getDataFechamento() != null ? imp.getDataFechamento() : LocalDateTime.now());
+        return faturaRepository.save(f);
+    }
+
+    private static int prioridadeFaturaParaImportacao(Fatura.StatusFatura status) {
+        if (status == Fatura.StatusFatura.PREVISTA) {
+            return 0;
+        }
+        if (status == Fatura.StatusFatura.ABERTA) {
+            return 1;
+        }
+        if (status == Fatura.StatusFatura.PARCIAL) {
+            return 2;
+        }
+        if (status == Fatura.StatusFatura.VENCIDA) {
+            return 3;
+        }
+        return 9;
+    }
+
+    private Fatura atualizarFaturaParaImportacao(Fatura f, ImportacaoFaturaCartao imp, String numeroCanonico) {
+        f.setNumeroFatura(numeroCanonico);
+        f.setStatusFatura(Fatura.StatusFatura.ABERTA);
+        f.setPaga(false);
+        f.setValorTotal(nz(imp.getValorTotal()));
+        f.setValorFatura(nz(imp.getValorTotal()));
+        f.setValorMinimo(nz(imp.getPagamentoMinimo()));
+        if (imp.getDataVencimento() != null) {
+            f.setDataVencimento(imp.getDataVencimento());
+        }
+        if (imp.getDataFechamento() != null) {
+            f.setDataFechamento(imp.getDataFechamento());
+        }
+        return faturaRepository.save(f);
+    }
+
+    /**
+     * Após importar o PDF real, remove PREVISTAS duplicadas do mesmo mês/cartão
+     * (projeções de parcelas que ficaram obsoletas).
+     */
+    private void descartarPrevistasObsoletasDoMes(Long cartaoId, Fatura faturaMantida) {
+        if (cartaoId == null || faturaMantida == null || faturaMantida.getDataVencimento() == null) {
+            return;
+        }
+        YearMonth ym = YearMonth.from(faturaMantida.getDataVencimento());
+        for (Fatura f : faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartaoId)) {
+            if (f.getId() == null || f.getId().equals(faturaMantida.getId())) {
+                continue;
+            }
+            if (f.getStatusFatura() != Fatura.StatusFatura.PREVISTA) {
+                continue;
+            }
+            if (f.getDataVencimento() == null || !YearMonth.from(f.getDataVencimento()).equals(ym)) {
+                continue;
+            }
+            List<com.consumoesperto.model.Transacao> txs =
+                transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(f.getId());
+            if (!txs.isEmpty()) {
+                transacaoRepository.deleteAll(txs);
+            }
+            faturaRepository.delete(f);
+            log.info("Removida PREVISTA obsoleta id={} após importação PDF (cartaoId={} mes={})",
+                f.getId(), cartaoId, ym);
+        }
     }
 
     private List<String> auditarGastosFantasmas(Long usuarioId, Long cartaoId, List<ImportacaoFaturaItemDTO> itens) {

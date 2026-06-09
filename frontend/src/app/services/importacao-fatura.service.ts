@@ -16,6 +16,7 @@ export interface ImportacaoFaturaItem {
 export interface ImportacaoFatura {
   id: number;
   cartaoCreditoId?: number | null;
+  cartaoCreditoNome?: string | null;
   bancoCartao: string;
   dataVencimento?: string | null;
   dataFechamento?: string | null;

@@ -7,6 +7,7 @@ import java.util.List;
 public class ImportacaoFaturaDTO {
     private Long id;
     private Long cartaoCreditoId;
+    private String cartaoCreditoNome;
     private String bancoCartao;
     private LocalDateTime dataVencimento;
     private LocalDateTime dataFechamento;
@@ -27,6 +28,9 @@ public class ImportacaoFaturaDTO {
 
     public Long getCartaoCreditoId() { return cartaoCreditoId; }
     public void setCartaoCreditoId(Long cartaoCreditoId) { this.cartaoCreditoId = cartaoCreditoId; }
+
+    public String getCartaoCreditoNome() { return cartaoCreditoNome; }
+    public void setCartaoCreditoNome(String cartaoCreditoNome) { this.cartaoCreditoNome = cartaoCreditoNome; }
 
     public String getBancoCartao() { return bancoCartao; }
     public void setBancoCartao(String bancoCartao) { this.bancoCartao = bancoCartao; }

@@ -297,9 +297,11 @@ export class FaturasComponent implements OnInit, OnDestroy {
         });
     }
     this.dialog.open(template, {
-      width: 'min(920px, 96vw)',
-      maxHeight: '86vh',
-      panelClass: 'fatura-transacoes-dialog'
+      width: 'min(960px, 96vw)',
+      maxWidth: '96vw',
+      maxHeight: '88vh',
+      panelClass: 'fatura-transacoes-dialog',
+      autoFocus: false,
     });
   }
 

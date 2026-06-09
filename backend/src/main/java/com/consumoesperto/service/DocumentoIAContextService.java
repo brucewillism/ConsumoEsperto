@@ -303,6 +303,7 @@ public class DocumentoIAContextService {
             + "Pix/boleto no crédito do Nubank trazem VÁRIAS quantias na mesma entrada (ex.: 'Total a pagar: R$ 307,20 (valor da transação de R$ 284,92 + R$ 1,68 de IOF + R$ 20,60 de juros). R$ 307,20'); "
             + "use SOMENTE o valor 'Total a pagar' (o total, ex.: 307.20) como valor do lançamento — NUNCA some/extraia as parcelas internas (transação, IOF, juros) como linhas separadas. "
             + "No Nubank, 'Total de compras de todos os cartões' é o valor de referência das compras; a soma dos lançamentos extraídos deve bater com ele. "
+            + "Quando o PDF mencionar 'Nu Pagamentos S.A.' ou 'Nubank', preencha bancoCartao como 'Nubank'. "
             + "Em faturas Banco do Brasil (bb), se o PDF mostrar saldo da fatura anterior e total desta fatura, preencha saldoFaturaAnterior (valor do saldo anterior) "
             + "e saldoFaturaAtual (total desta fatura / lançamentos do mês, SEM incluir o saldo anterior de novo); "
             + "valorTotal = total a pagar no PDF. A linha «SALDO FATURA ANTERIOR» nos lançamentos NÃO é despesa nova — é remanescente. "

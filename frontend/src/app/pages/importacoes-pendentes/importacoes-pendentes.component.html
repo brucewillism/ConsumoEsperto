@@ -48,10 +48,19 @@
     Nenhuma importação pendente.
   </div>
 
-  <mat-card class="import-card" *ngFor="let imp of importacoes">
+  <mat-card class="import-card" *ngFor="let imp of importacoes" [class.saving]="confirmandoId === imp.id">
+    <div class="import-saving" *ngIf="confirmandoId === imp.id">
+      <app-loading-indicator
+        mode="panel"
+        size="md"
+        message="Gravando os lançamentos selecionados">
+      </app-loading-indicator>
+    </div>
+
     <div class="import-head">
       <div>
         <h2>{{ imp.bancoCartao }}</h2>
+        <span *ngIf="imp.cartaoCreditoNome">Cartão vinculado: <strong>{{ imp.cartaoCreditoNome }}</strong> · </span>
         <span>Vencimento: {{ imp.dataVencimento | date:'dd/MM/yyyy' }} · Total {{ brl(imp.valorTotal) }}</span>
       </div>
       <strong>{{ imp.novosDetectados }} novos</strong>
@@ -92,7 +101,7 @@
 
     <div class="actions">
       <button mat-raised-button color="primary" (click)="confirmar(imp)" [disabled]="confirmandoId === imp.id || imp.aguardandoEscolhaSaldoAnterior || apagandoId === imp.id">
-        Confirmar selecionados
+        {{ confirmandoId === imp.id ? 'Salvando...' : 'Confirmar selecionados' }}
       </button>
       <button mat-stroked-button color="warn" (click)="apagarUma(imp)" [disabled]="confirmandoId === imp.id || apagandoId === imp.id">
         Descartar

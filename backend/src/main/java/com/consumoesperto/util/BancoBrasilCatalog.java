@@ -18,6 +18,28 @@ public final class BancoBrasilCatalog {
     /**
      * Indica se dois rótulos referem-se ao mesmo banco (id curto, nome comercial ou alias).
      */
+    /** Nome amigável para exibição (ex.: Nu Pagamentos S.A. → Nubank). */
+    public static String nomeExibicao(String bancoReferencia) {
+        if (bancoReferencia == null || bancoReferencia.isBlank()) {
+            return bancoReferencia;
+        }
+        String id = resolverIdCanonico(ApelidoNormalizador.normalizar(bancoReferencia));
+        if (id == null) {
+            return bancoReferencia.trim();
+        }
+        return switch (id) {
+            case "nubank" -> "Nubank";
+            case "itau" -> "Itaú";
+            case "bb" -> "Banco do Brasil";
+            case "bradesco" -> "Bradesco";
+            case "santander" -> "Santander";
+            case "inter" -> "Inter";
+            case "c6" -> "C6 Bank";
+            case "caixa" -> "Caixa";
+            default -> bancoReferencia.trim();
+        };
+    }
+
     public static boolean bancosCorrespondem(String bancoCadastrado, String bancoReferencia) {
         if (bancoCadastrado == null || bancoReferencia == null) {
             return false;
@@ -79,7 +101,7 @@ public final class BancoBrasilCatalog {
 
     private static Map<String, List<String>> buildAliases() {
         Map<String, List<String>> m = new LinkedHashMap<>();
-        m.put("nubank", List.of("nubank", "nu bank", "nu"));
+        m.put("nubank", List.of("nubank", "nu bank", "nu", "nu pagamentos", "nu pagamentos sa"));
         m.put("itau", List.of("itau", "itaú", "itau unibanco", "banco itau"));
         m.put("inter", List.of("inter", "banco inter"));
         m.put("bradesco", List.of("bradesco", "banco bradesco"));

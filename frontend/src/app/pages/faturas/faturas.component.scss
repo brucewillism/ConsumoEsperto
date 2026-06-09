@@ -656,9 +656,11 @@
   }
 
   .transacoes-modal-lista {
-    padding: 8px 24px 24px;
-    overflow: auto;
+    padding: 8px 16px 24px;
+    overflow-x: auto;
+    overflow-y: auto;
     max-height: 65vh;
+    min-width: 0;
   }
 
   .transacao-linha {
@@ -755,11 +757,23 @@
 
 .scanner-log {
   display: grid;
-  grid-template-columns: 118px 36px minmax(100px, 0.9fr) 1fr minmax(108px, auto);
-  gap: 10px;
-  align-items: center;
-  font-size: 0.78rem;
+  grid-template-columns: 132px 44px minmax(120px, 0.85fr) minmax(160px, 1.4fr) 108px;
+  gap: 12px;
+  align-items: start;
+  font-size: 0.8rem;
   font-family: var(--font-mono-amount), ui-monospace, monospace;
+  min-width: 720px;
+}
+
+.scanner-log .col-ts,
+.scanner-log .col-id,
+.scanner-log .col-val {
+  white-space: nowrap;
+}
+
+.scanner-log .col-desc {
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .scanner-log-head {
@@ -835,24 +849,8 @@
 }
 
 .scanner-log-row.scanline-warn {
-  position: relative;
-  animation: gritFlicker 1.8s ease-in-out infinite;
-
-  &::after {
-    content: '';
-    pointer-events: none;
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(255, 23, 68, 0.07) 2px,
-      rgba(255, 23, 68, 0.07) 4px
-    );
-    animation: scanlines 4s linear infinite;
-    mix-blend-mode: overlay;
-  }
+  background: rgba(255, 23, 68, 0.06);
+  border-radius: 6px;
 
   .neon-badge {
     color: #ff8a80;
@@ -864,8 +862,9 @@
 
 @media (max-width: 840px) {
   .scanner-log {
-    grid-template-columns: 1fr 1fr;
-    font-size: 0.72rem;
+    min-width: 0;
+    grid-template-columns: 1fr;
+    font-size: 0.78rem;
   }
 
   .scanner-log-head {
@@ -877,5 +876,13 @@
     border: 1px solid rgba(0, 229, 255, 0.12);
     border-radius: 8px;
     margin-bottom: 8px;
+    padding: 12px;
+    gap: 6px;
   }
+
+  .scanner-log-row .col-ts::before { content: 'Data: '; color: #64748b; }
+  .scanner-log-row .col-id::before { content: '#'; color: #64748b; }
+  .scanner-log-row .col-cat::before { content: 'Categoria: '; color: #64748b; display: block; margin-bottom: 4px; }
+  .scanner-log-row .col-desc::before { content: 'Descrição: '; color: #64748b; display: block; margin-bottom: 4px; }
+  .scanner-log-row .col-val::before { content: 'Valor: '; color: #64748b; }
 }
