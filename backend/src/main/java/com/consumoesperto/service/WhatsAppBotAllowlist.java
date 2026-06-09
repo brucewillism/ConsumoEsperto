@@ -121,7 +121,19 @@ public class WhatsAppBotAllowlist {
     }
 
     /**
-     * Evolution API: só na conversa “eu comigo” ({@code remoteJid} = teu número).
+     * JID fixo do chat “Mensagens para você” no WhatsApp (BR: 55 + 8000012008).
+     * Não é o MSISDN do utilizador — a Evolution envia este {@code remoteJid} na conversa consigo mesmo.
+     */
+    private static boolean isWhatsAppNotesToSelfJid(String remoteJid) {
+        if (remoteJid == null || remoteJid.isBlank()) {
+            return false;
+        }
+        String d = digitsFromJidLocalPart(remoteJid);
+        return "558000012008".equals(d) || "8000012008".equals(d);
+    }
+
+    /**
+     * Evolution API: só na conversa “eu comigo” ({@code remoteJid} = teu número ou JID de “mensagens para você”).
      * Não exige {@code fromMe}: muitos webhooks Evolution/Baileys trazem {@code fromMe=false} mesmo para mensagens tuas
      * nessa conversa; em chats com terceiros {@code remoteJid} é o outro número e isto falha.
      * Ecos/linhas de resposta do bot são filtrados depois em {@code WhatsAppCommandService}.
@@ -132,6 +144,10 @@ public class WhatsAppBotAllowlist {
         }
         if (remoteJid.contains("@lid")) {
             return false;
+        }
+        // Chat interno WhatsApp: instância já identificou o inquilino (ce-uN).
+        if (isWhatsAppNotesToSelfJid(remoteJid)) {
+            return true;
         }
         return matchesMyNumber(remoteJid, userId) || matchesAuthorizedExtrasGlobal(remoteJid);
     }

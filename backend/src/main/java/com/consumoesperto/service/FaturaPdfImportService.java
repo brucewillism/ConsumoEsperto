@@ -86,12 +86,14 @@ public class FaturaPdfImportService {
         if (pdfBytes == null || pdfBytes.length == 0) {
             throw new IllegalArgumentException("O PDF está vazio ou não foi recebido.");
         }
+        log.info("Processando PDF de fatura userId={} bytes={}", usuarioId, pdfBytes.length);
         try {
             JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes);
             return processarExtracao(usuarioId, extracted);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (RuntimeException e) {
+            log.warn("Falha ao processar PDF de fatura userId={}: {}", usuarioId, e.getMessage(), e);
             String human = AiErroHumanizer.humanizar(e.getMessage());
             if (human != null) {
                 throw new AiUnavailableException(human);
