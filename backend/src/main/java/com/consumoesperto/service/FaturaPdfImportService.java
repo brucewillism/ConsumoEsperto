@@ -38,6 +38,7 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Year;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -147,7 +148,10 @@ public class FaturaPdfImportService {
             .orElseThrow(() -> new IllegalArgumentException(mensagemCartaoNaoEncontrado(usuarioId, bancoParaLocalizar)));
         String banco = BancoBrasilCatalog.nomeExibicao(bancoExtraido);
 
-        List<ImportacaoFaturaItemDTO> itens = parseItens(extracted.path("lancamentos"), layoutEfetivo);
+        List<ImportacaoFaturaItemDTO> itens = parseItensBrutos(extracted.path("lancamentos"));
+        int anoReferencia = resolverAnoReferenciaFatura(extracted);
+        layoutEfetivo.complementarLancamentosDoTexto(textoPdf, itens, anoReferencia);
+        itens = layoutEfetivo.sanitizarLancamentos(itens);
         complementarItensComTaxasDeclaradas(itens, extracted, parseDate(extracted.path("dataFechamento").asText("")));
         for (ImportacaoFaturaItemDTO item : itens) {
             boolean novo = buscarExistentes(usuarioId, item).isEmpty();
@@ -713,7 +717,14 @@ public class FaturaPdfImportService {
             }
         }
         BigDecimal juros = itens.stream()
-            .filter(i -> norm(i.getDescricao()).matches(".*(juros|rotativo|multa|encargo).*"))
+            .filter(i -> {
+                String n = norm(i.getDescricao());
+                return n.matches(".*(juros|rotativo|multa|encargo).*")
+                    && !n.contains("total a pagar")
+                    && !n.contains("valor da transacao")
+                    && !n.contains("valor da transa")
+                    && !n.contains("de iof");
+            })
             .map(i -> i.getValor() != null ? i.getValor() : BigDecimal.ZERO)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (juros.compareTo(BigDecimal.ZERO) > 0) {
@@ -959,7 +970,15 @@ public class FaturaPdfImportService {
         }
     }
 
-    private List<ImportacaoFaturaItemDTO> parseItens(JsonNode arr, FaturaPdfLayoutStrategy layout) {
+    private int resolverAnoReferenciaFatura(JsonNode extracted) {
+        return Optional.ofNullable(parseDateTime(extracted.path("dataVencimento").asText("")))
+            .map(LocalDateTime::getYear)
+            .orElseGet(() -> Optional.ofNullable(parseDateTime(extracted.path("dataFechamento").asText("")))
+                .map(LocalDateTime::getYear)
+                .orElse(Year.now().getValue()));
+    }
+
+    private List<ImportacaoFaturaItemDTO> parseItensBrutos(JsonNode arr) {
         List<ImportacaoFaturaItemDTO> candidatos = new ArrayList<>();
         if (arr == null || !arr.isArray()) {
             return candidatos;
@@ -1009,7 +1028,7 @@ public class FaturaPdfImportService {
             }
             out.add(item);
         }
-        return layout.sanitizarLancamentos(out);
+        return out;
     }
 
     /**

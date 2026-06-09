@@ -56,18 +56,28 @@ public class NubankFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
     }
 
     @Override
+    public String sugerirBancoCartao(String textoPdfNormalizado, String bancoExtraidoIa) {
+        return "Nubank";
+    }
+
+    @Override
+    public void complementarLancamentosDoTexto(
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        int anoReferencia
+    ) {
+        NubankFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
+    }
+
+    @Override
     public BigDecimal resolverReferenciaConciliacao(
         JsonNode extracted,
         BigDecimal valorTotalPdf,
         List<ImportacaoFaturaItemDTO> itens,
         List<String> auditorias
     ) {
-        return FaturaPdfLayoutConciliacao.preferirSaldoFaturaAtual(extracted, valorTotalPdf, itens, auditorias);
-    }
-
-    @Override
-    public String sugerirBancoCartao(String textoPdfNormalizado, String bancoExtraidoIa) {
-        return "Nubank";
+        BigDecimal base = FaturaPdfLayoutConciliacao.preferirSaldoFaturaAtual(extracted, valorTotalPdf, itens, auditorias);
+        return base;
     }
 
     static List<ImportacaoFaturaItemDTO> removerComponentesPixDuplicados(List<ImportacaoFaturaItemDTO> itens) {
@@ -123,6 +133,12 @@ public class NubankFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
         }
         String n = FaturaPdfLayoutSupport.norm(descricao);
         if (n.isBlank() || n.contains("parcela") || n.contains("total a pagar")) {
+            return false;
+        }
+        if (n.contains("prefeitura") || n.contains("mercado") || n.contains("atacad")
+            || n.contains("posto") || n.contains("uber") || n.contains("ifood")
+            || n.contains("pay") || n.contains("ltda") || n.contains("pix")
+            || n.contains("boleto")) {
             return false;
         }
         if (n.matches(".*\\d.*")) {

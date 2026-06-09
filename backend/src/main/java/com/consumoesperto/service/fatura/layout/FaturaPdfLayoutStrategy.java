@@ -48,4 +48,13 @@ public interface FaturaPdfLayoutStrategy {
     default String sugerirBancoCartao(String textoPdfNormalizado, String bancoExtraidoIa) {
         return bancoExtraidoIa;
     }
+
+    /** Complementa lançamentos omitidos pela IA usando o texto bruto do PDF. */
+    default void complementarLancamentosDoTexto(
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        int anoReferencia
+    ) {
+        // padrão: sem complemento
+    }
 }
