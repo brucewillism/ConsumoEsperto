@@ -36,6 +36,13 @@ public class ContaBancaria {
     @Column(name = "saldo_atual", nullable = false, precision = 19, scale = 2)
     private BigDecimal saldoAtual;
 
+    /**
+     * Limite de cheque especial. Zero = sem cheque especial. Não soma ao saldo —
+     * apenas define o quão negativo o saldo pode ficar (piso = -limiteChequeEspecial).
+     */
+    @Column(name = "limite_cheque_especial", nullable = false, precision = 15, scale = 2)
+    private BigDecimal limiteChequeEspecial = BigDecimal.ZERO;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "usuario_id", nullable = false)
     @JsonBackReference("usuario-contas")
@@ -86,6 +93,41 @@ public class ContaBancaria {
 
     public BigDecimal getSaldoAtual() { return saldoAtual; }
     public void setSaldoAtual(BigDecimal saldoAtual) { this.saldoAtual = saldoAtual; }
+
+    /** Nunca retorna nulo (protege registros migrados e falhas de deserialização). */
+    public BigDecimal getLimiteChequeEspecial() {
+        return limiteChequeEspecial != null ? limiteChequeEspecial : BigDecimal.ZERO;
+    }
+    public void setLimiteChequeEspecial(BigDecimal limiteChequeEspecial) {
+        this.limiteChequeEspecial = limiteChequeEspecial != null ? limiteChequeEspecial : BigDecimal.ZERO;
+    }
+
+    /**
+     * Verifica se a conta comporta o débito informado considerando saldo + cheque especial.
+     * Fórmula: saldo + limite >= valorDebito.
+     */
+    public boolean temSaldoSuficiente(BigDecimal valorDebito) {
+        if (valorDebito == null || valorDebito.compareTo(BigDecimal.ZERO) <= 0) {
+            return true;
+        }
+        BigDecimal saldoBase = saldoAtual != null ? saldoAtual : BigDecimal.ZERO;
+        return saldoBase.add(getLimiteChequeEspecial()).compareTo(valorDebito) >= 0;
+    }
+
+    /** Saldo total disponível para transações (saldo + cheque especial). Só para exibição/validação. */
+    public BigDecimal getSaldoDisponivel() {
+        BigDecimal saldoBase = saldoAtual != null ? saldoAtual : BigDecimal.ZERO;
+        return saldoBase.add(getLimiteChequeEspecial());
+    }
+
+    /** Quanto do cheque especial está em uso (zero se saldo positivo). */
+    public BigDecimal getChequeEspecialUtilizado() {
+        BigDecimal saldoBase = saldoAtual != null ? saldoAtual : BigDecimal.ZERO;
+        if (saldoBase.compareTo(BigDecimal.ZERO) >= 0) {
+            return BigDecimal.ZERO;
+        }
+        return saldoBase.negate();
+    }
 
     public Usuario getUsuario() { return usuario; }
     public void setUsuario(Usuario usuario) { this.usuario = usuario; }

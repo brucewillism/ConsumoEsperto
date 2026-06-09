@@ -87,11 +87,35 @@
     font-size: 11px;
   }
 
+  .badge-cheque {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+  }
+
+  .badge-negativo {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+  }
+
   strong {
     font-size: 22px;
     white-space: nowrap;
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
+
+    &.saldo-negativo {
+      color: #fca5a5;
+    }
+  }
+}
+
+.cheque-info {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #fcd34d;
+
+  &.disponivel {
+    color: #9ca3af;
   }
 }
 

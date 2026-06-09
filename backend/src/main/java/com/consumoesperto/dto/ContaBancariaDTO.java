@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import javax.validation.constraints.DecimalMin;
+import javax.validation.constraints.Digits;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
@@ -27,6 +29,12 @@ public class ContaBancariaDTO {
     /** Saldo inicial no cadastro; após criação reflete movimentações (pode ser negativo — cheque especial). */
     @NotNull(message = "Saldo é obrigatório")
     private BigDecimal saldoAtual;
+
+    /** Limite de cheque especial (>= 0). Não soma ao saldo; permite o saldo ficar negativo até este valor. */
+    @NotNull
+    @DecimalMin(value = "0.00", message = "O limite de cheque especial não pode ser negativo.")
+    @Digits(integer = 13, fraction = 2)
+    private BigDecimal limiteChequeEspecial = BigDecimal.ZERO;
 
     private Long usuarioId;
     private boolean ativa = true;

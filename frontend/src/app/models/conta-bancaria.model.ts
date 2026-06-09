@@ -5,6 +5,8 @@ export interface ContaBancaria {
   nome: string;
   tipo: TipoContaBancaria;
   saldoAtual: number;
+  /** Limite de cheque especial (>= 0). Não soma ao saldo; permite o saldo ficar negativo até este valor. */
+  limiteChequeEspecial?: number;
   usuarioId?: number;
   ativa?: boolean;
   padrao?: boolean;
@@ -16,6 +18,7 @@ export interface ContaBancaria {
 export interface ContaBancariaUpdate {
   nome: string;
   tipo: TipoContaBancaria;
+  limiteChequeEspecial?: number;
   ativa?: boolean;
   padrao?: boolean;
 }

@@ -51,8 +51,10 @@ public class FaturaConciliacaoService {
         if (valor.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Valor do pagamento deve ser positivo.");
         }
-        if (conta.getSaldoAtual().compareTo(valor) < 0) {
-            throw new IllegalArgumentException("Saldo insuficiente na conta selecionada.");
+        if (!conta.temSaldoSuficiente(valor)) {
+            throw new IllegalArgumentException(
+                "Saldo insuficiente na conta selecionada. Disponível (incluindo cheque especial): R$ "
+                    + conta.getSaldoDisponivel().setScale(2, RoundingMode.HALF_UP));
         }
 
         String cartaoNome = fatura.getCartaoCredito() != null ? fatura.getCartaoCredito().getNome() : "Cartão";

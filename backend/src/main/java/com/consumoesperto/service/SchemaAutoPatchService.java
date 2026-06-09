@@ -63,6 +63,7 @@ public class SchemaAutoPatchService {
         ensureUsuarioConfiguracaoFiscalTable();
         ensureTransacaoOrigemFiscalColumn();
         ensureContasBancariasTable();
+        ensureContaBancariaChequeEspecialColumn();
         ensureRendasTable();
         ensureTransferenciasContasTable();
         ensureTransacaoContaBancariaColumn();
@@ -298,6 +299,30 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: tabela public.contas_bancarias verificada.");
         } catch (Exception e) {
             log.warn("Falha ao CREATE contas_bancarias: {}", e.getMessage());
+        }
+    }
+
+    private void ensureContaBancariaChequeEspecialColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema FROM information_schema.tables "
+                    + "WHERE table_name = 'contas_bancarias' AND table_type = 'BASE TABLE' "
+                    + "AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + schema + ".contas_bancarias "
+                        + "ADD COLUMN IF NOT EXISTS limite_cheque_especial NUMERIC(15,2) NOT NULL DEFAULT 0"
+                );
+            }
+            log.info("Schema patch: coluna limite_cheque_especial verificada em contas_bancarias.");
+        } catch (Exception e) {
+            log.warn("Falha ao adicionar limite_cheque_especial em contas_bancarias: {}", e.getMessage());
         }
     }
 

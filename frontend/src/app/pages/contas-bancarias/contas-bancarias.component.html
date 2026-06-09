@@ -34,9 +34,17 @@
           <h3>{{ c.nome }}</h3>
           <span class="tipo">{{ labelTipo(c.tipo) }}</span>
           <span class="badge" *ngIf="c.padrao">Padrão</span>
+          <span class="badge badge-cheque" *ngIf="saldoNegativo(c) && temChequeEspecial(c)">⚠ Cheque Especial</span>
+          <span class="badge badge-negativo" *ngIf="saldoNegativo(c) && !temChequeEspecial(c)">⚠ Saldo negativo</span>
         </div>
-        <strong>{{ brl(c.saldoAtual) }}</strong>
+        <strong [class.saldo-negativo]="saldoNegativo(c)">{{ brl(c.saldoAtual) }}</strong>
       </div>
+      <p class="cheque-info" *ngIf="saldoNegativo(c) && temChequeEspecial(c)">
+        Usando {{ brl(chequeEspecialUtilizado(c)) }} de {{ brl(c.limiteChequeEspecial || 0) }} do cheque especial
+      </p>
+      <p class="cheque-info disponivel" *ngIf="!saldoNegativo(c) && temChequeEspecial(c)">
+        Cheque especial disponível: {{ brl(c.limiteChequeEspecial || 0) }}
+      </p>
       <div class="conta-actions">
         <button mat-button (click)="abrirForm(c)">
           <mat-icon>edit</mat-icon>
@@ -103,6 +111,12 @@
       </mat-form-field>
 
       <p class="hint" *ngIf="editando">O saldo é atualizado automaticamente pelas transações confirmadas.</p>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
+        <mat-label>Limite de cheque especial</mat-label>
+        <input matInput type="text" inputmode="decimal" formControlName="limiteChequeEspecial" ceMask="decimal" placeholder="0,00">
+        <mat-hint>Zero = sem cheque especial. Permite o saldo ficar negativo até este valor.</mat-hint>
+      </mat-form-field>
 
       <mat-checkbox formControlName="padrao">Usar como conta padrão nos lançamentos</mat-checkbox>
     </mat-dialog-content>

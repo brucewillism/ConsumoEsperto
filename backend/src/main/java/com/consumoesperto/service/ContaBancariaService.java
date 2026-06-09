@@ -34,6 +34,7 @@ public class ContaBancariaService {
         conta.setNome(dto.getNome().trim());
         conta.setTipo(ContaBancaria.TipoConta.valueOf(dto.getTipo().name()));
         conta.setSaldoAtual(escala(dto.getSaldoAtual()));
+        conta.setLimiteChequeEspecial(escalaNaoNegativa(dto.getLimiteChequeEspecial()));
         conta.setUsuario(usuario);
         conta.setAtiva(dto.isAtiva());
         conta.setPadrao(dto.isPadrao());
@@ -65,6 +66,9 @@ public class ContaBancariaService {
         conta.setNome(dto.getNome().trim());
         conta.setTipo(ContaBancaria.TipoConta.valueOf(dto.getTipo().name()));
         conta.setAtiva(dto.isAtiva());
+        if (dto.getLimiteChequeEspecial() != null) {
+            conta.setLimiteChequeEspecial(escalaNaoNegativa(dto.getLimiteChequeEspecial()));
+        }
 
         if (dto.isPadrao() && !conta.isPadrao()) {
             desmarcarOutrasPadrao(usuarioId, id);
@@ -83,6 +87,7 @@ public class ContaBancariaService {
         update.setTipo(dto.getTipo());
         update.setAtiva(dto.isAtiva());
         update.setPadrao(dto.isPadrao());
+        update.setLimiteChequeEspecial(dto.getLimiteChequeEspecial());
         return atualizar(id, update, usuarioId);
     }
 
@@ -189,6 +194,7 @@ public class ContaBancariaService {
         dto.setNome(conta.getNome());
         dto.setTipo(ContaBancariaDTO.TipoConta.valueOf(conta.getTipo().name()));
         dto.setSaldoAtual(conta.getSaldoAtual());
+        dto.setLimiteChequeEspecial(conta.getLimiteChequeEspecial());
         dto.setUsuarioId(conta.getUsuario() != null ? conta.getUsuario().getId() : null);
         dto.setAtiva(conta.isAtiva());
         dto.setPadrao(conta.isPadrao());
@@ -202,5 +208,11 @@ public class ContaBancariaService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         return valor.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** Limite de cheque especial nunca é negativo; nulo vira zero. */
+    private static BigDecimal escalaNaoNegativa(BigDecimal valor) {
+        BigDecimal v = escala(valor);
+        return v.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : v;
     }
 }

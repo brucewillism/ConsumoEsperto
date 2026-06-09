@@ -36,8 +36,10 @@ public class TransferenciaContaService {
         if (valor.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Valor deve ser positivo.");
         }
-        if (origem.getSaldoAtual().compareTo(valor) < 0) {
-            throw new IllegalArgumentException("Saldo insuficiente na conta de origem.");
+        if (!origem.temSaldoSuficiente(valor)) {
+            throw new IllegalArgumentException(
+                "Saldo insuficiente na conta de origem. Disponível (incluindo cheque especial): R$ "
+                    + origem.getSaldoDisponivel().setScale(2, RoundingMode.HALF_UP));
         }
 
         saldoMovimentacaoService.aplicarTransferenciaEntreContas(origem.getId(), destino.getId(), valor);

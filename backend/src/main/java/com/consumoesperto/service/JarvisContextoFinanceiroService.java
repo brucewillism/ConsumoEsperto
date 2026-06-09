@@ -1,7 +1,9 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.OrcamentoDTO;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,7 @@ public class JarvisContextoFinanceiroService {
     private final SaldoService saldoService;
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
+    private final ContaBancariaRepository contaBancariaRepository;
 
     /** Bloco textual pronto para anexar ao system prompt. Nunca lança exceção. */
     public String montarBlocoContexto(Long userId) {
@@ -61,8 +64,62 @@ public class JarvisContextoFinanceiroService {
             .append(criticas.isEmpty() ? "(nenhuma)" : String.join(", ", criticas)).append("\n");
         sb.append("- Categorias com orçamento estourado (>100%): ")
             .append(estouradas.isEmpty() ? "(nenhuma)" : String.join(", ", estouradas)).append("\n");
+        List<String> linhasContas = montarLinhasContas(userId);
+        if (!linhasContas.isEmpty()) {
+            sb.append("- Contas e cheque especial:\n");
+            for (String linha : linhasContas) {
+                sb.append("  • ").append(linha).append("\n");
+            }
+        }
         sb.append("- Mês de referência: ").append(mesRef).append("\n");
         return sb.toString();
+    }
+
+    /**
+     * Linhas de contexto por conta — destaca uso de cheque especial para o J.A.R.V.I.S.
+     * Contas sem cheque especial e com saldo positivo não geram menção (cenário E).
+     */
+    private List<String> montarLinhasContas(Long userId) {
+        List<String> linhas = new ArrayList<>();
+        if (userId == null) {
+            return linhas;
+        }
+        try {
+            List<ContaBancaria> contas = contaBancariaRepository.findByUsuarioIdAndAtivaTrueOrderByPadraoDescNomeAsc(userId);
+            for (ContaBancaria conta : contas) {
+                if (conta == null || conta.getSaldoAtual() == null) {
+                    continue;
+                }
+                BigDecimal saldo = conta.getSaldoAtual();
+                BigDecimal limite = conta.getLimiteChequeEspecial();
+                boolean temCheque = limite.compareTo(BigDecimal.ZERO) > 0;
+
+                if (saldo.compareTo(BigDecimal.ZERO) >= 0) {
+                    if (temCheque) {
+                        linhas.add(String.format(
+                            "Conta %s: Saldo %s (cheque especial disponível: %s — não utilizado)",
+                            conta.getNome(), BRL.format(saldo), BRL.format(limite)));
+                    }
+                } else {
+                    BigDecimal utilizado = conta.getChequeEspecialUtilizado();
+                    BigDecimal disponivelRestante = conta.getSaldoDisponivel();
+                    if (temCheque) {
+                        linhas.add(String.format(
+                            "Conta %s: Saldo %s (ATENÇÃO: utilizando %s do cheque especial de %s. "
+                                + "Limite restante disponível: %s)",
+                            conta.getNome(), BRL.format(saldo), BRL.format(utilizado),
+                            BRL.format(limite), BRL.format(disponivelRestante)));
+                    } else {
+                        linhas.add(String.format(
+                            "Conta %s: Saldo %s (ATENÇÃO: saldo negativo, sem cheque especial configurado)",
+                            conta.getNome(), BRL.format(saldo)));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Contexto J.A.R.V.I.S.: contas indisponíveis userId={}: {}", userId, e.getMessage());
+        }
+        return linhas;
     }
 
     private String formatarSaldoSeguro(Long userId) {

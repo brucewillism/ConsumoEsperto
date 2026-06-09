@@ -152,12 +152,20 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     return parseValorBrasileiro(this.form.get('valor')?.value) ?? 0;
   }
 
+  /** Saldo total disponível da conta (saldo + cheque especial). */
+  saldoDisponivelConta(conta: ContaBancaria | undefined): number {
+    if (!conta) {
+      return 0;
+    }
+    return Number(conta.saldoAtual ?? 0) + Number(conta.limiteChequeEspecial ?? 0);
+  }
+
   get saldoInsuficiente(): boolean {
     const conta = this.contaSelecionada;
     if (!conta) {
       return false;
     }
-    return this.valorPagamento > Number(conta.saldoAtual ?? 0);
+    return this.valorPagamento > this.saldoDisponivelConta(conta);
   }
 
   get mesmoProvedor(): boolean {
@@ -219,7 +227,7 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     if (!conta) {
       return;
     }
-    const max = Math.min(Number(conta.saldoAtual ?? 0), Number(this.fatura.amount) || 0);
+    const max = Math.min(this.saldoDisponivelConta(conta), Number(this.fatura.amount) || 0);
     if (max <= 0) {
       return;
     }
@@ -234,8 +242,9 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     if (this.saldoInsuficiente) {
       const conta = this.contaSelecionada;
       this.snackBar.open(
-        `Saldo insuficiente em ${conta?.nome ?? 'conta'}. Disponível: ${this.brl(conta?.saldoAtual)}; `
-          + `pagamento: ${this.brl(this.valorPagamento)}. Ajuste o valor ou escolha outra conta.`,
+        `Saldo insuficiente em ${conta?.nome ?? 'conta'}. Disponível (incl. cheque especial): `
+          + `${this.brl(this.saldoDisponivelConta(conta))}; pagamento: ${this.brl(this.valorPagamento)}. `
+          + `Ajuste o valor ou escolha outra conta.`,
         'Fechar',
         { duration: 6000, panelClass: ['error-snackbar'] }
       );

@@ -71,6 +71,7 @@ export class ContasBancariasComponent implements OnInit {
       nome: ['', [Validators.required, Validators.maxLength(100)]],
       tipo: ['CORRENTE', Validators.required],
       saldoAtual: [0, Validators.required],
+      limiteChequeEspecial: [0],
       padrao: [false],
     });
   }
@@ -141,11 +142,12 @@ export class ContasBancariasComponent implements OnInit {
         nome: conta.nome,
         tipo: conta.tipo,
         saldoAtual: conta.saldoAtual,
+        limiteChequeEspecial: conta.limiteChequeEspecial ?? 0,
         padrao: !!conta.padrao,
       });
       this.form.get('saldoAtual')?.disable();
     } else {
-      this.form.reset({ tipo: 'CORRENTE', saldoAtual: 0, padrao: false });
+      this.form.reset({ tipo: 'CORRENTE', saldoAtual: 0, limiteChequeEspecial: 0, padrao: false });
       this.form.get('saldoAtual')?.enable();
     }
     openCeFormDialog(this.dialog, this.formTpl, {
@@ -162,10 +164,12 @@ export class ContasBancariasComponent implements OnInit {
     }
     this.salvando = true;
     const raw = this.form.getRawValue();
+    const limiteCheque = Math.max(0, parseValorBrasileiro(raw.limiteChequeEspecial) ?? 0);
     const payload: ContaBancaria = {
       nome: raw.nome,
       tipo: raw.tipo,
       saldoAtual: parseValorBrasileiro(raw.saldoAtual) ?? 0,
+      limiteChequeEspecial: limiteCheque,
       padrao: !!raw.padrao,
       ativa: true,
     };
@@ -174,6 +178,7 @@ export class ContasBancariasComponent implements OnInit {
       ? this.contaService.atualizar(this.editando.id, {
           nome: payload.nome,
           tipo: payload.tipo,
+          limiteChequeEspecial: limiteCheque,
           padrao: payload.padrao,
           ativa: true,
         })
@@ -224,5 +229,21 @@ export class ContasBancariasComponent implements OnInit {
 
   labelTipo(tipo: string): string {
     return this.tipos.find((t) => t.value === tipo)?.label ?? tipo;
+  }
+
+  /** True quando a conta possui cheque especial configurado (> 0). */
+  temChequeEspecial(c: ContaBancaria): boolean {
+    return (c.limiteChequeEspecial ?? 0) > 0;
+  }
+
+  /** Quanto do cheque especial está em uso (zero se saldo positivo). */
+  chequeEspecialUtilizado(c: ContaBancaria): number {
+    const saldo = Number(c.saldoAtual) || 0;
+    return saldo < 0 ? Math.abs(saldo) : 0;
+  }
+
+  /** True quando o saldo está negativo (usando cheque especial ou negativo legado). */
+  saldoNegativo(c: ContaBancaria): boolean {
+    return (Number(c.saldoAtual) || 0) < 0;
   }
 }
