@@ -642,6 +642,10 @@ a {
 /* Confirmação J.A.R.V.I.S. (substitui window.confirm) */
 .cdk-overlay-pane.jarvis-confirm-dialog {
   .mat-mdc-dialog-surface {
+    display: flex;
+    flex-direction: column;
+    max-height: 88vh;
+    overflow: hidden;
     border-radius: 16px !important;
     padding: 20px 22px 16px !important;
     box-shadow:
@@ -650,8 +654,18 @@ a {
       0 18px 40px rgba(0, 0, 0, 0.55) !important;
   }
 
-  .mat-mdc-dialog-actions {
-    border-top-color: rgba(0, 229, 255, 0.15) !important;
+  .jarvis-confirm-content {
+    flex: 1 1 auto;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    max-height: min(52vh, 360px) !important;
+    padding-right: 4px !important;
+  }
+
+  .mat-mdc-dialog-actions.jarvis-confirm-actions {
+    flex-shrink: 0;
+    border-top: 1px solid rgba(0, 229, 255, 0.15) !important;
+    background: var(--exec-surface);
   }
 }
 
@@ -1228,4 +1242,38 @@ app-root {
 
 .fatura-transacoes-dialog .mat-mdc-dialog-container {
   padding: 0;
+}
+
+/* Pagamento de fatura — conteúdo rolável; ações fixas no rodapé (evita sobreposição) */
+.cdk-overlay-pane.pagamento-fatura-dialog {
+  .mat-mdc-dialog-surface {
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    overflow: hidden;
+    padding: 20px 24px 16px;
+  }
+
+  .mat-mdc-dialog-content.modal-body {
+    flex: 1 1 auto;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    max-height: min(58vh, 480px) !important;
+    margin: 0 -4px;
+    padding: 4px 4px 12px !important;
+  }
+
+  .mat-mdc-dialog-actions.modal-actions {
+    flex-shrink: 0;
+    position: relative;
+    z-index: 3;
+    margin: 0;
+    padding: 12px 0 0;
+    background: var(--exec-surface);
+    border-top: 1px solid var(--exec-border);
+  }
+
+  .mat-mdc-form-field .mat-mdc-form-field-subscript-wrapper {
+    min-height: 0;
+  }
 }

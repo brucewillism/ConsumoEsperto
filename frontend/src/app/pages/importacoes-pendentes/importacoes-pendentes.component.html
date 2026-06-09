@@ -82,6 +82,30 @@
       </div>
     </div>
 
+    <div class="conciliacao-bar" [class.ok]="conciliacaoOk(imp)" [class.warn]="!conciliacaoOk(imp)">
+      <div class="conciliacao-item">
+        <span>Soma dos lançamentos</span>
+        <strong>{{ brl(imp.somaLancamentos) }}</strong>
+      </div>
+      <div class="conciliacao-item">
+        <span>Total da fatura</span>
+        <strong>{{ brl(imp.valorTotal) }}</strong>
+      </div>
+      <div class="conciliacao-item" *ngIf="!conciliacaoOk(imp)">
+        <span>Diferença</span>
+        <strong class="diff">{{ brl(imp.diferencaLancamentos) }}</strong>
+      </div>
+      <div class="conciliacao-item selecionados">
+        <span>Selecionados (novos)</span>
+        <strong>{{ brl(somaSelecionados(imp)) }}</strong>
+      </div>
+    </div>
+
+    <p class="conciliacao-hint" *ngIf="!conciliacaoOk(imp)">
+      A IA pode ter omitido lançamentos do PDF. Revise a lista, reimporte o arquivo ou confirme mesmo assim
+      e complete os faltantes depois em Transações.
+    </p>
+
     <div class="audit" *ngIf="imp.auditorias?.length">
       <p *ngFor="let a of imp.auditorias">• {{ a }}</p>
     </div>

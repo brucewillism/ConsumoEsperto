@@ -36,6 +36,19 @@
       </button>
     </div>
 
+    <div class="alert-jarvis contas-box" *ngIf="!carregando">
+      <div class="alert-icon"><i class="fas fa-university"></i></div>
+      <div class="alert-body">
+        <strong>Contas e cheque especial</strong>
+        <p class="hint">
+          O limite de <strong>cheque especial</strong> (saldo negativo permitido) é cadastrado em
+          <a routerLink="/contas">Contas</a> → <em>Editar</em> na conta (ex.: Itaú) → campo
+          <em>Limite de cheque especial</em>.
+        </p>
+      </div>
+      <a routerLink="/contas" class="btn outline">Abrir Contas</a>
+    </div>
+
     <div class="alert-jarvis fixas-box" *ngIf="!carregando">
       <div class="alert-icon"><i class="fas fa-lock"></i></div>
       <div class="alert-body">

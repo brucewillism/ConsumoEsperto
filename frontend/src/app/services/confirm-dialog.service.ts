@@ -14,8 +14,9 @@ export class ConfirmDialogService {
   /** Abre o diálogo e emite {@code true} se o utilizador confirmou. */
   ask(data: ConfirmDialogData): Observable<boolean> {
     const ref = this.dialog.open(ConfirmDialogComponent, {
-      width: '440px',
+      width: '480px',
       maxWidth: '96vw',
+      maxHeight: '88vh',
       panelClass: 'jarvis-confirm-dialog',
       autoFocus: 'first-toggler',
       data: this.normalizar(data),

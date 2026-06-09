@@ -8,6 +8,16 @@
 .modal-body {
   min-width: min(440px, 92vw);
   padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.form-pagamento {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .mes-ref {
@@ -128,10 +138,22 @@
   }
 
   .dica-cheque {
-    margin: 0 0 10px;
+    margin: 0 0 8px;
     font-size: 12px;
     line-height: 1.45;
     color: #fde68a;
+  }
+
+  .aviso-saldo-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .aviso-acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
   }
 }
 

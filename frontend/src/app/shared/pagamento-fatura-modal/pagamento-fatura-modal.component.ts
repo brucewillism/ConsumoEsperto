@@ -1,5 +1,6 @@
 import { Component, Inject, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -77,6 +78,7 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     private financaAlteracao: FinancaAlteracaoService,
     private projecaoService: ProjecaoDashboardService,
     private snackBar: MatSnackBar,
+    private router: Router,
     private dialogRef: MatDialogRef<PagamentoFaturaModalComponent, boolean>,
     @Inject(MAT_DIALOG_DATA) public data: PagamentoFaturaModalData
   ) {
@@ -341,5 +343,10 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     if (!this.enviando) {
       this.dialogRef.close(false);
     }
+  }
+
+  irConfigurarChequeEspecial(): void {
+    this.dialogRef.close(false);
+    void this.router.navigate(['/contas']);
   }
 }

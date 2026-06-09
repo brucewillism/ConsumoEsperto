@@ -44,6 +44,11 @@
       </p>
       <p class="cheque-info disponivel" *ngIf="!saldoNegativo(c) && temChequeEspecial(c)">
         Cheque especial disponível: {{ brl(c.limiteChequeEspecial || 0) }}
+        · Total disp.: {{ brl((c.saldoDisponivel ?? (c.saldoAtual + (c.limiteChequeEspecial || 0)))) }}
+      </p>
+      <p class="cheque-info alerta-sem-limite" *ngIf="!temChequeEspecial(c)">
+        <mat-icon>info</mat-icon>
+        Sem cheque especial — clique em <strong>Editar</strong> e preencha o campo abaixo do nome da conta.
       </p>
       <div class="conta-actions">
         <button mat-button (click)="abrirForm(c)">
@@ -112,11 +117,18 @@
 
       <p class="hint" *ngIf="editando">O saldo é atualizado automaticamente pelas transações confirmadas.</p>
 
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
-        <mat-label>Limite de cheque especial</mat-label>
-        <input matInput type="text" inputmode="decimal" formControlName="limiteChequeEspecial" ceMask="decimal" placeholder="0,00">
-        <mat-hint>Zero = sem cheque especial. Permite o saldo ficar negativo até este valor.</mat-hint>
-      </mat-form-field>
+      <div class="cheque-especial-bloco">
+        <h3>Cheque especial (saldo negativo controlado)</h3>
+        <p class="cheque-especial-explica">
+          Permite pagar faturas mesmo quando o saldo nominal é menor que o valor.
+          Ex.: saldo R$ 2.518 + limite R$ 2.500 → pode debitar até R$ 5.018.
+        </p>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full campo-cheque-destaque">
+          <mat-label>Limite de cheque especial (R$)</mat-label>
+          <input matInput type="text" inputmode="decimal" formControlName="limiteChequeEspecial" ceMask="decimal" placeholder="Ex.: 2.500,00">
+          <mat-hint>Deixe 0,00 se não usa cheque especial nesta conta.</mat-hint>
+        </mat-form-field>
+      </div>
 
       <mat-checkbox formControlName="padrao">Usar como conta padrão nos lançamentos</mat-checkbox>
     </mat-dialog-content>

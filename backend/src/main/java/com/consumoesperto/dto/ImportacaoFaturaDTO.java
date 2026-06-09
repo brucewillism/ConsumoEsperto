@@ -22,6 +22,10 @@ public class ImportacaoFaturaDTO {
     private Boolean aguardandoEscolhaSaldoAnterior;
     private BigDecimal saldoFaturaAnterior;
     private BigDecimal saldoFaturaAtual;
+    /** Soma de todos os lançamentos listados na importação. */
+    private BigDecimal somaLancamentos;
+    /** |valorTotal − somaLancamentos| (conciliação). */
+    private BigDecimal diferencaLancamentos;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -72,4 +76,10 @@ public class ImportacaoFaturaDTO {
 
     public BigDecimal getSaldoFaturaAtual() { return saldoFaturaAtual; }
     public void setSaldoFaturaAtual(BigDecimal saldoFaturaAtual) { this.saldoFaturaAtual = saldoFaturaAtual; }
+
+    public BigDecimal getSomaLancamentos() { return somaLancamentos; }
+    public void setSomaLancamentos(BigDecimal somaLancamentos) { this.somaLancamentos = somaLancamentos; }
+
+    public BigDecimal getDiferencaLancamentos() { return diferencaLancamentos; }
+    public void setDiferencaLancamentos(BigDecimal diferencaLancamentos) { this.diferencaLancamentos = diferencaLancamentos; }
 }

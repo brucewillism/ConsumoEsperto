@@ -17,39 +17,35 @@ export interface ConfirmDialogData {
   standalone: true,
   imports: [MatDialogModule, MatButtonModule, MatIconModule],
   template: `
-    <div class="jarvis-confirm-shell">
-      <div class="jarvis-confirm-icon" [class.destructive]="data.destructive">
-        <mat-icon>{{ data.destructive ? 'warning_amber' : 'help_outline' }}</mat-icon>
-      </div>
-      <div class="jarvis-confirm-body">
-        <h2 mat-dialog-title>{{ data.title }}</h2>
-        <mat-dialog-content>
-          <p class="msg">{{ data.message }}</p>
-        </mat-dialog-content>
-      </div>
-      <mat-dialog-actions align="end" class="jarvis-confirm-actions">
-        <button mat-stroked-button type="button" class="btn-cancel" [mat-dialog-close]="false">
-          {{ data.cancelLabel || 'Cancelar' }}
-        </button>
-        <button
-          mat-raised-button
-          type="button"
-          class="btn-confirm"
-          [class.destructive]="data.destructive"
-          [color]="data.destructive ? 'warn' : 'primary'"
-          [mat-dialog-close]="true">
-          {{ data.confirmLabel || 'Confirmar' }}
-        </button>
-      </mat-dialog-actions>
+    <div class="jarvis-confirm-icon" [class.destructive]="data.destructive">
+      <mat-icon>{{ data.destructive ? 'warning_amber' : 'help_outline' }}</mat-icon>
     </div>
+
+    <h2 mat-dialog-title class="jarvis-confirm-title">{{ data.title }}</h2>
+
+    <mat-dialog-content class="jarvis-confirm-content">
+      <p class="msg">{{ data.message }}</p>
+    </mat-dialog-content>
+
+    <mat-dialog-actions align="end" class="jarvis-confirm-actions">
+      <button mat-stroked-button type="button" class="btn-cancel" [mat-dialog-close]="false">
+        {{ data.cancelLabel || 'Cancelar' }}
+      </button>
+      <button
+        mat-raised-button
+        type="button"
+        class="btn-confirm"
+        [class.destructive]="data.destructive"
+        [color]="data.destructive ? 'warn' : 'primary'"
+        [mat-dialog-close]="true">
+        {{ data.confirmLabel || 'Confirmar' }}
+      </button>
+    </mat-dialog-actions>
   `,
   styles: [
     `
-      .jarvis-confirm-shell {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        padding: 4px 2px 0;
+      :host {
+        display: block;
       }
 
       .jarvis-confirm-icon {
@@ -62,7 +58,7 @@ export interface ConfirmDialogData {
         background: rgba(0, 229, 255, 0.12);
         border: 1px solid rgba(0, 229, 255, 0.35);
         color: #00e5ff;
-        margin-bottom: 4px;
+        margin-bottom: 8px;
       }
 
       .jarvis-confirm-icon.destructive {
@@ -77,11 +73,19 @@ export interface ConfirmDialogData {
         height: 28px;
       }
 
-      .jarvis-confirm-body h2 {
-        margin: 0 0 8px;
+      .jarvis-confirm-title {
+        margin: 0 0 4px;
+        padding: 0 !important;
         font-size: 1.15rem;
         font-weight: 600;
         letter-spacing: 0.01em;
+      }
+
+      .jarvis-confirm-content {
+        padding: 0 !important;
+        margin: 0;
+        max-height: none;
+        overflow: visible;
       }
 
       .msg {
@@ -90,16 +94,14 @@ export interface ConfirmDialogData {
         line-height: 1.5;
         color: var(--text-secondary, #94a3b8);
         font-size: 0.95rem;
+        word-break: break-word;
       }
 
       .jarvis-confirm-actions {
-        margin-top: 8px;
-        padding-top: 14px !important;
+        margin-top: 4px;
+        padding: 14px 0 0 !important;
         gap: 10px;
-      }
-
-      .btn-cancel {
-        border-color: rgba(148, 163, 184, 0.35) !important;
+        flex-wrap: wrap;
       }
     `
   ]

@@ -134,6 +134,62 @@
   color: #9ca3af;
 }
 
+.conciliacao-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+
+  &.ok {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.08);
+  }
+
+  &.warn {
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(245, 158, 11, 0.1);
+  }
+}
+
+.conciliacao-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  span {
+    font-size: 11px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  strong {
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .diff {
+    color: #fca5a5;
+  }
+
+  &.selecionados strong {
+    color: #93c5fd;
+  }
+}
+
+.conciliacao-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #fde68a;
+}
+
 .audit {
   padding: 12px;
   border-radius: 12px;
@@ -153,17 +209,39 @@
 
 .item-row {
   display: grid;
-  grid-template-columns: auto 56px 1fr 110px 90px;
-  gap: 10px;
+  grid-template-columns: 36px 52px minmax(0, 1fr) minmax(88px, auto) 76px;
+  gap: 8px 10px;
   align-items: center;
-  padding: 10px;
+  padding: 10px 12px;
   border-radius: 12px;
   background: rgba(255, 255, 255, .04);
+}
+
+.date {
+  font-size: 12px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
 }
 
 .desc {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+
+  small {
+    margin-top: 2px;
+  }
+}
+
+.item-row strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.item-row em {
+  text-align: right;
 }
 
 em {
@@ -182,6 +260,11 @@ em.old {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-top: 12px;
+  background: linear-gradient(180deg, transparent, #111827 24%);
 }
 
 .empty {
@@ -198,6 +281,30 @@ em.old {
   }
 
   .item-row {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: 32px 1fr auto;
+    grid-template-areas:
+      'chk desc valor'
+      'chk meta tag';
+  }
+
+  .item-row mat-checkbox {
+    grid-area: chk;
+  }
+
+  .item-row .date {
+    grid-area: meta;
+    font-size: 11px;
+  }
+
+  .item-row .desc {
+    grid-area: desc;
+  }
+
+  .item-row strong {
+    grid-area: valor;
+  }
+
+  .item-row em {
+    grid-area: tag;
   }
 }

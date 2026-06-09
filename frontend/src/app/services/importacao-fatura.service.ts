@@ -30,6 +30,8 @@ export interface ImportacaoFatura {
   aguardandoEscolhaSaldoAnterior?: boolean;
   saldoFaturaAnterior?: number | null;
   saldoFaturaAtual?: number | null;
+  somaLancamentos?: number | null;
+  diferencaLancamentos?: number | null;
 }
 
 @Injectable({ providedIn: 'root' })

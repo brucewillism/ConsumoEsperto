@@ -21,70 +21,61 @@
     <div>
       <strong>Atenção: cheque especial</strong>
       <p>
-        Esta operação utilizará <strong>{{ brl(valorUsoChequeEspecial()) }}</strong> do seu cheque especial
-        na conta <em>{{ contaSelecionada?.nome }}</em>.
-        Saldo após débito: <strong>{{ brl(saldoContaPosDebito()) }}</strong>
-        (limite disponível: {{ brl(contaSelecionada?.limiteChequeEspecial) }}).
+        Usará <strong>{{ brl(valorUsoChequeEspecial()) }}</strong> do limite na conta
+        <em>{{ contaSelecionada?.nome }}</em>. Saldo após débito:
+        <strong>{{ brl(saldoContaPosDebito()) }}</strong>.
       </p>
     </div>
   </div>
 
   <div class="aviso-saldo" *ngIf="!carregandoContas && contaSelecionada && saldoInsuficiente">
     <mat-icon>account_balance_wallet</mat-icon>
-    <div>
+    <div class="aviso-saldo-body">
       <strong>Saldo insuficiente</strong>
       <p>
-        A conta <em>{{ contaSelecionada?.nome }}</em> tem disponível {{ brl(saldoDisponivelConta(contaSelecionada)) }}
+        Disponível {{ brl(saldoDisponivelConta(contaSelecionada)) }}
         (saldo {{ brl(contaSelecionada?.saldoAtual) }}
         <ng-container *ngIf="limiteChequeConta(contaSelecionada) > 0">
           + cheque {{ brl(limiteChequeConta(contaSelecionada)) }}
         </ng-container>
-        <ng-container *ngIf="limiteChequeConta(contaSelecionada) <= 0">
-          — <strong>sem cheque especial cadastrado</strong>
-        </ng-container>),
-        mas o pagamento é {{ brl(valorPagamento) }}.
+        <ng-container *ngIf="limiteChequeConta(contaSelecionada) <= 0"> — sem cheque cadastrado</ng-container>).
+        Pagamento: {{ brl(valorPagamento) }}.
       </p>
       <p class="dica-cheque" *ngIf="limiteChequeConta(contaSelecionada) <= 0">
-        Para pagar esta fatura, edite a conta em <strong>Contas</strong> e cadastre o
-        <strong>Limite de cheque especial</strong> (mínimo {{ brl(limiteMinimoParaPagamento()) }}).
-        Ex.: saldo {{ brl(contaSelecionada?.saldoAtual) }} + limite {{ brl(2500) }} cobre até {{ brl(exemploDisponivelComLimite(2500)) }}.
+        Cadastre o <strong>limite de cheque especial</strong> (mín. {{ brl(limiteMinimoParaPagamento()) }})
+        em <strong>Contas → Editar {{ contaSelecionada?.nome }}</strong>.
       </p>
-      <p class="dica-cheque" *ngIf="limiteChequeConta(contaSelecionada) > 0 && deficitChequeEspecial() > 0">
-        Aumente o limite de cheque especial em <strong>Contas</strong> em pelo menos {{ brl(deficitChequeEspecial()) }}.
-      </p>
-      <button mat-stroked-button type="button" color="accent" (click)="usarSaldoDisponivel()">
-        Pagar com saldo disponível ({{ brl(saldoDisponivelConta(contaSelecionada)) }})
-      </button>
+      <div class="aviso-acoes">
+        <button mat-stroked-button type="button" color="accent" (click)="irConfigurarChequeEspecial()">
+          Ir para Contas
+        </button>
+        <button mat-stroked-button type="button" (click)="usarSaldoDisponivel()">
+          Pagar {{ brl(saldoDisponivelConta(contaSelecionada)) }}
+        </button>
+      </div>
     </div>
   </div>
 
-  <form [formGroup]="form" (ngSubmit)="confirmar()" *ngIf="!carregandoContas">
-    <mat-form-field appearance="outline" class="full">
+  <form [formGroup]="form" (ngSubmit)="confirmar()" *ngIf="!carregandoContas" class="form-pagamento">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
       <mat-label>Escolha a conta de débito</mat-label>
       <mat-select formControlName="contaBancariaId" required>
         <mat-option *ngFor="let c of contas" [value]="c.id">
           {{ c.nome }} — disp. {{ brl(saldoDisponivelConta(c)) }}
-          (saldo {{ brl(c.saldoAtual) }}<ng-container *ngIf="limiteChequeConta(c) > 0"> + ch.esp. {{ brl(limiteChequeConta(c)) }}</ng-container>)
         </mat-option>
       </mat-select>
       <mat-hint *ngIf="contaSelecionada && !saldoInsuficiente && saldoContaPosDebito() != null">
-        Saldo da conta após débito:
+        Saldo após débito:
         <strong [class.saldo-negativo]="(saldoContaPosDebito() ?? 0) < 0">{{ brl(saldoContaPosDebito()) }}</strong>
-        <ng-container *ngIf="usaraChequeEspecial"> (usa cheque especial)</ng-container>
-        <ng-container *ngIf="mesmoProvedor && patrimonioProjetadoPosDebito() != null">
-          · Patrimônio projetado (fim do mês):
-          <strong>{{ brl(patrimonioProjetadoPosDebito()) }}</strong>
-        </ng-container>
+        <ng-container *ngIf="usaraChequeEspecial"> (cheque especial)</ng-container>
       </mat-hint>
       <mat-error *ngIf="form.get('contaBancariaId')?.hasError('required')">Selecione a conta de débito</mat-error>
-      <mat-error *ngIf="saldoInsuficiente">Saldo insuficiente na conta selecionada</mat-error>
     </mat-form-field>
 
     <p class="aviso-provedor" *ngIf="mesmoProvedor && contaSelecionada">
       <mat-icon>info</mat-icon>
       <span>
         Conta e cartão do mesmo provedor ({{ getBancoNome(fatura.bankName) }}).
-        A projeção considera a conciliação consolidada — gastos do cartão não são duplicados no patrimônio.
         <span *ngIf="carregandoProjecao"> Atualizando projeção…</span>
       </span>
     </p>
@@ -94,7 +85,7 @@
       [compact]="true">
     </app-chart-metodologia>
 
-    <mat-form-field appearance="outline" class="full">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
       <mat-label>Valor do pagamento</mat-label>
       <span matTextPrefix>R$&nbsp;</span>
       <input matInput type="text" formControlName="valor" ceMask="decimal" inputmode="decimal" placeholder="0,00">
@@ -112,7 +103,7 @@
     color="primary"
     type="button"
     (click)="confirmar()"
-    [disabled]="form.invalid || enviando || carregandoContas || contas.length === 0"
+    [disabled]="form.invalid || enviando || carregandoContas || contas.length === 0 || saldoInsuficiente"
     [class.btn-saldo-insuficiente]="saldoInsuficiente">
     <mat-spinner *ngIf="enviando" diameter="18" class="btn-spinner"></mat-spinner>
     <span>{{ enviando ? 'Processando…' : 'Confirmar pagamento e conciliar' }}</span>

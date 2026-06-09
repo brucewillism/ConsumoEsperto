@@ -119,6 +119,7 @@ public class FaturaPdfImportService {
         String banco = BancoBrasilCatalog.nomeExibicao(bancoExtraido);
 
         List<ImportacaoFaturaItemDTO> itens = parseItens(extracted.path("lancamentos"));
+        complementarItensComTaxasDeclaradas(itens, extracted, parseDate(extracted.path("dataFechamento").asText("")));
         for (ImportacaoFaturaItemDTO item : itens) {
             boolean novo = buscarExistentes(usuarioId, item).isEmpty();
             item.setNovo(novo);
@@ -132,7 +133,9 @@ public class FaturaPdfImportService {
         imp.setBancoCartao(banco);
         imp.setDataVencimento(parseDateTime(extracted.path("dataVencimento").asText("")));
         imp.setDataFechamento(parseDateTime(extracted.path("dataFechamento").asText("")));
-        BigDecimal valorTotal = readMoney(extracted.path("valorTotal"));
+        BigDecimal valorTotalPdf = readMoney(extracted.path("valorTotal"));
+        List<String> auditorias = new ArrayList<>();
+        BigDecimal valorTotal = resolverReferenciaConciliacao(extracted, valorTotalPdf, itens, auditorias);
         imp.setValorTotal(valorTotal);
         imp.setPagamentoMinimo(readMoney(extracted.path("pagamentoMinimo")));
         imp.setItensJson(writeJson(itens));
@@ -142,7 +145,7 @@ public class FaturaPdfImportService {
         if (!anteriores.isEmpty()) {
             prevItens = readItens(anteriores.get(0).getItensJson());
         }
-        List<String> auditorias = new ArrayList<>(auditarGastosFantasmas(usuarioId, cartao.getId(), itens));
+        auditorias.addAll(auditarGastosFantasmas(usuarioId, cartao.getId(), itens));
         List<ContencaoJarvisService.SugestaoContencaoDraft> contencaoDrafts = new ArrayList<>();
         auditorias.addAll(contencaoJarvisService.montarAuditoriasComMetasNaImportacao(
             usuarioId, cartao.getId(), prevItens, itens, contencaoDrafts));
@@ -243,9 +246,9 @@ public class FaturaPdfImportService {
         Set<Integer> indices = request != null && request.getIndices() != null && !request.getIndices().isEmpty()
             ? new HashSet<>(request.getIndices())
             : null;
-        List<ImportacaoFaturaItemDTO> itensSelecionados = itensSelecionados(itens, indices);
+        List<ImportacaoFaturaItemDTO> itensContabilizados = itensContabilizadosNaConfirmacao(itens, indices);
         boolean ignorarDivergencia = request != null && request.isIgnorarDivergencia();
-        Optional<String> divergencia = validarSomaParaConfirmacao(imp.getValorTotal(), itensSelecionados, readAuditorias(imp.getAuditoriaJson()));
+        Optional<String> divergencia = validarSomaParaConfirmacao(imp.getValorTotal(), itensContabilizados, readAuditorias(imp.getAuditoriaJson()));
         if (divergencia.isPresent() && !ignorarDivergencia) {
             throw new DivergenciaFaturaException(divergencia.get()
                 + " Você pode confirmar mesmo assim e completar os lançamentos faltantes depois, ou reimportar o PDF.");
@@ -382,6 +385,11 @@ public class FaturaPdfImportService {
             dto.setAguardandoEscolhaSaldoAnterior(!m.resolvido());
         });
         dto.setDataCriacao(imp.getDataCriacao());
+        BigDecimal soma = somaValoresItens(dto.getItens());
+        dto.setSomaLancamentos(soma);
+        if (imp.getValorTotal() != null) {
+            dto.setDiferencaLancamentos(imp.getValorTotal().subtract(soma).abs().setScale(2, RoundingMode.HALF_UP));
+        }
         return dto;
     }
 
@@ -862,7 +870,11 @@ public class FaturaPdfImportService {
         return new java.text.DecimalFormat("#,##0.00", new java.text.DecimalFormatSymbols(new Locale("pt", "BR"))).format(v);
     }
 
-    private List<ImportacaoFaturaItemDTO> itensSelecionados(List<ImportacaoFaturaItemDTO> itens, Set<Integer> indices) {
+    /** Lançamentos que entrarão na fatura na confirmação: já existentes + novos selecionados. */
+    private List<ImportacaoFaturaItemDTO> itensContabilizadosNaConfirmacao(
+        List<ImportacaoFaturaItemDTO> itens,
+        Set<Integer> indices
+    ) {
         if (itens == null || itens.isEmpty()) {
             return List.of();
         }
@@ -870,11 +882,83 @@ public class FaturaPdfImportService {
         for (int i = 0; i < itens.size(); i++) {
             ImportacaoFaturaItemDTO item = itens.get(i);
             boolean selecionado = indices == null ? item.isSelecionado() : indices.contains(i);
-            if (selecionado && item.isNovo()) {
+            if (!item.isNovo() || selecionado) {
                 out.add(item);
             }
         }
         return out;
+    }
+
+    private void complementarItensComTaxasDeclaradas(
+        List<ImportacaoFaturaItemDTO> itens,
+        JsonNode extracted,
+        LocalDate dataFechamento
+    ) {
+        if (itens == null || extracted == null || extracted.isMissingNode()) {
+            return;
+        }
+        JsonNode taxas = extracted.path("taxasForaDaTabelaPrincipal");
+        if (!taxas.isArray()) {
+            return;
+        }
+        for (JsonNode taxa : taxas) {
+            BigDecimal valor = readMoney(taxa.path("valor"));
+            if (valor.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            String tipo = taxa.path("tipo").asText("").trim();
+            String descricao = taxa.path("descricao").asText("").trim();
+            if (descricao.isBlank()) {
+                descricao = (tipo.isBlank() ? "Taxa" : tipo) + " — fatura";
+            }
+            String descNorm = norm(descricao);
+            boolean jaPresente = itens.stream().anyMatch(i ->
+                i.getValor() != null
+                    && moedasQuaseIguais(i.getValor(), valor, new BigDecimal("0.04"))
+                    && (norm(i.getDescricao()).contains(descNorm) || descNorm.contains(norm(i.getDescricao())))
+            );
+            if (jaPresente) {
+                continue;
+            }
+            ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
+            item.setDescricao(descricao);
+            item.setValor(valor);
+            item.setData(dataFechamento);
+            itens.add(item);
+            log.info("Injetando taxa ausente nos lançamentos: '{}' = {}", descricao, valor);
+        }
+    }
+
+    /**
+     * Quando o saldo desta fatura (sem saldo anterior) bate com a soma extraída, usa-o como referência
+     * em vez do total a pagar do PDF.
+     */
+    private BigDecimal resolverReferenciaConciliacao(
+        JsonNode extracted,
+        BigDecimal valorTotalPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        List<String> auditorias
+    ) {
+        if (valorTotalPdf == null || valorTotalPdf.compareTo(BigDecimal.ZERO) <= 0) {
+            return valorTotalPdf;
+        }
+        BigDecimal soma = somaValoresItens(itens);
+        BigDecimal saldoAtual = readMoney(extracted.path("saldoFaturaAtual"));
+        if (saldoAtual.compareTo(BigDecimal.ZERO) <= 0) {
+            return valorTotalPdf;
+        }
+        BigDecimal tol = toleranciaChecksum(valorTotalPdf.max(saldoAtual));
+        BigDecimal diffTotal = soma.subtract(valorTotalPdf).abs();
+        BigDecimal diffAtual = soma.subtract(saldoAtual).abs();
+        if (diffAtual.compareTo(tol) <= 0 && diffAtual.compareTo(diffTotal) < 0) {
+            auditorias.add(
+                "Conciliação alinhada ao saldo desta fatura (R$ " + formatBrl(saldoAtual).trim()
+                    + "). O total a pagar no PDF (R$ " + formatBrl(valorTotalPdf).trim()
+                    + ") pode incluir saldo anterior ou outros ajustes."
+            );
+            return saldoAtual;
+        }
+        return valorTotalPdf;
     }
 
     private List<ImportacaoFaturaItemDTO> parseItens(JsonNode arr) {

@@ -238,4 +238,15 @@ export class ImportacoesPendentesComponent implements OnInit {
   brl(v: number | null | undefined): string {
     return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
+
+  somaSelecionados(imp: ImportacaoFatura): number {
+    return imp.itens
+      .filter((i) => i.novo && i.selecionado)
+      .reduce((acc, i) => acc + Number(i.valor || 0), 0);
+  }
+
+  conciliacaoOk(imp: ImportacaoFatura): boolean {
+    const tol = Math.max(5, Math.min(120, Number(imp.valorTotal || 0) * 0.02));
+    return Number(imp.diferencaLancamentos ?? 999) <= tol;
+  }
 }

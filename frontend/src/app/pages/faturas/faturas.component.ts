@@ -264,8 +264,9 @@ export class FaturasComponent implements OnInit, OnDestroy {
     }
     this.dialog
       .open(PagamentoFaturaModalComponent, {
-        width: '500px',
+        width: '520px',
         maxWidth: '96vw',
+        maxHeight: '90vh',
         disableClose: true,
         data: { fatura },
         panelClass: 'pagamento-fatura-dialog',
