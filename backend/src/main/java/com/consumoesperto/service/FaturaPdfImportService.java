@@ -1011,7 +1011,97 @@ public class FaturaPdfImportService {
             }
             out.add(item);
         }
+        return sanitizarLancamentosExtraidos(out);
+    }
+
+    /**
+     * Pós-processamento defensivo: corrige leituras comuns da IA em faturas Nubank
+     * (subtotal de portador e componentes internos de Pix/boleto duplicados).
+     */
+    /** Exposto apenas para testes unitários. */
+    static List<ImportacaoFaturaItemDTO> sanitizarLancamentosExtraidosParaTeste(List<ImportacaoFaturaItemDTO> itens) {
+        return sanitizarLancamentosExtraidos(itens);
+    }
+
+    private static List<ImportacaoFaturaItemDTO> sanitizarLancamentosExtraidos(List<ImportacaoFaturaItemDTO> itens) {
+        if (itens == null || itens.isEmpty()) {
+            return itens;
+        }
+        return removerSubtotaisPortadorNubank(removerComponentesPixDuplicados(itens));
+    }
+
+    /**
+     * No Nubank, Pix/boleto no crédito traz "valor da transação + IOF + juros" e depois o
+     * "Total a pagar". A IA às vezes extrai os componentes como lançamentos à parte — infla a soma.
+     */
+    private static List<ImportacaoFaturaItemDTO> removerComponentesPixDuplicados(List<ImportacaoFaturaItemDTO> itens) {
+        Set<LocalDate> datasComTotalPagar = itens.stream()
+            .filter(i -> i.getData() != null && contemTotalAPagar(i.getDescricao()))
+            .map(ImportacaoFaturaItemDTO::getData)
+            .collect(Collectors.toSet());
+        if (datasComTotalPagar.isEmpty()) {
+            return itens;
+        }
+        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
+        for (ImportacaoFaturaItemDTO item : itens) {
+            if (item.getData() != null
+                && datasComTotalPagar.contains(item.getData())
+                && pareceComponenteDeTotalAPagar(item.getDescricao())) {
+                log.info("Ignorando componente interno de Pix/boleto: '{}' = {}", item.getDescricao(), item.getValor());
+                continue;
+            }
+            out.add(item);
+        }
         return out;
+    }
+
+    /** Ex.: "Bruce W M Silva R$ 2.425,51" — subtotal do titular, não é compra. */
+    private static List<ImportacaoFaturaItemDTO> removerSubtotaisPortadorNubank(List<ImportacaoFaturaItemDTO> itens) {
+        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
+        for (ImportacaoFaturaItemDTO item : itens) {
+            if (pareceSubtotalPortadorNubank(item.getDescricao())) {
+                log.info("Ignorando subtotal de portador Nubank: '{}' = {}", item.getDescricao(), item.getValor());
+                continue;
+            }
+            out.add(item);
+        }
+        return out;
+    }
+
+    private static boolean contemTotalAPagar(String descricao) {
+        String n = norm(descricao);
+        return n.contains("total a pagar");
+    }
+
+    private static boolean pareceComponenteDeTotalAPagar(String descricao) {
+        String n = norm(descricao);
+        if (n.isBlank() || n.contains("total a pagar")) {
+            return false;
+        }
+        return n.contains("valor da transacao")
+            || n.contains("valor da transa")
+            || n.matches(".*\\bde\\s+iof\\b.*")
+            || n.matches(".*\\biof\\s+de\\b.*")
+            || (n.contains("iof") && n.length() < 42)
+            || (n.contains("juros") && n.length() < 48 && !n.contains("rotativo") && !n.contains("encargos"));
+    }
+
+    private static boolean pareceSubtotalPortadorNubank(String descricao) {
+        if (descricao == null || descricao.isBlank()) {
+            return false;
+        }
+        if (descricao.contains("••••")) {
+            return false;
+        }
+        String n = norm(descricao);
+        if (n.isBlank() || n.contains("parcela") || n.contains("total a pagar")) {
+            return false;
+        }
+        if (n.matches(".*\\d.*")) {
+            return false;
+        }
+        String[] tokens = n.split(" ");
+        return tokens.length >= 2 && tokens.length <= 7 && n.length() <= 52;
     }
 
     /**
@@ -1024,6 +1114,8 @@ public class FaturaPdfImportService {
             return false;
         }
         return n.contains("pagamentos e financiamentos")
+            || n.contains("fatura anterior")
+            || n.contains("outros lancamentos")
             || n.contains("total de compras")
             || n.contains("total dos lancamentos")
             || n.contains("total da fatura")
