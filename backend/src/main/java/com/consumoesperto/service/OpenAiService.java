@@ -371,6 +371,48 @@ public class OpenAiService {
         return out;
     }
 
+    /** Visão computacional para boleto bancário ou QR Code Pix (agendamento de pagamento). */
+    public JsonNode analisarImagemBoletoPix(byte[] imageBytes, String contentType, Long userId) {
+        if (imageBytes == null || imageBytes.length == 0) {
+            throw new RuntimeException("Imagem não informada para leitura de boleto/Pix");
+        }
+        String safeContentType = (contentType == null || contentType.isBlank()) ? "image/jpeg" : contentType;
+        String base64 = Base64.getEncoder().encodeToString(imageBytes);
+        String dataUrl = "data:" + safeContentType + ";base64," + base64;
+
+        AiProvidersConfig cfg = cfgForAi(userId);
+        String systemPrompt = "Você extrai dados de boleto bancário brasileiro ou QR Code Pix para agendamento de pagamento. "
+            + "Retorne estritamente JSON sem markdown.";
+        String userPrompt = "Analise a imagem e extraia: "
+            + "tipo (BOLETO|PIX|CUPOM_FISCAL|OUTRO), beneficiario (string), valor (número decimal), "
+            + "dataVencimento (yyyy-MM-dd), linhaDigitavel ou codigoBarrasOuPix (se visível), "
+            + "confianca (0 a 1), erro (string opcional). "
+            + "Use tipo CUPOM_FISCAL se for nota fiscal de compra, não boleto. "
+            + "Se não for possível ler com segurança, preencha erro e confianca baixa.";
+
+        AiGatewayService.GatewayOptimizationResult visionOpt = aiGatewayService.optimizeBeforeProvider(
+            userId, systemPrompt, userPrompt,
+            AiGatewayPromptContext.fromPrompts(systemPrompt, userPrompt, false, true),
+            resolveTargetModelForSuppressor(cfg, false)
+        );
+        final String visionSys = visionOpt.systemPrompt();
+        final String visionUsr = visionOpt.userPrompt();
+
+        JsonNode out = executeAIRequestWithFallback(
+            cfg,
+            p -> canVision(cfg, p),
+            (p, c) -> {
+                String model = visionModelFor(p, c);
+                return parseVisionOpenAiCompatible(
+                    p.name(), apiKeyFor(p, c), baseUrlFor(p, c), model, visionSys, visionUsr, dataUrl);
+            },
+            "Falha leitura boleto/Pix em todos provedores: "
+        );
+        log.info("[VISION-LOG] Boleto/Pix userId={} tipo={} confianca={}",
+            userId, out.path("tipo").asText(""), out.path("confianca").asDouble(Double.NaN));
+        return out;
+    }
+
     public JsonNode gerarJson(Long userId, String systemPrompt, String userPrompt) {
         return gerarJsonInternal(userId, systemPrompt, userPrompt, false);
     }

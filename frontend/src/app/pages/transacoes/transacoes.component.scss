@@ -23,6 +23,81 @@ h1 {
   color: var(--text-secondary);
 }
 
+.agendamentos-panel {
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+
+  h2 {
+    margin: 0 0 4px;
+    font-size: 1.15rem;
+  }
+}
+
+.agendamentos-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.agendamento-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.15);
+  margin-bottom: 8px;
+
+  &.falhou {
+    border-left: 3px solid #f87171;
+  }
+}
+
+.agendamento-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  .erro {
+    font-size: 12px;
+    color: #fca5a5;
+  }
+}
+
+.agendamento-acoes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+
+  .valor {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+
+    &.agendado {
+      background: rgba(59, 130, 246, 0.25);
+      color: #93c5fd;
+    }
+
+    &.falhou {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+  }
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

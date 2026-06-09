@@ -257,12 +257,16 @@ public class DocumentoIAContextService {
             + "Não agrupe nem omita linhas por serem pequenas. "
             + "Classifique como FATURA_CARTAO quando houver vencimento da fatura, pagamento mínimo, fechamento, limite, cartão, compras parceladas, total da fatura ou lançamentos de cartão. "
             + "Classifique como EXTRATO_CONTA somente quando for movimentação de conta corrente com saldo, crédito/débito em conta, agência/conta, PIX/TED/depósito/saque, sem vencimento de fatura. "
+            + "Classifique como BOLETO_COBRANCA quando for cobrança bancária, concessionária (água, luz, telefone), fatura de serviço ou tributo com linha digitável/código de barras, "
+            + "beneficiário, valor e data de vencimento — NÃO é fatura de cartão nem contracheque. "
+            + "Para BOLETO_COBRANCA: preencha beneficiario, valorTotal, dataVencimento, linhaDigitavel (47-48 dígitos) e/ou codigoPix se houver. "
             + taxasEhLeituraFatura()
             + baseAudit + " "
             + "Para CONTRACHEQUE e OUTRO, você pode usar o array insights textual curto quando fizer sentido. "
             + "Para FATURA_CARTAO (e EXTRATO se relevante): preencher taxasForaDaTabelaPrincipal sempre que aparecer valores de Anuidade, IOF internacional/compra exterior, "
             + "Juros Rotativos, Encargos, Tarifa de Cobrança, Seguro Prestamista etc. mesmo fora das linhas típicas de compras.\n\n"
-            + "Schema: {\"tipoDocumento\":\"FATURA_CARTAO|EXTRATO_CONTA|CONTRACHEQUE|OUTRO\","
+            + "Schema: {\"tipoDocumento\":\"FATURA_CARTAO|EXTRATO_CONTA|CONTRACHEQUE|BOLETO_COBRANCA|OUTRO\","
+            + "\"beneficiario\":\"...\",\"linhaDigitavel\":\"...\",\"codigoPix\":\"...\","
             + "\"bancoCartao\":\"...\",\"dataVencimento\":\"yyyy-MM-dd\",\"dataFechamento\":\"yyyy-MM-dd\","
             + "\"valorTotal\":0.0,\"saldoFaturaAnterior\":0.0,\"saldoFaturaAtual\":0.0,\"pagamentoMinimo\":0.0,"
             + "\"taxasForaDaTabelaPrincipal\":[{\"tipo\":\"ANUIDADE|IOF|JUROS|TARIFA|OUTRO\",\"valor\":0.0,\"descricao\":\"string\"}],"
@@ -601,5 +605,73 @@ public class DocumentoIAContextService {
             .replaceAll("[^a-z0-9 ]", " ")
             .replaceAll("\\s+", " ")
             .trim();
+    }
+
+    /** Pix copia e cola (payload EMV BR). */
+    public static boolean parecePixCopiaECola(String texto) {
+        if (texto == null) {
+            return false;
+        }
+        String t = AgendamentoPagamentoService.higienizarCodigo(texto);
+        return t.startsWith("000201") && t.length() >= 50;
+    }
+
+    /** Linha digitável de boleto (47 ou 48 dígitos). */
+    public static boolean pareceLinhaDigitavel(String texto) {
+        if (texto == null) {
+            return false;
+        }
+        String digits = texto.replaceAll("\\D", "");
+        return digits.length() == 47 || digits.length() == 48;
+    }
+
+    public static boolean pareceBoletoOuPix(JsonNode node) {
+        if (node == null) {
+            return false;
+        }
+        String tipo = node.path("tipoDocumento").asText(node.path("tipo").asText("")).toUpperCase(Locale.ROOT);
+        return tipo.contains("BOLETO") || tipo.contains("PIX") || tipo.contains("COBRANCA");
+    }
+
+    /** OCR/visão de imagem de boleto ou QR Pix. */
+    public JsonNode extrairBoletoOuPixImagem(Long usuarioId, byte[] imageBytes, String contentType) {
+        return openAiService.analisarImagemBoletoPix(imageBytes, contentType, usuarioId);
+    }
+
+    /** Extrai dados de Pix copia e cola ou linha digitável enviada como texto. */
+    public JsonNode extrairBoletoOuPixTexto(Long usuarioId, String texto) {
+        String higienizado = AgendamentoPagamentoService.higienizarCodigo(texto);
+        String system = "Você extrai dados de pagamento brasileiro (boleto ou Pix copia e cola). Retorne apenas JSON válido. "
+            + "Campos: tipo (BOLETO|PIX), beneficiario, valor (número decimal), dataVencimento (yyyy-MM-dd ou dd/MM/yyyy), "
+            + "codigoBarrasOuPix (payload/linha digitável higienizado), confianca (0-1), erro (opcional). "
+            + "Para Pix EMV (000201...), infira valor e beneficiário do payload quando possível; se vencimento ausente, use a data mais próxima citada.";
+        String user = "Conteúdo:\n" + (higienizado.length() > 500 ? higienizado.substring(0, 500) + "..." : higienizado)
+            + "\n\nTexto original (pode ter quebras):\n" + texto;
+        JsonNode json = openAiService.gerarJsonDocumento(usuarioId, system, user);
+        if (json.isObject()) {
+            ((com.fasterxml.jackson.databind.node.ObjectNode) json).put("codigoBarrasOuPix", higienizado);
+        }
+        return json;
+    }
+
+    /** Normaliza JSON de PDF já classificado como BOLETO_COBRANCA. */
+    public JsonNode normalizarBoletoPdf(JsonNode extracted) {
+        if (extracted == null || !extracted.isObject()) {
+            return extracted;
+        }
+        com.fasterxml.jackson.databind.node.ObjectNode out = (com.fasterxml.jackson.databind.node.ObjectNode) extracted;
+        out.put("tipo", "BOLETO");
+        if (!out.has("beneficiario") || out.path("beneficiario").asText("").isBlank()) {
+            out.put("beneficiario", out.path("empresa").asText("Beneficiário"));
+        }
+        String codigo = AgendamentoPagamentoService.higienizarCodigo(
+            out.path("codigoPix").asText(out.path("linhaDigitavel").asText("")));
+        if (!codigo.isBlank()) {
+            out.put("codigoBarrasOuPix", codigo);
+        }
+        if (!out.has("confianca")) {
+            out.put("confianca", 0.85);
+        }
+        return out;
     }
 }

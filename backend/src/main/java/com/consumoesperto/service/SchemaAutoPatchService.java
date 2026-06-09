@@ -65,6 +65,7 @@ public class SchemaAutoPatchService {
         ensureContasBancariasTable();
         ensureContaBancariaChequeEspecialColumn();
         ensureDebitosInternosTable();
+        ensureAgendamentosPagamentosTable();
         ensureRendasTable();
         ensureTransferenciasContasTable();
         ensureTransacaoContaBancariaColumn();
@@ -353,6 +354,33 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: tabela public.debitos_internos verificada.");
         } catch (Exception e) {
             log.warn("Falha ao CREATE debitos_internos: {}", e.getMessage());
+        }
+    }
+
+    private void ensureAgendamentosPagamentosTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.agendamentos_pagamentos ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "conta_debito_id BIGINT NOT NULL REFERENCES public.contas_bancarias(id),"
+                    + "beneficiario VARCHAR(200) NOT NULL,"
+                    + "valor NUMERIC(19,2) NOT NULL,"
+                    + "data_vencimento DATE NOT NULL,"
+                    + "codigo_barras_ou_pix TEXT,"
+                    + "status VARCHAR(16) NOT NULL DEFAULT 'AGENDADO',"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_processamento TIMESTAMP,"
+                    + "mensagem_erro VARCHAR(500)"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_agendamentos_usuario_status "
+                    + "ON public.agendamentos_pagamentos(usuario_id, status, data_vencimento)"
+            );
+            log.info("Schema patch: tabela public.agendamentos_pagamentos verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE agendamentos_pagamentos: {}", e.getMessage());
         }
     }
 

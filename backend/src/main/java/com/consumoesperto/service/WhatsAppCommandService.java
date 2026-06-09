@@ -106,6 +106,7 @@ public class WhatsAppCommandService {
     private final UsuarioSessaoContextoService sessaoContextoService;
     private final WhatsAppAppParityService whatsAppAppParityService;
     private final SplitBillService splitBillService;
+    private final AgendamentoPagamentoService agendamentoPagamentoService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -222,6 +223,14 @@ public class WhatsAppCommandService {
     }
 
     private Optional<String> executarPreProcessadoresJarvis(Long userId, String text) {
+        Optional<String> agendamento = tryResolveAgendamentoConfirmacao(userId, text);
+        if (agendamento.isPresent()) {
+            return agendamento;
+        }
+        Optional<String> boletoTexto = tryDetectarBoletoOuPixTexto(userId, text);
+        if (boletoTexto.isPresent()) {
+            return boletoTexto;
+        }
         Optional<String> despesaFixaDia = tryResolveDespesaFixaDiaPendente(userId, text);
         if (despesaFixaDia.isPresent()) {
             return despesaFixaDia;
@@ -834,6 +843,15 @@ public class WhatsAppCommandService {
     private String handleImageReceiptBytes(String from, Long userId, byte[] imageBytes, String mediaContentType) {
         log.info("[VISION-LOG] Imagem recebida userId={} from={}", userId, from);
         String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+        try {
+            JsonNode boletoPix = documentoIAContextService.extrairBoletoOuPixImagem(userId, imageBytes, mediaContentType);
+            String tipoImg = boletoPix.path("tipo").asText("").toUpperCase(Locale.ROOT);
+            if (!tipoImg.contains("CUPOM") && agendamentoPagamentoService.deveProporAgendamento(boletoPix)) {
+                return msgOk("Agendamento", agendamentoPagamentoService.salvarPropostaESugerir(userId, boletoPix));
+            }
+        } catch (Exception e) {
+            log.debug("[VISION-LOG] Leitura boleto/Pix falhou, tentando cupom: {}", e.getMessage());
+        }
         JsonNode ocr = openAiService.analisarImagemNotaFiscal(imageBytes, mediaContentType, userId);
         double confianca = ocr.path("confianca").asDouble(0.0d);
         String erro = ocr.path("erro").asText("");
@@ -942,6 +960,14 @@ public class WhatsAppCommandService {
                 ContrachequeDTO c = contrachequeImportService.processarExtracao(userId, extracted);
                 awaitingContrachequeImportConfirm.put(userId, c.getId());
                 return jarvisProtocolService.protocoloRendaConcluidoComDecomposicao(c);
+            }
+            if ("BOLETO_COBRANCA".equalsIgnoreCase(tipo) || documentoIAContextService.pareceBoletoOuPix(extracted)) {
+                JsonNode boleto = documentoIAContextService.normalizarBoletoPdf(extracted);
+                if (agendamentoPagamentoService.deveProporAgendamento(boleto)) {
+                    return msgOk("Agendamento", agendamentoPagamentoService.salvarPropostaESugerir(userId, boleto));
+                }
+                return msgErro(userId, "Boleto",
+                    "Li o PDF como cobrança, mas não consegui extrair valor e vencimento com segurança.");
             }
             if ("FATURA_CARTAO".equalsIgnoreCase(tipo) || faturaPdfImportService.pareceFaturaCartao(extracted)) {
                 ImportacaoFaturaDTO imp = faturaPdfImportService.processarExtracao(userId, extracted);
@@ -3261,6 +3287,49 @@ public class WhatsAppCommandService {
         } catch (Exception e) {
             return extractAmountFromText(text);
         }
+    }
+
+    /** Pix copia e cola ou linha digitável colada como texto. */
+    private Optional<String> tryDetectarBoletoOuPixTexto(Long userId, String text) {
+        if (text == null || text.isBlank()) {
+            return Optional.empty();
+        }
+        if (!DocumentoIAContextService.parecePixCopiaECola(text)
+            && !DocumentoIAContextService.pareceLinhaDigitavel(text)) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode extracted = documentoIAContextService.extrairBoletoOuPixTexto(userId, text);
+            if (agendamentoPagamentoService.deveProporAgendamento(extracted)) {
+                return Optional.of(msgOk("Agendamento",
+                    agendamentoPagamentoService.salvarPropostaESugerir(userId, extracted)));
+            }
+        } catch (Exception e) {
+            log.info("Boleto/Pix texto: {}", e.getMessage());
+            return Optional.of(msgErro(userId, "Boleto/Pix", humanizarErroComando(e.getMessage())));
+        }
+        return Optional.empty();
+    }
+
+    /** Confirmação sim/não de agendamento de boleto/Pix pendente na sessão. */
+    private Optional<String> tryResolveAgendamentoConfirmacao(Long userId, String text) {
+        if (!agendamentoPagamentoService.temPropostaPendente(userId)) {
+            return Optional.empty();
+        }
+        if (isAffirmativeSaveReply(text)) {
+            try {
+                String msg = agendamentoPagamentoService.confirmarAgendamento(userId);
+                return Optional.of(msgOk("Pagamento agendado", msg));
+            } catch (Exception e) {
+                return Optional.of(msgErro(userId, "Agendamento", humanizarErroComando(e.getMessage())));
+            }
+        }
+        if (isNegativeReply(text)) {
+            agendamentoPagamentoService.cancelarProposta(userId);
+            return Optional.of(msgInfo("Agendamento", "Não agendei o pagamento. Pode enviar outro boleto quando quiser."));
+        }
+        return Optional.of(msgInfo("Agendamento pendente",
+            "Responda *sim* para confirmar o agendamento ou *não* para cancelar."));
     }
 
     private Optional<String> tryResolveComprovanteConfirmacao(Long userId, String text) {

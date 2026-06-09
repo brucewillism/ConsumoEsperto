@@ -40,6 +40,7 @@ public class JarvisContextoFinanceiroService {
     private final JarvisProtocolService jarvisProtocolService;
     private final ContaBancariaRepository contaBancariaRepository;
     private final DebitoInternoRepository debitoInternoRepository;
+    private final AgendamentoPagamentoService agendamentoPagamentoService;
 
     /** Bloco textual pronto para anexar ao system prompt. Nunca lança exceção. */
     public String montarBlocoContexto(Long userId) {
@@ -77,6 +78,10 @@ public class JarvisContextoFinanceiroService {
         String debitos = montarBlocoDebitosInternos(userId);
         if (!debitos.isBlank()) {
             sb.append(debitos);
+        }
+        String agendamentos = montarBlocoAgendamentos(userId);
+        if (!agendamentos.isBlank()) {
+            sb.append(agendamentos);
         }
         sb.append("- Mês de referência: ").append(mesRef).append("\n");
         return sb.toString();
@@ -152,6 +157,22 @@ public class JarvisContextoFinanceiroService {
             log.debug("Contexto J.A.R.V.I.S.: contas indisponíveis userId={}: {}", userId, e.getMessage());
         }
         return linhas;
+    }
+
+    private String montarBlocoAgendamentos(Long userId) {
+        if (userId == null) {
+            return "";
+        }
+        try {
+            BigDecimal total = agendamentoPagamentoService.totalAgendadoFuturo(userId);
+            if (total.compareTo(BigDecimal.ZERO) <= 0) {
+                return "";
+            }
+            return "- Pagamentos agendados (saídas previstas): " + BRL.format(total) + " em boletos/Pix futuros\n";
+        } catch (Exception e) {
+            log.debug("Contexto J.A.R.V.I.S.: agendamentos indisponíveis userId={}: {}", userId, e.getMessage());
+            return "";
+        }
     }
 
     private String formatarSaldoSeguro(Long userId) {

@@ -32,6 +32,7 @@ import { ListaTransacaoComponent } from './components/lista-transacao/lista-tran
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError, valorMonetarioBrValidator } from '../../shared/utils/form.utils';
+import { AgendamentoPagamento, AgendamentoPagamentoService } from '../../services/agendamento-pagamento.service';
 
 @Component({
   selector: 'app-transacoes',
@@ -83,6 +84,10 @@ export class TransacoesComponent implements OnInit {
   /** IDs com confirmação em andamento (loading por linha) */
   confirmandoTransacaoIds: number[] = [];
 
+  agendamentos: AgendamentoPagamento[] = [];
+  loadingAgendamentos = false;
+  cancelandoAgendamentoId: number | null = null;
+
   tipoTransacao = TipoTransacao;
 
   constructor(
@@ -93,7 +98,8 @@ export class TransacoesComponent implements OnInit {
     private readonly dialog: MatDialog,
     private readonly confirmDialog: ConfirmDialogService,
     private readonly snackBar: MatSnackBar,
-    private readonly financaAlteracao: FinancaAlteracaoService
+    private readonly financaAlteracao: FinancaAlteracaoService,
+    private readonly agendamentoService: AgendamentoPagamentoService
   ) {
     this.transacaoForm = this.fb.group({
       descricao: ['', Validators.required],
@@ -110,6 +116,61 @@ export class TransacoesComponent implements OnInit {
     this.carregarTransacoes();
     this.carregarCategorias();
     this.carregarContas();
+    this.carregarAgendamentos();
+  }
+
+  carregarAgendamentos(): void {
+    this.loadingAgendamentos = true;
+    this.agendamentoService.listar().subscribe({
+      next: (lista) => {
+        this.agendamentos = (lista ?? []).filter((a) => a.status === 'AGENDADO' || a.status === 'FALHOU');
+        this.loadingAgendamentos = false;
+      },
+      error: () => {
+        this.agendamentos = [];
+        this.loadingAgendamentos = false;
+      },
+    });
+  }
+
+  cancelarAgendamento(ag: AgendamentoPagamento): void {
+    if (this.cancelandoAgendamentoId) {
+      return;
+    }
+    this.cancelandoAgendamentoId = ag.id;
+    this.agendamentoService.cancelar(ag.id).subscribe({
+      next: () => {
+        this.cancelandoAgendamentoId = null;
+        this.snackBar.open('Agendamento cancelado', 'Fechar', { duration: 2500 });
+        this.carregarAgendamentos();
+      },
+      error: (err) => {
+        this.cancelandoAgendamentoId = null;
+        this.snackBar.open(resolveHttpError(err, 'Erro ao cancelar'), 'Fechar', { duration: 3500 });
+      },
+    });
+  }
+
+  brl(v: number): string {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
+  }
+
+  labelStatusAgendamento(status: string): string {
+    const map: Record<string, string> = {
+      AGENDADO: 'Agendado',
+      PAGO: 'Pago',
+      FALHOU: 'Falhou',
+      CANCELADO: 'Cancelado',
+    };
+    return map[status] ?? status;
+  }
+
+  formatarData(iso: string): string {
+    if (!iso) {
+      return '—';
+    }
+    const d = new Date(iso + 'T12:00:00');
+    return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('pt-BR');
   }
 
   abrirDialogoTransacao(transacao?: Transacao): void {

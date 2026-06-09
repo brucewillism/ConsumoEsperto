@@ -15,6 +15,29 @@
     </button>
   </div>
 
+  <section class="agendamentos-panel" *ngIf="agendamentos.length || loadingAgendamentos">
+    <h2>Pagamentos agendados</h2>
+    <p class="agendamentos-hint">Boletos e Pix enviados pelo J.A.R.V.I.S. no WhatsApp — débito automático no vencimento (06h).</p>
+    <div class="agendamentos-loading" *ngIf="loadingAgendamentos">Carregando…</div>
+    <div class="agendamento-card" *ngFor="let a of agendamentos" [class.falhou]="a.status === 'FALHOU'">
+      <div class="agendamento-info">
+        <strong>{{ a.beneficiario }}</strong>
+        <span>{{ formatarData(a.dataVencimento) }} · {{ a.contaDebitoNome || 'Conta' }}</span>
+        <span class="erro" *ngIf="a.mensagemErro">{{ a.mensagemErro }}</span>
+      </div>
+      <div class="agendamento-acoes">
+        <span class="valor">{{ brl(a.valor) }}</span>
+        <span class="badge" [class.agendado]="a.status === 'AGENDADO'" [class.falhou]="a.status === 'FALHOU'">
+          {{ labelStatusAgendamento(a.status) }}
+        </span>
+        <button mat-stroked-button color="warn" *ngIf="a.status === 'AGENDADO'"
+          (click)="cancelarAgendamento(a)" [disabled]="cancelandoAgendamentoId === a.id">
+          {{ cancelandoAgendamentoId === a.id ? '...' : 'Cancelar' }}
+        </button>
+      </div>
+    </div>
+  </section>
+
   <app-filtro-transacao
     [filtroTipo]="filtroTipo"
     [filtroDataInicio]="filtroDataInicio"
