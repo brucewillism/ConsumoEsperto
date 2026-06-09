@@ -76,10 +76,16 @@ public class FaturaConciliacaoService {
         saldoMovimentacaoService.aplicarCriacao(salva);
 
         LocalDateTime dataPag = pagamento.getDataTransacao();
-        fatura.setPaga(true);
-        fatura.setStatus(Fatura.StatusFatura.PAGA);
         fatura.setDataPagamento(dataPag);
         fatura.setValorPago(valor);
+        boolean quitacaoTotal = valor.compareTo(valorFatura) >= 0;
+        if (quitacaoTotal) {
+            fatura.setPaga(true);
+            fatura.setStatus(Fatura.StatusFatura.PAGA);
+        } else {
+            fatura.setPaga(false);
+            fatura.setStatus(Fatura.StatusFatura.PARCIAL);
+        }
         faturaRepository.save(fatura);
 
         saldoService.notificarAlteracaoSaldo(usuarioId);

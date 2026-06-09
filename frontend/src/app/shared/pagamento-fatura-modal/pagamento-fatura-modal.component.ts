@@ -214,8 +214,31 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     });
   }
 
+  usarSaldoDisponivel(): void {
+    const conta = this.contaSelecionada;
+    if (!conta) {
+      return;
+    }
+    const max = Math.min(Number(conta.saldoAtual ?? 0), Number(this.fatura.amount) || 0);
+    if (max <= 0) {
+      return;
+    }
+    this.form.patchValue({ valor: max });
+  }
+
   confirmar(): void {
-    if (this.form.invalid || this.enviando || this.saldoInsuficiente) {
+    if (this.form.invalid || this.enviando) {
+      this.form.markAllAsTouched();
+      return;
+    }
+    if (this.saldoInsuficiente) {
+      const conta = this.contaSelecionada;
+      this.snackBar.open(
+        `Saldo insuficiente em ${conta?.nome ?? 'conta'}. Disponível: ${this.brl(conta?.saldoAtual)}; `
+          + `pagamento: ${this.brl(this.valorPagamento)}. Ajuste o valor ou escolha outra conta.`,
+        'Fechar',
+        { duration: 6000, panelClass: ['error-snackbar'] }
+      );
       this.form.markAllAsTouched();
       return;
     }

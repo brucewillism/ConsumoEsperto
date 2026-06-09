@@ -94,7 +94,9 @@ public class DocumentoIAContextService {
         List<String> paginas = pdfTextExtractionService.extrairTextoPorPagina(pdfBytes);
         String fullText = juntarPaginas(paginas);
         if (fullText.length() < 80) {
-            throw new IllegalArgumentException("Não consegui ler texto suficiente do PDF.");
+            throw new IllegalArgumentException(
+                "Não consegui ler texto suficiente do PDF. Arquivos protegidos por senha (comum em Inter e Mastercard) "
+                    + "precisam ser reexportados sem senha ou enviados pelo app do banco em PDF aberto.");
         }
         log.info("[PDF-FULL-SCAN] paginasExtraidas={} caracteresTotais={}", paginas.size(), fullText.length());
         List<String> trechos = fatiarTextoParaModelo(paginas);
@@ -308,6 +310,15 @@ public class DocumentoIAContextService {
             + "tabelas de Encargos/CET/juros (% ao mês/ano), simulações de 'Parcelar a fatura' / 'Alternativas de pagamento', "
             + "nem blocos 'PRÓXIMAS FATURAS', 'LIMITES DISPONÍVEIS' e 'VALOR MÁXIMO PARA TRANSAÇÕES'. "
             + "O número '4020 0182' é telefone do SAC, NÃO é valor de compra; '403,21% ao ano' é CET, NÃO é R$ 403,21. "
+            + "FATURAS MERCADO PAGO: bancoCartao='Mercado Pago'. Lançamentos reais ficam em 'Movimentações na fatura' (colunas Data/Movimentações/Valor). "
+            + "O 'Resumo da fatura' (Consumos, Tarifas, Total da fatura de abril, Pagamentos e créditos devolvidos) é resumo — NÃO liste como lançamento. "
+            + "Ignore simulações '1 + [9]x', 'Seus parcelamentos de fatura ativos', 'Lançamentos futuros', 'Opções de pagamento' e rodapé SAC/Ouvidoria. "
+            + "NÃO inclua créditos: 'Pagamento da fatura de', 'Crédito por parcelamento', 'Pagamentos e créditos devolvidos'. "
+            + "Inclua débitos do período: parcelas de compra, IOF/juros/multa cobrados nesta fatura, 'Parcela da fatura de …' quando for cobrança do mês. "
+            + "FATURAS BANCO INTER: bancoCartao='Inter'. Transações em tabela com data; ignore 'Opções de pagamento', simulação de parcelamento, limites e rodapé. "
+            + "PDFs protegidos por senha (comum Inter/Mastercard): se não houver texto legível, não invente lançamentos. "
+            + "FATURAS MASTERCARD (emissores variados: Itaú, Santander, etc.): identifique o banco emissor no cabeçalho para bancoCartao; "
+            + "extraia só compras/parcelas do período; ignore totais, limites, pontos e simulações de parcelamento. "
             + "Em faturas Banco do Brasil (bb), se o PDF mostrar saldo da fatura anterior e total desta fatura, preencha saldoFaturaAnterior (valor do saldo anterior) "
             + "e saldoFaturaAtual (total desta fatura / lançamentos do mês, SEM incluir o saldo anterior de novo); "
             + "valorTotal = total a pagar no PDF. A linha «SALDO FATURA ANTERIOR» nos lançamentos NÃO é despesa nova — é remanescente. "

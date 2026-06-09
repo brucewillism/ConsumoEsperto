@@ -16,6 +16,20 @@
     <span>Carregando contas…</span>
   </div>
 
+  <div class="aviso-saldo" *ngIf="!carregandoContas && contaSelecionada && saldoInsuficiente">
+    <mat-icon>account_balance_wallet</mat-icon>
+    <div>
+      <strong>Saldo insuficiente</strong>
+      <p>
+        A conta <em>{{ contaSelecionada?.nome }}</em> tem {{ brl(contaSelecionada?.saldoAtual) }},
+        mas o pagamento é {{ brl(valorPagamento) }}.
+      </p>
+      <button mat-stroked-button type="button" color="accent" (click)="usarSaldoDisponivel()">
+        Pagar com saldo disponível ({{ brl(contaSelecionada?.saldoAtual) }})
+      </button>
+    </div>
+  </div>
+
   <form [formGroup]="form" (ngSubmit)="confirmar()" *ngIf="!carregandoContas">
     <mat-form-field appearance="outline" class="full">
       <mat-label>Escolha a conta de débito</mat-label>
@@ -68,7 +82,8 @@
     color="primary"
     type="button"
     (click)="confirmar()"
-    [disabled]="form.invalid || enviando || carregandoContas || contas.length === 0 || saldoInsuficiente">
+    [disabled]="form.invalid || enviando || carregandoContas || contas.length === 0"
+    [class.btn-saldo-insuficiente]="saldoInsuficiente">
     <mat-spinner *ngIf="enviando" diameter="18" class="btn-spinner"></mat-spinner>
     <span>{{ enviando ? 'Processando…' : 'Confirmar pagamento e conciliar' }}</span>
   </button>

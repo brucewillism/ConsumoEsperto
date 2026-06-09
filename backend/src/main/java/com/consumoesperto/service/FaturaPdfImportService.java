@@ -948,7 +948,19 @@ public class FaturaPdfImportService {
             || n.contains("limites disponiveis")
             || n.contains("proximas faturas")
             || n.contains("saldo em aberto")
-            || n.equals("total a pagar");
+            || n.equals("total a pagar")
+            || n.contains("resumo da fatura")
+            || n.contains("consumos de")
+            || n.contains("tarifas e encargos")
+            || n.contains("total da fatura de")
+            || n.contains("lancamentos futuros")
+            || n.contains("opcoes de pagamento")
+            || n.contains("seus parcelamentos de fatura")
+            || n.contains("fatura parcelada")
+            || n.contains("compras parceladas")
+            || n.contains("detalhes de consumo")
+            || n.contains("movimentacoes na fatura")
+            || n.contains("valor total de juros");
     }
 
     /**
@@ -983,7 +995,15 @@ public class FaturaPdfImportService {
             || n.contains("saque no credito")
             || n.contains("saque internacional")
             || n.contains("pix no credito")
-            || n.contains("pagamentos de boleto no credito")) {
+            || n.contains("pagamentos de boleto no credito")
+            || n.contains("fale com a gente")
+            || n.contains("canal de libras")
+            || n.contains("pague sua fatura pelo app")
+            || n.contains("parcele a fatura do seu cartao")) {
+            return true;
+        }
+        // Simulação Mercado Pago / Inter: "1 + [9]x R$ 120,58" ou "Até 1 + 9x"
+        if (n.matches(".*\\d\\s*\\+\\s*\\[?\\d+\\]?x.*") || n.contains("ate 1 +")) {
             return true;
         }
         // Descrição curta só com padrão de telefone (ex.: "sac 4020 0182").
@@ -1013,7 +1033,11 @@ public class FaturaPdfImportService {
             || n.contains("devolucao")
             || n.contains("saldo restante da fatura anterior")
             || n.contains("saldo da fatura anterior")
-            || n.contains("saldo fatura anterior");
+            || n.contains("saldo fatura anterior")
+            || n.contains("credito por parcelamento")
+            || n.contains("pagamento da fatura de")
+            || n.contains("pagamentos e creditos devolvidos")
+            || n.contains("pagamento recebido");
     }
 
     private List<ImportacaoFaturaItemDTO> readItens(String json) {
