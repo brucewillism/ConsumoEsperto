@@ -8,7 +8,9 @@ cd "$(dirname "$0")/.."
 
 echo "Limpando faturas do usuario_id=${USUARIO_ID}..."
 
-docker compose exec -T postgres psql -U "${POSTGRES_USER:-consumo}" -d "${POSTGRES_DB:-consumo_db}" <<SQL
+# Usa POSTGRES_USER/POSTGRES_DB do container (mesmo .env do docker compose), não o default "consumo".
+docker compose exec -T postgres sh -ec "
+psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" <<'EOSQL'
 BEGIN;
 DELETE FROM sugestoes_contencao_jarvis
 WHERE usuario_id = ${USUARIO_ID}
@@ -21,6 +23,7 @@ DELETE FROM faturas WHERE cartao_credito_id IN (
 COMMIT;
 SELECT count(*) AS faturas_restantes FROM faturas
 WHERE cartao_credito_id IN (SELECT id FROM cartoes_credito WHERE usuario_id = ${USUARIO_ID});
-SQL
+EOSQL
+"
 
 echo "Concluído."
