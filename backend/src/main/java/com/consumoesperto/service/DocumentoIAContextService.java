@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -32,6 +33,7 @@ public class DocumentoIAContextService {
     private final PdfTextExtractionService pdfTextExtractionService;
     private final OpenAiService openAiService;
     private final ObjectMapper objectMapper;
+    private final com.consumoesperto.service.fatura.layout.FaturaPdfLayoutDetector faturaPdfLayoutDetector;
 
     private String textoAuditoria(LogAuditoria op, String entrada, JsonNode resultado) {
         try {
@@ -91,6 +93,10 @@ public class DocumentoIAContextService {
     }
 
     public JsonNode extrairDocumentoPdf(Long usuarioId, byte[] pdfBytes) {
+        return extrairDocumentoPdf(usuarioId, pdfBytes, faturaPdfLayoutDetector.detectar(pdfBytes));
+    }
+
+    public JsonNode extrairDocumentoPdf(Long usuarioId, byte[] pdfBytes, FaturaPdfLayoutStrategy layoutFatura) {
         List<String> paginas = pdfTextExtractionService.extrairTextoPorPagina(pdfBytes);
         String fullText = juntarPaginas(paginas);
         if (fullText.length() < 80) {
@@ -98,15 +104,16 @@ public class DocumentoIAContextService {
                 "Não consegui ler texto suficiente do PDF. Arquivos protegidos por senha (comum em Inter e Mastercard) "
                     + "precisam ser reexportados sem senha ou enviados pelo app do banco em PDF aberto.");
         }
-        log.info("[PDF-FULL-SCAN] paginasExtraidas={} caracteresTotais={}", paginas.size(), fullText.length());
+        log.info("[PDF-FULL-SCAN] layout={} paginasExtraidas={} caracteresTotais={}",
+            layoutFatura.layout(), paginas.size(), fullText.length());
         List<String> trechos = fatiarTextoParaModelo(paginas);
         JsonNode extracted;
         if (trechos.size() == 1) {
-            extracted = extrairJsonPrimeiroTrecho(usuarioId, trechos.get(0), true, LogAuditoria.PDF_EXTRACAO_COMPLETA);
+            extracted = extrairJsonPrimeiroTrecho(usuarioId, trechos.get(0), true, LogAuditoria.PDF_EXTRACAO_COMPLETA, layoutFatura);
         } else {
-            extracted = extrairJsonPrimeiroTrecho(usuarioId, trechos.get(0), true, LogAuditoria.PDF_CHUNK);
+            extracted = extrairJsonPrimeiroTrecho(usuarioId, trechos.get(0), true, LogAuditoria.PDF_CHUNK, layoutFatura);
             for (int i = 1; i < trechos.size(); i++) {
-                JsonNode cont = extrairLancamentosContinuacao(usuarioId, trechos.get(i), i + 1, trechos.size());
+                JsonNode cont = extrairLancamentosContinuacao(usuarioId, trechos.get(i), i + 1, trechos.size(), layoutFatura);
                 mesclarFragmentoExtracaoNoAlvo(extracted, cont);
             }
             registrarAuditoria(LogAuditoria.PDF_CHUNK_CONTINUACAO,
@@ -216,25 +223,33 @@ public class DocumentoIAContextService {
         return out;
     }
 
-    private JsonNode extrairJsonPrimeiroTrecho(Long usuarioId, String trechoUsuario, boolean esquemaCabecalho, LogAuditoria logOp) {
-        String system = sistemaExtracaoCabecalho(esquemaCabecalho);
-        String userMsg = "(Trecho inicial do PDF; pode haver continuações.)\n\nTexto extraído:\n" + trechoUsuario;
+    private JsonNode extrairJsonPrimeiroTrecho(
+        Long usuarioId,
+        String trechoUsuario,
+        boolean esquemaCabecalho,
+        LogAuditoria logOp,
+        FaturaPdfLayoutStrategy layoutFatura
+    ) {
+        String system = sistemaExtracaoCabecalho(esquemaCabecalho, layoutFatura);
+        String userMsg = "(Trecho inicial do PDF; pode haver continuações. Layout detectado: "
+            + layoutFatura.layout().getNomeExibicao() + ".)\n\nTexto extraído:\n" + trechoUsuario;
         JsonNode json = openAiService.gerarJsonDocumento(usuarioId, system, userMsg);
         registrarAuditoria(logOp, userMsg, json);
         return json;
     }
 
-    private JsonNode extrairLancamentosContinuacao(Long usuarioId, String trecho, int parteNum, int totalTrechos) {
+    private JsonNode extrairLancamentosContinuacao(
+        Long usuarioId,
+        String trecho,
+        int parteNum,
+        int totalTrechos,
+        FaturaPdfLayoutStrategy layoutFatura
+    ) {
         String system = "Você continua a extração da MESMA fatura de cartão brasileira. Retorne apenas JSON válido no formato "
             + "{\"lancamentos\":[...],\"taxasForaDaTabelaPrincipal\":[{\"tipo\":\"ANUIDADE|IOF|JUROS|TARIFA|OUTRO\",\"valor\":0.0,\"descricao\":\"string\"}]}. "
             + "taxasForaDaTabelaPrincipal pode ser [] se não houver nada novo neste trecho. "
-            + "Liste somente novos lançamentos presentes neste trecho que ainda não constem em trechos anteriores "
-            + "(cartão, PIX, parcelas 02/10, compras internacionais, saques, assinaturas, multas etc.). "
-            + "ATENÇÃO Itaú/outros: padrão 'DD/MM estabelecimento … N/N valor' — o par N/N imediatamente antes do valor (ex.: '10/10 64,10') "
-            + "é parcela atual/total, NÃO separador de milhar; o valor cobrado NESTA fatura é só o último número (ex.: 64.10). "
-            + "Use 1064.10 apenas quando o PDF mostrar milhar com ponto brasileiro explícito (ex.: '1.064,10' ou linha 'R$ 1.064,10'), nunca por causa de '10/10' antes dos centavos. "
-            + "Varredura explícita neste trecho: procure em rodapés, quadros e fora da tabela principal por Anuidade, IOF (compra internacional/exterior), "
-            + "Juros (rotativo/atraso/financiamento), Tarifas de serviço/cobrança, Seguro prestamista — registre em taxasForaDaTabelaPrincipal E como lançamento descritivo quando couber. "
+            + "Liste somente novos lançamentos presentes neste trecho que ainda não constem em trechos anteriores. "
+            + layoutFatura.instrucoesContinuacaoChunk() + " "
             + "Não omita linhas por serem muitas; não resuma listas. Linhas já extraídas noutras partes NÃO repetir.";
         String userMsg = "Trecho PDF parte " + parteNum + " de ~" + totalTrechos + "\n\n" + trecho;
         JsonNode json = openAiService.gerarJsonDocumento(usuarioId, system, userMsg);
@@ -243,10 +258,10 @@ public class DocumentoIAContextService {
     }
 
     /** Prompt completo: taxas ocultas, assinatura vs hábito (campo insights), schema estendido. */
-    private static String sistemaExtracaoCabecalho(boolean incluirTodosOsTiposDocs) {
+    private static String sistemaExtracaoCabecalho(boolean incluirTodosOsTiposDocs, FaturaPdfLayoutStrategy layoutFatura) {
         String baseAudit = auditoriaFinanceiraHumanaLinhas();
         if (!incluirTodosOsTiposDocs) {
-            return sistemaSóFatura(baseAudit);
+            return sistemaSóFatura(baseAudit, layoutFatura);
         }
         return "Você classifica e extrai PDFs financeiros brasileiros. Retorne apenas JSON válido. "
             + "Reconheça CONTRACHEQUE quando houver termos como Vencimentos, Líquido, IRRF, INSS, Folha, FGTS, holerite. "
@@ -260,7 +275,8 @@ public class DocumentoIAContextService {
             + "Classifique como BOLETO_COBRANCA quando for cobrança bancária, concessionária (água, luz, telefone), fatura de serviço ou tributo com linha digitável/código de barras, "
             + "beneficiário, valor e data de vencimento — NÃO é fatura de cartão nem contracheque. "
             + "Para BOLETO_COBRANCA: preencha beneficiario, valorTotal, dataVencimento, linhaDigitavel (47-48 dígitos) e/ou codigoPix se houver. "
-            + taxasEhLeituraFatura()
+            + taxasEhLeituraFaturaBase()
+            + instrucoesLayoutFatura(layoutFatura)
             + baseAudit + " "
             + "Para CONTRACHEQUE e OUTRO, você pode usar o array insights textual curto quando fizer sentido. "
             + "Para FATURA_CARTAO (e EXTRATO se relevante): preencher taxasForaDaTabelaPrincipal sempre que aparecer valores de Anuidade, IOF internacional/compra exterior, "
@@ -276,9 +292,10 @@ public class DocumentoIAContextService {
             + "\"descontos\":[{\"rotulo\":\"INSS\",\"valor\":0.0},{\"descricao\":\"IRRF\",\"valor\":0.0}]}";
     }
 
-    private static String sistemaSóFatura(String baseAudit) {
+    private static String sistemaSóFatura(String baseAudit, FaturaPdfLayoutStrategy layoutFatura) {
         return "Você extrai uma fatura de cartão brasileira (tipoDocumento=FATURA_CARTAO). Retorne apenas JSON válido. "
-            + taxasEhLeituraFatura()
+            + taxasEhLeituraFaturaBase()
+            + instrucoesLayoutFatura(layoutFatura)
             + baseAudit + " "
             + "Campo obrigatório taxasForaDaTabelaPrincipal quando houver anuidade, IOF, juros ou tarifa fora do bloco típico de compras.\n\n"
             + "{\"tipoDocumento\":\"FATURA_CARTAO\",\"bancoCartao\":\"...\",\"dataVencimento\":\"yyyy-MM-dd\",\"dataFechamento\":\"yyyy-MM-dd\","
@@ -287,7 +304,15 @@ public class DocumentoIAContextService {
             + "\"lancamentos\":[...],\"insights\":[]}";
     }
 
-    private static String taxasEhLeituraFatura() {
+    private static String instrucoesLayoutFatura(FaturaPdfLayoutStrategy layoutFatura) {
+        if (layoutFatura == null) {
+            return "";
+        }
+        return "REGRAS DO LAYOUT DETECTADO (" + layoutFatura.layout().getNomeExibicao() + "): "
+            + layoutFatura.instrucoesExtracaoIa() + " ";
+    }
+
+    private static String taxasEhLeituraFaturaBase() {
         return "Em faturas de cartão, extraia TODOS os lançamentos visíveis em TODAS as páginas do trecho; "
             + "não resuma listas longas nem pule páginas por limite de atenção — cada página do trecho deve ser varrida linha a linha. "
             + "Se a descrição indicar parcelamento como 02/10, 2/10, parcela 2 de 10, "
@@ -302,34 +327,9 @@ public class DocumentoIAContextService {
             + "Tarifas de cobrança/serviço, multa, seguro do cartão — muitas vezes em rodapé, box lateral ou resumo. "
             + "Inclua essas taxas tanto em \"lancamentos\" (descrição clara, ex.: 'IOF compra internacional') quanto em \"taxasForaDaTabelaPrincipal\" com tipo adequado. "
             + "Confira a soma dos lançamentos contra o valorTotal informado pela fatura e contra subtotais do PDF (ex.: 'Lançamentos no cartão', 'Total dos lançamentos atuais'); se não bater, revise linhas de parcela N/N e duplicatas. "
-            + "FATURAS NUBANK (Nu Pagamentos): a seção 'TRANSAÇÕES' começa com um CABEÇALHO que é o NOME do titular seguido de um SUBTOTAL "
-            + "(ex.: 'Bruce W M Silva R$ 2.425,51') e pode ter cabeçalhos de bloco como 'Pagamentos e Financiamentos -R$ 1.863,70'. "
-            + "ESSAS linhas são SUBTOTAIS/CABEÇALHOS de seção, NÃO são lançamentos — NUNCA as inclua em \"lancamentos\". "
-            + "Todo lançamento Nubank verdadeiro começa com a DATA (ex.: '25 ABR') e normalmente o final do cartão ('•••• 3443'); se a linha não começa com data, é cabeçalho/subtotal e deve ser ignorada. "
-            + "Pix/boleto no crédito do Nubank trazem VÁRIAS quantias na mesma entrada (ex.: 'Total a pagar: R$ 307,20 (valor da transação de R$ 284,92 + R$ 1,68 de IOF + R$ 20,60 de juros). R$ 307,20'); "
-            + "use SOMENTE UMA linha por Pix/boleto com o valor 'Total a pagar' (ex.: 307.20) — NUNCA crie linhas separadas para 'valor da transação', IOF ou juros da mesma operação. "
-            + "Ignore subtotais de portador sem data/cartão (ex.: 'Bruce W M Silva R$ 2.425,51'); só extraia linhas com data (ex.: '25 ABR') e final do cartão ('•••• 3443'). "
-            + "Parcelas 'Parcela 6/10 R$ 52,00' são a parcela DESTE mês — use 52.00, não o valor total da compra. "
-            + "No Nubank, 'Total de compras de todos os cartões' é o valor de referência das compras; a soma dos lançamentos extraídos deve bater com ele. "
-            + "Quando o PDF mencionar 'Nu Pagamentos S.A.' ou 'Nubank', preencha bancoCartao como 'Nubank'. "
-            + "NUNCA inclua em \"lancamentos\" o rodapé institucional (SAC, Ouvidoria, telefones 0800/4020, CNPJ, endereço), "
-            + "tabelas de Encargos/CET/juros (% ao mês/ano), simulações de 'Parcelar a fatura' / 'Alternativas de pagamento', "
-            + "nem blocos 'PRÓXIMAS FATURAS', 'LIMITES DISPONÍVEIS' e 'VALOR MÁXIMO PARA TRANSAÇÕES'. "
-            + "O número '4020 0182' é telefone do SAC, NÃO é valor de compra; '403,21% ao ano' é CET, NÃO é R$ 403,21. "
-            + "FATURAS MERCADO PAGO: bancoCartao='Mercado Pago'. Lançamentos reais ficam em 'Movimentações na fatura' (colunas Data/Movimentações/Valor). "
-            + "O 'Resumo da fatura' (Consumos, Tarifas, Total da fatura de abril, Pagamentos e créditos devolvidos) é resumo — NÃO liste como lançamento. "
-            + "Ignore simulações '1 + [9]x', 'Seus parcelamentos de fatura ativos', 'Lançamentos futuros', 'Opções de pagamento' e rodapé SAC/Ouvidoria. "
-            + "NÃO inclua créditos: 'Pagamento da fatura de', 'Crédito por parcelamento', 'Pagamentos e créditos devolvidos'. "
-            + "Inclua débitos do período: parcelas de compra, IOF/juros/multa cobrados nesta fatura, 'Parcela da fatura de …' quando for cobrança do mês. "
-            + "FATURAS BANCO INTER: bancoCartao='Inter'. Transações em tabela com data; ignore 'Opções de pagamento', simulação de parcelamento, limites e rodapé. "
-            + "PDFs protegidos por senha (comum Inter/Mastercard): se não houver texto legível, não invente lançamentos. "
-            + "FATURAS MASTERCARD (emissores variados: Itaú, Santander, etc.): identifique o banco emissor no cabeçalho para bancoCartao; "
-            + "extraia só compras/parcelas do período; ignore totais, limites, pontos e simulações de parcelamento. "
-            + "Em faturas Banco do Brasil (bb), se o PDF mostrar saldo da fatura anterior e total desta fatura, preencha saldoFaturaAnterior (valor do saldo anterior) "
-            + "e saldoFaturaAtual (total desta fatura / lançamentos do mês, SEM incluir o saldo anterior de novo); "
-            + "valorTotal = total a pagar no PDF. A linha «SALDO FATURA ANTERIOR» nos lançamentos NÃO é despesa nova — é remanescente. "
             + "NÃO inclua em \"lancamentos\" linhas de crédito/ajuste que não são compras: 'Pagamento recebido', 'Pagamento em DD MMM', 'Pagamento de fatura', estornos, reembolsos, devoluções e 'Saldo restante da fatura anterior'. "
-            + "Essas linhas reduzem o saldo e não são despesas; ignore-as para que a soma dos lançamentos bata com o valorTotal. ";
+            + "Essas linhas reduzem o saldo e não são despesas; ignore-as para que a soma dos lançamentos bata com o valorTotal. "
+            + "PDFs protegidos por senha (comum Inter/Mastercard): se não houver texto legível, não invente lançamentos. ";
     }
 
     private static String auditoriaFinanceiraHumanaLinhas() {
@@ -446,7 +446,7 @@ public class DocumentoIAContextService {
         }
 
         String systemRetry = "Você é extrator/auditor de fatura de cartão brasileira. Retorne apenas JSON válido. "
-            + taxasEhLeituraFatura().replace("\n\n", "\n ")
+            + taxasEhLeituraFaturaBase().replace("\n\n", "\n ")
             + auditoriaFinanceiraHumanaLinhas().replace("\n\n", "\n ")
             + " Refaça a extração completa usando TODO o texto fornecido, linha a linha nas tabelas, sem omitir lançamentos. "
             + "Inclua compras, assinaturas de software/streaming/TV, PIX/cartão, parcelas, juros rotativos, IOF internacional e anuidade. "

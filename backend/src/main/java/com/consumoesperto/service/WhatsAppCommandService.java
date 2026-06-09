@@ -81,6 +81,8 @@ public class WhatsAppCommandService {
     private final ParcelamentoService parcelamentoService;
     private final ForecastFinanceiroService forecastFinanceiroService;
     private final FaturaPdfImportService faturaPdfImportService;
+    private final com.consumoesperto.service.fatura.layout.FaturaPdfLayoutDetector faturaPdfLayoutDetector;
+    private final PdfTextExtractionService pdfTextExtractionService;
     private final ContrachequeImportService contrachequeImportService;
     private final DocumentoIAContextService documentoIAContextService;
     private final SaldoService saldoService;
@@ -968,7 +970,10 @@ public class WhatsAppCommandService {
 
     private String handlePdfDocument(Long userId, byte[] mediaBytes) {
         try {
-            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(userId, mediaBytes);
+            String textoPdf = pdfTextExtractionService.extrairTexto(mediaBytes);
+            com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy layoutFatura =
+                faturaPdfLayoutDetector.detectarTexto(textoPdf);
+            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(userId, mediaBytes, layoutFatura);
             String tipo = extracted.path("tipoDocumento").asText("");
             if ("CONTRACHEQUE".equalsIgnoreCase(tipo)) {
                 ContrachequeDTO c = contrachequeImportService.processarExtracao(userId, extracted);
@@ -984,7 +989,7 @@ public class WhatsAppCommandService {
                     "Li o PDF como cobrança, mas não consegui extrair valor e vencimento com segurança.");
             }
             if ("FATURA_CARTAO".equalsIgnoreCase(tipo) || faturaPdfImportService.pareceFaturaCartao(extracted)) {
-                ImportacaoFaturaDTO imp = faturaPdfImportService.processarExtracao(userId, extracted);
+                ImportacaoFaturaDTO imp = faturaPdfImportService.processarExtracao(userId, extracted, layoutFatura, textoPdf);
                 if (Boolean.TRUE.equals(imp.getAguardandoEscolhaSaldoAnterior())) {
                     awaitingFaturaSaldoAnteriorChoice.put(userId, imp.getId());
                     String banco = imp.getBancoCartao() != null && !imp.getBancoCartao().isBlank()

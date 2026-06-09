@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
+import com.consumoesperto.service.fatura.layout.NubankFaturaPdfLayoutStrategy;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -15,6 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class FaturaPdfImportNubankSanitizerTest {
 
+    private final NubankFaturaPdfLayoutStrategy nubank = new NubankFaturaPdfLayoutStrategy();
+
     @Test
     void removeComponentesPixQuandoHaTotalAPagarNaMesmaData() {
         LocalDate dia = LocalDate.of(2026, 5, 8);
@@ -25,7 +28,7 @@ class FaturaPdfImportNubankSanitizerTest {
         itens.add(item(dia, "PREFEITURA DE CAMARAGIBE Total a pagar R$ 307,20", "307.20"));
         itens.add(item(LocalDate.of(2026, 4, 25), "A B Vilela Silva - Parcela 6/10", "52.00"));
 
-        List<ImportacaoFaturaItemDTO> out = FaturaPdfImportService.sanitizarLancamentosExtraidosParaTeste(itens);
+        List<ImportacaoFaturaItemDTO> out = nubank.sanitizarLancamentos(itens);
 
         assertEquals(2, out.size());
         assertEquals(new BigDecimal("307.20"), out.get(0).getValor());
@@ -39,7 +42,7 @@ class FaturaPdfImportNubankSanitizerTest {
             item(LocalDate.of(2026, 4, 26), "Atacadao 150 As", "90.53")
         );
 
-        List<ImportacaoFaturaItemDTO> out = FaturaPdfImportService.sanitizarLancamentosExtraidosParaTeste(itens);
+        List<ImportacaoFaturaItemDTO> out = nubank.sanitizarLancamentos(itens);
 
         assertEquals(1, out.size());
         assertEquals("Atacadao 150 As", out.get(0).getDescricao());

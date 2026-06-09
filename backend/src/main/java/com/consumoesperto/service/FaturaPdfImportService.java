@@ -17,6 +17,10 @@ import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.exception.AiUnavailableException;
 import com.consumoesperto.util.AiErroHumanizer;
 import com.consumoesperto.util.BancoBrasilCatalog;
+import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutDetector;
+import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
+import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutSupport;
+import com.consumoesperto.service.fatura.layout.GenericoFaturaPdfLayoutStrategy;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbMeta;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbPendente;
@@ -75,6 +79,9 @@ public class FaturaPdfImportService {
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final ContencaoJarvisService contencaoJarvisService;
     private final ObjectProvider<FaturaPdfImportService> selfProvider;
+    private final FaturaPdfLayoutDetector faturaPdfLayoutDetector;
+    private final GenericoFaturaPdfLayoutStrategy genericoFaturaPdfLayoutStrategy;
+    private final PdfTextExtractionService pdfTextExtractionService;
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
     public static boolean isBulletVisivelAoUsuario(String linhaAuditoria) {
@@ -89,8 +96,10 @@ public class FaturaPdfImportService {
         }
         log.info("Processando PDF de fatura userId={} bytes={}", usuarioId, pdfBytes.length);
         try {
-            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes);
-            return selfProvider.getObject().processarExtracao(usuarioId, extracted);
+            String textoPdf = pdfTextExtractionService.extrairTexto(pdfBytes);
+            FaturaPdfLayoutStrategy layout = faturaPdfLayoutDetector.detectarTexto(textoPdf);
+            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes, layout);
+            return selfProvider.getObject().processarExtracao(usuarioId, extracted, layout, textoPdf);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
@@ -108,17 +117,37 @@ public class FaturaPdfImportService {
 
     @Transactional(timeout = 300)
     public ImportacaoFaturaDTO processarExtracao(Long usuarioId, JsonNode extracted) {
+        return processarExtracao(usuarioId, extracted, genericoFaturaPdfLayoutStrategy, "");
+    }
+
+    @Transactional(timeout = 300)
+    public ImportacaoFaturaDTO processarExtracao(Long usuarioId, JsonNode extracted, FaturaPdfLayoutStrategy layout) {
+        return processarExtracao(usuarioId, extracted, layout, "");
+    }
+
+    @Transactional(timeout = 300)
+    public ImportacaoFaturaDTO processarExtracao(
+        Long usuarioId,
+        JsonNode extracted,
+        FaturaPdfLayoutStrategy layout,
+        String textoPdf
+    ) {
+        final FaturaPdfLayoutStrategy layoutEfetivo =
+            layout != null ? layout : genericoFaturaPdfLayoutStrategy;
+        String textoNorm = FaturaPdfLayoutSupport.norm(textoPdf);
         String tipo = extracted.path("tipoDocumento").asText("");
         if (!"FATURA_CARTAO".equalsIgnoreCase(tipo) && !pareceFaturaCartao(extracted)) {
             throw new IllegalArgumentException("O PDF parece ser um extrato de conta, não uma fatura de cartão.");
         }
 
         String bancoExtraido = firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText(""));
-        CartaoCredito cartao = localizarCartao(usuarioId, bancoExtraido)
-            .orElseThrow(() -> new IllegalArgumentException(mensagemCartaoNaoEncontrado(usuarioId, bancoExtraido)));
+        bancoExtraido = layoutEfetivo.sugerirBancoCartao(textoNorm, bancoExtraido);
+        final String bancoParaLocalizar = bancoExtraido;
+        CartaoCredito cartao = localizarCartao(usuarioId, bancoParaLocalizar)
+            .orElseThrow(() -> new IllegalArgumentException(mensagemCartaoNaoEncontrado(usuarioId, bancoParaLocalizar)));
         String banco = BancoBrasilCatalog.nomeExibicao(bancoExtraido);
 
-        List<ImportacaoFaturaItemDTO> itens = parseItens(extracted.path("lancamentos"));
+        List<ImportacaoFaturaItemDTO> itens = parseItens(extracted.path("lancamentos"), layoutEfetivo);
         complementarItensComTaxasDeclaradas(itens, extracted, parseDate(extracted.path("dataFechamento").asText("")));
         for (ImportacaoFaturaItemDTO item : itens) {
             boolean novo = buscarExistentes(usuarioId, item).isEmpty();
@@ -135,7 +164,8 @@ public class FaturaPdfImportService {
         imp.setDataFechamento(parseDateTime(extracted.path("dataFechamento").asText("")));
         BigDecimal valorTotalPdf = readMoney(extracted.path("valorTotal"));
         List<String> auditorias = new ArrayList<>();
-        BigDecimal valorTotal = resolverReferenciaConciliacao(extracted, valorTotalPdf, itens, auditorias);
+        auditorias.add("Leitura com layout " + layoutEfetivo.layout().getNomeExibicao() + ".");
+        BigDecimal valorTotal = layoutEfetivo.resolverReferenciaConciliacao(extracted, valorTotalPdf, itens, auditorias);
         imp.setValorTotal(valorTotal);
         imp.setPagamentoMinimo(readMoney(extracted.path("pagamentoMinimo")));
         imp.setItensJson(writeJson(itens));
@@ -929,39 +959,7 @@ public class FaturaPdfImportService {
         }
     }
 
-    /**
-     * Quando o saldo desta fatura (sem saldo anterior) bate com a soma extraída, usa-o como referência
-     * em vez do total a pagar do PDF.
-     */
-    private BigDecimal resolverReferenciaConciliacao(
-        JsonNode extracted,
-        BigDecimal valorTotalPdf,
-        List<ImportacaoFaturaItemDTO> itens,
-        List<String> auditorias
-    ) {
-        if (valorTotalPdf == null || valorTotalPdf.compareTo(BigDecimal.ZERO) <= 0) {
-            return valorTotalPdf;
-        }
-        BigDecimal soma = somaValoresItens(itens);
-        BigDecimal saldoAtual = readMoney(extracted.path("saldoFaturaAtual"));
-        if (saldoAtual.compareTo(BigDecimal.ZERO) <= 0) {
-            return valorTotalPdf;
-        }
-        BigDecimal tol = toleranciaChecksum(valorTotalPdf.max(saldoAtual));
-        BigDecimal diffTotal = soma.subtract(valorTotalPdf).abs();
-        BigDecimal diffAtual = soma.subtract(saldoAtual).abs();
-        if (diffAtual.compareTo(tol) <= 0 && diffAtual.compareTo(diffTotal) < 0) {
-            auditorias.add(
-                "Conciliação alinhada ao saldo desta fatura (R$ " + formatBrl(saldoAtual).trim()
-                    + "). O total a pagar no PDF (R$ " + formatBrl(valorTotalPdf).trim()
-                    + ") pode incluir saldo anterior ou outros ajustes."
-            );
-            return saldoAtual;
-        }
-        return valorTotalPdf;
-    }
-
-    private List<ImportacaoFaturaItemDTO> parseItens(JsonNode arr) {
+    private List<ImportacaoFaturaItemDTO> parseItens(JsonNode arr, FaturaPdfLayoutStrategy layout) {
         List<ImportacaoFaturaItemDTO> candidatos = new ArrayList<>();
         if (arr == null || !arr.isArray()) {
             return candidatos;
@@ -1011,97 +1009,7 @@ public class FaturaPdfImportService {
             }
             out.add(item);
         }
-        return sanitizarLancamentosExtraidos(out);
-    }
-
-    /**
-     * Pós-processamento defensivo: corrige leituras comuns da IA em faturas Nubank
-     * (subtotal de portador e componentes internos de Pix/boleto duplicados).
-     */
-    /** Exposto apenas para testes unitários. */
-    static List<ImportacaoFaturaItemDTO> sanitizarLancamentosExtraidosParaTeste(List<ImportacaoFaturaItemDTO> itens) {
-        return sanitizarLancamentosExtraidos(itens);
-    }
-
-    private static List<ImportacaoFaturaItemDTO> sanitizarLancamentosExtraidos(List<ImportacaoFaturaItemDTO> itens) {
-        if (itens == null || itens.isEmpty()) {
-            return itens;
-        }
-        return removerSubtotaisPortadorNubank(removerComponentesPixDuplicados(itens));
-    }
-
-    /**
-     * No Nubank, Pix/boleto no crédito traz "valor da transação + IOF + juros" e depois o
-     * "Total a pagar". A IA às vezes extrai os componentes como lançamentos à parte — infla a soma.
-     */
-    private static List<ImportacaoFaturaItemDTO> removerComponentesPixDuplicados(List<ImportacaoFaturaItemDTO> itens) {
-        Set<LocalDate> datasComTotalPagar = itens.stream()
-            .filter(i -> i.getData() != null && contemTotalAPagar(i.getDescricao()))
-            .map(ImportacaoFaturaItemDTO::getData)
-            .collect(Collectors.toSet());
-        if (datasComTotalPagar.isEmpty()) {
-            return itens;
-        }
-        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
-        for (ImportacaoFaturaItemDTO item : itens) {
-            if (item.getData() != null
-                && datasComTotalPagar.contains(item.getData())
-                && pareceComponenteDeTotalAPagar(item.getDescricao())) {
-                log.info("Ignorando componente interno de Pix/boleto: '{}' = {}", item.getDescricao(), item.getValor());
-                continue;
-            }
-            out.add(item);
-        }
-        return out;
-    }
-
-    /** Ex.: "Bruce W M Silva R$ 2.425,51" — subtotal do titular, não é compra. */
-    private static List<ImportacaoFaturaItemDTO> removerSubtotaisPortadorNubank(List<ImportacaoFaturaItemDTO> itens) {
-        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
-        for (ImportacaoFaturaItemDTO item : itens) {
-            if (pareceSubtotalPortadorNubank(item.getDescricao())) {
-                log.info("Ignorando subtotal de portador Nubank: '{}' = {}", item.getDescricao(), item.getValor());
-                continue;
-            }
-            out.add(item);
-        }
-        return out;
-    }
-
-    private static boolean contemTotalAPagar(String descricao) {
-        String n = norm(descricao);
-        return n.contains("total a pagar");
-    }
-
-    private static boolean pareceComponenteDeTotalAPagar(String descricao) {
-        String n = norm(descricao);
-        if (n.isBlank() || n.contains("total a pagar")) {
-            return false;
-        }
-        return n.contains("valor da transacao")
-            || n.contains("valor da transa")
-            || n.matches(".*\\bde\\s+iof\\b.*")
-            || n.matches(".*\\biof\\s+de\\b.*")
-            || (n.contains("iof") && n.length() < 42)
-            || (n.contains("juros") && n.length() < 48 && !n.contains("rotativo") && !n.contains("encargos"));
-    }
-
-    private static boolean pareceSubtotalPortadorNubank(String descricao) {
-        if (descricao == null || descricao.isBlank()) {
-            return false;
-        }
-        if (descricao.contains("••••")) {
-            return false;
-        }
-        String n = norm(descricao);
-        if (n.isBlank() || n.contains("parcela") || n.contains("total a pagar")) {
-            return false;
-        }
-        if (n.matches(".*\\d.*")) {
-            return false;
-        }
-        String[] tokens = n.split(" ");
-        return tokens.length >= 2 && tokens.length <= 7 && n.length() <= 52;
+        return layout.sanitizarLancamentos(out);
     }
 
     /**
