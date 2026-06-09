@@ -131,7 +131,7 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt, contextoFinanceiro);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|UNKNOWN), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
             "description, amount, bank, cardName, cardNumber, dueDay, creditLimit (limite total do cartão, opcional), " +
             "accountName (nome da conta bancária/carteira), accountType (CORRENTE|POUPANCA|DINHEIRO), initialBalance (saldo inicial da conta), " +
@@ -142,6 +142,8 @@ public class OpenAiService {
             "newAvailableLimit (opcional), percentualComprometimento (0-100 quando for meta), " +
             "manageOperation (delete|edit), manageTarget (transacao|meta|cartao|conta_bancaria|categoria|orcamento), searchPhrase (termo de busca), " +
             "targetEntity (AUTO|CONTA|CARTAO|CONTA_BANCARIA|META|CATEGORIA|DESPESA_FIXA), identifier (apelido/nome do cadastro), " +
+            "splitMembers (array de nomes/apelidos dos membros marcados no racha-contas, ex.: [\"Esposa\",\"Filho\"]), " +
+            "counterpartyAlias (nome/apelido do membro ao quitar débito, ex.: \"Esposa\"), " +
             "updates (objeto JSON com campos a alterar, ex.: {\"limite\":5000,\"apelido\":\"Nubank Ultra\",\"icone\":\"shopping-cart\"}), " +
             "legado cartão: newLimit, newAvailableLimit, newCardName — use UPDATE_ACCOUNT_CONFIG ou UPDATE_ENTITY_CONFIG com updates.\n" +
             "confianca (0-1), errorMessage. " +
@@ -213,6 +215,14 @@ public class OpenAiService {
             "salarioBruto (número), diaPagamento (1-31), descontosFixos como array de objetos " +
             "{ \"rotulo\": \"INSS\", \"valor\": 600 } (use rotulo ou label; valor ou amount numérico). " +
             "Se a frase não disser o dia, inferir com cuidado ou usar UNKNOWN pedindo o dia.\n" +
+            "- Racha-contas / dividir despesa no grupo familiar (ex.: 'racha os 150 do restaurante entre eu, a Esposa e o Filho', " +
+            "'divide a conta de 90 comigo e com o João', 'racha 60 com a Maria'): action SPLIT_BILL; amount = valor total; " +
+            "description = motivo/local (ex.: restaurante); splitMembers = array com os nomes dos OUTROS membros marcados " +
+            "(NÃO inclua o próprio usuário/'eu'/'mim'). Ex.: 'racha 150 entre eu, Esposa e Filho' → amount=150, splitMembers=[\"Esposa\",\"Filho\"].\n" +
+            "- Consultar quem está devendo / pendências do grupo (ex.: 'quem está me devendo?', 'quais minhas pendências no grupo?', " +
+            "'meu balanço da família'): action LIST_DEBTS.\n" +
+            "- Quitar/acertar débito interno do grupo (ex.: 'acertei os 50 com a Esposa', 'a Maria me pagou', 'quitei com o João'): " +
+            "action SETTLE_DEBT; counterpartyAlias = nome do membro com quem acertou.\n" +
             "- Se faltar dado essencial, retornar action UNKNOWN com errorMessage explicando o que faltou.\n" +
             "- amount deve ser número decimal sem símbolo de moeda.\n" +
             "- Sempre retornar o campo confianca com valor entre 0 e 1.";

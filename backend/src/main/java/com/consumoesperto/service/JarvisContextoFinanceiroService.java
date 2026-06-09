@@ -2,8 +2,10 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.OrcamentoDTO;
 import com.consumoesperto.model.ContaBancaria;
+import com.consumoesperto.model.DebitoInterno;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
+import com.consumoesperto.repository.DebitoInternoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +39,7 @@ public class JarvisContextoFinanceiroService {
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
     private final ContaBancariaRepository contaBancariaRepository;
+    private final DebitoInternoRepository debitoInternoRepository;
 
     /** Bloco textual pronto para anexar ao system prompt. Nunca lança exceção. */
     public String montarBlocoContexto(Long userId) {
@@ -71,8 +74,37 @@ public class JarvisContextoFinanceiroService {
                 sb.append("  • ").append(linha).append("\n");
             }
         }
+        String debitos = montarBlocoDebitosInternos(userId);
+        if (!debitos.isBlank()) {
+            sb.append(debitos);
+        }
         sb.append("- Mês de referência: ").append(mesRef).append("\n");
         return sb.toString();
+    }
+
+    /** Resumo dos débitos internos (racha-contas) pendentes do usuário no grupo familiar. */
+    private String montarBlocoDebitosInternos(Long userId) {
+        if (userId == null) {
+            return "";
+        }
+        try {
+            List<DebitoInterno> aReceber = debitoInternoRepository.findAReceber(userId);
+            List<DebitoInterno> devidos = debitoInternoRepository.findDevidos(userId);
+            if (aReceber.isEmpty() && devidos.isEmpty()) {
+                return "";
+            }
+            BigDecimal totalReceber = aReceber.stream().map(DebitoInterno::getValor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal totalDevido = devidos.stream().map(DebitoInterno::getValor)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            StringBuilder sb = new StringBuilder();
+            sb.append("- Racha-contas (grupo familiar): a receber ").append(BRL.format(totalReceber))
+                .append(", a pagar ").append(BRL.format(totalDevido)).append("\n");
+            return sb.toString();
+        } catch (Exception e) {
+            log.debug("Contexto J.A.R.V.I.S.: débitos internos indisponíveis userId={}: {}", userId, e.getMessage());
+            return "";
+        }
     }
 
     /**

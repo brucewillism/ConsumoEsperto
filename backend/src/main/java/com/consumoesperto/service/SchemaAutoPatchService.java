@@ -64,6 +64,7 @@ public class SchemaAutoPatchService {
         ensureTransacaoOrigemFiscalColumn();
         ensureContasBancariasTable();
         ensureContaBancariaChequeEspecialColumn();
+        ensureDebitosInternosTable();
         ensureRendasTable();
         ensureTransferenciasContasTable();
         ensureTransacaoContaBancariaColumn();
@@ -323,6 +324,35 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: coluna limite_cheque_especial verificada em contas_bancarias.");
         } catch (Exception e) {
             log.warn("Falha ao adicionar limite_cheque_especial em contas_bancarias: {}", e.getMessage());
+        }
+    }
+
+    private void ensureDebitosInternosTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.debitos_internos ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "grupo_familiar_id BIGINT NOT NULL REFERENCES public.grupos_familiares(id) ON DELETE CASCADE,"
+                    + "credor_usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "devedor_usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "valor NUMERIC(19,2) NOT NULL,"
+                    + "descricao VARCHAR(200),"
+                    + "liquidado BOOLEAN NOT NULL DEFAULT FALSE,"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_liquidacao TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_debitos_internos_credor "
+                    + "ON public.debitos_internos(credor_usuario_id, liquidado)"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_debitos_internos_devedor "
+                    + "ON public.debitos_internos(devedor_usuario_id, liquidado)"
+            );
+            log.info("Schema patch: tabela public.debitos_internos verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE debitos_internos: {}", e.getMessage());
         }
     }
 

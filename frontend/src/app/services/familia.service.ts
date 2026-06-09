@@ -20,6 +20,27 @@ export interface GrupoFamiliar {
   membros: GrupoFamiliarMembro[];
 }
 
+export interface DebitoInterno {
+  id: number;
+  credorId: number;
+  credorNome: string;
+  devedorId: number;
+  devedorNome: string;
+  valor: number;
+  descricao?: string;
+  liquidado: boolean;
+  dataCriacao?: string;
+  dataLiquidacao?: string;
+}
+
+export interface BalancoGrupo {
+  aReceber: DebitoInterno[];
+  devidos: DebitoInterno[];
+  totalAReceber: number;
+  totalDevido: number;
+  saldoLiquido: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class FamiliaService {
   private readonly base = `${environment.apiUrl}/familia`;
@@ -51,5 +72,13 @@ export class FamiliaService {
     if (mes) params['mes'] = String(mes);
     if (ano) params['ano'] = String(ano);
     return this.http.get<Orcamento[]>(`${this.base}/orcamentos-compartilhados`, { params });
+  }
+
+  balanco(): Observable<BalancoGrupo> {
+    return this.http.get<BalancoGrupo>(`${this.base}/balanco`);
+  }
+
+  liquidarDebito(debitoId: number): Observable<DebitoInterno> {
+    return this.http.post<DebitoInterno>(`${this.base}/debitos/${debitoId}/liquidar`, {});
   }
 }

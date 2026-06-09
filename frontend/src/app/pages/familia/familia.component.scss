@@ -107,3 +107,83 @@
 .budget small {
   color: #9ca3af;
 }
+
+.balanco-sub {
+  color: #9ca3af;
+  font-size: 13px;
+  margin: 0 0 12px;
+
+  em {
+    color: #93c5fd;
+  }
+}
+
+.balanco-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.balanco-col h3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 8px;
+  font-size: 15px;
+
+  .total {
+    font-variant-numeric: tabular-nums;
+
+    &.receber {
+      color: #6ee7b7;
+    }
+
+    &.devido {
+      color: #fca5a5;
+    }
+  }
+}
+
+.debito-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  margin-bottom: 8px;
+}
+
+.debito-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .desc {
+    color: #9ca3af;
+    font-size: 12px;
+  }
+}
+
+.debito-acao {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.valor {
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+
+  &.receber {
+    color: #6ee7b7;
+  }
+
+  &.devido {
+    color: #fca5a5;
+  }
+}

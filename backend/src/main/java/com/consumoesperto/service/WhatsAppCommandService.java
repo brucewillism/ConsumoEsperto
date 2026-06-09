@@ -105,6 +105,7 @@ public class WhatsAppCommandService {
     private final OrcamentoService orcamentoService;
     private final UsuarioSessaoContextoService sessaoContextoService;
     private final WhatsAppAppParityService whatsAppAppParityService;
+    private final SplitBillService splitBillService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -878,6 +879,8 @@ public class WhatsAppCommandService {
             && !"GERAR_RELATORIO".equals(action)
             && !"SET_SALARY_CONFIG".equals(action)
             && !"MANAGE_ENTITY".equals(action)
+            && !"LIST_DEBTS".equals(action)
+            && !"SETTLE_DEBT".equals(action)
             && confianca < 0.55d) {
             return msgErro(userId, "Confiança da IA",
                 "Não executei nada. Confiança " + String.format(Locale.US, "%.0f%%", confianca * 100)
@@ -913,6 +916,9 @@ public class WhatsAppCommandService {
                 }
                 yield whatsAppGestaoProativaService.iniciarGestao(cmd, userId, sourceText);
             }
+            case "SPLIT_BILL" -> handleSplitBill(cmd, userId, sourceText);
+            case "LIST_DEBTS" -> handleListDebts(userId);
+            case "SETTLE_DEBT" -> handleSettleDebt(cmd, userId, sourceText);
             case "GENERATE_REPORT" -> msgInfo("Relatório PDF",
                 "Para receber o PDF aqui no WhatsApp, usa a Evolution ligada a este número. No app: *Relatórios → PDF*.");
             default -> {
@@ -1688,6 +1694,116 @@ public class WhatsAppCommandService {
             log.info("WhatsApp despesa: {}", e.getMessage());
             return msgErro(userId, "Despesa", humanizarErroComando(e.getMessage()));
         }
+    }
+
+    /** Racha-contas: divide a despesa, registra a fatia do pagador e cria débitos internos. */
+    private String handleSplitBill(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            Usuario pagador = usuarioRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
+            BigDecimal amount = readAmount(cmd, sourceText);
+            String descricao = cmd.path("description").asText("Racha-contas");
+
+            List<String> membros = new java.util.ArrayList<>();
+            JsonNode arr = cmd.path("splitMembers");
+            if (arr.isArray()) {
+                arr.forEach(n -> {
+                    String nome = n.asText("").trim();
+                    if (!nome.isBlank()) {
+                        membros.add(nome);
+                    }
+                });
+            }
+            if (membros.isEmpty()) {
+                return msgErro(userId, "Racha-contas",
+                    "Marca pelo menos um membro do grupo pra dividir (ex.: *racha 150 com a Esposa e o Filho*).");
+            }
+
+            SplitBillService.ResultadoDivisao r = splitBillService.processarDivisao(pagador, amount, membros, descricao);
+            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("Feito, ").append(voc).append("! Já registrei a sua parte de *")
+                .append(BRL.format(r.fatiaPagador())).append("* (").append(r.descricao()).append(").\n\n")
+                .append("Lancei estes débitos no painel da Família:");
+            for (var d : r.debitos()) {
+                sb.append("\n• *").append(primeiroNome(d.getDevedorNome())).append("* deve *")
+                    .append(BRL.format(d.getValor())).append("*");
+            }
+            sb.append("\n\nQuando alguém te pagar, me avisa (\"acertei com a ")
+                .append(primeiroNome(r.debitos().get(0).getDevedorNome())).append("\") ou marca como pago no app.");
+            return msgOk("Racha-contas", sb.toString());
+        } catch (RuntimeException e) {
+            log.info("WhatsApp split-bill: {}", e.getMessage());
+            return msgErro(userId, "Racha-contas", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    /** Consulta o balanço do racha-contas (quem deve quem) do usuário. */
+    private String handleListDebts(Long userId) {
+        try {
+            var balanco = splitBillService.balanco(userId);
+            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+            boolean semNada = balanco.getAReceber().isEmpty() && balanco.getDevidos().isEmpty();
+            if (semNada) {
+                return msgInfo("Balanço do grupo",
+                    "Tudo certo, " + voc + "! Não há débitos pendentes no seu grupo familiar.");
+            }
+            StringBuilder sb = new StringBuilder();
+            if (!balanco.getAReceber().isEmpty()) {
+                sb.append("*A receber* (").append(BRL.format(balanco.getTotalAReceber())).append("):");
+                for (var d : balanco.getAReceber()) {
+                    sb.append("\n• *").append(primeiroNome(d.getDevedorNome())).append("* te deve *")
+                        .append(BRL.format(d.getValor())).append("*")
+                        .append(d.getDescricao() != null ? " (" + d.getDescricao() + ")" : "");
+                }
+            }
+            if (!balanco.getDevidos().isEmpty()) {
+                if (sb.length() > 0) {
+                    sb.append("\n\n");
+                }
+                sb.append("*Você deve* (").append(BRL.format(balanco.getTotalDevido())).append("):");
+                for (var d : balanco.getDevidos()) {
+                    sb.append("\n• Você deve *").append(BRL.format(d.getValor())).append("* para *")
+                        .append(primeiroNome(d.getCredorNome())).append("*")
+                        .append(d.getDescricao() != null ? " (" + d.getDescricao() + ")" : "");
+                }
+            }
+            sb.append("\n\nSaldo líquido no grupo: *").append(BRL.format(balanco.getSaldoLiquido())).append("*.");
+            return msgOk("Balanço do grupo", sb.toString());
+        } catch (RuntimeException e) {
+            log.info("WhatsApp list-debts: {}", e.getMessage());
+            return msgErro(userId, "Balanço do grupo", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    /** Quita os débitos pendentes de um membro com o usuário (credor). */
+    private String handleSettleDebt(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            Usuario credor = usuarioRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
+            String alias = cmd.path("counterpartyAlias").asText("").trim();
+            if (alias.isBlank()) {
+                return msgErro(userId, "Acerto de contas",
+                    "Diz com quem você acertou (ex.: *acertei os 50 com a Esposa*).");
+            }
+            BigDecimal total = splitBillService.quitarComDevedor(credor, alias);
+            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+            return msgOk("Acerto de contas",
+                "Perfeito, " + voc + "! Quitei *" + BRL.format(total) + "* de débitos de *"
+                    + primeiroNome(alias) + "* com você. Tudo zerado entre vocês.");
+        } catch (RuntimeException e) {
+            log.info("WhatsApp settle-debt: {}", e.getMessage());
+            return msgErro(userId, "Acerto de contas", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private String primeiroNome(String nome) {
+        if (nome == null || nome.isBlank()) {
+            return "membro";
+        }
+        String n = nome.trim();
+        return n.contains(" ") ? n.substring(0, n.indexOf(' ')) : n;
     }
 
     /**

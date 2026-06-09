@@ -51,6 +51,45 @@
     </div>
   </mat-card>
 
+  <mat-card class="panel" *ngIf="grupo">
+    <h2>Balanço do Grupo</h2>
+    <p class="balanco-sub" *ngIf="balanco">
+      Racha-contas: registre divisões pelo J.A.R.V.I.S. (ex.: <em>"racha 150 com a Esposa e o Filho"</em>).
+    </p>
+
+    <div class="empty" *ngIf="!temBalanco()">Nenhum débito pendente no grupo.</div>
+
+    <div class="balanco-cols" *ngIf="temBalanco()">
+      <div class="balanco-col" *ngIf="balanco && balanco.aReceber.length">
+        <h3>Valores a receber <span class="total receber">{{ brl(balanco.totalAReceber) }}</span></h3>
+        <div class="debito-item" *ngFor="let d of balanco.aReceber">
+          <div class="debito-info">
+            <strong>{{ primeiroNome(d.devedorNome) }}</strong>
+            <span class="desc" *ngIf="d.descricao">{{ d.descricao }}</span>
+          </div>
+          <div class="debito-acao">
+            <span class="valor receber">{{ brl(d.valor) }}</span>
+            <button mat-stroked-button color="primary" (click)="marcarPago(d)" [disabled]="liquidandoId === d.id">
+              <mat-icon>check</mat-icon>
+              {{ liquidandoId === d.id ? '...' : 'Marcar como pago' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="balanco-col" *ngIf="balanco && balanco.devidos.length">
+        <h3>Suas pendências <span class="total devido">{{ brl(balanco.totalDevido) }}</span></h3>
+        <div class="debito-item" *ngFor="let d of balanco.devidos">
+          <div class="debito-info">
+            <strong>{{ primeiroNome(d.credorNome) }}</strong>
+            <span class="desc" *ngIf="d.descricao">{{ d.descricao }}</span>
+          </div>
+          <span class="valor devido">{{ brl(d.valor) }}</span>
+        </div>
+      </div>
+    </div>
+  </mat-card>
+
   <mat-card class="panel">
     <h2>Barras compartilhadas</h2>
     <div class="empty" *ngIf="!orcamentos.length">Nenhum orçamento compartilhado ativo.</div>

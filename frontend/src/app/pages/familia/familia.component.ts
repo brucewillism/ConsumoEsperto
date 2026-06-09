@@ -16,7 +16,7 @@ import {
   ConvidarFamiliarDialogResult,
 } from '../../shared/convidar-familiar-dialog/convidar-familiar-dialog.component';
 import { catchError } from 'rxjs/operators';
-import { FamiliaService, GrupoFamiliar, GrupoFamiliarMembro } from '../../services/familia.service';
+import { BalancoGrupo, DebitoInterno, FamiliaService, GrupoFamiliar, GrupoFamiliarMembro } from '../../services/familia.service';
 import { Orcamento } from '../../services/orcamento.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -41,8 +41,10 @@ export class FamiliaComponent implements OnInit {
   grupo: GrupoFamiliar | null = null;
   convites: GrupoFamiliarMembro[] = [];
   orcamentos: Orcamento[] = [];
+  balanco: BalancoGrupo | null = null;
   carregando = true;
   conviteVisual = '';
+  liquidandoId: number | null = null;
 
   constructor(
     private familiaService: FamiliaService,
@@ -59,12 +61,43 @@ export class FamiliaComponent implements OnInit {
     forkJoin({
       grupo: this.familiaService.meuGrupo().pipe(catchError(() => of(null))),
       convites: this.familiaService.convites().pipe(catchError(() => of([] as GrupoFamiliarMembro[]))),
-      orcamentos: this.familiaService.orcamentosCompartilhados().pipe(catchError(() => of([] as Orcamento[])))
-    }).subscribe(({ grupo, convites, orcamentos }) => {
+      orcamentos: this.familiaService.orcamentosCompartilhados().pipe(catchError(() => of([] as Orcamento[]))),
+      balanco: this.familiaService.balanco().pipe(catchError(() => of(null)))
+    }).subscribe(({ grupo, convites, orcamentos, balanco }) => {
       this.grupo = grupo;
       this.convites = convites;
       this.orcamentos = orcamentos;
+      this.balanco = balanco;
       this.carregando = false;
+    });
+  }
+
+  temBalanco(): boolean {
+    return !!this.balanco && (this.balanco.aReceber.length > 0 || this.balanco.devidos.length > 0);
+  }
+
+  primeiroNome(nome: string): string {
+    if (!nome) {
+      return 'Membro';
+    }
+    return nome.trim().split(' ')[0];
+  }
+
+  marcarPago(debito: DebitoInterno): void {
+    if (this.liquidandoId) {
+      return;
+    }
+    this.liquidandoId = debito.id;
+    this.familiaService.liquidarDebito(debito.id).subscribe({
+      next: () => {
+        this.toast.success(`Débito de ${this.primeiroNome(debito.devedorNome)} marcado como pago.`);
+        this.liquidandoId = null;
+        this.carregar();
+      },
+      error: (e) => {
+        this.liquidandoId = null;
+        this.toast.error(e?.error?.message || 'Erro ao liquidar débito.');
+      }
     });
   }
 
