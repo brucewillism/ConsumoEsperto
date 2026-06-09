@@ -324,8 +324,40 @@ public class SchemaAutoPatchService {
                 );
             }
             log.info("Schema patch: coluna limite_cheque_especial verificada em contas_bancarias.");
+            removerCheckSaldoNaoNegativoContas();
         } catch (Exception e) {
             log.warn("Falha ao adicionar limite_cheque_especial em contas_bancarias: {}", e.getMessage());
+        }
+    }
+
+    /** Permite saldo_atual negativo dentro do limite de cheque especial. */
+    private void removerCheckSaldoNaoNegativoContas() {
+        try {
+            List<String> constraints = jdbcTemplate.queryForList(
+                "SELECT con.conname || '|' || n.nspname "
+                    + "FROM pg_constraint con "
+                    + "JOIN pg_class rel ON rel.oid = con.conrelid "
+                    + "JOIN pg_namespace n ON n.oid = rel.relnamespace "
+                    + "WHERE rel.relname = 'contas_bancarias' "
+                    + "AND con.contype = 'c' "
+                    + "AND pg_get_constraintdef(con.oid) ILIKE '%saldo%>=%0%'",
+                String.class
+            );
+            if (constraints == null) {
+                return;
+            }
+            for (String row : constraints) {
+                String[] parts = row.split("\\|", 2);
+                if (parts.length == 2) {
+                    executeDdlAutocommit(
+                        "ALTER TABLE " + parts[1].replace("\"", "") + ".contas_bancarias DROP CONSTRAINT IF EXISTS "
+                            + parts[0].replace("\"", "")
+                    );
+                    log.info("Schema patch: removido CHECK saldo>=0 em contas_bancarias ({})", parts[0]);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Falha ao remover CHECK saldo>=0 em contas_bancarias: {}", e.getMessage());
         }
     }
 

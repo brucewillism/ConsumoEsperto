@@ -108,6 +108,7 @@ public class WhatsAppCommandService {
     private final SplitBillService splitBillService;
     private final AgendamentoPagamentoService agendamentoPagamentoService;
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
+    private final ChequeEspecialConfirmacaoService chequeEspecialConfirmacaoService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -231,6 +232,10 @@ public class WhatsAppCommandService {
         Optional<String> assinatura = tryResolveAssinaturaConfirmacao(userId, text);
         if (assinatura.isPresent()) {
             return assinatura;
+        }
+        Optional<String> chequeEsp = tryResolveChequeEspecialConfirmacao(userId, text);
+        if (chequeEsp.isPresent()) {
+            return chequeEsp;
         }
         Optional<String> boletoTexto = tryDetectarBoletoOuPixTexto(userId, text);
         if (boletoTexto.isPresent()) {
@@ -1702,6 +1707,21 @@ public class WhatsAppCommandService {
                 dto.setFaturaId(faturaAlvo.getId());
             } else {
                 aplicarContaBancariaSeInformada(cmd, sourceText, userId, dto, pagamentoEmConta);
+            }
+
+            if (pagamentoEmConta && dto.getContaBancariaId() != null
+                && status == TransacaoDTO.StatusConferencia.CONFIRMADA) {
+                ContaBancaria contaDebito = contaBancariaService.buscarEntidade(dto.getContaBancariaId(), userId);
+                if (chequeEspecialConfirmacaoService.precisaConfirmacao(contaDebito, amount)) {
+                    chequeEspecialConfirmacaoService.salvarProposta(userId, dto, contaDebito.getId(), amount);
+                    return msgInfo("Cheque especial",
+                        chequeEspecialConfirmacaoService.mensagemPropostaAtiva(userId));
+                }
+                if (!contaDebito.temSaldoSuficiente(amount)) {
+                    return msgErro(userId, "Despesa",
+                        "Saldo insuficiente na conta *" + contaDebito.getNome() + "*. Disponível (incl. cheque especial): *"
+                            + BRL.format(contaDebito.getSaldoDisponivel()) + "*.");
+                }
             }
 
             final TransacaoDTO[] createdHolder = new TransacaoDTO[1];
@@ -3322,6 +3342,34 @@ public class WhatsAppCommandService {
             return Optional.of(msgErro(userId, "Boleto/Pix", humanizarErroComando(e.getMessage())));
         }
         return Optional.empty();
+    }
+
+    /** Confirmação sim/não de débito que usará cheque especial. */
+    private Optional<String> tryResolveChequeEspecialConfirmacao(Long userId, String text) {
+        if (!chequeEspecialConfirmacaoService.temPropostaPendente(userId)) {
+            return Optional.empty();
+        }
+        if (isAffirmativeSaveReply(text)) {
+            try {
+                TransacaoDTO dto = chequeEspecialConfirmacaoService.transacaoPendente(userId)
+                    .orElseThrow(() -> new IllegalArgumentException("Proposta expirada. Repita o comando de despesa."));
+                chequeEspecialConfirmacaoService.cancelarProposta(userId);
+                TransacaoDTO created = transacaoService.criarTransacao(dto, userId);
+                String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+                return Optional.of(msgOk("Despesa autorizada",
+                    jarvisProtocolService.formatExpenseCatalogued(voc, BRL.format(created.getValor()))
+                        + "\n\nAutorizei o débito na conta *" + (created.getContaBancariaNome() != null ? created.getContaBancariaNome() : "bancária")
+                        + "* usando o cheque especial."));
+            } catch (Exception e) {
+                return Optional.of(msgErro(userId, "Cheque especial", humanizarErroComando(e.getMessage())));
+            }
+        }
+        if (isNegativeReply(text)) {
+            chequeEspecialConfirmacaoService.cancelarProposta(userId);
+            return Optional.of(msgInfo("Cheque especial", "Não registrei a despesa. O saldo da conta permanece inalterado."));
+        }
+        return Optional.of(msgInfo("Confirmação pendente",
+            "Responda *sim* para autorizar o débito com cheque especial ou *não* para cancelar."));
     }
 
     /** Confirmação sim/não de assinatura detectada pendente na sessão. */

@@ -168,6 +168,26 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     return this.valorPagamento > this.saldoDisponivelConta(conta);
   }
 
+  /** Débito cabe no saldo + cheque especial, mas o saldo nominal ficará negativo. */
+  get usaraChequeEspecial(): boolean {
+    const conta = this.contaSelecionada;
+    if (!conta || this.saldoInsuficiente) {
+      return false;
+    }
+    const saldo = Number(conta.saldoAtual ?? 0);
+    const limite = Number(conta.limiteChequeEspecial ?? 0);
+    return limite > 0 && this.valorPagamento > saldo;
+  }
+
+  valorUsoChequeEspecial(): number {
+    const conta = this.contaSelecionada;
+    if (!conta) {
+      return 0;
+    }
+    const saldo = Number(conta.saldoAtual ?? 0);
+    return Math.max(0, this.valorPagamento - saldo);
+  }
+
   get mesmoProvedor(): boolean {
     const conta = this.contaSelecionada;
     return conta ? this.contaMesmoProvedorDaFatura(conta) : false;

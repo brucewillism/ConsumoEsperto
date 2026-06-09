@@ -27,6 +27,8 @@ public class UsuarioSessaoContextoService {
     public static final String CHAVE_AGENDAMENTO_PAGAMENTO = "AGENDAMENTO_PAGAMENTO_CONFIRMACAO";
     /** Recorrência detectada aguardando confirmação para salvar como assinatura. */
     public static final String CHAVE_ASSINATURA_CONFIRMACAO = "ASSINATURA_CONFIRMACAO";
+    /** Débito em conta que usará cheque especial — aguarda sim/não. */
+    public static final String CHAVE_CHEQUE_ESPECIAL_CONFIRMACAO = "CHEQUE_ESPECIAL_CONFIRMACAO";
 
     private final UsuarioSessaoContextoRepository repository;
     private final ObjectMapper objectMapper;

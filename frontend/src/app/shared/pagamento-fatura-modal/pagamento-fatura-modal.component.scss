@@ -68,6 +68,38 @@
   display: inline-block;
 }
 
+.aviso-cheque {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+
+  mat-icon {
+    flex-shrink: 0;
+    color: #f59e0b;
+  }
+
+  p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #fcd34d;
+  }
+
+  strong {
+    color: #fef3c7;
+  }
+}
+
+.saldo-negativo {
+  color: #fbbf24;
+}
+
 .aviso-saldo {
   display: flex;
   align-items: flex-start;

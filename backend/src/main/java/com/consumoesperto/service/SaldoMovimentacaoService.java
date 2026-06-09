@@ -99,6 +99,14 @@ public class SaldoMovimentacaoService {
         ContaBancaria conta = contaBancariaRepository.findById(contaId)
             .orElseThrow(() -> new RuntimeException("Conta bancária não encontrada: " + contaId));
         BigDecimal saldo = scale(conta.getSaldoAtual()).add(scale(delta));
+        if (delta.compareTo(BigDecimal.ZERO) < 0) {
+            BigDecimal debito = delta.negate();
+            if (!conta.temSaldoSuficiente(debito)) {
+                throw new IllegalArgumentException(
+                    "Saldo insuficiente na conta (incluindo cheque especial). Disponível: R$ "
+                        + conta.getSaldoDisponivel().setScale(SCALE, RoundingMode.HALF_UP));
+            }
+        }
         conta.setSaldoAtual(saldo);
         contaBancariaRepository.save(conta);
         log.debug("[MULTICARTEIRA] Conta {} saldo → {} (delta {})", contaId, saldo, delta);

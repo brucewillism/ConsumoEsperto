@@ -16,16 +16,33 @@
     <span>Carregando contas…</span>
   </div>
 
+  <div class="aviso-cheque" *ngIf="!carregandoContas && contaSelecionada && usaraChequeEspecial">
+    <mat-icon>warning_amber</mat-icon>
+    <div>
+      <strong>Atenção: cheque especial</strong>
+      <p>
+        Esta operação utilizará <strong>{{ brl(valorUsoChequeEspecial()) }}</strong> do seu cheque especial
+        na conta <em>{{ contaSelecionada?.nome }}</em>.
+        Saldo após débito: <strong>{{ brl(saldoContaPosDebito()) }}</strong>
+        (limite disponível: {{ brl(contaSelecionada?.limiteChequeEspecial) }}).
+      </p>
+    </div>
+  </div>
+
   <div class="aviso-saldo" *ngIf="!carregandoContas && contaSelecionada && saldoInsuficiente">
     <mat-icon>account_balance_wallet</mat-icon>
     <div>
       <strong>Saldo insuficiente</strong>
       <p>
-        A conta <em>{{ contaSelecionada?.nome }}</em> tem {{ brl(contaSelecionada?.saldoAtual) }},
+        A conta <em>{{ contaSelecionada?.nome }}</em> tem disponível {{ brl(saldoDisponivelConta(contaSelecionada)) }}
+        (saldo {{ brl(contaSelecionada?.saldoAtual) }}
+        <ng-container *ngIf="(contaSelecionada?.limiteChequeEspecial ?? 0) > 0">
+          + cheque {{ brl(contaSelecionada?.limiteChequeEspecial) }}
+        </ng-container>),
         mas o pagamento é {{ brl(valorPagamento) }}.
       </p>
       <button mat-stroked-button type="button" color="accent" (click)="usarSaldoDisponivel()">
-        Pagar com saldo disponível ({{ brl(contaSelecionada?.saldoAtual) }})
+        Pagar com saldo disponível ({{ brl(saldoDisponivelConta(contaSelecionada)) }})
       </button>
     </div>
   </div>
@@ -36,11 +53,13 @@
       <mat-select formControlName="contaBancariaId" required>
         <mat-option *ngFor="let c of contas" [value]="c.id">
           {{ c.nome }} — saldo {{ brl(c.saldoAtual) }}
+          <ng-container *ngIf="(c.limiteChequeEspecial ?? 0) > 0"> · ch. esp. {{ brl(c.limiteChequeEspecial) }}</ng-container>
         </mat-option>
       </mat-select>
       <mat-hint *ngIf="contaSelecionada && !saldoInsuficiente && saldoContaPosDebito() != null">
         Saldo da conta após débito:
-        <strong>{{ brl(saldoContaPosDebito()) }}</strong>
+        <strong [class.saldo-negativo]="(saldoContaPosDebito() ?? 0) < 0">{{ brl(saldoContaPosDebito()) }}</strong>
+        <ng-container *ngIf="usaraChequeEspecial"> (usa cheque especial)</ng-container>
         <ng-container *ngIf="mesmoProvedor && patrimonioProjetadoPosDebito() != null">
           · Patrimônio projetado (fim do mês):
           <strong>{{ brl(patrimonioProjetadoPosDebito()) }}</strong>
