@@ -68,6 +68,26 @@
   transition: .2s ease;
 }
 
+.drop-zone.processing {
+  border-color: rgba(0, 229, 255, .45);
+  background: rgba(17, 24, 39, .95);
+  box-shadow: 0 0 24px rgba(0, 229, 255, .12);
+}
+
+.drop-zone-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 8px 8px;
+}
+
+.loading-hint {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
 .drop-zone.drag-over {
   background: rgba(59, 130, 246, .16);
   border-color: #60a5fa;

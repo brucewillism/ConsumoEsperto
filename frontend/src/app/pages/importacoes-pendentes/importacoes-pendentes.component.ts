@@ -11,11 +11,21 @@ import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
+import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 
 @Component({
   selector: 'app-importacoes-pendentes',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCardModule, MatCheckboxModule, MatIconModule, WhatsappParityHintComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatButtonModule,
+    MatCardModule,
+    MatCheckboxModule,
+    MatIconModule,
+    WhatsappParityHintComponent,
+    LoadingIndicatorComponent,
+  ],
   templateUrl: './importacoes-pendentes.component.html',
   styleUrl: './importacoes-pendentes.component.scss'
 })
@@ -184,6 +194,9 @@ export class ImportacoesPendentesComponent implements OnInit {
   }
 
   onDragOver(event: DragEvent): void {
+    if (this.enviandoPdf) {
+      return;
+    }
     event.preventDefault();
     this.dragOver = true;
   }
@@ -196,6 +209,9 @@ export class ImportacoesPendentesComponent implements OnInit {
   onDrop(event: DragEvent): void {
     event.preventDefault();
     this.dragOver = false;
+    if (this.enviandoPdf) {
+      return;
+    }
     const file = event.dataTransfer?.files?.[0];
     if (file) this.enviarPdf(file);
   }
