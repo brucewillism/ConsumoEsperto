@@ -904,6 +904,11 @@ public class FaturaPdfImportService {
                 log.info("Ignorando linha de subtotal/cabeçalho na fatura: '{}' = {}", item.getDescricao(), item.getValor());
                 continue;
             }
+            // Rodapé, SAC/telefone, tabela CET e simulações de parcelamento (ex.: Nubank "SAC 4020 0182" + 403,21%).
+            if (pareceRuidoRodapeOuSimulacao(item.getDescricao())) {
+                log.info("Ignorando linha de rodapé/simulação na fatura: '{}' = {}", item.getDescricao(), item.getValor());
+                continue;
+            }
             if (item.getData() != null) {
                 existeItemComData = true;
             }
@@ -944,6 +949,48 @@ public class FaturaPdfImportService {
             || n.contains("proximas faturas")
             || n.contains("saldo em aberto")
             || n.equals("total a pagar");
+    }
+
+    /**
+     * Rodapé institucional, telefones de atendimento, tabelas de CET/juros e simulações
+     * de parcelamento — comuns em faturas Nubank e frequentemente lidos como lançamento pela IA.
+     */
+    private static boolean pareceRuidoRodapeOuSimulacao(String descricao) {
+        String n = norm(descricao);
+        if (n.isBlank()) {
+            return false;
+        }
+        if (n.contains("sac ")
+            || n.startsWith("sac")
+            || n.contains("ouvidoria")
+            || n.contains("0800")
+            || n.contains("4020 0182")
+            || n.contains("capitais e regioes")
+            || n.contains("demais localidades")
+            || n.contains("encargos e custo")
+            || n.contains("custo efetivo total")
+            || n.contains("cet ")
+            || n.contains("juros rotativo")
+            || n.contains("juros de parcelamento")
+            || n.contains("juros e mora")
+            || n.contains("nu pagamentos")
+            || n.contains("cnpj")
+            || n.contains("parcelar em")
+            || n.contains("alternativas de pagamento")
+            || n.contains("pagamento minimo de")
+            || n.contains("saldo em aberto da proxima")
+            || n.contains("limite adicional")
+            || n.contains("saque no credito")
+            || n.contains("saque internacional")
+            || n.contains("pix no credito")
+            || n.contains("pagamentos de boleto no credito")) {
+            return true;
+        }
+        // Descrição curta só com padrão de telefone (ex.: "sac 4020 0182").
+        String digitos = n.replaceAll("[^0-9]", "");
+        return n.length() <= 48
+            && digitos.length() >= 8
+            && (n.contains("sac") || n.contains("tel") || n.startsWith("0800") || n.matches(".*\\d{4}\\s+\\d{4}.*"));
     }
 
     /**
