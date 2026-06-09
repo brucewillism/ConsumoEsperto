@@ -107,6 +107,7 @@ public class WhatsAppCommandService {
     private final WhatsAppAppParityService whatsAppAppParityService;
     private final SplitBillService splitBillService;
     private final AgendamentoPagamentoService agendamentoPagamentoService;
+    private final AssinaturaRecorrenteService assinaturaRecorrenteService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -226,6 +227,10 @@ public class WhatsAppCommandService {
         Optional<String> agendamento = tryResolveAgendamentoConfirmacao(userId, text);
         if (agendamento.isPresent()) {
             return agendamento;
+        }
+        Optional<String> assinatura = tryResolveAssinaturaConfirmacao(userId, text);
+        if (assinatura.isPresent()) {
+            return assinatura;
         }
         Optional<String> boletoTexto = tryDetectarBoletoOuPixTexto(userId, text);
         if (boletoTexto.isPresent()) {
@@ -899,6 +904,8 @@ public class WhatsAppCommandService {
             && !"MANAGE_ENTITY".equals(action)
             && !"LIST_DEBTS".equals(action)
             && !"SETTLE_DEBT".equals(action)
+            && !"LIST_SUBSCRIPTIONS".equals(action)
+            && !"TOGGLE_SUBSCRIPTION".equals(action)
             && confianca < 0.55d) {
             return msgErro(userId, "Confiança da IA",
                 "Não executei nada. Confiança " + String.format(Locale.US, "%.0f%%", confianca * 100)
@@ -937,6 +944,8 @@ public class WhatsAppCommandService {
             case "SPLIT_BILL" -> handleSplitBill(cmd, userId, sourceText);
             case "LIST_DEBTS" -> handleListDebts(userId);
             case "SETTLE_DEBT" -> handleSettleDebt(cmd, userId, sourceText);
+            case "LIST_SUBSCRIPTIONS" -> handleListSubscriptions(userId);
+            case "TOGGLE_SUBSCRIPTION" -> handleToggleSubscription(cmd, userId, sourceText);
             case "GENERATE_REPORT" -> msgInfo("Relatório PDF",
                 "Para receber o PDF aqui no WhatsApp, usa a Evolution ligada a este número. No app: *Relatórios → PDF*.");
             default -> {
@@ -1695,7 +1704,11 @@ public class WhatsAppCommandService {
                 aplicarContaBancariaSeInformada(cmd, sourceText, userId, dto, pagamentoEmConta);
             }
 
-            TransacaoDTO created = transacaoService.criarTransacao(dto, userId);
+            final TransacaoDTO[] createdHolder = new TransacaoDTO[1];
+            assinaturaRecorrenteService.executarComRespostaWhatsappSincrona(() ->
+                createdHolder[0] = transacaoService.criarTransacao(dto, userId));
+            TransacaoDTO created = createdHolder[0];
+            String sugestaoAssinatura = assinaturaRecorrenteService.mensagemPropostaAtiva(userId);
             String invoiceMessage = pagamentoEmConta
                 ? ""
                 : vincularNaFatura(matchResult, amount, userId);
@@ -1708,14 +1721,14 @@ public class WhatsAppCommandService {
                 if (matchResult.pendingReview) {
                     detalhe += "\n⚠️ Ficou *pendente de conferência* (há mais do que um cartão parecido com o nome que disseste).";
                 }
-                return msgOk("Despesa registada", detalhe + orcamentoLinha);
+                return msgOk("Despesa registada", detalhe + orcamentoLinha + sugestaoAssinatura);
             }
             String contaInfo = created.getContaBancariaNome() != null && !created.getContaBancariaNome().isBlank()
                 ? " na conta *" + created.getContaBancariaNome() + "*"
                 : "";
             return msgOk("Despesa registada",
                 jarvisLinha + "\n\n*" + created.getDescricao() + "*" + contaInfo + " (sem cartão associado).\n"
-                    + invoiceMessage.trim() + orcamentoLinha);
+                    + invoiceMessage.trim() + orcamentoLinha + sugestaoAssinatura);
         } catch (RuntimeException e) {
             log.info("WhatsApp despesa: {}", e.getMessage());
             return msgErro(userId, "Despesa", humanizarErroComando(e.getMessage()));
@@ -3309,6 +3322,83 @@ public class WhatsAppCommandService {
             return Optional.of(msgErro(userId, "Boleto/Pix", humanizarErroComando(e.getMessage())));
         }
         return Optional.empty();
+    }
+
+    /** Confirmação sim/não de assinatura detectada pendente na sessão. */
+    private Optional<String> tryResolveAssinaturaConfirmacao(Long userId, String text) {
+        if (!assinaturaRecorrenteService.temPropostaPendente(userId)) {
+            return Optional.empty();
+        }
+        if (isAffirmativeSaveReply(text)) {
+            try {
+                String msg = assinaturaRecorrenteService.confirmarProposta(userId);
+                return Optional.of(msgOk("Assinatura salva", msg));
+            } catch (Exception e) {
+                return Optional.of(msgErro(userId, "Assinatura", humanizarErroComando(e.getMessage())));
+            }
+        }
+        if (isNegativeReply(text)) {
+            assinaturaRecorrenteService.cancelarProposta(userId);
+            return Optional.of(msgInfo("Assinatura", "Tudo bem, não salvei como assinatura. Continuo monitorando seus gastos."));
+        }
+        return Optional.of(msgInfo("Assinatura pendente",
+            "Responda *sim* para salvar como assinatura monitorada ou *não* para ignorar."));
+    }
+
+    private String handleListSubscriptions(Long userId) {
+        try {
+            var lista = assinaturaRecorrenteService.listar(userId);
+            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+            if (lista.isEmpty()) {
+                return msgInfo("Assinaturas",
+                    voc + ", você ainda não tem assinaturas cadastradas. Quando eu detectar um padrão mensal, pergunto se quer salvar.");
+            }
+            StringBuilder sb = new StringBuilder();
+            sb.append("Assinaturas que monitoro para você, ").append(voc).append(":\n\n");
+            for (var a : lista) {
+                sb.append("• *").append(a.getNome()).append("* — ")
+                    .append(BRL.format(a.getValor())).append(" (dia ").append(a.getDiaVencimento()).append(") — ")
+                    .append(a.isAtivo() ? "ativa" : "pausada");
+                if (a.getContaDebitoPadraoNome() != null && !a.getContaDebitoPadraoNome().isBlank()) {
+                    sb.append(" · conta ").append(a.getContaDebitoPadraoNome());
+                }
+                sb.append("\n");
+            }
+            sb.append("\nDiga *desative a assinatura da Netflix* para pausar, ou gerencie em *Assinaturas* no app.");
+            return msgOk("Assinaturas", sb.toString());
+        } catch (RuntimeException e) {
+            return msgErro(userId, "Assinaturas", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private String handleToggleSubscription(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            String nome = cmd.path("description").asText("").trim();
+            if (nome.isBlank()) {
+                nome = cmd.path("searchPhrase").asText("").trim();
+            }
+            if (nome.isBlank() && sourceText != null) {
+                nome = sourceText.replaceAll("(?i).*assinatura (da |de )?", "").trim();
+            }
+            if (nome.isBlank()) {
+                return msgErro(userId, "Assinatura", "Diz qual assinatura (ex.: *desative a assinatura da Netflix*).");
+            }
+            boolean ativar;
+            if (cmd.has("subscriptionActive")) {
+                ativar = cmd.path("subscriptionActive").asBoolean();
+            } else {
+                ativar = sourceText != null && sourceText.matches("(?is).*(ative|ativar|reativ|ligue|liga).*")
+                    && !sourceText.matches("(?is).*(desativ|pause|paus|inativ|cancel).*");
+            }
+            var atualizada = assinaturaRecorrenteService.alternarPorNome(userId, nome, ativar);
+            String acao = ativar ? "reativei" : "pausei";
+            return msgOk("Assinatura",
+                "Pronto! " + acao + " a assinatura *" + atualizada.getNome() + "* ("
+                    + BRL.format(atualizada.getValor()) + "/mês). "
+                    + (ativar ? "Volto a alertar 3 dias antes do vencimento." : "O job diário vai ignorar até você reativar."));
+        } catch (RuntimeException e) {
+            return msgErro(userId, "Assinatura", humanizarErroComando(e.getMessage()));
+        }
     }
 
     /** Confirmação sim/não de agendamento de boleto/Pix pendente na sessão. */

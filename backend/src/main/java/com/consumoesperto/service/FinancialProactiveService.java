@@ -47,6 +47,7 @@ public class FinancialProactiveService {
     private final SentinelaProtocolService sentinelaProtocolService;
     private final PlanejamentoFiscalService planejamentoFiscalService;
     private final AmortizacaoSazonalService amortizacaoSazonalService;
+    private final AssinaturaRecorrenteService assinaturaRecorrenteService;
 
     @Transactional(readOnly = true)
     public Optional<Categoria> sugerirCategoria(Long usuarioId, String descricao) {
@@ -103,6 +104,11 @@ public class FinancialProactiveService {
             habitDominoService.avaliarEfeitoDominioPosDespesa(transacao);
         } catch (Exception e) {
             log.warn("Falha efeito dominó após despesa {}: {}", id(transacao), e.getMessage());
+        }
+        try {
+            assinaturaRecorrenteService.avaliarPropostaAposDespesa(transacao);
+        } catch (Exception e) {
+            log.warn("Falha detecção assinatura após despesa {}: {}", id(transacao), e.getMessage());
         }
     }
 

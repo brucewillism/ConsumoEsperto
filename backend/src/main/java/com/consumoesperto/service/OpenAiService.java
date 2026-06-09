@@ -131,7 +131,7 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt, contextoFinanceiro);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|UNKNOWN), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
             "description, amount, bank, cardName, cardNumber, dueDay, creditLimit (limite total do cartão, opcional), " +
             "accountName (nome da conta bancária/carteira), accountType (CORRENTE|POUPANCA|DINHEIRO), initialBalance (saldo inicial da conta), " +
@@ -144,6 +144,7 @@ public class OpenAiService {
             "targetEntity (AUTO|CONTA|CARTAO|CONTA_BANCARIA|META|CATEGORIA|DESPESA_FIXA), identifier (apelido/nome do cadastro), " +
             "splitMembers (array de nomes/apelidos dos membros marcados no racha-contas, ex.: [\"Esposa\",\"Filho\"]), " +
             "counterpartyAlias (nome/apelido do membro ao quitar débito, ex.: \"Esposa\"), " +
+            "subscriptionActive (true para ativar/reativar assinatura cadastrada; false para desativar/pausar), " +
             "updates (objeto JSON com campos a alterar, ex.: {\"limite\":5000,\"apelido\":\"Nubank Ultra\",\"icone\":\"shopping-cart\"}), " +
             "legado cartão: newLimit, newAvailableLimit, newCardName — use UPDATE_ACCOUNT_CONFIG ou UPDATE_ENTITY_CONFIG com updates.\n" +
             "confianca (0-1), errorMessage. " +
@@ -223,6 +224,9 @@ public class OpenAiService {
             "'meu balanço da família'): action LIST_DEBTS.\n" +
             "- Quitar/acertar débito interno do grupo (ex.: 'acertei os 50 com a Esposa', 'a Maria me pagou', 'quitei com o João'): " +
             "action SETTLE_DEBT; counterpartyAlias = nome do membro com quem acertou.\n" +
+            "- Listar assinaturas cadastradas/monitoradas (ex.: 'quais minhas assinaturas?', 'lista assinaturas'): action LIST_SUBSCRIPTIONS.\n" +
+            "- Ativar ou desativar assinatura cadastrada (ex.: 'desative a assinatura da Netflix', 'pause a academia', 'reative o Spotify'): " +
+            "action TOGGLE_SUBSCRIPTION; description ou searchPhrase = nome da assinatura; subscriptionActive=false para desativar/pausar, true para ativar.\n" +
             "- Se faltar dado essencial, retornar action UNKNOWN com errorMessage explicando o que faltou.\n" +
             "- amount deve ser número decimal sem símbolo de moeda.\n" +
             "- Sempre retornar o campo confianca com valor entre 0 e 1.";

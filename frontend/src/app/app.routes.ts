@@ -119,6 +119,12 @@ export const routes: Routes = [
   },
 
   {
+    path: 'assinaturas',
+    loadComponent: () => import('./pages/assinaturas/assinaturas.component').then(m => m.AssinaturasComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
     path: 'investimentos',
     loadComponent: () => import('./pages/investimentos/investimentos.component').then(m => m.InvestimentosComponent),
     canActivate: [AuthGuard]

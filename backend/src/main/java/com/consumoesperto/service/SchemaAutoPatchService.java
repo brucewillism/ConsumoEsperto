@@ -66,6 +66,7 @@ public class SchemaAutoPatchService {
         ensureContaBancariaChequeEspecialColumn();
         ensureDebitosInternosTable();
         ensureAgendamentosPagamentosTable();
+        ensureAssinaturasRecorrentesTable();
         ensureRendasTable();
         ensureTransferenciasContasTable();
         ensureTransacaoContaBancariaColumn();
@@ -381,6 +382,31 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: tabela public.agendamentos_pagamentos verificada.");
         } catch (Exception e) {
             log.warn("Falha ao CREATE agendamentos_pagamentos: {}", e.getMessage());
+        }
+    }
+
+    private void ensureAssinaturasRecorrentesTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.assinaturas_recorrentes ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "nome VARCHAR(200) NOT NULL,"
+                    + "valor NUMERIC(19,2) NOT NULL,"
+                    + "dia_vencimento INTEGER NOT NULL CHECK (dia_vencimento >= 1 AND dia_vencimento <= 31),"
+                    + "conta_debito_padrao_id BIGINT REFERENCES public.contas_bancarias(id),"
+                    + "ativo BOOLEAN NOT NULL DEFAULT TRUE,"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,"
+                    + "data_atualizacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_assinaturas_usuario_ativo "
+                    + "ON public.assinaturas_recorrentes(usuario_id, ativo, dia_vencimento)"
+            );
+            log.info("Schema patch: tabela public.assinaturas_recorrentes verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE assinaturas_recorrentes: {}", e.getMessage());
         }
     }
 

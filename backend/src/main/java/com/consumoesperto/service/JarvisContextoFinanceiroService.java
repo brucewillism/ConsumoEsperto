@@ -41,6 +41,7 @@ public class JarvisContextoFinanceiroService {
     private final ContaBancariaRepository contaBancariaRepository;
     private final DebitoInternoRepository debitoInternoRepository;
     private final AgendamentoPagamentoService agendamentoPagamentoService;
+    private final AssinaturaRecorrenteService assinaturaRecorrenteService;
 
     /** Bloco textual pronto para anexar ao system prompt. Nunca lança exceção. */
     public String montarBlocoContexto(Long userId) {
@@ -82,6 +83,10 @@ public class JarvisContextoFinanceiroService {
         String agendamentos = montarBlocoAgendamentos(userId);
         if (!agendamentos.isBlank()) {
             sb.append(agendamentos);
+        }
+        String assinaturas = montarBlocoAssinaturas(userId);
+        if (!assinaturas.isBlank()) {
+            sb.append(assinaturas);
         }
         sb.append("- Mês de referência: ").append(mesRef).append("\n");
         return sb.toString();
@@ -157,6 +162,32 @@ public class JarvisContextoFinanceiroService {
             log.debug("Contexto J.A.R.V.I.S.: contas indisponíveis userId={}: {}", userId, e.getMessage());
         }
         return linhas;
+    }
+
+    private String montarBlocoAssinaturas(Long userId) {
+        if (userId == null) {
+            return "";
+        }
+        try {
+            var proximas = assinaturaRecorrenteService.listarVencendoEmDias(userId, 3);
+            BigDecimal totalAtivas = assinaturaRecorrenteService.totalAssinaturasAtivas(userId);
+            if (totalAtivas.compareTo(BigDecimal.ZERO) <= 0 && proximas.isEmpty()) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder();
+            sb.append("- Assinaturas ativas (mensal): ").append(BRL.format(totalAtivas));
+            if (!proximas.isEmpty()) {
+                sb.append(" — vencendo em 3 dias: ");
+                sb.append(proximas.stream()
+                    .map(a -> a.getNome() + " (" + BRL.format(a.getValor()) + ")")
+                    .collect(java.util.stream.Collectors.joining(", ")));
+            }
+            sb.append("\n");
+            return sb.toString();
+        } catch (Exception e) {
+            log.debug("Contexto J.A.R.V.I.S.: assinaturas indisponíveis userId={}: {}", userId, e.getMessage());
+            return "";
+        }
     }
 
     private String montarBlocoAgendamentos(Long userId) {

@@ -25,6 +25,8 @@ public class UsuarioSessaoContextoService {
     public static final String CHAVE_COMPROVANTE_CONFIRMACAO = "COMPROVANTE_CONFIRMACAO";
     /** Boleto/Pix lido aguardando confirmação "sim/não" para agendar pagamento. */
     public static final String CHAVE_AGENDAMENTO_PAGAMENTO = "AGENDAMENTO_PAGAMENTO_CONFIRMACAO";
+    /** Recorrência detectada aguardando confirmação para salvar como assinatura. */
+    public static final String CHAVE_ASSINATURA_CONFIRMACAO = "ASSINATURA_CONFIRMACAO";
 
     private final UsuarioSessaoContextoRepository repository;
     private final ObjectMapper objectMapper;

@@ -120,6 +120,7 @@ export class AppComponent implements OnInit {
     if (path.startsWith('/orcamentos')) return 'Orçamentos';
     if (path.startsWith('/renda')) return 'Renda';
     if (path.startsWith('/familia')) return 'Família';
+    if (path.startsWith('/assinaturas')) return 'Assinaturas';
     if (path.startsWith('/investimentos')) return 'Investimentos';
     if (path.startsWith('/score')) return 'Score';
     if (path.startsWith('/importacoes-pendentes')) return 'Importações Pendentes';

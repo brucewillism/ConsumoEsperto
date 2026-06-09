@@ -1,0 +1,67 @@
+<div class="assinaturas-page">
+  <app-whatsapp-parity-hint rota="/assinaturas"></app-whatsapp-parity-hint>
+
+  <section class="hero">
+    <div>
+      <p>J.A.R.V.I.S.</p>
+      <h1>Assinaturas e Recorrências</h1>
+      <span>Streaming, academias, seguros — monitoramento proativo com alerta 3 dias antes do vencimento.</span>
+    </div>
+    <button mat-raised-button color="primary" (click)="abrirNova()">
+      <mat-icon>add</mat-icon>
+      Nova assinatura
+    </button>
+  </section>
+
+  <div class="loading" *ngIf="carregando">
+    <mat-spinner diameter="36"></mat-spinner>
+  </div>
+
+  <mat-card class="empty" *ngIf="!carregando && !lista.length">
+    <mat-icon>subscriptions</mat-icon>
+    <p>Nenhuma assinatura cadastrada.</p>
+    <small>Quando você registrar despesas repetidas (ex.: Netflix), o J.A.R.V.I.S. pode sugerir salvar aqui pelo WhatsApp.</small>
+  </mat-card>
+
+  <div class="grid" *ngIf="!carregando && lista.length">
+    <mat-card class="assinatura-card" *ngFor="let a of lista" [class.pausada]="!a.ativo">
+      <div class="card-head">
+        <h2>{{ a.nome }}</h2>
+        <mat-slide-toggle [checked]="a.ativo" (change)="alternarAtivo(a)">
+          {{ a.ativo ? 'Ativa' : 'Pausada' }}
+        </mat-slide-toggle>
+      </div>
+      <p class="valor">{{ formatarValor(a.valor) }}<span>/mês</span></p>
+      <p class="meta">Vence todo dia <strong>{{ a.diaVencimento }}</strong>
+        <span *ngIf="a.contaDebitoPadraoNome"> · débito em {{ a.contaDebitoPadraoNome }}</span>
+      </p>
+      <div class="acoes">
+        <button mat-button color="primary" (click)="abrirEditar(a)">Editar</button>
+        <button mat-button color="warn" (click)="excluir(a)">Excluir</button>
+      </div>
+    </mat-card>
+  </div>
+
+  <div class="modal-backdrop" *ngIf="modalAberto" (click)="fecharModal()"></div>
+  <mat-card class="modal" *ngIf="modalAberto" (click)="$event.stopPropagation()">
+    <h2>{{ editando ? 'Editar assinatura' : 'Nova assinatura' }}</h2>
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Nome</mat-label>
+      <input matInput [(ngModel)]="form.nome" placeholder="Netflix, Academia..." />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Valor mensal (R$)</mat-label>
+      <input matInput type="number" step="0.01" [(ngModel)]="form.valor" />
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Dia do vencimento (1–31)</mat-label>
+      <input matInput type="number" min="1" max="31" [(ngModel)]="form.diaVencimento" />
+    </mat-form-field>
+    <div class="modal-acoes">
+      <button mat-button (click)="fecharModal()">Cancelar</button>
+      <button mat-raised-button color="primary" (click)="salvar()" [disabled]="salvando">
+        {{ salvando ? 'Salvando…' : 'Salvar' }}
+      </button>
+    </div>
+  </mat-card>
+</div>
