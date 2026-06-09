@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -73,6 +74,7 @@ public class FaturaPdfImportService {
     private final ScoreService scoreService;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final ContencaoJarvisService contencaoJarvisService;
+    private final ObjectProvider<FaturaPdfImportService> selfProvider;
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
     public static boolean isBulletVisivelAoUsuario(String linhaAuditoria) {
@@ -81,7 +83,6 @@ public class FaturaPdfImportService {
             && !linhaAuditoria.startsWith(SaldoAnteriorFaturaBbSupport.META_SALDO_ANTERIOR_BB_PREFIX);
     }
 
-    @Transactional
     public ImportacaoFaturaDTO processarPdf(Long usuarioId, byte[] pdfBytes) {
         if (pdfBytes == null || pdfBytes.length == 0) {
             throw new IllegalArgumentException("O PDF está vazio ou não foi recebido.");
@@ -89,7 +90,7 @@ public class FaturaPdfImportService {
         log.info("Processando PDF de fatura userId={} bytes={}", usuarioId, pdfBytes.length);
         try {
             JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes);
-            return processarExtracao(usuarioId, extracted);
+            return selfProvider.getObject().processarExtracao(usuarioId, extracted);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
@@ -105,7 +106,7 @@ public class FaturaPdfImportService {
         }
     }
 
-    @Transactional
+    @Transactional(timeout = 300)
     public ImportacaoFaturaDTO processarExtracao(Long usuarioId, JsonNode extracted) {
         String tipo = extracted.path("tipoDocumento").asText("");
         if (!"FATURA_CARTAO".equalsIgnoreCase(tipo) && !pareceFaturaCartao(extracted)) {

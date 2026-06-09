@@ -15,6 +15,10 @@ public final class AiErroHumanizer {
         if (raw == null || raw.isBlank()) {
             return null;
         }
+        if (raw.contains("Transaction timed out")) {
+            return "O processamento do documento demorou mais que o tempo permitido. "
+                + "Tente enviar o PDF novamente em alguns instantes.";
+        }
         boolean falhaIa = raw.contains("Nao foi possivel gerar JSON via IA")
             || raw.contains("Nao foi possivel processar IA")
             || raw.contains("Falha OCR em todos provedores")

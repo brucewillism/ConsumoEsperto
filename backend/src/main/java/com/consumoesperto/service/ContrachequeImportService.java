@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,13 +56,14 @@ public class ContrachequeImportService {
     private final ScoreService scoreService;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final PlanejamentoFiscalService planejamentoFiscalService;
+    private final ObjectProvider<ContrachequeImportService> selfProvider;
 
-    @Transactional
     public ContrachequeDTO processarPdf(Long usuarioId, byte[] pdfBytes) {
-        return processarExtracao(usuarioId, documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes));
+        JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes);
+        return selfProvider.getObject().processarExtracao(usuarioId, extracted);
     }
 
-    @Transactional
+    @Transactional(timeout = 300)
     public ContrachequeDTO processarExtracao(Long usuarioId, JsonNode extracted) {
         String tipo = extracted.path("tipoDocumento").asText("");
         if (!"CONTRACHEQUE".equalsIgnoreCase(tipo)) {
