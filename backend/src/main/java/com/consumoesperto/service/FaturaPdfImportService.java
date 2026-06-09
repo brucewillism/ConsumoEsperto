@@ -796,10 +796,11 @@ public class FaturaPdfImportService {
     }
 
     private List<ImportacaoFaturaItemDTO> parseItens(JsonNode arr) {
-        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
+        List<ImportacaoFaturaItemDTO> candidatos = new ArrayList<>();
         if (arr == null || !arr.isArray()) {
-            return out;
+            return candidatos;
         }
+        boolean existeItemComData = false;
         for (JsonNode n : arr) {
             ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
             item.setData(parseDate(n.path("data").asText("")));
@@ -816,9 +817,51 @@ public class FaturaPdfImportService {
             if (pareceCreditoOuAjusteFatura(item.getDescricao())) {
                 continue;
             }
+            // Subtotais/cabeçalhos de seção (ex.: Nubank "Total de compras", "Pagamentos e Financiamentos").
+            if (pareceCabecalhoOuSubtotal(item.getDescricao())) {
+                log.info("Ignorando linha de subtotal/cabeçalho na fatura: '{}' = {}", item.getDescricao(), item.getValor());
+                continue;
+            }
+            if (item.getData() != null) {
+                existeItemComData = true;
+            }
+            candidatos.add(item);
+        }
+        // Em faturas de cartão todo lançamento real tem data; linhas sem data costumam ser
+        // subtotais de portador (ex.: Nubank "Bruce W M Silva R$ 2.425,51"), que inflam a soma.
+        // Só descartamos as sem data quando há pelo menos um lançamento datado (evita zerar
+        // faturas em que a IA não conseguiu ler nenhuma data).
+        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
+        for (ImportacaoFaturaItemDTO item : candidatos) {
+            if (existeItemComData && item.getData() == null) {
+                log.info("Ignorando lançamento sem data (provável subtotal de portador): '{}' = {}",
+                    item.getDescricao(), item.getValor());
+                continue;
+            }
             out.add(item);
         }
         return out;
+    }
+
+    /**
+     * Linhas que são subtotais ou cabeçalhos de seção (não são compras): aparecem em faturas
+     * Nubank/outras como agregadores que inflam a soma se contados como lançamento.
+     */
+    private static boolean pareceCabecalhoOuSubtotal(String descricao) {
+        String n = norm(descricao);
+        if (n.isBlank()) {
+            return false;
+        }
+        return n.contains("pagamentos e financiamentos")
+            || n.contains("total de compras")
+            || n.contains("total dos lancamentos")
+            || n.contains("total da fatura")
+            || n.contains("resumo da fatura")
+            || n.contains("transacoes de")
+            || n.contains("limites disponiveis")
+            || n.contains("proximas faturas")
+            || n.contains("saldo em aberto")
+            || n.equals("total a pagar");
     }
 
     /**
