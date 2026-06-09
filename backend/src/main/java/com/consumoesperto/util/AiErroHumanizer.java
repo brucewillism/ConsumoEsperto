@@ -24,7 +24,12 @@ public final class AiErroHumanizer {
             || raw.contains("Rate limit reached")
             || raw.contains("GEMINI_API_KEY não configurada")
             || raw.contains("CLAUDE_API_KEY não configurada")
-            || raw.contains("DEEPSEEK_API_KEY não configurada");
+            || raw.contains("DEEPSEEK_API_KEY não configurada")
+            || raw.contains("SocketTimeoutException")
+            || raw.contains("Connect timed out")
+            || raw.contains("Read timed out")
+            || raw.contains("Connection refused")
+            || raw.contains("OLLAMA:");
         if (!falhaIa) {
             return null;
         }

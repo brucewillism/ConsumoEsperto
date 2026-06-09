@@ -92,13 +92,16 @@ public class FaturaPdfImportService {
             return processarExtracao(usuarioId, extracted);
         } catch (IllegalArgumentException e) {
             throw e;
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             log.warn("Falha ao processar PDF de fatura userId={}: {}", usuarioId, e.getMessage(), e);
             String human = AiErroHumanizer.humanizar(e.getMessage());
             if (human != null) {
                 throw new AiUnavailableException(human);
             }
-            throw e;
+            if (e instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new RuntimeException(e);
         }
     }
 
