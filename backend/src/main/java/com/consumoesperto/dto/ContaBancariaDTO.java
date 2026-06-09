@@ -36,6 +36,9 @@ public class ContaBancariaDTO {
     @Digits(integer = 13, fraction = 2)
     private BigDecimal limiteChequeEspecial = BigDecimal.ZERO;
 
+    /** Saldo nominal + limite de cheque especial (somente leitura, calculado no backend). */
+    private BigDecimal saldoDisponivel;
+
     private Long usuarioId;
     private boolean ativa = true;
     private boolean padrao = false;

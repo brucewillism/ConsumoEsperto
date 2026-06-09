@@ -157,7 +157,40 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     if (!conta) {
       return 0;
     }
+    if (conta.saldoDisponivel != null && !Number.isNaN(Number(conta.saldoDisponivel))) {
+      return Number(conta.saldoDisponivel);
+    }
     return Number(conta.saldoAtual ?? 0) + Number(conta.limiteChequeEspecial ?? 0);
+  }
+
+  limiteChequeConta(conta: ContaBancaria | undefined): number {
+    return Number(conta?.limiteChequeEspecial ?? 0);
+  }
+
+  /** Quanto falta de limite de cheque especial para cobrir o pagamento (0 se já cobre). */
+  deficitChequeEspecial(): number {
+    const conta = this.contaSelecionada;
+    if (!conta || !this.saldoInsuficiente) {
+      return 0;
+    }
+    return Math.max(0, this.valorPagamento - this.saldoDisponivelConta(conta));
+  }
+
+  /** Limite mínimo de cheque especial para cobrir o pagamento atual (só saldo nominal). */
+  limiteMinimoParaPagamento(): number {
+    const conta = this.contaSelecionada;
+    if (!conta) {
+      return 0;
+    }
+    return Math.max(0, this.valorPagamento - Number(conta.saldoAtual ?? 0));
+  }
+
+  exemploDisponivelComLimite(limite: number): number {
+    const conta = this.contaSelecionada;
+    if (!conta) {
+      return limite;
+    }
+    return Number(conta.saldoAtual ?? 0) + limite;
   }
 
   get saldoInsuficiente(): boolean {

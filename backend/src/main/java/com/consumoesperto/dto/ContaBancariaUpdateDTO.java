@@ -29,7 +29,7 @@ public class ContaBancariaUpdateDTO {
     /** Limite de cheque especial (>= 0). Editável; o saldo nominal continua sendo movimentado por transações. */
     @DecimalMin(value = "0.00", message = "O limite de cheque especial não pode ser negativo.")
     @Digits(integer = 13, fraction = 2)
-    private BigDecimal limiteChequeEspecial;
+    private BigDecimal limiteChequeEspecial = BigDecimal.ZERO;
 
     private boolean ativa = true;
     private boolean padrao = false;

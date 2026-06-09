@@ -66,9 +66,8 @@ public class ContaBancariaService {
         conta.setNome(dto.getNome().trim());
         conta.setTipo(ContaBancaria.TipoConta.valueOf(dto.getTipo().name()));
         conta.setAtiva(dto.isAtiva());
-        if (dto.getLimiteChequeEspecial() != null) {
-            conta.setLimiteChequeEspecial(escalaNaoNegativa(dto.getLimiteChequeEspecial()));
-        }
+        conta.setLimiteChequeEspecial(escalaNaoNegativa(
+            dto.getLimiteChequeEspecial() != null ? dto.getLimiteChequeEspecial() : BigDecimal.ZERO));
 
         if (dto.isPadrao() && !conta.isPadrao()) {
             desmarcarOutrasPadrao(usuarioId, id);
@@ -195,6 +194,7 @@ public class ContaBancariaService {
         dto.setTipo(ContaBancariaDTO.TipoConta.valueOf(conta.getTipo().name()));
         dto.setSaldoAtual(conta.getSaldoAtual());
         dto.setLimiteChequeEspecial(conta.getLimiteChequeEspecial());
+        dto.setSaldoDisponivel(conta.getSaldoDisponivel());
         dto.setUsuarioId(conta.getUsuario() != null ? conta.getUsuario().getId() : null);
         dto.setAtiva(conta.isAtiva());
         dto.setPadrao(conta.isPadrao());

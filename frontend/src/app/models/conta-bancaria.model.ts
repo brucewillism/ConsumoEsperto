@@ -7,6 +7,8 @@ export interface ContaBancaria {
   saldoAtual: number;
   /** Limite de cheque especial (>= 0). Não soma ao saldo; permite o saldo ficar negativo até este valor. */
   limiteChequeEspecial?: number;
+  /** Saldo nominal + limite de cheque especial (calculado no backend). */
+  saldoDisponivel?: number;
   usuarioId?: number;
   ativa?: boolean;
   padrao?: boolean;

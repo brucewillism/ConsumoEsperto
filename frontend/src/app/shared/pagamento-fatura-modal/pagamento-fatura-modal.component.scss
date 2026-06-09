@@ -126,6 +126,13 @@
   strong {
     color: #fee2e2;
   }
+
+  .dica-cheque {
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #fde68a;
+  }
 }
 
 .btn-saldo-insuficiente:not(:disabled) {

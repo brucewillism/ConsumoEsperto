@@ -36,10 +36,21 @@
       <p>
         A conta <em>{{ contaSelecionada?.nome }}</em> tem disponível {{ brl(saldoDisponivelConta(contaSelecionada)) }}
         (saldo {{ brl(contaSelecionada?.saldoAtual) }}
-        <ng-container *ngIf="(contaSelecionada?.limiteChequeEspecial ?? 0) > 0">
-          + cheque {{ brl(contaSelecionada?.limiteChequeEspecial) }}
+        <ng-container *ngIf="limiteChequeConta(contaSelecionada) > 0">
+          + cheque {{ brl(limiteChequeConta(contaSelecionada)) }}
+        </ng-container>
+        <ng-container *ngIf="limiteChequeConta(contaSelecionada) <= 0">
+          — <strong>sem cheque especial cadastrado</strong>
         </ng-container>),
         mas o pagamento é {{ brl(valorPagamento) }}.
+      </p>
+      <p class="dica-cheque" *ngIf="limiteChequeConta(contaSelecionada) <= 0">
+        Para pagar esta fatura, edite a conta em <strong>Contas</strong> e cadastre o
+        <strong>Limite de cheque especial</strong> (mínimo {{ brl(limiteMinimoParaPagamento()) }}).
+        Ex.: saldo {{ brl(contaSelecionada?.saldoAtual) }} + limite {{ brl(2500) }} cobre até {{ brl(exemploDisponivelComLimite(2500)) }}.
+      </p>
+      <p class="dica-cheque" *ngIf="limiteChequeConta(contaSelecionada) > 0 && deficitChequeEspecial() > 0">
+        Aumente o limite de cheque especial em <strong>Contas</strong> em pelo menos {{ brl(deficitChequeEspecial()) }}.
       </p>
       <button mat-stroked-button type="button" color="accent" (click)="usarSaldoDisponivel()">
         Pagar com saldo disponível ({{ brl(saldoDisponivelConta(contaSelecionada)) }})
@@ -52,8 +63,8 @@
       <mat-label>Escolha a conta de débito</mat-label>
       <mat-select formControlName="contaBancariaId" required>
         <mat-option *ngFor="let c of contas" [value]="c.id">
-          {{ c.nome }} — saldo {{ brl(c.saldoAtual) }}
-          <ng-container *ngIf="(c.limiteChequeEspecial ?? 0) > 0"> · ch. esp. {{ brl(c.limiteChequeEspecial) }}</ng-container>
+          {{ c.nome }} — disp. {{ brl(saldoDisponivelConta(c)) }}
+          (saldo {{ brl(c.saldoAtual) }}<ng-container *ngIf="limiteChequeConta(c) > 0"> + ch.esp. {{ brl(limiteChequeConta(c)) }}</ng-container>)
         </mat-option>
       </mat-select>
       <mat-hint *ngIf="contaSelecionada && !saldoInsuficiente && saldoContaPosDebito() != null">
