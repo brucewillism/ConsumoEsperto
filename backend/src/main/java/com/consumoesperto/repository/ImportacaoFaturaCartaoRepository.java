@@ -12,4 +12,6 @@ public interface ImportacaoFaturaCartaoRepository extends JpaRepository<Importac
     List<ImportacaoFaturaCartao> findByUsuarioIdAndStatusOrderByDataCriacaoDesc(Long usuarioId, ImportacaoFaturaCartao.Status status);
     Optional<ImportacaoFaturaCartao> findByIdAndUsuarioId(Long id, Long usuarioId);
     List<ImportacaoFaturaCartao> findByUsuarioIdAndCartaoCreditoIdOrderByDataVencimentoDesc(Long usuarioId, Long cartaoCreditoId);
+
+    List<ImportacaoFaturaCartao> findByUsuarioId(Long usuarioId);
 }

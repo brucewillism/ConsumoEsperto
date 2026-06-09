@@ -16,6 +16,7 @@ import javax.validation.Valid;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Controller responsável por gerenciar operações relacionadas a faturas de cartão de crédito
@@ -147,6 +148,14 @@ public class FaturaController {
         // Atualiza a fatura verificando propriedade do usuário
         FaturaDTO faturaAtualizada = faturaService.atualizarFatura(id, faturaDTO, currentUser.getId());
         return ResponseEntity.ok(faturaAtualizada);
+    }
+
+    @DeleteMapping("/todas")
+    @Operation(summary = "Apagar todas as faturas", description = "Remove todas as faturas e lançamentos de cartão vinculados, para reimportação")
+    public ResponseEntity<Map<String, Integer>> excluirTodas(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        int removidas = faturaService.excluirTodasDoUsuario(currentUser.getId());
+        return ResponseEntity.ok(Map.of("removidas", removidas));
     }
 
     /**

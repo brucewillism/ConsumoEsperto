@@ -4,8 +4,12 @@ import com.consumoesperto.dto.FaturaDTO;
 import com.consumoesperto.dto.MelhorDiaCompraCalculado;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
+import com.consumoesperto.model.ImportacaoFaturaCartao;
+import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.FaturaRepository;
+import com.consumoesperto.repository.ImportacaoFaturaCartaoRepository;
+import com.consumoesperto.repository.SugestaoContencaoJarvisRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +66,10 @@ public class FaturaService {
     private final CartaoCreditoRepository cartaoCreditoRepository;
 
     private final TransacaoRepository transacaoRepository;
+
+    private final ImportacaoFaturaCartaoRepository importacaoFaturaCartaoRepository;
+
+    private final SugestaoContencaoJarvisRepository sugestaoContencaoJarvisRepository;
 
     /**
      * Dias corridos entre o fechamento estimado e o vencimento (ex.: 10 = fechamento 10 dias antes do vencimento).
@@ -247,12 +255,48 @@ public class FaturaService {
      * @throws RuntimeException se a fatura não for encontrada ou não pertencer ao usuário
      */
     public void deletarFatura(Long id, Long usuarioId) {
-        // Verifica se a fatura existe e pertence ao usuário antes de tentar excluir
         Fatura fatura = faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
                 .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
-        
-        // Remove a fatura do banco de dados
+        removerTransacoesDaFatura(fatura.getId());
         faturaRepository.delete(fatura);
+    }
+
+    /**
+     * Remove todas as faturas do usuário e lançamentos vinculados a elas,
+     * para permitir reimportação limpa dos PDFs.
+     */
+    @Transactional
+    public int excluirTodasDoUsuario(Long usuarioId) {
+        List<Fatura> faturas = faturaRepository.findByCartaoCreditoUsuarioId(usuarioId);
+        int transacoesRemovidas = 0;
+        for (Fatura fatura : faturas) {
+            transacoesRemovidas += removerTransacoesDaFatura(fatura.getId());
+        }
+        List<ImportacaoFaturaCartao> importacoes = importacaoFaturaCartaoRepository.findByUsuarioId(usuarioId);
+        for (ImportacaoFaturaCartao imp : importacoes) {
+            sugestaoContencaoJarvisRepository.deleteAll(
+                sugestaoContencaoJarvisRepository.findByUsuarioIdAndImportacaoFaturaCartaoId(usuarioId, imp.getId())
+            );
+        }
+        int importacoesRemovidas = importacoes.size();
+        if (!importacoes.isEmpty()) {
+            importacaoFaturaCartaoRepository.deleteAll(importacoes);
+        }
+        int faturasRemovidas = faturaRepository.deleteByCartaoCreditoUsuarioId(usuarioId);
+        log.warn("Limpeza de faturas userId={}: {} faturas, {} transações de cartão, {} importações",
+            usuarioId, faturasRemovidas, transacoesRemovidas, importacoesRemovidas);
+        return faturasRemovidas;
+    }
+
+    private int removerTransacoesDaFatura(Long faturaId) {
+        if (faturaId == null) {
+            return 0;
+        }
+        List<Transacao> txs = transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(faturaId);
+        if (!txs.isEmpty()) {
+            transacaoRepository.deleteAll(txs);
+        }
+        return txs.size();
     }
 
     /**
