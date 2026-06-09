@@ -69,6 +69,20 @@ class NubankFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiCompraComMascaraAsterisco() {
+        String trecho = """
+            TRANSAÇÕES DE BRUCE W M SILVA
+            26 ABR
+            Atacadao 150 As
+            **** 3443
+            R$ 90,53
+            """;
+        List<ImportacaoFaturaItemDTO> itens = NubankFaturaTextoExtrator.extrairLancamentos(trecho, 2026);
+        assertEquals(1, itens.size());
+        assertEquals(new BigDecimal("90.53"), itens.get(0).getValor());
+    }
+
+    @Test
     void extraiTotalComprasDoTexto() {
         assertEquals(
             new BigDecimal("2444.42"),

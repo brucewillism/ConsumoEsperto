@@ -40,6 +40,10 @@ public final class NubankFaturaTextoExtrator {
     private static final Pattern TOTAL_A_PAGAR = Pattern.compile(
         "(?i)total a pagar[^\\d]{0,12}R\\$\\s*([\\d.]+,\\d{2})"
     );
+    private static final Pattern MASCARA_CARTAO = Pattern.compile(
+        "(?:[•●*\\.]{4}|xxxx)\\s*\\d{4}|(?m)^\\d{4}\\s*$",
+        Pattern.CASE_INSENSITIVE | Pattern.MULTILINE
+    );
 
     private NubankFaturaTextoExtrator() {
     }
@@ -59,8 +63,13 @@ public final class NubankFaturaTextoExtrator {
         if (destino == null || textoPdf == null || textoPdf.isBlank()) {
             return;
         }
+        List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
+        if (doTexto.size() >= 12) {
+            mesclarPreferindoTexto(destino, doTexto);
+            return;
+        }
         int inseridos = 0;
-        for (ImportacaoFaturaItemDTO candidato : extrairLancamentos(textoPdf, anoReferencia)) {
+        for (ImportacaoFaturaItemDTO candidato : doTexto) {
             if (!jaExiste(destino, candidato)) {
                 destino.add(candidato);
                 inseridos++;
@@ -70,6 +79,24 @@ public final class NubankFaturaTextoExtrator {
         if (inseridos > 0) {
             log.info("Nubank texto: {} lançamento(s) complementar(es) injetado(s).", inseridos);
         }
+    }
+
+    static void mesclarPreferindoTexto(List<ImportacaoFaturaItemDTO> destino, List<ImportacaoFaturaItemDTO> doTexto) {
+        List<ImportacaoFaturaItemDTO> mesclado = new ArrayList<>(doTexto);
+        int extrasIa = 0;
+        for (ImportacaoFaturaItemDTO ia : destino) {
+            if (!jaExiste(mesclado, ia)) {
+                mesclado.add(ia);
+                extrasIa++;
+            }
+        }
+        destino.clear();
+        destino.addAll(mesclado);
+        log.info(
+            "Nubank texto: mescla com {} lançamento(s) do PDF (+{} só na IA).",
+            doTexto.size(),
+            extrasIa
+        );
     }
 
     public static List<ImportacaoFaturaItemDTO> extrairLancamentos(String textoPdf, int anoReferencia) {
@@ -111,7 +138,7 @@ public final class NubankFaturaTextoExtrator {
 
         LocalDate data = parseDataNubank(dm.group(1), dm.group(2), anoReferencia);
         boolean pix = norm.contains("total a pagar");
-        boolean cartao = bloco.contains("••••");
+        boolean cartao = temMascaraCartao(bloco) || norm.contains("parcela");
         if (!pix && !cartao) {
             return Optional.empty();
         }
@@ -155,7 +182,8 @@ public final class NubankFaturaTextoExtrator {
 
     private static String extrairDescricao(String bloco, boolean pix) {
         String limpo = bloco.replaceAll("(?m)^\\d{2}\\s+(?:ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ|JAN|FEV|MAR)\\s*", "");
-        limpo = limpo.replaceAll("••••\\s*\\d{4}\\s*", "").trim();
+        limpo = limpo.replaceAll("(?:[•●*\\.]{4}|xxxx)\\s*\\d{4}\\s*", "").trim();
+        limpo = limpo.replaceAll("(?m)^\\d{4}\\s*$", "").trim();
         if (pix) {
             int idx = limpo.toLowerCase(Locale.ROOT).indexOf("total a pagar");
             if (idx > 0) {
@@ -236,6 +264,10 @@ public final class NubankFaturaTextoExtrator {
             }
         }
         return false;
+    }
+
+    private static boolean temMascaraCartao(String bloco) {
+        return bloco.contains("••••") || MASCARA_CARTAO.matcher(bloco).find();
     }
 
     private static int indexOfIgnoreCase(String texto, String needle) {

@@ -103,7 +103,7 @@ public class NubankFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
     static List<ImportacaoFaturaItemDTO> removerSubtotaisPortador(List<ImportacaoFaturaItemDTO> itens) {
         List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
         for (ImportacaoFaturaItemDTO item : itens) {
-            if (!pareceSubtotalPortador(item.getDescricao())) {
+            if (!pareceSubtotalPortador(item)) {
                 out.add(item);
             }
         }
@@ -127,8 +127,16 @@ public class NubankFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
             || (n.contains("juros") && n.length() < 48 && !n.contains("rotativo") && !n.contains("encargos"));
     }
 
-    private static boolean pareceSubtotalPortador(String descricao) {
-        if (descricao == null || descricao.isBlank() || descricao.contains("••••")) {
+    private static boolean pareceSubtotalPortador(ImportacaoFaturaItemDTO item) {
+        if (item == null) {
+            return false;
+        }
+        String descricao = item.getDescricao();
+        if (descricao == null || descricao.isBlank() || descricao.contains("••••") || descricao.contains("****")) {
+            return false;
+        }
+        // Subtotal do titular no Nubank é agregador alto (ex.: R$ 2.425,51). Compras avulsas são menores.
+        if (item.getValor() == null || item.getValor().compareTo(new BigDecimal("1200")) < 0) {
             return false;
         }
         String n = FaturaPdfLayoutSupport.norm(descricao);
@@ -138,7 +146,7 @@ public class NubankFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
         if (n.contains("prefeitura") || n.contains("mercado") || n.contains("atacad")
             || n.contains("posto") || n.contains("uber") || n.contains("ifood")
             || n.contains("pay") || n.contains("ltda") || n.contains("pix")
-            || n.contains("boleto")) {
+            || n.contains("boleto") || n.contains("netflix") || n.contains("google")) {
             return false;
         }
         if (n.matches(".*\\d.*")) {

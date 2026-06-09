@@ -48,6 +48,17 @@ class FaturaPdfImportNubankSanitizerTest {
         assertEquals("Atacadao 150 As", out.get(0).getDescricao());
     }
 
+    @Test
+    void naoRemoveComprasPequenasComNomeCurto() {
+        List<ImportacaoFaturaItemDTO> itens = List.of(
+            item(LocalDate.of(2026, 4, 10), "Netflix Com", "47.12"),
+            item(LocalDate.of(2026, 4, 11), "Google One", "19.80"),
+            item(LocalDate.of(2026, 5, 8), "Pamela Mendes", "64.08")
+        );
+
+        assertEquals(3, nubank.sanitizarLancamentos(itens).size());
+    }
+
     private static ImportacaoFaturaItemDTO item(LocalDate data, String desc, String valor) {
         ImportacaoFaturaItemDTO dto = new ImportacaoFaturaItemDTO();
         dto.setData(data);
