@@ -1,6 +1,8 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dto.PagamentoFaturaRequest;
 import com.consumoesperto.model.CartaoCredito;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -17,6 +19,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -73,6 +76,25 @@ class FaturaConciliacaoServiceTest {
         assertEquals(Fatura.StatusFatura.PAGA, fatura.getStatus());
         assertTrue(fatura.getPaga());
         verify(faturaRepository).save(fatura);
+    }
+
+    @Test
+    void rejeitaPagamentoParcialQuandoRestanteMaiorQueValorEnviado() {
+        when(faturaRepository.findByIdAndCartaoCreditoUsuarioId(99L, 1L))
+            .thenReturn(Optional.of(fatura));
+        when(transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(99L))
+            .thenReturn(new BigDecimal("2500.00"));
+
+        PagamentoFaturaRequest req = new PagamentoFaturaRequest();
+        req.setFaturaId(99L);
+        req.setContaBancariaId(5L);
+        req.setValor(new BigDecimal("2500.00"));
+
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> service.pagarFatura(1L, req)
+        );
+        assertTrue(ex.getMessage().contains("integral"));
     }
 
     @Test

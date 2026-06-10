@@ -82,10 +82,13 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     private dialogRef: MatDialogRef<PagamentoFaturaModalComponent, boolean>,
     @Inject(MAT_DIALOG_DATA) public data: PagamentoFaturaModalData
   ) {
-    const valorTotal = Number(data.fatura.amount) || 0;
+    const valorRestante = Math.max(
+      0,
+      (Number(data.fatura.amount) || 0) - (Number(data.fatura.valorPago) || 0)
+    );
     this.form = this.fb.group({
       contaBancariaId: [null, Validators.required],
-      valor: [valorTotal, [Validators.required, Validators.min(0.01)]],
+      valor: [{ value: valorRestante, disabled: true }, [Validators.required, Validators.min(0.01)]],
     });
   }
 
@@ -150,8 +153,11 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     return this.contas.find((c) => c.id === Number(id));
   }
 
+  /** Valor integral restante da fatura (não aceitamos pagamento parcial neste fluxo). */
   get valorPagamento(): number {
-    return parseValorBrasileiro(this.form.get('valor')?.value) ?? 0;
+    const total = Number(this.fatura.amount) || 0;
+    const pago = Number(this.fatura.valorPago) || 0;
+    return Math.max(0, Math.round((total - pago) * 100) / 100);
   }
 
   /** Saldo total disponível da conta (saldo + cheque especial). */
@@ -277,18 +283,6 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     });
   }
 
-  usarSaldoDisponivel(): void {
-    const conta = this.contaSelecionada;
-    if (!conta) {
-      return;
-    }
-    const max = Math.min(this.saldoDisponivelConta(conta), Number(this.fatura.amount) || 0);
-    if (max <= 0) {
-      return;
-    }
-    this.form.patchValue({ valor: max });
-  }
-
   confirmar(): void {
     if (this.form.invalid || this.enviando) {
       this.form.markAllAsTouched();
@@ -297,11 +291,12 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
     if (this.saldoInsuficiente) {
       const conta = this.contaSelecionada;
       this.snackBar.open(
-        `Saldo insuficiente em ${conta?.nome ?? 'conta'}. Disponível (incl. cheque especial): `
-          + `${this.brl(this.saldoDisponivelConta(conta))}; pagamento: ${this.brl(this.valorPagamento)}. `
-          + `Ajuste o valor ou escolha outra conta.`,
+        `Saldo insuficiente em ${conta?.nome ?? 'conta'}. `
+          + `Disponível (saldo + cheque especial): ${this.brl(this.saldoDisponivelConta(conta))}; `
+          + `necessário para quitar a fatura: ${this.brl(this.valorPagamento)}. `
+          + `Aumente o limite de cheque especial em Contas ou escolha outra conta.`,
         'Fechar',
-        { duration: 6000, panelClass: ['error-snackbar'] }
+        { duration: 7000, panelClass: ['error-snackbar'] }
       );
       this.form.markAllAsTouched();
       return;
@@ -319,7 +314,7 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
       .pagarFatura({
         faturaId,
         contaBancariaId: Number(raw.contaBancariaId),
-        valor: parseValorBrasileiro(raw.valor) ?? 0,
+        valor: this.valorPagamento,
       })
       .subscribe({
         next: () => {

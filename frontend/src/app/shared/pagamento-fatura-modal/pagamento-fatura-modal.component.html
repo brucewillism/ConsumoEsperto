@@ -33,24 +33,23 @@
     <div class="aviso-saldo-body">
       <strong>Saldo insuficiente</strong>
       <p>
-        Disponível {{ brl(saldoDisponivelConta(contaSelecionada)) }}
+        Para quitar a fatura são necessários <strong>{{ brl(valorPagamento) }}</strong>.
+        Disponível nesta conta: <strong>{{ brl(saldoDisponivelConta(contaSelecionada)) }}</strong>
         (saldo {{ brl(contaSelecionada?.saldoAtual) }}
         <ng-container *ngIf="limiteChequeConta(contaSelecionada) > 0">
-          + cheque {{ brl(limiteChequeConta(contaSelecionada)) }}
+          + cheque especial {{ brl(limiteChequeConta(contaSelecionada)) }}
         </ng-container>
         <ng-container *ngIf="limiteChequeConta(contaSelecionada) <= 0"> — sem cheque cadastrado</ng-container>).
-        Pagamento: {{ brl(valorPagamento) }}.
       </p>
-      <p class="dica-cheque" *ngIf="limiteChequeConta(contaSelecionada) <= 0">
-        Cadastre o <strong>limite de cheque especial</strong> (mín. {{ brl(limiteMinimoParaPagamento()) }})
-        em <strong>Contas → Editar {{ contaSelecionada?.nome }}</strong>.
+      <p class="dica-cheque">
+        Cheque especial permite o saldo ficar negativo até o limite cadastrado
+        (ex.: saldo R$ 2.000 + fatura R$ 2.800 → saldo final −R$ 800).
+        O pagamento é sempre <strong>integral</strong>; se saldo + cheque não cobrem o total, aumente o limite
+        em <strong>Contas</strong> ou use outra conta.
       </p>
       <div class="aviso-acoes">
         <button mat-stroked-button type="button" color="accent" (click)="irConfigurarChequeEspecial()">
-          Ir para Contas
-        </button>
-        <button mat-stroked-button type="button" (click)="usarSaldoDisponivel()">
-          Pagar {{ brl(saldoDisponivelConta(contaSelecionada)) }}
+          Ajustar cheque especial em Contas
         </button>
       </div>
     </div>
@@ -86,12 +85,10 @@
     </app-chart-metodologia>
 
     <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
-      <mat-label>Valor do pagamento</mat-label>
+      <mat-label>Valor a debitar (integral)</mat-label>
       <span matTextPrefix>R$&nbsp;</span>
-      <input matInput type="text" formControlName="valor" ceMask="decimal" inputmode="decimal" placeholder="0,00">
-      <mat-hint>Edite para pagamento parcial, se necessário</mat-hint>
-      <mat-error *ngIf="form.get('valor')?.hasError('required')">Informe o valor</mat-error>
-      <mat-error *ngIf="form.get('valor')?.hasError('min')">O valor deve ser maior que zero</mat-error>
+      <input matInput type="text" formControlName="valor" ceMask="decimal" inputmode="decimal" readonly>
+      <mat-hint>Quitação integral do restante da fatura — o saldo pode ficar negativo dentro do cheque especial</mat-hint>
     </mat-form-field>
   </form>
 </mat-dialog-content>

@@ -49,16 +49,29 @@ public class FaturaConciliacaoService {
 
         ContaBancaria conta = contaBancariaService.buscarEntidade(request.getContaBancariaId(), usuarioId);
         BigDecimal valorDevido = resolverValorDevido(fatura);
-        BigDecimal valorFatura = valorDevido;
-        BigDecimal valor = request.getValor() != null ? request.getValor() : valorFatura;
+        BigDecimal jaPago = somaPagamentosRegistrados(fatura);
+        BigDecimal valorRestante = valorDevido.subtract(jaPago).max(BigDecimal.ZERO)
+            .setScale(2, RoundingMode.HALF_UP);
+        if (valorRestante.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("Fatura já está quitada.");
+        }
+        BigDecimal valor = request.getValor() != null ? request.getValor() : valorRestante;
         valor = valor.setScale(2, RoundingMode.HALF_UP);
         if (valor.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Valor do pagamento deve ser positivo.");
         }
+        if (!valorCobreRestanteIntegral(valor, valorRestante)) {
+            throw new IllegalArgumentException(
+                "O pagamento da fatura deve ser integral (restante: R$ " + valorRestante
+                    + "). Cheque especial permite saldo negativo até o limite cadastrado; "
+                    + "não é possível pagar um valor menor que o restante.");
+        }
         if (!conta.temSaldoSuficiente(valor)) {
             throw new IllegalArgumentException(
-                "Saldo insuficiente na conta selecionada. Disponível (incluindo cheque especial): R$ "
-                    + conta.getSaldoDisponivel().setScale(2, RoundingMode.HALF_UP));
+                "Saldo insuficiente na conta selecionada. Disponível (saldo + cheque especial): R$ "
+                    + conta.getSaldoDisponivel().setScale(2, RoundingMode.HALF_UP)
+                    + ". Valor necessário: R$ " + valorRestante
+                    + ". Aumente o limite de cheque especial em Contas ou escolha outra conta.");
         }
 
         String cartaoNome = fatura.getCartaoCredito() != null ? fatura.getCartaoCredito().getNome() : "Cartão";
@@ -177,6 +190,14 @@ public class FaturaConciliacaoService {
             return false;
         }
         return totalPago.add(TOLERANCIA_QUITACAO).compareTo(valorDevido) >= 0;
+    }
+
+    /** Pagamento deve igualar o restante (± tolerância), não um valor menor. */
+    private static boolean valorCobreRestanteIntegral(BigDecimal valorPagamento, BigDecimal valorRestante) {
+        if (valorPagamento == null || valorRestante == null) {
+            return false;
+        }
+        return valorPagamento.subtract(valorRestante).abs().compareTo(TOLERANCIA_QUITACAO) <= 0;
     }
 
     private static BigDecimal nz(BigDecimal v) {
