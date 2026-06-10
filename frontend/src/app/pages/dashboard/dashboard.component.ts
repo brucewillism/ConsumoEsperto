@@ -253,6 +253,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   
   // Estado de carregamento para mostrar spinner
   isLoading = false;
+
+  /** Primeira visita sem cache: oculta cards até o resumo rápido; revisita usa snapshot. */
+  conteudoBloqueado = true;
   
   // Dados de erro para tratamento
   errorMessage = '';
@@ -382,12 +385,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.radarPulsoHud = e.radarPulsoHud;
       });
 
-    const revisita = this.dashboardSessionCache.isFresh();
-    if (revisita) {
-      this.restaurarDashboardDoCache();
+    const cacheFresco = this.dashboardSessionCache.isFresh();
+    const cacheStale = this.dashboardSessionCache.getStale();
+    if (cacheStale) {
+      this.restaurarDashboardDoCache(cacheStale);
+      this.conteudoBloqueado = false;
       this.isLoading = false;
     }
-    this.loadDashboardData({ silent: revisita, completo: false });
+    this.loadDashboardData({ silent: !!cacheStale, completo: false });
 
     fromEvent(document, 'visibilitychange')
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -604,13 +609,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.syncDashboardPageOverlay();
       return;
     }
-    // Evita flash de overlay em recargas rápidas (login / voltar à rota).
+    // Evita flash de overlay em recargas rápidas; só mostra se demorar > 250 ms.
     this.overlayDelayTimer = setTimeout(() => {
       this.overlayDelayTimer = null;
       if (this.isLoading) {
         this.syncDashboardPageOverlay();
       }
-    }, 400);
+    }, 250);
   }
 
   abrirNovoLancamento(): void {
@@ -644,18 +649,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     if (this.isLoadingData) {
       console.log('⚠️ Carregamento já em andamento, ignorando chamada duplicada');
-      if (!silent) {
-        this.setDashboardLoading(true);
-      }
       return;
     }
 
     const now = Date.now();
     if (now - this.lastLoadTime < 2000) {
       console.log('⚠️ Carregamento muito frequente, aguardando cooldown');
-      if (!silent && this.isLoadingData) {
-        this.setDashboardLoading(true);
-      }
       return;
     }
 
@@ -672,8 +671,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadDashboardDataAfterSync(completo);
   }
 
-  private restaurarDashboardDoCache(): void {
-    const snap = this.dashboardSessionCache.get();
+  private restaurarDashboardDoCache(snap = this.dashboardSessionCache.getStale()): void {
     if (!snap) {
       return;
     }
@@ -1338,6 +1336,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     const liberarOverlay = () => {
       this.ultimaAtualizacao = new Date();
+      this.conteudoBloqueado = false;
       this.setDashboardLoading(false);
       this.isLoadingData = false;
       this.isSilentRefreshing = false;

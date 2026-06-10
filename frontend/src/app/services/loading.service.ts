@@ -34,7 +34,8 @@ export class LoadingService {
   });
   readonly authFlowOverlay$ = this.authFlowSubject.asObservable();
 
-  private pageOverlayDepth = 0;
+  /** Um único overlay de página por vez (evita ficar preso por contador de profundidade). */
+  private pageOverlayActive = false;
   private pageOverlayMessage = 'Carregando…';
   private requestOverlayActive = false;
 
@@ -80,17 +81,15 @@ export class LoadingService {
    * Overlay de página (dashboard, page-loading, etc.) — sempre no app-root, cobre o ecrã inteiro.
    */
   setPageOverlay(active: boolean, message = 'Carregando…'): void {
+    this.pageOverlayActive = active;
     if (active) {
-      this.pageOverlayDepth += 1;
       this.pageOverlayMessage = message;
-    } else {
-      this.pageOverlayDepth = Math.max(0, this.pageOverlayDepth - 1);
     }
     this.emitShellOverlay();
   }
 
   updatePageOverlayMessage(message: string): void {
-    if (this.pageOverlayDepth > 0) {
+    if (this.pageOverlayActive) {
       this.pageOverlayMessage = message;
       this.emitShellOverlay();
     }
@@ -102,7 +101,7 @@ export class LoadingService {
       this.shellOverlaySubject.next({ active: true, message: auth.message });
       return;
     }
-    if (this.pageOverlayDepth > 0) {
+    if (this.pageOverlayActive) {
       this.shellOverlaySubject.next({ active: true, message: this.pageOverlayMessage });
       return;
     }
@@ -165,7 +164,7 @@ export class LoadingService {
     }
     this.activeRequests = 0;
     this.requestOverlayActive = false;
-    this.pageOverlayDepth = 0;
+    this.pageOverlayActive = false;
     this.loadingSubject.next(false);
     this.endAuthFlow();
     this.emitShellOverlay();

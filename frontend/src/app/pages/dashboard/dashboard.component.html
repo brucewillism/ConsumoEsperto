@@ -110,8 +110,8 @@
     </div>
   </section>
 
-  <!-- Conteúdo oculto no carregamento inicial; recargas silenciosas não bloqueiam a tela. -->
-  <section class="quick-lancamento" *ngIf="!errorMessage && !isLoading">
+  <!-- Conteúdo oculto só na primeira visita sem cache; revisita mostra snapshot enquanto sincroniza. -->
+  <section class="quick-lancamento" *ngIf="!errorMessage && !conteudoBloqueado">
     <div class="quick-lancamento-card">
       <h3 class="quick-lancamento-title">Novo lançamento</h3>
       <p class="quick-lancamento-hint">Registre receitas, despesas e investimentos sem sair do painel.</p>
@@ -123,7 +123,7 @@
   </section>
 
   <!-- Conteúdo do Dashboard -->
-  <div class="dashboard-content" *ngIf="!isLoading">
+  <div class="dashboard-content" *ngIf="!conteudoBloqueado">
     <!-- Mensagem de Erro -->
     <div class="error-message" *ngIf="errorMessage">
       <div class="error-content">

@@ -59,6 +59,12 @@ export class DashboardSessionCacheService {
     return this.isFresh() ? this.snapshot : null;
   }
 
+  /** Última vista salva (mesmo expirada) — exibe enquanto revalida em segundo plano. */
+  getStale(): DashboardViewSnapshot | null {
+    this.hydrateFromStorage();
+    return this.snapshot;
+  }
+
   clear(): void {
     this.snapshot = null;
     if (typeof sessionStorage !== 'undefined') {
