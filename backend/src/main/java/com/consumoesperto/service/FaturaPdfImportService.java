@@ -514,10 +514,8 @@ public class FaturaPdfImportService {
         if (ativos.isEmpty()) {
             return Optional.empty();
         }
-        if (!FaturaPdfLayoutSupport.bancoExtraidoUtil(banco)) {
-            banco = "";
-        }
-        String token = norm(banco);
+        final String bancoRef = FaturaPdfLayoutSupport.bancoExtraidoUtil(banco) ? banco : "";
+        String token = norm(bancoRef);
         if (token.isBlank()) {
             if (ativos.size() == 1) {
                 return Optional.of(ativos.get(0));
@@ -527,7 +525,7 @@ public class FaturaPdfImportService {
             return Optional.empty();
         }
         return ativos.stream()
-            .filter(c -> cartaoCorrespondeBancoExtraido(c, banco, token))
+            .filter(c -> cartaoCorrespondeBancoExtraido(c, bancoRef, token))
             .findFirst();
     }
 
