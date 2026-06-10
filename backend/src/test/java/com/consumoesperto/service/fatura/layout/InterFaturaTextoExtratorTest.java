@@ -69,6 +69,8 @@ class InterFaturaTextoExtratorTest {
         assertTrue(InterFaturaTextoExtrator.deveIgnorarDescricao("Opções de pagamento"));
         assertTrue(InterFaturaTextoExtrator.pareceLinhaEncargoInter(
             "Total a pagar em encargos e IOF do rotativo"));
+        assertTrue(InterFaturaTextoExtrator.pareceLinhaEncargoInter(
+            "Valor total de juros e encargos"));
     }
 
     @Test
@@ -107,9 +109,31 @@ class InterFaturaTextoExtratorTest {
         destino.add(item("Parcelamento 1+5x", new BigDecimal("71.81"), null, null, null));
 
         InterFaturaTextoExtrator.finalizarListaInter(destino, TEXTO, new BigDecimal("291.14"), 2026);
-        assertEquals(3, destino.size());
+        assertEquals(2, destino.size());
         assertEquals(1, destino.stream().filter(i -> i.getDescricao().contains("PARC")).count());
         assertFalse(destino.stream().anyMatch(i -> i.getValor().compareTo(new BigDecimal("71.81")) == 0));
+        assertEquals(
+            new BigDecimal("291.14"),
+            destino.stream().map(ImportacaoFaturaItemDTO::getValor).reduce(BigDecimal.ZERO, BigDecimal::add)
+        );
+    }
+
+    @Test
+    void finalizarRemoveEncargosSimuladosEConciliaComTotal() {
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        LocalDate fev21 = LocalDate.of(2026, 2, 21);
+        destino.add(item("PARC SALDO TOT", new BigDecimal("273.14"), fev21, 4, 6));
+        destino.add(item("APPLE.COM/BILL", new BigDecimal("11.50"), LocalDate.of(2026, 4, 28), null, null));
+        destino.add(item("APPLE.COM/BILL", new BigDecimal("18.00"), LocalDate.of(2026, 4, 29), null, null));
+        destino.add(item("Valor total de juros e encargos", new BigDecimal("53.21"), LocalDate.of(2026, 5, 25), null, null));
+
+        InterFaturaTextoExtrator.finalizarListaInter(destino, TEXTO, new BigDecimal("291.14"), 2026);
+        assertEquals(2, destino.size());
+        assertFalse(destino.stream().anyMatch(i -> i.getDescricao().toLowerCase().contains("juros")));
+        assertEquals(
+            new BigDecimal("291.14"),
+            destino.stream().map(ImportacaoFaturaItemDTO::getValor).reduce(BigDecimal.ZERO, BigDecimal::add)
+        );
     }
 
     private static ImportacaoFaturaItemDTO item(

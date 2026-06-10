@@ -211,6 +211,54 @@ public final class InterFaturaTextoExtrator {
             removerValoresCitadosEmOpcoesPagamento(itens, textoPdf);
             colapsarMesmaDataValorParcelaMenor(itens);
             podarEspurios(itens, textoPdf);
+            ajustarSomaAoTotal(itens, total);
+        }
+    }
+
+    /**
+     * Quando a soma ainda excede o total da fatura, remove o lançamento cuja exclusão
+     * aproxima mais a soma do total (ex.: simulação de juros R$ 53,21 ou Apple duplicado em «Próximas faturas»).
+     */
+    private static void ajustarSomaAoTotal(List<ImportacaoFaturaItemDTO> itens, BigDecimal total) {
+        if (itens == null || itens.isEmpty() || total == null) {
+            return;
+        }
+        BigDecimal tolerancia = new BigDecimal("0.01");
+        BigDecimal soma = somaValores(itens);
+        while (soma.compareTo(total.add(tolerancia)) > 0 && itens.size() > 1) {
+            ImportacaoFaturaItemDTO remover = null;
+            BigDecimal melhorDist = distanciaAoTotal(soma, total);
+            for (ImportacaoFaturaItemDTO candidato : itens) {
+                if (candidato.getValor() == null) {
+                    continue;
+                }
+                BigDecimal novaSoma = soma.subtract(candidato.getValor());
+                BigDecimal dist = distanciaAoTotal(novaSoma, total);
+                if (dist.compareTo(melhorDist) >= 0) {
+                    continue;
+                }
+                boolean bateExato = dist.compareTo(tolerancia) <= 0;
+                boolean naoFicaMuitoAbaixo = novaSoma.compareTo(total.subtract(tolerancia)) >= 0;
+                if (bateExato || naoFicaMuitoAbaixo) {
+                    remover = candidato;
+                    melhorDist = dist;
+                }
+            }
+            if (remover == null) {
+                break;
+            }
+            itens.remove(remover);
+            soma = somaValores(itens);
+            log.info(
+                "Inter ajuste total: removido «{}» ({}) — soma agora {} (alvo {}).",
+                remover.getDescricao(),
+                remover.getValor(),
+                soma,
+                total
+            );
+            if (distanciaAoTotal(soma, total).compareTo(tolerancia) <= 0) {
+                break;
+            }
         }
     }
 
@@ -723,6 +771,8 @@ public final class InterFaturaTextoExtrator {
         }
         return n.startsWith("total a pagar")
             || n.contains("total a pagar em")
+            || n.contains("valor total de juros")
+            || n.contains("total de juros e encargos")
             || n.contains("encargos e iof")
             || n.contains("iof do rotativo")
             || n.contains("iof adicional")
@@ -730,6 +780,7 @@ public final class InterFaturaTextoExtrator {
             || n.contains("encargos rotativos")
             || n.contains("juros do rotativo")
             || n.contains("juros rotativos")
+            || n.contains("juros e encargos")
             || n.contains("encargos em caso")
             || n.contains("valor total financiado");
     }
