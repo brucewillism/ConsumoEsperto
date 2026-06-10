@@ -31,18 +31,17 @@
     placeholder="(11) 99999-9999"
     [disabled]="salvando"
   />
-</mat-dialog-content>
 
-<mat-dialog-actions class="convidar-actions">
   <button
     type="button"
-    mat-raised-button
-    color="primary"
     class="convidar-btn-enviar"
     (click)="enviar()"
     [disabled]="salvando"
   >
     {{ salvando ? 'Enviando…' : 'Enviar convite' }}
   </button>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
   <button type="button" mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
 </mat-dialog-actions>

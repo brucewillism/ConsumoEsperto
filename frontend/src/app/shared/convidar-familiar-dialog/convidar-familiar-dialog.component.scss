@@ -58,3 +58,34 @@
   text-transform: uppercase;
   color: var(--text-muted, #64748b);
 }
+
+.convidar-btn-enviar {
+  display: block;
+  width: 100%;
+  margin-top: 1rem;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid rgba(0, 229, 255, 0.55);
+  border-radius: 10px;
+  background: rgba(0, 229, 255, 0.28);
+  color: #f8fafc;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 229, 255, 0.38);
+    border-color: rgba(0, 229, 255, 0.85);
+    box-shadow: 0 0 18px rgba(0, 229, 255, 0.25);
+  }
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+}

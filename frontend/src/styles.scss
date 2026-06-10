@@ -767,21 +767,6 @@ a {
     overflow: visible !important;
   }
 
-  .mat-mdc-dialog-actions.convidar-actions {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-    overflow: visible !important;
-    padding-top: 16px !important;
-  }
-
-  .mat-mdc-dialog-actions.convidar-actions .mat-mdc-button,
-  .mat-mdc-dialog-actions.convidar-actions .mat-mdc-raised-button {
-    width: 100% !important;
-    min-height: 44px !important;
-    margin: 0 !important;
-  }
 }
 
 .ce-form-dialog .ce-form-row {
