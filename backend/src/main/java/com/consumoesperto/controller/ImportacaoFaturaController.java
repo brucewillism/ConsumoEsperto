@@ -50,7 +50,8 @@ public class ImportacaoFaturaController {
     public ResponseEntity<ImportacaoFaturaDTO> upload(
         @AuthenticationPrincipal UserPrincipal user,
         @RequestPart(value = "file", required = false) MultipartFile filePart,
-        @RequestParam(value = "file", required = false) MultipartFile fileParam
+        @RequestParam(value = "file", required = false) MultipartFile fileParam,
+        @RequestParam(value = "senhaPdf", required = false) String senhaPdf
     ) throws java.io.IOException {
         MultipartFile file = escolherArquivoMultipart(filePart, fileParam);
         if (file == null || file.isEmpty()) {
@@ -60,7 +61,7 @@ public class ImportacaoFaturaController {
         if (!nome.endsWith(".pdf") && !"application/pdf".equalsIgnoreCase(file.getContentType())) {
             throw new IllegalArgumentException("O ficheiro deve ser um PDF de fatura de cartão.");
         }
-        return ResponseEntity.ok(faturaPdfImportService.processarPdf(user.getId(), file.getBytes()));
+        return ResponseEntity.ok(faturaPdfImportService.processarPdf(user.getId(), file.getBytes(), senhaPdf));
     }
 
     private static MultipartFile escolherArquivoMultipart(MultipartFile part, MultipartFile param) {

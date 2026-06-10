@@ -110,12 +110,25 @@ public class DocumentoIAContextService {
         FaturaPdfLayoutStrategy layoutFatura,
         boolean classificacaoAmpla
     ) {
-        List<String> paginas = pdfTextExtractionService.extrairTextoPorPagina(pdfBytes);
+        return extrairDocumentoPdf(usuarioId, pdfBytes, layoutFatura, classificacaoAmpla, null);
+    }
+
+    public JsonNode extrairDocumentoPdf(
+        Long usuarioId,
+        byte[] pdfBytes,
+        FaturaPdfLayoutStrategy layoutFatura,
+        boolean classificacaoAmpla,
+        String senhaPdf
+    ) {
+        List<String> paginas = pdfTextExtractionService.extrairTextoPorPagina(pdfBytes, senhaPdf);
         String fullText = juntarPaginas(paginas);
-        if (fullText.length() < 80) {
+        if (!pdfTextExtractionService.textoPareceFaturaLegivel(fullText)) {
+            if (pdfTextExtractionService.pdfPareceCriptografado(pdfBytes)) {
+                throw new IllegalArgumentException(PdfTextExtractionService.mensagemPdfProtegidoItau(senhaPdf));
+            }
             throw new IllegalArgumentException(
-                "Não consegui ler texto suficiente do PDF. Arquivos protegidos por senha (comum em Inter e Mastercard) "
-                    + "precisam ser reexportados sem senha ou enviados pelo app do banco em PDF aberto.");
+                "Não consegui ler texto suficiente do PDF. Arquivos protegidos por senha (comum em Itaú, Inter e Mastercard) "
+                    + "precisam da senha correta ou reexportação sem proteção.");
         }
         log.info("[PDF-FULL-SCAN] layout={} paginasExtraidas={} caracteresTotais={}",
             layoutFatura.layout(), paginas.size(), fullText.length());

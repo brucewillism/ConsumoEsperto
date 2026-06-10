@@ -96,15 +96,22 @@ public class FaturaPdfImportService {
     }
 
     public ImportacaoFaturaDTO processarPdf(Long usuarioId, byte[] pdfBytes) {
+        return processarPdf(usuarioId, pdfBytes, null);
+    }
+
+    public ImportacaoFaturaDTO processarPdf(Long usuarioId, byte[] pdfBytes, String senhaPdf) {
         if (pdfBytes == null || pdfBytes.length == 0) {
             throw new IllegalArgumentException("O PDF está vazio ou não foi recebido.");
         }
         log.info("Processando PDF de fatura userId={} bytes={}", usuarioId, pdfBytes.length);
         try {
-            String textoPdf = pdfTextExtractionService.extrairTexto(pdfBytes);
+            String textoPdf = pdfTextExtractionService.extrairTexto(pdfBytes, senhaPdf);
             FaturaPdfLayoutStrategy layout = faturaPdfLayoutDetector.detectarTexto(textoPdf);
-            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes, layout, false);
-            return selfProvider.getObject().processarExtracao(usuarioId, extracted, layout, textoPdf);
+            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(
+                usuarioId, pdfBytes, layout, false, senhaPdf);
+            ImportacaoFaturaDTO dto = selfProvider.getObject().processarExtracao(usuarioId, extracted, layout, textoPdf);
+            validarImportacaoNaoVazia(dto, pdfBytes, senhaPdf);
+            return dto;
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
@@ -499,6 +506,22 @@ public class FaturaPdfImportService {
         return "Não encontrei cartão ativo correspondente a «" + ref + "». "
             + "Seus cartões ativos: " + lista + ". "
             + "Ajuste o nome ou banco do cartão em *Cartões* para coincidir com a fatura.";
+    }
+
+    private void validarImportacaoNaoVazia(ImportacaoFaturaDTO dto, byte[] pdfBytes, String senhaPdf) {
+        if (dto == null) {
+            return;
+        }
+        boolean semItens = dto.getItens() == null || dto.getItens().isEmpty();
+        boolean semTotal = dto.getValorTotal() == null || dto.getValorTotal().compareTo(BigDecimal.ZERO) <= 0;
+        if (semItens && semTotal && pdfTextExtractionService.pdfPareceCriptografado(pdfBytes)) {
+            throw new IllegalArgumentException(PdfTextExtractionService.mensagemPdfProtegidoItau(senhaPdf));
+        }
+        if (semItens && semTotal) {
+            throw new IllegalArgumentException(
+                "Não extraí lançamentos nem total desta fatura. Verifique se o PDF está legível "
+                    + "ou informe a senha (Itaú: 5 primeiros dígitos do CPF).");
+        }
     }
 
     private FaturaPdfLayoutStrategy layoutParaProcessamento(

@@ -37,6 +37,8 @@ export class ImportacoesPendentesComponent implements OnInit {
   enviandoPdf = false;
   apagandoTodas = false;
   apagandoId: number | null = null;
+  /** Itaú e outros bancos: senha do PDF (ex.: 5 primeiros dígitos do CPF). */
+  senhaPdf = '';
 
   constructor(
     private importacaoService: ImportacaoFaturaService,
@@ -222,7 +224,7 @@ export class ImportacoesPendentesComponent implements OnInit {
       return;
     }
     this.enviandoPdf = true;
-    this.importacaoService.upload(file).subscribe({
+    this.importacaoService.upload(file, this.senhaPdf).subscribe({
       next: () => {
         this.toast.success('Fatura processada. Revise a conciliação antes de confirmar.');
         this.enviandoPdf = false;

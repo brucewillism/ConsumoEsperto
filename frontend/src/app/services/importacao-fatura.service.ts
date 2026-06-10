@@ -66,10 +66,14 @@ export class ImportacaoFaturaService {
     );
   }
 
-  /** PDF + extração IA pode levar vários minutos. */
-  upload(file: File): Observable<ImportacaoFatura> {
+  /** PDF + extração IA pode levar vários minutos. Faturas Itaú: senhaPdf = 5 primeiros dígitos do CPF. */
+  upload(file: File, senhaPdf?: string): Observable<ImportacaoFatura> {
     const form = new FormData();
     form.append('file', file);
+    const senha = senhaPdf?.trim();
+    if (senha) {
+      form.append('senhaPdf', senha);
+    }
     return this.http.post<ImportacaoFatura>(`${this.base}/upload`, form).pipe(timeout(300_000));
   }
 }

@@ -37,6 +37,17 @@
       <mat-icon>cloud_upload</mat-icon>
       <h2>Arraste a fatura PDF aqui</h2>
       <p>A IA faz a leitura e mostra a conciliação em tempo real antes de confirmar.</p>
+      <label class="senha-pdf-field">
+        <span>Senha do PDF (Itaú: 5 primeiros dígitos do CPF)</span>
+        <input
+          type="password"
+          inputmode="numeric"
+          maxlength="11"
+          [(ngModel)]="senhaPdf"
+          placeholder="Ex.: 12345"
+          autocomplete="off"
+        />
+      </label>
       <input #invoiceFile type="file" accept="application/pdf,.pdf" hidden (change)="onFileSelected($event)">
       <button mat-raised-button color="primary" (click)="invoiceFile.click()">
         Selecionar PDF
