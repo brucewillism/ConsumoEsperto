@@ -730,6 +730,14 @@ a {
 .ce-form-dialog .mat-mdc-dialog-content {
   padding-top: 4px !important;
   max-height: none !important;
+  min-width: min(100%, 420px);
+  box-sizing: border-box;
+}
+
+.ce-form-dialog .ce-form-body .mat-mdc-form-field,
+.ce-form-dialog .mat-mdc-form-field.full {
+  width: 100%;
+  display: block;
 }
 
 .ce-form-dialog .mat-mdc-dialog-actions {

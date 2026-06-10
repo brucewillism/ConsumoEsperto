@@ -28,6 +28,7 @@ public class GrupoFamiliarService {
     private final GrupoFamiliarMembroRepository membroRepository;
     private final UsuarioRepository usuarioRepository;
     private final WhatsAppNotificationService whatsAppNotificationService;
+    private final WhatsAppUserMappingService whatsAppUserMappingService;
 
     @Transactional
     public GrupoFamiliarDTO criar(Long usuarioId, GrupoFamiliarRequest request) {
@@ -65,6 +66,14 @@ public class GrupoFamiliarService {
         String whatsapp = request != null && request.getWhatsapp() != null ? request.getWhatsapp().trim() : "";
         if (email.isBlank() && whatsapp.isBlank()) {
             throw new IllegalArgumentException("Informe e-mail ou WhatsApp do convidado.");
+        }
+        if (!whatsapp.isBlank()) {
+            try {
+                whatsapp = whatsAppUserMappingService.normalize(whatsapp);
+            } catch (RuntimeException e) {
+                throw new IllegalArgumentException(
+                    "Número de WhatsApp inválido. Use DDD + número, ex.: (11) 99999-9999.");
+            }
         }
 
         Usuario convidado = resolveUsuario(email, whatsapp).orElse(null);
@@ -146,7 +155,7 @@ public class GrupoFamiliarService {
             }
         }
         if (whatsapp != null && !whatsapp.isBlank()) {
-            return usuarioRepository.findByWhatsappNumero(whatsapp);
+            return whatsAppUserMappingService.findByIncomingNumber(whatsapp);
         }
         return Optional.empty();
     }

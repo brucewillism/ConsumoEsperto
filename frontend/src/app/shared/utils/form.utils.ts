@@ -105,6 +105,44 @@ export function formatCpfDisplay(value: string): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+/** Apenas dígitos do telefone BR (com ou sem código 55). */
+export function phoneDigitsBr(value: string): string {
+  let d = sanitizeIntegerInput(value);
+  if (d.startsWith('55') && d.length > 13) {
+    d = d.slice(0, 13);
+  } else if (!d.startsWith('55') && d.length > 11) {
+    d = d.slice(0, 11);
+  }
+  return d;
+}
+
+/** Normaliza telefone BR para E.164 (+5511999999999). */
+export function normalizePhoneBrE164(value: string): string {
+  const d = phoneDigitsBr(value);
+  if (!d) {
+    return '';
+  }
+  if (d.startsWith('55')) {
+    return `+${d}`;
+  }
+  if (d.length === 10 || d.length === 11) {
+    return `+55${d}`;
+  }
+  return `+${d}`;
+}
+
+/** Valida telefone BR com DDD (mín. 10 dígitos nacionais). */
+export function isWhatsappBrValido(value: string): boolean {
+  const d = phoneDigitsBr(value);
+  if (!d) {
+    return false;
+  }
+  if (d.startsWith('55')) {
+    return d.length >= 12;
+  }
+  return d.length >= 10;
+}
+
 /** Telefone BR: +55 (11) 99999-9999 ou variantes parciais. */
 export function formatPhoneBrDisplay(value: string): string {
   let d = value.replace(/\D/g, '');
