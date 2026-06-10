@@ -1,7 +1,6 @@
 package com.consumoesperto.service.fatura.layout;
 
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -10,16 +9,16 @@ import java.util.List;
 import java.util.Optional;
 
 @Component
-public class BancoBrasilFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
+public class XpFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
 
     @Override
     public BancoFaturaLayout layout() {
-        return BancoFaturaLayout.BANCO_BRASIL;
+        return BancoFaturaLayout.XP;
     }
 
     @Override
     public int prioridade() {
-        return 85;
+        return 83;
     }
 
     @Override
@@ -27,25 +26,24 @@ public class BancoBrasilFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
         return FaturaPdfLayoutSupport.pareceFaturaCartao(textoPdfNormalizado)
             && FaturaPdfLayoutSupport.contem(
                 textoPdfNormalizado,
-                "banco do brasil",
-                "bb com br",
-                "saldo fatura anterior",
-                "lancamentos no cartao"
+                "xp investimentos",
+                "xp inc",
+                "cartao xp",
+                "visa infinite xp"
             );
     }
 
     @Override
     public String instrucoesExtracaoIa() {
-        return "LAYOUT BANCO DO BRASIL: preencha saldoFaturaAnterior e saldoFaturaAtual quando visíveis. "
-            + "valorTotal = total a pagar. 'SALDO FATURA ANTERIOR' nos lançamentos NÃO é despesa nova. "
-            + "bancoCartao='Banco do Brasil'. Ignore pagamentos recebidos e saldo restante da fatura anterior.";
+        return "LAYOUT XP INVESTIMENTOS: bancoCartao='XP'. Extraia compras/parcelas do período da fatura. "
+            + "Ignore simulações, limites e «Próximas faturas».";
     }
 
     @Override
     public List<ImportacaoFaturaItemDTO> sanitizarLancamentos(List<ImportacaoFaturaItemDTO> itens) {
         List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
         for (ImportacaoFaturaItemDTO item : itens) {
-            if (!BancoBrasilFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())) {
+            if (!XpFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())) {
                 out.add(item);
             }
         }
@@ -53,28 +51,18 @@ public class BancoBrasilFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
     }
 
     @Override
-    public BigDecimal resolverReferenciaConciliacao(
-        JsonNode extracted,
-        BigDecimal valorTotalPdf,
-        List<ImportacaoFaturaItemDTO> itens,
-        List<String> auditorias
-    ) {
-        return FaturaPdfLayoutConciliacao.preferirSaldoFaturaAtual(extracted, valorTotalPdf, itens, auditorias);
-    }
-
-    @Override
     public String sugerirBancoCartao(String textoPdfNormalizado, String bancoExtraidoIa) {
-        return "Banco do Brasil";
+        return "XP";
     }
 
     @Override
     public void complementarLancamentosDoTexto(String textoPdf, List<ImportacaoFaturaItemDTO> itens, int anoReferencia) {
-        BancoBrasilFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
+        XpFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
     }
 
     @Override
     public Optional<BigDecimal> extrairTotalFaturaDoTexto(String textoPdf) {
-        return BancoBrasilFaturaTextoExtrator.extrairTotalFatura(textoPdf);
+        return XpFaturaTextoExtrator.extrairTotalFatura(textoPdf);
     }
 
     @Override
@@ -84,6 +72,6 @@ public class BancoBrasilFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
         BigDecimal totalFatura,
         int anoReferencia
     ) {
-        BancoBrasilFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
+        XpFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
     }
 }

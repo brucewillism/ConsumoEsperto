@@ -9,43 +9,35 @@ import java.util.List;
 import java.util.Optional;
 
 @Component
-public class MercadoPagoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
+public class C6BankFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
 
     @Override
     public BancoFaturaLayout layout() {
-        return BancoFaturaLayout.MERCADO_PAGO;
+        return BancoFaturaLayout.C6_BANK;
     }
 
     @Override
     public int prioridade() {
-        return 87;
+        return 84;
     }
 
     @Override
     public boolean reconhece(String textoPdfNormalizado) {
         return FaturaPdfLayoutSupport.pareceFaturaCartao(textoPdfNormalizado)
-            && FaturaPdfLayoutSupport.contem(
-                textoPdfNormalizado,
-                "mercado pago",
-                "mercadopago",
-                "movimentacoes na fatura",
-                "credit card mp"
-            );
+            && FaturaPdfLayoutSupport.contem(textoPdfNormalizado, "c6 bank", "c6bank", "c6 carbon", "banco c6");
     }
 
     @Override
     public String instrucoesExtracaoIa() {
-        return "LAYOUT MERCADO PAGO: bancoCartao='Mercado Pago'. Lançamentos reais em 'Movimentações na fatura' "
-            + "(colunas Data/Movimentações/Valor). 'Resumo da fatura', 'Consumos', 'Tarifas', "
-            + "'Total da fatura de', 'Pagamentos e créditos devolvidos' são resumo — NÃO liste como lançamento. "
-            + "Ignore simulações '1 + [9]x', parcelamentos de fatura ativos e rodapé SAC.";
+        return "LAYOUT C6 BANK: bancoCartao='C6 Bank'. Extraia compras/parcelas do período. "
+            + "Ignore «Próximas faturas», opções de pagamento simuladas e Átomos/pontos.";
     }
 
     @Override
     public List<ImportacaoFaturaItemDTO> sanitizarLancamentos(List<ImportacaoFaturaItemDTO> itens) {
         List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
         for (ImportacaoFaturaItemDTO item : itens) {
-            if (!MercadoPagoFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())) {
+            if (!C6BankFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())) {
                 out.add(item);
             }
         }
@@ -54,17 +46,17 @@ public class MercadoPagoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
 
     @Override
     public String sugerirBancoCartao(String textoPdfNormalizado, String bancoExtraidoIa) {
-        return "Mercado Pago";
+        return "C6 Bank";
     }
 
     @Override
     public void complementarLancamentosDoTexto(String textoPdf, List<ImportacaoFaturaItemDTO> itens, int anoReferencia) {
-        MercadoPagoFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
+        C6BankFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
     }
 
     @Override
     public Optional<BigDecimal> extrairTotalFaturaDoTexto(String textoPdf) {
-        return MercadoPagoFaturaTextoExtrator.extrairTotalFatura(textoPdf);
+        return C6BankFaturaTextoExtrator.extrairTotalFatura(textoPdf);
     }
 
     @Override
@@ -74,6 +66,6 @@ public class MercadoPagoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
         BigDecimal totalFatura,
         int anoReferencia
     ) {
-        MercadoPagoFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
+        C6BankFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
     }
 }

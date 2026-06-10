@@ -1,7 +1,6 @@
 package com.consumoesperto.service.fatura.layout;
 
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -10,16 +9,16 @@ import java.util.List;
 import java.util.Optional;
 
 @Component
-public class BancoBrasilFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
+public class BradescoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
 
     @Override
     public BancoFaturaLayout layout() {
-        return BancoFaturaLayout.BANCO_BRASIL;
+        return BancoFaturaLayout.BRADESCO;
     }
 
     @Override
     public int prioridade() {
-        return 85;
+        return 86;
     }
 
     @Override
@@ -27,54 +26,45 @@ public class BancoBrasilFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
         return FaturaPdfLayoutSupport.pareceFaturaCartao(textoPdfNormalizado)
             && FaturaPdfLayoutSupport.contem(
                 textoPdfNormalizado,
-                "banco do brasil",
-                "bb com br",
-                "saldo fatura anterior",
-                "lancamentos no cartao"
+                "bradesco",
+                "banco bradesco",
+                "bradescard",
+                "www bradesco com br"
             );
     }
 
     @Override
     public String instrucoesExtracaoIa() {
-        return "LAYOUT BANCO DO BRASIL: preencha saldoFaturaAnterior e saldoFaturaAtual quando visíveis. "
-            + "valorTotal = total a pagar. 'SALDO FATURA ANTERIOR' nos lançamentos NÃO é despesa nova. "
-            + "bancoCartao='Banco do Brasil'. Ignore pagamentos recebidos e saldo restante da fatura anterior.";
+        return "LAYOUT BRADESCO: bancoCartao='Bradesco'. Extraia só compras/parcelas/taxas do período da fatura. "
+            + "Ignore «Próximas faturas», simulações de parcelamento, limites, pontos e encargos rotativos simulados. "
+            + "Parcela N de M na linha seguinte = parcelaAtual/totalParcelas.";
     }
 
     @Override
     public List<ImportacaoFaturaItemDTO> sanitizarLancamentos(List<ImportacaoFaturaItemDTO> itens) {
         List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
         for (ImportacaoFaturaItemDTO item : itens) {
-            if (!BancoBrasilFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())) {
-                out.add(item);
+            if (BradescoFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())) {
+                continue;
             }
+            out.add(item);
         }
         return out;
     }
 
     @Override
-    public BigDecimal resolverReferenciaConciliacao(
-        JsonNode extracted,
-        BigDecimal valorTotalPdf,
-        List<ImportacaoFaturaItemDTO> itens,
-        List<String> auditorias
-    ) {
-        return FaturaPdfLayoutConciliacao.preferirSaldoFaturaAtual(extracted, valorTotalPdf, itens, auditorias);
-    }
-
-    @Override
     public String sugerirBancoCartao(String textoPdfNormalizado, String bancoExtraidoIa) {
-        return "Banco do Brasil";
+        return "Bradesco";
     }
 
     @Override
     public void complementarLancamentosDoTexto(String textoPdf, List<ImportacaoFaturaItemDTO> itens, int anoReferencia) {
-        BancoBrasilFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
+        BradescoFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
     }
 
     @Override
     public Optional<BigDecimal> extrairTotalFaturaDoTexto(String textoPdf) {
-        return BancoBrasilFaturaTextoExtrator.extrairTotalFatura(textoPdf);
+        return BradescoFaturaTextoExtrator.extrairTotalFatura(textoPdf);
     }
 
     @Override
@@ -84,6 +74,6 @@ public class BancoBrasilFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
         BigDecimal totalFatura,
         int anoReferencia
     ) {
-        BancoBrasilFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
+        BradescoFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
     }
 }

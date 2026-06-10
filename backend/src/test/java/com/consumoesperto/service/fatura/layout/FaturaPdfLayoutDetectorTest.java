@@ -21,8 +21,14 @@ class FaturaPdfLayoutDetectorTest {
                 new ItauFaturaPdfLayoutStrategy(),
                 new InterFaturaPdfLayoutStrategy(),
                 new MercadoPagoFaturaPdfLayoutStrategy(),
-                new MastercardFaturaPdfLayoutStrategy(),
-                new BancoBrasilFaturaPdfLayoutStrategy()
+                new BradescoFaturaPdfLayoutStrategy(),
+                new SantanderFaturaPdfLayoutStrategy(),
+                new BancoBrasilFaturaPdfLayoutStrategy(),
+                new CaixaFaturaPdfLayoutStrategy(),
+                new C6BankFaturaPdfLayoutStrategy(),
+                new XpFaturaPdfLayoutStrategy(),
+                new BancoNordesteFaturaPdfLayoutStrategy(),
+                new MastercardFaturaPdfLayoutStrategy()
             ),
             new GenericoFaturaPdfLayoutStrategy()
         );
@@ -53,6 +59,48 @@ class FaturaPdfLayoutDetectorTest {
     }
 
     @Test
+    void detectaBancoBrasil() {
+        String texto = "Banco do Brasil lançamentos no cartão saldo fatura anterior total da fatura vencimento";
+        assertEquals(BancoFaturaLayout.BANCO_BRASIL, detector.detectarTexto(texto).layout());
+    }
+
+    @Test
+    void detectaBradesco() {
+        String texto = "Bradesco fatura cartão lançamentos data de vencimento pagamento mínimo";
+        assertEquals(BancoFaturaLayout.BRADESCO, detector.detectarTexto(texto).layout());
+    }
+
+    @Test
+    void detectaSantander() {
+        String texto = "Santander fatura cartão lançamentos esfera data de vencimento";
+        assertEquals(BancoFaturaLayout.SANTANDER, detector.detectarTexto(texto).layout());
+    }
+
+    @Test
+    void detectaCaixa() {
+        String texto = "Caixa Econômica Federal fatura cartão lançamentos data de vencimento";
+        assertEquals(BancoFaturaLayout.CAIXA, detector.detectarTexto(texto).layout());
+    }
+
+    @Test
+    void detectaC6Bank() {
+        String texto = "C6 Bank fatura cartão lançamentos data de vencimento pagamento mínimo";
+        assertEquals(BancoFaturaLayout.C6_BANK, detector.detectarTexto(texto).layout());
+    }
+
+    @Test
+    void detectaXp() {
+        String texto = "XP Investimentos cartão xp fatura lançamentos data de vencimento";
+        assertEquals(BancoFaturaLayout.XP, detector.detectarTexto(texto).layout());
+    }
+
+    @Test
+    void detectaBancoNordeste() {
+        String texto = "Banco do Nordeste fatura cartão lançamentos data de vencimento";
+        assertEquals(BancoFaturaLayout.BANCO_NORDESTE, detector.detectarTexto(texto).layout());
+    }
+
+    @Test
     void detectaMastercardSemEmissorEspecifico() {
         String texto = "Fatura Mastercard cartão de crédito data de vencimento pagamento mínimo";
         assertEquals(BancoFaturaLayout.MASTERCARD, detector.detectarTexto(texto).layout());
@@ -62,6 +110,12 @@ class FaturaPdfLayoutDetectorTest {
     void itauVenceMastercardQuandoAmbosAparecem() {
         String texto = "Itaú Unibanco Mastercard fatura vencimento pagamento mínimo";
         assertEquals(BancoFaturaLayout.ITAU, detector.detectarTexto(texto).layout());
+    }
+
+    @Test
+    void bradescoVenceMastercard() {
+        String texto = "Bradesco Mastercard fatura vencimento pagamento mínimo lançamentos";
+        assertEquals(BancoFaturaLayout.BRADESCO, detector.detectarTexto(texto).layout());
     }
 
     @Test

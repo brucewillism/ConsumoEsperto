@@ -8,8 +8,14 @@ public enum BancoFaturaLayout {
     ITAU("Itaú"),
     INTER("Inter"),
     MERCADO_PAGO("Mercado Pago"),
-    MASTERCARD("Mastercard"),
     BANCO_BRASIL("Banco do Brasil"),
+    BRADESCO("Bradesco"),
+    SANTANDER("Santander"),
+    CAIXA("Caixa"),
+    C6_BANK("C6 Bank"),
+    XP("XP Investimentos"),
+    BANCO_NORDESTE("Banco do Nordeste"),
+    MASTERCARD("Mastercard"),
     GENERICO("Genérico");
 
     private final String nomeExibicao;

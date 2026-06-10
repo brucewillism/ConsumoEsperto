@@ -28,7 +28,11 @@ public class MastercardFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrateg
         if (!FaturaPdfLayoutSupport.pareceFaturaCartao(textoPdfNormalizado)) {
             return false;
         }
-        if (FaturaPdfLayoutSupport.contem(textoPdfNormalizado, "itau", "nubank", "banco inter", "mercado pago", "banco do brasil")) {
+        if (FaturaPdfLayoutSupport.contem(
+            textoPdfNormalizado,
+            "itau", "nubank", "banco inter", "mercado pago", "banco do brasil",
+            "bradesco", "santander", "caixa economica", "c6 bank", "xp investimentos", "banco do nordeste"
+        )) {
             return false;
         }
         return FaturaPdfLayoutSupport.contem(

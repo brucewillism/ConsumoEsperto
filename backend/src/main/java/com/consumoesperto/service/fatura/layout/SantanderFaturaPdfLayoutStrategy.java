@@ -9,43 +9,35 @@ import java.util.List;
 import java.util.Optional;
 
 @Component
-public class MercadoPagoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
+public class SantanderFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
 
     @Override
     public BancoFaturaLayout layout() {
-        return BancoFaturaLayout.MERCADO_PAGO;
+        return BancoFaturaLayout.SANTANDER;
     }
 
     @Override
     public int prioridade() {
-        return 87;
+        return 86;
     }
 
     @Override
     public boolean reconhece(String textoPdfNormalizado) {
         return FaturaPdfLayoutSupport.pareceFaturaCartao(textoPdfNormalizado)
-            && FaturaPdfLayoutSupport.contem(
-                textoPdfNormalizado,
-                "mercado pago",
-                "mercadopago",
-                "movimentacoes na fatura",
-                "credit card mp"
-            );
+            && FaturaPdfLayoutSupport.contem(textoPdfNormalizado, "santander", "banco santander", "esfera");
     }
 
     @Override
     public String instrucoesExtracaoIa() {
-        return "LAYOUT MERCADO PAGO: bancoCartao='Mercado Pago'. Lançamentos reais em 'Movimentações na fatura' "
-            + "(colunas Data/Movimentações/Valor). 'Resumo da fatura', 'Consumos', 'Tarifas', "
-            + "'Total da fatura de', 'Pagamentos e créditos devolvidos' são resumo — NÃO liste como lançamento. "
-            + "Ignore simulações '1 + [9]x', parcelamentos de fatura ativos e rodapé SAC.";
+        return "LAYOUT SANTANDER: bancoCartao='Santander'. Extraia só despesas do período da fatura. "
+            + "Ignore «Próximas faturas», simulações, limites, pontos Esfera e encargos projetados.";
     }
 
     @Override
     public List<ImportacaoFaturaItemDTO> sanitizarLancamentos(List<ImportacaoFaturaItemDTO> itens) {
         List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
         for (ImportacaoFaturaItemDTO item : itens) {
-            if (!MercadoPagoFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())) {
+            if (!SantanderFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())) {
                 out.add(item);
             }
         }
@@ -54,17 +46,17 @@ public class MercadoPagoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
 
     @Override
     public String sugerirBancoCartao(String textoPdfNormalizado, String bancoExtraidoIa) {
-        return "Mercado Pago";
+        return "Santander";
     }
 
     @Override
     public void complementarLancamentosDoTexto(String textoPdf, List<ImportacaoFaturaItemDTO> itens, int anoReferencia) {
-        MercadoPagoFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
+        SantanderFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
     }
 
     @Override
     public Optional<BigDecimal> extrairTotalFaturaDoTexto(String textoPdf) {
-        return MercadoPagoFaturaTextoExtrator.extrairTotalFatura(textoPdf);
+        return SantanderFaturaTextoExtrator.extrairTotalFatura(textoPdf);
     }
 
     @Override
@@ -74,6 +66,6 @@ public class MercadoPagoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
         BigDecimal totalFatura,
         int anoReferencia
     ) {
-        MercadoPagoFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
+        SantanderFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
     }
 }

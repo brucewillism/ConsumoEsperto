@@ -37,6 +37,8 @@ public final class BancoBrasilCatalog {
             case "c6" -> "C6 Bank";
             case "caixa" -> "Caixa";
             case "mercadopago" -> "Mercado Pago";
+            case "xp" -> "XP";
+            case "bnb" -> "Banco do Nordeste";
             case "mastercard" -> "Mastercard";
             default -> bancoReferencia.trim();
         };
@@ -114,6 +116,8 @@ public final class BancoBrasilCatalog {
         m.put("btg", List.of("btg", "btg pactual"));
         m.put("pagbank", List.of("pagbank", "pag bank", "pagseguro"));
         m.put("mercadopago", List.of("mercadopago", "mercado pago", "cartao de credito mercado pago"));
+        m.put("xp", List.of("xp", "xp investimentos", "cartao xp"));
+        m.put("bnb", List.of("bnb", "banco do nordeste", "bnbank"));
         m.put("mastercard", List.of("mastercard", "master card"));
         m.put("sicredi", List.of("sicredi"));
         m.put("sicoob", List.of("sicoob"));

@@ -96,6 +96,15 @@ public final class FaturaPdfLayoutSupport {
         if (contem(textoNorm, "c6 bank", "c6bank")) {
             return "C6 Bank";
         }
+        if (contem(textoNorm, "caixa economica", "cef ", "cartao caixa")) {
+            return "Caixa";
+        }
+        if (contem(textoNorm, "xp investimentos", "cartao xp")) {
+            return "XP";
+        }
+        if (contem(textoNorm, "banco do nordeste", "bnb ")) {
+            return "Banco do Nordeste";
+        }
         return "";
     }
 }

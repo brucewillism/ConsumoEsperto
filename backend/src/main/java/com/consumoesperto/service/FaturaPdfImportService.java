@@ -23,7 +23,6 @@ import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutSupport;
 import com.consumoesperto.service.fatura.layout.GenericoFaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.ItauFaturaPdfLayoutStrategy;
-import com.consumoesperto.service.fatura.layout.InterFaturaTextoExtrator;
 import com.consumoesperto.service.fatura.layout.ItauFaturaTextoExtrator;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbMeta;
@@ -181,21 +180,14 @@ public class FaturaPdfImportService {
         List<String> auditorias = new ArrayList<>();
         auditorias.add("Leitura com layout " + layoutEfetivo.layout().getNomeExibicao() + ".");
         BigDecimal valorTotal = layoutEfetivo.resolverReferenciaConciliacao(extracted, valorTotalPdf, itens, auditorias);
-        if (valorTotal.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {
-            valorTotal = ItauFaturaTextoExtrator.extrairTotalFatura(textoPdf).orElse(valorTotal);
-            if (valorTotal.compareTo(BigDecimal.ZERO) > 0) {
+        if (valorTotal.compareTo(BigDecimal.ZERO) <= 0) {
+            java.util.Optional<BigDecimal> totalTexto = layoutEfetivo.extrairTotalFaturaDoTexto(textoPdf);
+            if (totalTexto.isPresent() && totalTexto.get().compareTo(BigDecimal.ZERO) > 0) {
+                valorTotal = totalTexto.get();
                 auditorias.add("Total da fatura lido do texto do PDF (IA não preencheu valorTotal).");
             }
         }
-        if (valorTotal.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.INTER) {
-            valorTotal = InterFaturaTextoExtrator.extrairTotalFatura(textoPdf).orElse(valorTotal);
-            if (valorTotal.compareTo(BigDecimal.ZERO) > 0) {
-                auditorias.add("Total da fatura lido do texto do PDF (IA não preencheu valorTotal).");
-            }
-        }
-        if (layoutEfetivo.layout() == BancoFaturaLayout.INTER) {
-            InterFaturaTextoExtrator.finalizarListaInter(itens, textoPdf, valorTotal, anoReferencia);
-        }
+        layoutEfetivo.finalizarLancamentosDoTexto(textoPdf, itens, valorTotal, anoReferencia);
         imp.setValorTotal(valorTotal);
         BigDecimal pagamentoMinimo = readMoney(extracted.path("pagamentoMinimo"));
         if (pagamentoMinimo.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {

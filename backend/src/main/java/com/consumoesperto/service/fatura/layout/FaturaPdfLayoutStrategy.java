@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Regras de leitura e pós-processamento por banco/emissor de fatura PDF.
@@ -56,5 +57,20 @@ public interface FaturaPdfLayoutStrategy {
         int anoReferencia
     ) {
         // padrão: sem complemento
+    }
+
+    /** Total da fatura lido deterministicamente do texto (fallback quando a IA não preenche). */
+    default Optional<BigDecimal> extrairTotalFaturaDoTexto(String textoPdf) {
+        return Optional.empty();
+    }
+
+    /** Segunda passagem de poda/conciliação com o total conhecido. */
+    default void finalizarLancamentosDoTexto(
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        BigDecimal totalFatura,
+        int anoReferencia
+    ) {
+        // padrão: sem finalização extra
     }
 }
