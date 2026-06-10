@@ -18,7 +18,7 @@ public class MercadoPagoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrate
 
     @Override
     public int prioridade() {
-        return 87;
+        return 89;
     }
 
     @Override

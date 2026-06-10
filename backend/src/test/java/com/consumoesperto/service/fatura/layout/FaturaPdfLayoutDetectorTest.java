@@ -59,6 +59,16 @@ class FaturaPdfLayoutDetectorTest {
     }
 
     @Test
+    void mercadoPagoVenceInterQuandoTemResumoDaFatura() {
+        String texto = """
+            Mercado Pago Total a pagar R$ 661,94 Resumo da fatura
+            Movimentações na fatura Consumos de 30/04 a 29/05
+            Data de vencimento 08/06/2026
+            """;
+        assertEquals(BancoFaturaLayout.MERCADO_PAGO, detector.detectarTexto(texto).layout());
+    }
+
+    @Test
     void detectaBancoBrasil() {
         String texto = "Banco do Brasil lançamentos no cartão saldo fatura anterior total da fatura vencimento";
         assertEquals(BancoFaturaLayout.BANCO_BRASIL, detector.detectarTexto(texto).layout());

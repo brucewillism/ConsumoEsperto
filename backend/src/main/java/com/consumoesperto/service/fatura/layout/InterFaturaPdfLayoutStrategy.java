@@ -23,27 +23,26 @@ public class InterFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
 
     @Override
     public boolean reconhece(String textoPdfNormalizado) {
-        boolean sinaisInter = FaturaPdfLayoutSupport.contem(
+        if (FaturaPdfLayoutSupport.contem(
+            textoPdfNormalizado,
+            "mercado pago",
+            "mercadopago",
+            "nubank",
+            "nu pagamentos",
+            "itau",
+            "itaú unibanco"
+        )) {
+            return false;
+        }
+        return FaturaPdfLayoutSupport.contem(
             textoPdfNormalizado,
             "banco inter",
             "bancointer",
             "inter medium",
             "inter black",
             "inter gold",
-            "super app inter",
-            "resumo da fatura"
-        );
-        if (!sinaisInter) {
-            return false;
-        }
-        return FaturaPdfLayoutSupport.pareceFaturaCartao(textoPdfNormalizado)
-            || FaturaPdfLayoutSupport.contem(
-                textoPdfNormalizado,
-                "valor da fatura",
-                "detalhamento da fatura",
-                "proximas faturas",
-                "opcoes de pagamento"
-            );
+            "super app inter"
+        ) && FaturaPdfLayoutSupport.pareceFaturaCartao(textoPdfNormalizado);
     }
 
     @Override
@@ -65,6 +64,8 @@ public class InterFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
                 || InterFaturaTextoExtrator.pareceLinhaEncargoInter(item.getDescricao())
                 || n.contains("parcelar fatura")
                 || n.contains("limite disponivel")
+                || n.contains("limite total")
+                || n.contains("limite utilizado")
                 || n.contains("valor financiado")
                 || n.contains("taxa efetiva")
                 || n.matches(".*\\d\\s*\\+\\s*\\d+x.*")) {

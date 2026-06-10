@@ -289,7 +289,8 @@ final class FaturaTextoExtratorPadrao {
     }
 
     private static final String[] TOKENS_IGNORAR_COMUNS = {
-        "limite de credito", "limite disponivel", "opcoes de pagamento", "parcelar fatura",
+        "limite de credito", "limite total", "limite utilizado", "limite disponivel",
+        "saque total", "opcoes de pagamento", "parcelar fatura",
         "proximas faturas", "proxima fatura", "pagamento minimo", "resumo da fatura",
         "valor da fatura", "total da fatura", "data de vencimento", "data de corte",
         "saldo restante", "valor financiado", "taxa efetiva", "simulacao", "consumos de",
