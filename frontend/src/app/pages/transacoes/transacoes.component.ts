@@ -34,6 +34,7 @@ import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/w
 import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError, valorMonetarioBrValidator } from '../../shared/utils/form.utils';
 import { AgendamentoPagamento, AgendamentoPagamentoService } from '../../services/agendamento-pagamento.service';
 import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alteracao-refresh.util';
+import { timeout, finalize } from 'rxjs/operators';
 
 @Component({
   selector: 'app-transacoes',
@@ -234,38 +235,65 @@ export class TransacoesComponent implements OnInit {
       return;
     }
 
-    const raw = this.transacaoForm.value;
-    const transacao: Transacao = {
-      ...raw,
-      valor: parseValorBrasileiro(raw.valor) ?? 0,
-    };
+    const transacao = this.montarPayloadTransacao(this.transacaoForm.getRawValue());
     this.salvandoTransacao = true;
 
     const request$ = this.transacaoEditando?.id
       ? this.transacaoService.atualizarTransacao(this.transacaoEditando.id, transacao)
       : this.transacaoService.criarTransacao(transacao);
 
-    request$.subscribe({
-      next: () => {
-        this.salvandoTransacao = false;
-        this.dialog.closeAll();
-        this.snackBar.open(
-          this.transacaoEditando ? 'Transação atualizada com sucesso!' : 'Transação criada com sucesso!',
-          'Fechar',
-          { duration: 3000, panelClass: ['success-snackbar'] }
-        );
-        this.financaAlteracao.notificar('transacoes');
-        this.carregarTransacoes({ silent: true });
-      },
-      error: (err) => {
-        this.salvandoTransacao = false;
-        this.snackBar.open(
-          resolveHttpError(err, 'Erro ao salvar transação. Verifique os dados e tente novamente.'),
-          'Fechar',
-          { duration: 4000, panelClass: ['error-snackbar'] }
-        );
-      }
-    });
+    request$
+      .pipe(
+        timeout(45_000),
+        finalize(() => {
+          this.salvandoTransacao = false;
+        })
+      )
+      .subscribe({
+        next: () => {
+          this.dialog.closeAll();
+          this.snackBar.open(
+            this.transacaoEditando ? 'Transação atualizada com sucesso!' : 'Transação criada com sucesso!',
+            'Fechar',
+            { duration: 3000, panelClass: ['success-snackbar'] }
+          );
+          this.financaAlteracao.notificar('transacoes');
+          this.carregarTransacoes({ silent: true });
+        },
+        error: (err) => {
+          const msg =
+            err?.name === 'TimeoutError'
+              ? 'O servidor demorou demais para responder. Verifique se a transação foi criada antes de tentar de novo.'
+              : resolveHttpError(err, 'Erro ao salvar transação. Verifique os dados e tente novamente.');
+          this.snackBar.open(msg, 'Fechar', { duration: 5000, panelClass: ['error-snackbar'] });
+        },
+      });
+  }
+
+  private montarPayloadTransacao(raw: Record<string, unknown>): Transacao {
+    const dataRaw = raw['dataTransacao'];
+    const data =
+      dataRaw instanceof Date
+        ? dataRaw
+        : dataRaw
+          ? new Date(String(dataRaw))
+          : new Date();
+    const contaRaw = raw['contaBancariaId'];
+    const contaBancariaId =
+      contaRaw === '' || contaRaw == null || contaRaw === undefined
+        ? undefined
+        : Number(contaRaw);
+    return {
+      descricao: String(raw['descricao'] ?? '').trim(),
+      valor: parseValorBrasileiro(String(raw['valor'] ?? '')) ?? 0,
+      tipoTransacao: raw['tipoTransacao'] as TipoTransacao,
+      dataTransacao: data,
+      categoriaId:
+        raw['categoriaId'] === '' || raw['categoriaId'] == null
+          ? undefined
+          : Number(raw['categoriaId']),
+      contaBancariaId: Number.isFinite(contaBancariaId) ? contaBancariaId : undefined,
+    };
   }
 
   editarTransacao(transacao: Transacao): void {

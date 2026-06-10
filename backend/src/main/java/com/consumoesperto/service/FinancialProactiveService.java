@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -79,6 +80,10 @@ public class FinancialProactiveService {
         return Optional.empty();
     }
 
+    /**
+     * Alertas, forecast e WhatsApp não bloqueiam o POST de criação da transação.
+     */
+    @Async("cerebroExecutor")
     public void aposDespesaSalva(Transacao transacao) {
         try {
             orcamentoService.verificarAposDespesa(transacao);
