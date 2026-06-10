@@ -8,8 +8,12 @@ import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { FamiliaService } from '../../services/familia.service';
 import { ToastService } from '../../services/toast.service';
-import { CeInputMaskDirective } from '../directives/ce-input-mask.directive';
-import { isEmailValido, resolveHttpError } from '../utils/form.utils';
+import {
+  formatPhoneBrDisplay,
+  isEmailValido,
+  resolveHttpError,
+  sanitizeEmailInput,
+} from '../utils/form.utils';
 
 export interface ConvidarFamiliarDialogResult {
   conviteVisual: string;
@@ -26,7 +30,6 @@ export interface ConvidarFamiliarDialogResult {
     MatFormFieldModule,
     MatInputModule,
     MatIconModule,
-    CeInputMaskDirective,
   ],
   templateUrl: './convidar-familiar-dialog.component.html',
   styleUrl: './convidar-familiar-dialog.component.scss',
@@ -42,6 +45,14 @@ export class ConvidarFamiliarDialogComponent {
     private toast: ToastService,
     private dialogRef: MatDialogRef<ConvidarFamiliarDialogComponent, ConvidarFamiliarDialogResult | null>
   ) {}
+
+  onEmailInput(raw: string): void {
+    this.conviteEmail = sanitizeEmailInput(raw);
+  }
+
+  onWhatsappInput(raw: string): void {
+    this.conviteWhatsapp = formatPhoneBrDisplay(raw);
+  }
 
   enviar(): void {
     this.conviteErro = '';

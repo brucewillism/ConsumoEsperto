@@ -14,6 +14,7 @@ import { resolveHttpError } from '../utils/form.utils';
   standalone: true,
   imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatInputModule],
   templateUrl: './criar-grupo-familiar-dialog.component.html',
+  styleUrl: './criar-grupo-familiar-dialog.component.scss',
 })
 export class CriarGrupoFamiliarDialogComponent {
   nomeGrupo = 'Orçamento do Casal';
