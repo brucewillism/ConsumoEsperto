@@ -104,7 +104,7 @@ public final class BancoBrasilCatalog {
     private static Map<String, List<String>> buildAliases() {
         Map<String, List<String>> m = new LinkedHashMap<>();
         m.put("nubank", List.of("nubank", "nu bank", "nu", "nu pagamentos", "nu pagamentos sa"));
-        m.put("itau", List.of("itau", "itaú", "itau unibanco", "banco itau"));
+        m.put("itau", List.of("itau", "itaú", "itau unibanco", "banco itau", "itau azul", "cartao itau"));
         m.put("inter", List.of("inter", "banco inter"));
         m.put("bradesco", List.of("bradesco", "banco bradesco"));
         m.put("santander", List.of("santander", "banco santander"));

@@ -50,4 +50,52 @@ public final class FaturaPdfLayoutSupport {
             "compras e saques"
         );
     }
+
+    /** Valores placeholder da IA (schema JSON) não identificam o emissor. */
+    public static boolean bancoExtraidoUtil(String banco) {
+        if (banco == null || banco.isBlank()) {
+            return false;
+        }
+        String n = norm(banco);
+        if (n.length() < 2) {
+            return false;
+        }
+        return switch (n) {
+            case "...", "na", "n a", "n d", "desconhecido", "nao identificado", "nao informado",
+                 "cartao", "banco", "emissor", "credito", "debito", "visa", "mastercard", "elo", "amex" -> false;
+            default -> !n.matches("^\\.+$");
+        };
+    }
+
+    /** Infere o banco emissor a partir do texto bruto do PDF quando a IA não preencheu bancoCartao. */
+    public static String inferirBancoEmissorDoTexto(String textoNorm) {
+        if (textoNorm == null || textoNorm.isBlank()) {
+            return "";
+        }
+        if (contem(textoNorm, "itau", "itaú unibanco", "itaucard", "www itau com br", "cartao itau")) {
+            return "Itaú";
+        }
+        if (contem(textoNorm, "nubank", "nu pagamentos", "nu bank")) {
+            return "Nubank";
+        }
+        if (contem(textoNorm, "banco inter", "inter medium", "inter gold")) {
+            return "Inter";
+        }
+        if (contem(textoNorm, "mercado pago", "mercadopago")) {
+            return "Mercado Pago";
+        }
+        if (contem(textoNorm, "banco do brasil", "banco brasil")) {
+            return "Banco do Brasil";
+        }
+        if (contem(textoNorm, "bradesco")) {
+            return "Bradesco";
+        }
+        if (contem(textoNorm, "santander")) {
+            return "Santander";
+        }
+        if (contem(textoNorm, "c6 bank", "c6bank")) {
+            return "C6 Bank";
+        }
+        return "";
+    }
 }

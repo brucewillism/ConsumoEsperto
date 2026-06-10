@@ -33,4 +33,12 @@ public class GenericoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy 
     public List<ImportacaoFaturaItemDTO> sanitizarLancamentos(List<ImportacaoFaturaItemDTO> itens) {
         return itens;
     }
+
+    @Override
+    public String sugerirBancoCartao(String textoPdfNormalizado, String bancoExtraidoIa) {
+        if (FaturaPdfLayoutSupport.bancoExtraidoUtil(bancoExtraidoIa)) {
+            return bancoExtraidoIa;
+        }
+        return FaturaPdfLayoutSupport.inferirBancoEmissorDoTexto(textoPdfNormalizado);
+    }
 }

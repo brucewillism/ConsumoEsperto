@@ -21,13 +21,24 @@ public class ItauFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
 
     @Override
     public boolean reconhece(String textoPdfNormalizado) {
+        boolean sinaisItau = FaturaPdfLayoutSupport.contem(
+            textoPdfNormalizado,
+            "itau",
+            "itaú unibanco",
+            "itaucard",
+            "www itau com br",
+            "cartao itau"
+        );
+        if (!sinaisItau) {
+            return false;
+        }
         return FaturaPdfLayoutSupport.pareceFaturaCartao(textoPdfNormalizado)
-            && FaturaPdfLayoutSupport.contem(
+            || FaturaPdfLayoutSupport.contem(
                 textoPdfNormalizado,
-                "itau",
-                "itaú unibanco",
-                "itaucard",
-                "www itau com br"
+                "demonstrativo",
+                "total desta fatura",
+                "valor total da fatura",
+                "pagamento total"
             );
     }
 
@@ -54,6 +65,9 @@ public class ItauFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
 
     @Override
     public String sugerirBancoCartao(String textoPdfNormalizado, String bancoExtraidoIa) {
+        if (FaturaPdfLayoutSupport.bancoExtraidoUtil(bancoExtraidoIa)) {
+            return bancoExtraidoIa;
+        }
         return "Itaú";
     }
 }

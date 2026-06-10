@@ -3,9 +3,11 @@ package com.consumoesperto.service;
 import com.consumoesperto.service.fatura.layout.BancoFaturaLayout;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutSupport;
 import com.consumoesperto.service.fatura.layout.ItauFaturaPdfLayoutStrategy;
+import com.consumoesperto.util.BancoBrasilCatalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -52,6 +54,26 @@ class FaturaPdfImportDocumentoTest {
         assertTrue(itauLayout.reconhece(norm));
         assertTrue(FaturaPdfLayoutSupport.pareceFaturaCartao(norm));
         assertEqualsLayout(BancoFaturaLayout.ITAU, itauLayout.layout());
+    }
+
+    @Test
+    void placeholderDaIaNaoContaComoBancoUtil() {
+        assertFalse(FaturaPdfLayoutSupport.bancoExtraidoUtil("..."));
+        assertFalse(FaturaPdfLayoutSupport.bancoExtraidoUtil("Mastercard"));
+        assertTrue(FaturaPdfLayoutSupport.bancoExtraidoUtil("Itaú"));
+    }
+
+    @Test
+    void infereItauDoTextoQuandoIaRetornaPlaceholder() {
+        String texto = "Itaú Unibanco demonstrativo total desta fatura vencimento";
+        assertEquals("Itaú", FaturaPdfLayoutSupport.inferirBancoEmissorDoTexto(FaturaPdfLayoutSupport.norm(texto)));
+        assertEquals("Itaú", itauLayout.sugerirBancoCartao(FaturaPdfLayoutSupport.norm(texto), "..."));
+    }
+
+    @Test
+    void cartaoItauAzulCorrespondeAoEmissorItau() {
+        assertTrue(BancoBrasilCatalog.bancosCorrespondem("itau azul", "Itaú"));
+        assertTrue(BancoBrasilCatalog.bancosCorrespondem("itau", "Itaú"));
     }
 
     private static void assertEqualsLayout(BancoFaturaLayout expected, BancoFaturaLayout actual) {

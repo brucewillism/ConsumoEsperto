@@ -143,7 +143,7 @@ public class FaturaPdfImportService {
         }
 
         String bancoExtraido = firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText(""));
-        bancoExtraido = layoutEfetivo.sugerirBancoCartao(textoNorm, bancoExtraido);
+        bancoExtraido = resolverBancoCartaoParaLocalizacao(bancoExtraido, textoNorm, layoutEfetivo);
         final String bancoParaLocalizar = bancoExtraido;
         CartaoCredito cartao = localizarCartao(usuarioId, bancoParaLocalizar)
             .orElseThrow(() -> new IllegalArgumentException(mensagemCartaoNaoEncontrado(usuarioId, bancoParaLocalizar)));
@@ -226,7 +226,8 @@ public class FaturaPdfImportService {
     }
 
     static boolean temSinaisEstruturaisFaturaCartao(JsonNode extracted) {
-        boolean temCartao = !firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText("")).isBlank();
+        String bancoRef = firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText(""));
+        boolean temCartao = FaturaPdfLayoutSupport.bancoExtraidoUtil(bancoRef);
         boolean temVencimento = parseDate(extracted.path("dataVencimento").asText("")) != null;
         boolean temTotal = readMoney(extracted.path("valorTotal")).compareTo(BigDecimal.ZERO) > 0;
         boolean temMinimoOuFechamento = readMoney(extracted.path("pagamentoMinimo")).compareTo(BigDecimal.ZERO) > 0
@@ -476,7 +477,8 @@ public class FaturaPdfImportService {
         if (ativos.isEmpty()) {
             return "Não há cartão de crédito ativo. Cadastre um cartão em *Cartões* antes de importar a fatura.";
         }
-        String ref = banco == null || banco.isBlank() ? "(banco não identificado no PDF)" : banco;
+        String ref = banco == null || banco.isBlank() || !FaturaPdfLayoutSupport.bancoExtraidoUtil(banco)
+            ? "(banco não identificado no PDF)" : banco;
         String lista = ativos.stream()
             .map(c -> c.getNome() + " / " + c.getBanco())
             .distinct()
@@ -487,10 +489,33 @@ public class FaturaPdfImportService {
             + "Ajuste o nome ou banco do cartão em *Cartões* para coincidir com a fatura.";
     }
 
+    private String resolverBancoCartaoParaLocalizacao(
+        String bancoExtraidoIa,
+        String textoPdfNormalizado,
+        FaturaPdfLayoutStrategy layout
+    ) {
+        FaturaPdfLayoutStrategy layoutEfetivo = layout != null ? layout : genericoFaturaPdfLayoutStrategy;
+        String sugerido = layoutEfetivo.sugerirBancoCartao(textoPdfNormalizado, bancoExtraidoIa);
+        if (FaturaPdfLayoutSupport.bancoExtraidoUtil(sugerido)) {
+            return sugerido.trim();
+        }
+        String inferido = FaturaPdfLayoutSupport.inferirBancoEmissorDoTexto(textoPdfNormalizado);
+        if (FaturaPdfLayoutSupport.bancoExtraidoUtil(inferido)) {
+            return inferido;
+        }
+        if (layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {
+            return "Itaú";
+        }
+        return sugerido != null ? sugerido.trim() : "";
+    }
+
     private Optional<CartaoCredito> localizarCartao(Long usuarioId, String banco) {
         List<CartaoCredito> ativos = cartaoCreditoRepository.findByUsuarioIdAndAtivoTrue(usuarioId);
         if (ativos.isEmpty()) {
             return Optional.empty();
+        }
+        if (!FaturaPdfLayoutSupport.bancoExtraidoUtil(banco)) {
+            banco = "";
         }
         String token = norm(banco);
         if (token.isBlank()) {
