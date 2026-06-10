@@ -23,6 +23,7 @@ import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutSupport;
 import com.consumoesperto.service.fatura.layout.GenericoFaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.ItauFaturaPdfLayoutStrategy;
+import com.consumoesperto.service.fatura.layout.InterFaturaTextoExtrator;
 import com.consumoesperto.service.fatura.layout.ItauFaturaTextoExtrator;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbMeta;
@@ -182,6 +183,12 @@ public class FaturaPdfImportService {
         BigDecimal valorTotal = layoutEfetivo.resolverReferenciaConciliacao(extracted, valorTotalPdf, itens, auditorias);
         if (valorTotal.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {
             valorTotal = ItauFaturaTextoExtrator.extrairTotalFatura(textoPdf).orElse(valorTotal);
+            if (valorTotal.compareTo(BigDecimal.ZERO) > 0) {
+                auditorias.add("Total da fatura lido do texto do PDF (IA não preencheu valorTotal).");
+            }
+        }
+        if (valorTotal.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.INTER) {
+            valorTotal = InterFaturaTextoExtrator.extrairTotalFatura(textoPdf).orElse(valorTotal);
             if (valorTotal.compareTo(BigDecimal.ZERO) > 0) {
                 auditorias.add("Total da fatura lido do texto do PDF (IA não preencheu valorTotal).");
             }
@@ -1196,7 +1203,11 @@ public class FaturaPdfImportService {
             || n.contains("fale com a gente")
             || n.contains("canal de libras")
             || n.contains("pague sua fatura pelo app")
-            || n.contains("parcele a fatura do seu cartao")) {
+            || n.contains("parcele a fatura do seu cartao")
+            || n.contains("valor financiado")
+            || n.contains("iof do rotativo")
+            || n.contains("taxa efetiva mensal")
+            || n.contains("encargos rotativos")) {
             return true;
         }
         // Simulação Mercado Pago / Inter: "1 + [9]x R$ 120,58" ou "Até 1 + 9x"

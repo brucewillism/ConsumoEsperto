@@ -52,7 +52,9 @@ public class ItauFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
         return "LAYOUT ITAÚ: padrão 'DD/MM estabelecimento … N/N valor' — o par N/N antes do valor "
             + "(ex.: '10/10 64,10') é parcela atual/total; o valor cobrado NESTA fatura é só o último número (64.10), "
             + "NUNCA 1064.10 por causa de '10/10'. Milhar só com ponto brasileiro explícito ('1.064,10'). "
-            + "bancoCartao='Itaú'. Extraia só compras/parcelas/taxas do período; ignore limites, pontos e simulações.";
+            + "Inclua TODAS as seções que compõem o total: compras e saques, produtos e serviços (anuidade), "
+            + "Encargos financeiros (IOF, juros rotativos, multa). bancoCartao='Itaú'. "
+            + "Ignore limites, pontos e simulações.";
     }
 
     @Override

@@ -66,7 +66,7 @@ export class ImportacaoFaturaService {
     );
   }
 
-  /** PDF + extração IA pode levar vários minutos. Faturas Itaú: senhaPdf = 5 primeiros dígitos do CPF. */
+  /** PDF + extração IA pode levar vários minutos. Itaú: 5 dígitos CPF; Inter: 6 dígitos CPF. */
   upload(file: File, senhaPdf?: string): Observable<ImportacaoFatura> {
     const form = new FormData();
     form.append('file', file);

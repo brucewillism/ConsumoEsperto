@@ -37,7 +37,7 @@ export class ImportacoesPendentesComponent implements OnInit {
   enviandoPdf = false;
   apagandoTodas = false;
   apagandoId: number | null = null;
-  /** Itaú e outros bancos: senha do PDF (ex.: 5 primeiros dígitos do CPF). */
+  /** PDFs protegidos: Itaú 5 dígitos CPF; Inter 6 dígitos CPF. */
   senhaPdf = '';
 
   constructor(

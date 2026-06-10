@@ -99,12 +99,13 @@ public class PdfTextExtractionService {
 
     public static String mensagemPdfProtegidoItau(String senhaInformada) {
         if (senhaInformada == null || senhaInformada.isBlank()) {
-            return "Este PDF está protegido por senha (faturas Itaú usam os *5 primeiros dígitos do CPF*). "
-                + "Informe essa senha no campo abaixo e envie o PDF novamente.";
+            return "Este PDF está protegido por senha. Itaú: *5 primeiros dígitos do CPF*; "
+                + "Inter e outros: *6 primeiros dígitos do CPF*. "
+                + "Informe a senha no campo abaixo e envie o PDF novamente.";
         }
         return "Não consegui abrir o PDF com a senha informada. "
-            + "Nas faturas Itaú, use os *5 primeiros dígitos do CPF do titular* (somente números, sem pontos). "
-            + "Confira se é o CPF de quem recebe a fatura no e-mail do banco.";
+            + "Itaú: *5 primeiros dígitos do CPF*; Inter: *6 primeiros dígitos do CPF* (somente números). "
+            + "Confira se é o CPF do titular que recebe a fatura no e-mail do banco.";
     }
 
     private List<String> tentarExtrairPaginas(byte[] pdfBytes, String senha) {

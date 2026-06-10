@@ -47,4 +47,44 @@ class ItauFaturaTextoExtratorTest {
         assertFalse(destino.isEmpty());
         assertEquals(2, destino.size());
     }
+
+    @Test
+    void extraiEncargosFinanceirosSemData() {
+        String texto = """
+            LANÇAMENTOS: compras e saques
+            05/05 MERCADO CENTRAL 45,90
+            Encargos financeiros
+            IOF OPER CREDITO 133,15
+            Total desta fatura R$ 179,05
+            """;
+        List<ImportacaoFaturaItemDTO> itens = ItauFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(2, itens.size());
+        BigDecimal soma = itens.stream()
+            .map(ImportacaoFaturaItemDTO::getValor)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(new BigDecimal("179.05"), soma);
+        assertTrue(itens.stream().anyMatch(i -> i.getDescricao().toUpperCase().contains("IOF")));
+    }
+
+    @Test
+    void complementarInjetaEncargosQuandoIaOmitiu() {
+        String texto = """
+            LANÇAMENTOS: compras e saques
+            05/05 MERCADO CENTRAL 45,90
+            Encargos financeiros
+            IOF OPER CREDITO 133,15
+            Total desta fatura R$ 179,05
+            """;
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        ImportacaoFaturaItemDTO compra = new ImportacaoFaturaItemDTO();
+        compra.setDescricao("MERCADO CENTRAL");
+        compra.setValor(new BigDecimal("45.90"));
+        destino.add(compra);
+        ItauFaturaTextoExtrator.complementar(destino, texto, 2026);
+        BigDecimal soma = destino.stream()
+            .map(ImportacaoFaturaItemDTO::getValor)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(new BigDecimal("179.05"), soma);
+        assertEquals(2, destino.size());
+    }
 }
