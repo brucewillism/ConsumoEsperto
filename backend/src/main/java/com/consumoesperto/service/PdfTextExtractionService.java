@@ -156,7 +156,7 @@ public class PdfTextExtractionService {
         return new ArrayList<>(senhas);
     }
 
-    private static boolean temTextoUtil(List<String> paginas) {
+    private boolean temTextoUtil(List<String> paginas) {
         if (paginas == null || paginas.isEmpty()) {
             return false;
         }
