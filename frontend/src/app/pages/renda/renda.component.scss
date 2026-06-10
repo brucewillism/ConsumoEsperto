@@ -81,12 +81,86 @@ $jarvis-bg: #0d0e12;
 
 .chart-card,
 .upload-card,
-.paycheck-card {
+.paycheck-card,
+.fiscal-card {
   color: #e5e7eb;
 }
 
+.fiscal-card {
+  padding: 20px 24px;
+}
+
+.fiscal-hint {
+  margin: 0 0 16px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.fiscal-loading {
+  color: #9ca3af;
+  padding: 12px 0;
+}
+
+.fiscal-form {
+  display: grid;
+  gap: 14px;
+}
+
+.fiscal-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.fiscal-toggle-row {
+  padding: 4px 0;
+}
+
+.fiscal-preview {
+  margin-top: 4px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(123, 31, 162, 0.08);
+  border: 1px solid rgba(123, 31, 162, 0.22);
+}
+
+.fiscal-preview-aviso {
+  margin: 0 0 10px;
+  color: #fde68a;
+  font-size: 0.875rem;
+}
+
+.fiscal-base {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-bottom: 12px;
+  font-size: 0.8125rem;
+  color: #cbd5e1;
+}
+
+.fiscal-fonte {
+  color: #94a3b8;
+}
+
+.fiscal-empty-preview {
+  margin: 0;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.fiscal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 .chart-card h2,
-.upload-card h2 {
+.upload-card h2,
+.fiscal-card h2 {
   margin: 0 0 12px;
   font-size: 1rem;
   letter-spacing: 0.06em;

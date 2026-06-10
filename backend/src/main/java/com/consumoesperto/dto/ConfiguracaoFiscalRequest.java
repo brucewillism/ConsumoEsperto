@@ -12,5 +12,7 @@ public class ConfiguracaoFiscalRequest {
     private TipoRecebimento13 tipoRecebimento13;
     private Integer mesParcelaUnica;
     private Integer mesPrimeiraParcela;
+    private Integer mesSegundaParcela;
+    private Integer diaPagamento13;
     private Boolean provisionamentoAtivo;
 }

@@ -14,6 +14,7 @@ export const JARVIS_HTTP_ERROR_SKIP_PATH_SUBSTRINGS: readonly string[] = [
   '/relatorios/alertas',
   '/projecoes',
   '/renda-config',
+  '/planejamento-fiscal',
   '/score',
   '/importacoes/faturas',
   '/familia/convites',

@@ -284,9 +284,17 @@ public class SchemaAutoPatchService {
                         + "tipo_recebimento_13 VARCHAR(32),"
                         + "mes_parcela_unica INTEGER,"
                         + "mes_primeira_parcela INTEGER,"
+                        + "mes_segunda_parcela INTEGER,"
+                        + "dia_pagamento_13 INTEGER,"
                         + "provisionamento_ativo BOOLEAN NOT NULL DEFAULT TRUE,"
                         + "data_atualizacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
                         + ")"
+                );
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS mes_segunda_parcela INTEGER"
+                );
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS dia_pagamento_13 INTEGER"
                 );
                 log.info("Schema patch: tabela {} verificada.", qualifiedTable);
             }

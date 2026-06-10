@@ -27,7 +27,7 @@ import java.util.Optional;
 @Slf4j
 public class PlanejamentoFiscalService {
 
-    private static final int MES_SEGUNDA_PARCELA_13 = 12;
+    private static final int MES_SEGUNDA_PARCELA_13_PADRAO = 12;
     private static final int DIA_PAGAMENTO_PADRAO = 5;
     private static final RoundingMode ARREDONDAMENTO = RoundingMode.HALF_UP;
 
@@ -60,6 +60,8 @@ public class PlanejamentoFiscalService {
             cfg.setTipoRecebimento13(request.getTipoRecebimento13());
             cfg.setMesParcelaUnica(clampMes(request.getMesParcelaUnica()));
             cfg.setMesPrimeiraParcela(clampMes(request.getMesPrimeiraParcela()));
+            cfg.setMesSegundaParcela(clampMes(request.getMesSegundaParcela()));
+            cfg.setDiaPagamento13(clampDia(request.getDiaPagamento13()));
             if (request.getProvisionamentoAtivo() != null) {
                 cfg.setProvisionamentoAtivo(request.getProvisionamentoAtivo());
             }
@@ -75,7 +77,7 @@ public class PlanejamentoFiscalService {
     public PlanejamentoFiscalResumoDTO simular(Long usuarioId) {
         ConfiguracaoFiscalDTO cfgDto = obterDto(usuarioId);
         Optional<BaseContrachequeFiscalDTO> baseOpt = calculadorFiscalService.obterBaseContracheque(usuarioId);
-        int diaPag = resolverDiaPagamento(usuarioId);
+        int diaPag = resolverDiaPagamento13(cfgDto, usuarioId);
         List<ParcelaReceitaFiscalDTO> parcelas =
             montarParcelas(cfgDto, baseOpt.orElse(null), LocalDate.now().getYear(), diaPag);
         return montarResumo(cfgDto, baseOpt.orElse(null), parcelas, 0, avisoBase(baseOpt));
@@ -95,10 +97,10 @@ public class PlanejamentoFiscalService {
             return montarResumo(cfgDto, baseOpt.orElse(null), List.of(), 0, avisoBase(baseOpt));
         }
 
+        int diaPagamento = resolverDiaPagamento13(cfgDto, usuarioId);
         List<ParcelaReceitaFiscalDTO> parcelas =
-            montarParcelas(cfgDto, baseOpt.orElse(null), ano, resolverDiaPagamento(usuarioId));
+            montarParcelas(cfgDto, baseOpt.orElse(null), ano, diaPagamento);
         int criadas = 0;
-        int diaPagamento = resolverDiaPagamento(usuarioId);
 
         for (ParcelaReceitaFiscalDTO parcela : parcelas) {
             if (parcela.getValor() == null || parcela.getValor().compareTo(BigDecimal.ZERO) <= 0) {
@@ -153,7 +155,7 @@ public class PlanejamentoFiscalService {
         int diaHoje = LocalDate.now().getDayOfMonth();
         int mesAtual = LocalDate.now().getMonthValue();
 
-        return montarParcelas(cfg, base.orElse(null), ano, resolverDiaPagamento(usuarioId)).stream()
+        return montarParcelas(cfg, base.orElse(null), ano, resolverDiaPagamento13(cfg, usuarioId)).stream()
             .filter(p -> p.getMes() == mesAtual && p.getDia() > diaHoje)
             .filter(p -> p.getValor() != null && p.getValor().compareTo(BigDecimal.ZERO) > 0)
             .collect(java.util.stream.Collectors.toList());
@@ -216,12 +218,15 @@ public class PlanejamentoFiscalService {
                 .build());
         }
 
+        int mesSegunda = cfg.getMesSegundaParcela() != null
+            ? cfg.getMesSegundaParcela()
+            : MES_SEGUNDA_PARCELA_13_PADRAO;
         if (decimo.getSegundaParcelaLiquida() != null
             && decimo.getSegundaParcelaLiquida().compareTo(BigDecimal.ZERO) > 0) {
             out.add(ParcelaReceitaFiscalDTO.builder()
                 .origem(OrigemProvisionamentoFiscal.DECIMO_TERCEIRA_SEGUNDA)
                 .rotulo("13º salário — 2ª parcela " + ano + " (previsto)")
-                .mes(MES_SEGUNDA_PARCELA_13)
+                .mes(mesSegunda)
                 .dia(diaPag)
                 .valor(decimo.getSegundaParcelaLiquida())
                 .observacao("Saldo líquido após retenções tributárias acumuladas")
@@ -264,7 +269,17 @@ public class PlanejamentoFiscalService {
         return null;
     }
 
-    private int resolverDiaPagamento(Long usuarioId) {
+    private int resolverDiaPagamento13(ConfiguracaoFiscalDTO cfg, Long usuarioId) {
+        if (cfg != null && cfg.getDiaPagamento13() != null) {
+            Integer dia = clampDia(cfg.getDiaPagamento13());
+            if (dia != null) {
+                return dia;
+            }
+        }
+        return resolverDiaPagamentoRenda(usuarioId);
+    }
+
+    private int resolverDiaPagamentoRenda(Long usuarioId) {
         return rendaConfigRepository.findByUsuarioId(usuarioId)
             .map(RendaConfig::getDiaPagamento)
             .filter(d -> d != null && d >= 1 && d <= 28)
@@ -281,6 +296,16 @@ public class PlanejamentoFiscalService {
         return mes;
     }
 
+    private Integer clampDia(Integer dia) {
+        if (dia == null) {
+            return null;
+        }
+        if (dia < 1 || dia > 28) {
+            return null;
+        }
+        return dia;
+    }
+
     private ConfiguracaoFiscalDTO toDto(ConfiguracaoFiscal cfg) {
         return ConfiguracaoFiscalDTO.builder()
             .mesRestituicaoIr(cfg.getMesRestituicaoIr())
@@ -288,6 +313,8 @@ public class PlanejamentoFiscalService {
             .tipoRecebimento13(cfg.getTipoRecebimento13())
             .mesParcelaUnica(cfg.getMesParcelaUnica())
             .mesPrimeiraParcela(cfg.getMesPrimeiraParcela())
+            .mesSegundaParcela(cfg.getMesSegundaParcela())
+            .diaPagamento13(cfg.getDiaPagamento13())
             .provisionamentoAtivo(cfg.isProvisionamentoAtivo())
             .build();
     }

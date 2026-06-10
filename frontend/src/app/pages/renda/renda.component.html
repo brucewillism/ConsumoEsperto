@@ -12,7 +12,113 @@
     </button>
   </section>
 
-  <mat-card class="upload-card hud-animate" style="--stagger: 1">
+  <mat-card class="fiscal-card hud-animate" style="--stagger: 1">
+    <h2>Calendário do 13º salário</h2>
+    <p class="fiscal-hint">
+      Um contracheque confirmado basta como base. Aqui você define <strong>quando</strong> o 13º entra no fluxo de caixa
+      (parcela única ou duas parcelas). Cada usuário configura o próprio calendário.
+    </p>
+
+    <div class="fiscal-loading" *ngIf="carregandoFiscal">Carregando calendário…</div>
+
+    <div class="fiscal-form" *ngIf="!carregandoFiscal">
+      <div class="fiscal-row">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Como você recebe o 13º?</mat-label>
+          <mat-select
+            name="tipoRecebimento13"
+            [(ngModel)]="fiscal.tipoRecebimento13"
+            (selectionChange)="onTipoRecebimentoChange()"
+          >
+            <mat-option [value]="'DUAS_PARCELAS'">Duas parcelas (adiantamento + saldo)</mat-option>
+            <mat-option [value]="'PARCELA_UNICA'">Parcela única (tudo de uma vez)</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Dia do pagamento do 13º</mat-label>
+          <mat-select name="diaPagamento13" [(ngModel)]="fiscal.diaPagamento13">
+            <mat-option [value]="null">Mesmo dia do salário mensal</mat-option>
+            <mat-option *ngFor="let d of diasPagamento" [value]="d">Dia {{ d }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="fiscal-row" *ngIf="fiscal.tipoRecebimento13 === 'DUAS_PARCELAS'">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Mês da 1ª parcela (50% bruto)</mat-label>
+          <mat-select name="mesPrimeiraParcela" [(ngModel)]="fiscal.mesPrimeiraParcela">
+            <mat-option *ngFor="let m of meses" [value]="m.valor">{{ m.rotulo }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Mês da 2ª parcela (saldo líquido)</mat-label>
+          <mat-select name="mesSegundaParcela" [(ngModel)]="fiscal.mesSegundaParcela">
+            <mat-option *ngFor="let m of meses" [value]="m.valor">{{ m.rotulo }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="fiscal-row" *ngIf="fiscal.tipoRecebimento13 === 'PARCELA_UNICA'">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Mês do pagamento integral</mat-label>
+          <mat-select name="mesParcelaUnica" [(ngModel)]="fiscal.mesParcelaUnica">
+            <mat-option *ngFor="let m of meses" [value]="m.valor">{{ m.rotulo }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="fiscal-toggle-row">
+        <mat-slide-toggle
+          name="provisionamentoAtivo"
+          [(ngModel)]="fiscal.provisionamentoAtivo"
+          color="primary"
+        >
+          Lançar receitas previstas do 13º no fluxo de caixa
+        </mat-slide-toggle>
+      </div>
+
+      <div class="fiscal-preview" *ngIf="simulacao">
+        <p class="fiscal-preview-aviso" *ngIf="simulacao.aviso">{{ simulacao.aviso }}</p>
+
+        <div class="fiscal-base" *ngIf="simulacao.baseContracheque">
+          <span>Base: bruto {{ brl(simulacao.baseContracheque.salarioBruto) }}</span>
+          <span>· líquido {{ brl(simulacao.baseContracheque.salarioLiquido) }}</span>
+          <span class="fiscal-fonte" *ngIf="simulacao.baseContracheque.estimado">(estimativa)</span>
+        </div>
+
+        <div class="discount-tech-grid" *ngIf="parcelasDecimo().length; else semParcelas">
+          <div class="discount-tech-head">
+            <span>Data</span>
+            <span>Descrição</span>
+            <span>Valor</span>
+          </div>
+          <div class="discount-tech-row" *ngFor="let p of parcelasDecimo()">
+            <span class="mono">{{ dataParcela(p.mes, p.dia) }}</span>
+            <span>{{ p.rotulo }}</span>
+            <strong class="font-mono-amount">{{ brl(p.valor) }}</strong>
+          </div>
+        </div>
+        <ng-template #semParcelas>
+          <p class="fiscal-empty-preview">Confirme um contracheque ou configure a renda para ver os valores estimados.</p>
+        </ng-template>
+      </div>
+
+      <div class="fiscal-actions">
+        <button mat-stroked-button type="button" (click)="atualizarSimulacao()" [disabled]="salvandoFiscal">
+          <mat-icon>calculate</mat-icon>
+          Atualizar simulação
+        </button>
+        <button mat-raised-button color="primary" type="button" (click)="salvarCalendario()" [disabled]="salvandoFiscal">
+          <mat-icon>save</mat-icon>
+          {{ salvandoFiscal ? 'Salvando…' : 'Salvar calendário' }}
+        </button>
+      </div>
+    </div>
+  </mat-card>
+
+  <mat-card class="upload-card hud-animate" style="--stagger: 2">
     <h2>Upload manual de contracheque</h2>
     <p>Envie um PDF para a IA extrair bruto, líquido, descontos e insights. A renda só muda após confirmação.</p>
     <input #paycheckFile type="file" accept="application/pdf,.pdf" hidden (change)="onFileSelected($event)">
@@ -22,7 +128,7 @@
     </button>
   </mat-card>
 
-  <mat-card class="chart-card hud-animate" style="--stagger: 2">
+  <mat-card class="chart-card hud-animate" style="--stagger: 3">
     <h2>Bruto vs. Líquido</h2>
     <div class="chart-box" *ngIf="chartData.labels?.length; else emptyChart">
       <canvas baseChart [type]="'bar'" [data]="chartData" [options]="chartOptions"></canvas>
@@ -38,7 +144,7 @@
     *ngFor="let c of contracheques; let idx = index"
     [class.expanded]="expandedId === c.id"
     [class.audit-warn]="c.auditoriaSomaBrutoOk === false"
-    [style.--stagger]="3 + idx"
+    [style.--stagger]="4 + idx"
   >
     <div class="paycheck-head" (click)="toggleExpand(c.id)" role="button" tabindex="0" (keydown.enter)="toggleExpand(c.id)">
       <div>

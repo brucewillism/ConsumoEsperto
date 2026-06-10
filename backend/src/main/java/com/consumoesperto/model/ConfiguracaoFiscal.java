@@ -45,6 +45,14 @@ public class ConfiguracaoFiscal {
     @Column(name = "mes_primeira_parcela")
     private Integer mesPrimeiraParcela;
 
+    /** Mês do saldo do 13º ({@link TipoRecebimento13#DUAS_PARCELAS}); padrão dezembro. */
+    @Column(name = "mes_segunda_parcela")
+    private Integer mesSegundaParcela;
+
+    /** Dia do pagamento do 13º (1–28); se nulo, usa o dia de pagamento da renda. */
+    @Column(name = "dia_pagamento_13")
+    private Integer diaPagamento13;
+
     @Column(name = "provisionamento_ativo", nullable = false)
     private boolean provisionamentoAtivo = true;
 
