@@ -9,10 +9,11 @@
   <label class="field-label" for="convite-email">E-mail do convidado</label>
   <input
     id="convite-email"
+    name="conviteEmail"
     class="convidar-input"
     type="text"
-    [ngModel]="conviteEmail"
-    (ngModelChange)="onEmailInput($event)"
+    [(ngModel)]="conviteEmail"
+    (blur)="conviteEmail = sanitizeEmail(conviteEmail)"
     autocomplete="email"
     [disabled]="salvando"
   />
@@ -22,11 +23,13 @@
   <label class="field-label" for="convite-whatsapp">WhatsApp do convidado</label>
   <input
     id="convite-whatsapp"
+    name="conviteWhatsapp"
     class="convidar-input"
     type="tel"
     inputmode="tel"
-    [ngModel]="conviteWhatsapp"
-    (ngModelChange)="onWhatsappInput($event)"
+    [(ngModel)]="conviteWhatsapp"
+    (input)="onWhatsappInput($event)"
+    (blur)="conviteWhatsapp = formatarWhatsapp(conviteWhatsapp)"
     autocomplete="tel"
     placeholder="(11) 99999-9999"
     [disabled]="salvando"

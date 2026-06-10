@@ -1214,6 +1214,18 @@ a {
   font-family: var(--font-sans) !important;
 }
 
+/* Garante toasts no canto superior direito (evita snack preso no topo-esquerda com modal aberto) */
+.cdk-global-overlay-wrapper:has(.mat-mdc-snack-bar-container) {
+  justify-content: flex-end !important;
+  align-items: flex-start !important;
+  padding: 24px 24px 0 0 !important;
+  pointer-events: none;
+}
+
+.cdk-global-overlay-wrapper:has(.mat-mdc-snack-bar-container) .mat-mdc-snack-bar-container {
+  pointer-events: auto;
+}
+
 /* Host da app: evita comportamento inline do custom element e dá base estável a overlays full-viewport */
 app-root {
   display: block;

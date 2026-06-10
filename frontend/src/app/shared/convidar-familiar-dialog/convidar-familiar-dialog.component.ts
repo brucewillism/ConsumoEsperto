@@ -36,42 +36,46 @@ export class ConvidarFamiliarDialogComponent {
   conviteErro = '';
   salvando = false;
 
-  onEmailInput(raw: string): void {
-    this.conviteEmail = sanitizeEmailInput(raw);
-  }
+  readonly sanitizeEmail = sanitizeEmailInput;
+  readonly formatarWhatsapp = formatPhoneBrDisplay;
 
-  onWhatsappInput(raw: string): void {
+  onWhatsappInput(event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
     this.conviteWhatsapp = formatPhoneBrDisplay(raw);
+    (event.target as HTMLInputElement).value = this.conviteWhatsapp;
   }
 
   fechar(): void {
     this.dialogRef.close(null);
   }
 
+  /** Lê o valor visível nos inputs (autofill/DOM) e sincroniza o modelo. */
+  private lerCampos(): { email: string; whatsapp: string } {
+    const emailEl = document.getElementById('convite-email') as HTMLInputElement | null;
+    const whatsappEl = document.getElementById('convite-whatsapp') as HTMLInputElement | null;
+    const email = sanitizeEmailInput(emailEl?.value ?? this.conviteEmail).trim();
+    const whatsapp = formatPhoneBrDisplay(whatsappEl?.value ?? this.conviteWhatsapp).trim();
+    this.conviteEmail = email;
+    this.conviteWhatsapp = whatsapp;
+    return { email, whatsapp };
+  }
+
   enviar(): void {
     this.conviteErro = '';
-
-    const email = sanitizeEmailInput(this.conviteEmail).trim();
-    const whatsappDisplay = (this.conviteWhatsapp || '').trim();
+    const { email, whatsapp: whatsappDisplay } = this.lerCampos();
     const temEmail = !!email;
     const temWhatsapp = isWhatsappBrValido(whatsappDisplay);
 
     if (!temEmail && !temWhatsapp) {
-      const msg = 'Informe o e-mail ou o WhatsApp do convidado.';
-      this.conviteErro = msg;
-      this.toast.warning(msg);
+      this.conviteErro = 'Informe o e-mail ou o WhatsApp do convidado.';
       return;
     }
     if (temEmail && !isEmailValido(email)) {
-      const msg = 'Digite um e-mail válido.';
-      this.conviteErro = msg;
-      this.toast.warning(msg);
+      this.conviteErro = 'Digite um e-mail válido.';
       return;
     }
     if (!temEmail && whatsappDisplay && !temWhatsapp) {
-      const msg = 'Informe o WhatsApp com DDD (mínimo 10 dígitos).';
-      this.conviteErro = msg;
-      this.toast.warning(msg);
+      this.conviteErro = 'Informe o WhatsApp com DDD (mínimo 10 dígitos).';
       return;
     }
 
@@ -87,9 +91,7 @@ export class ConvidarFamiliarDialogComponent {
       },
       error: (e) => {
         this.salvando = false;
-        const msg = resolveHttpError(e, 'Erro ao enviar convite.');
-        this.conviteErro = msg;
-        this.toast.error(msg);
+        this.conviteErro = resolveHttpError(e, 'Erro ao enviar convite.');
       },
     });
   }
