@@ -16,6 +16,16 @@ class PdfTextExtractionServiceTest {
     }
 
     @Test
+    void detectaEncryptNoTrailerFinalDoArquivo() {
+        byte[] prefix = ("x".repeat(140_000)).getBytes();
+        byte[] trailer = "/Root/Encrypt/Filter".getBytes();
+        byte[] pdf = new byte[prefix.length + trailer.length];
+        System.arraycopy(prefix, 0, pdf, 0, prefix.length);
+        System.arraycopy(trailer, 0, pdf, prefix.length, trailer.length);
+        assertTrue(service.pdfPareceCriptografado(pdf));
+    }
+
+    @Test
     void textoLegivelExigeDataEValor() {
         assertFalse(service.textoPareceFaturaLegivel("ItauDisplay-Regular font metadata only"));
         assertTrue(service.textoPareceFaturaLegivel(

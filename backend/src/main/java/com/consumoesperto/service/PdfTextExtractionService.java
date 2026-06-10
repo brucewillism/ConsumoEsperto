@@ -1,15 +1,17 @@
 package com.consumoesperto.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -36,7 +38,7 @@ public class PdfTextExtractionService {
             List<String> paginas = tentarExtrairPaginas(pdfBytes, senha);
             if (temTextoUtil(paginas)) {
                 if (senha != null) {
-                    log.info("PDF desbloqueado com senha informada ({} página(s) com texto).", paginas.size());
+                    log.info("PDF desbloqueado ({} página(s) com texto).", paginas.size());
                 }
                 return paginas;
             }
@@ -71,9 +73,18 @@ public class PdfTextExtractionService {
         if (pdfBytes == null || pdfBytes.length < 32) {
             return false;
         }
-        int amostra = Math.min(pdfBytes.length, 120_000);
-        String amostraTxt = new String(pdfBytes, 0, amostra, StandardCharsets.ISO_8859_1);
-        return amostraTxt.contains("/Encrypt");
+        // Faturas Itaú costumam ter /Encrypt só no trailer (final do arquivo).
+        int[] offsets = {0, Math.max(0, pdfBytes.length - 65_536)};
+        for (int offset : offsets) {
+            int len = offset == 0
+                ? Math.min(pdfBytes.length, 65_536)
+                : pdfBytes.length - offset;
+            String chunk = new String(pdfBytes, offset, len, StandardCharsets.ISO_8859_1);
+            if (chunk.contains("/Encrypt")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean textoPareceFaturaLegivel(String texto) {
@@ -92,14 +103,61 @@ public class PdfTextExtractionService {
                 + "Informe essa senha no campo abaixo e envie o PDF novamente.";
         }
         return "Não consegui abrir o PDF com a senha informada. "
-            + "Nas faturas Itaú, use os *5 primeiros dígitos do CPF* (somente números, sem pontos).";
+            + "Nas faturas Itaú, use os *5 primeiros dígitos do CPF do titular* (somente números, sem pontos). "
+            + "Confira se é o CPF de quem recebe a fatura no e-mail do banco.";
     }
 
     private List<String> tentarExtrairPaginas(byte[] pdfBytes, String senha) {
+        List<String> pdfBox = tentarExtrairComPdfBox(pdfBytes, senha);
+        if (!pdfBox.isEmpty()) {
+            return pdfBox;
+        }
+        return tentarExtrairComOpenPdf(pdfBytes, senha);
+    }
+
+    private List<String> tentarExtrairComPdfBox(byte[] pdfBytes, String senha) {
+        List<String> paginas = new ArrayList<>();
+        try (PDDocument doc = abrirPdfBox(pdfBytes, senha)) {
+            if (doc == null) {
+                return paginas;
+            }
+            PDFTextStripper stripper = new PDFTextStripper();
+            int total = doc.getNumberOfPages();
+            for (int i = 1; i <= total; i++) {
+                stripper.setStartPage(i);
+                stripper.setEndPage(i);
+                String pageText = stripper.getText(doc);
+                paginas.add(pageText != null ? pageText.trim() : "");
+            }
+        } catch (IOException e) {
+            log.debug("PDFBox falhou senha={}: {}", senha != null ? "***" : "(vazia)", e.getMessage());
+        } catch (Exception e) {
+            log.debug("PDFBox erro inesperado: {}", e.getMessage());
+        }
+        return paginas;
+    }
+
+    private static PDDocument abrirPdfBox(byte[] pdfBytes, String senha) throws IOException {
+        if (senha != null && !senha.isBlank()) {
+            return PDDocument.load(pdfBytes, senha);
+        }
+        return PDDocument.load(pdfBytes);
+    }
+
+    private List<String> tentarExtrairComOpenPdf(byte[] pdfBytes, String senha) {
         List<String> paginas = new ArrayList<>();
         try {
             Class<?> readerClass = Class.forName("com.lowagie.text.pdf.PdfReader");
-            Object reader = abrirReader(readerClass, pdfBytes, senha);
+            Object reader = abrirReaderOpenPdf(readerClass, pdfBytes, senha);
+            Boolean encrypted = (Boolean) readerClass.getMethod("isEncrypted").invoke(reader);
+            if (Boolean.TRUE.equals(encrypted)) {
+                try {
+                    readerClass.getMethod("close").invoke(reader);
+                } catch (Exception ignored) {
+                    // close best effort
+                }
+                return paginas;
+            }
             int pages = (Integer) readerClass.getMethod("getNumberOfPages").invoke(reader);
             Class<?> extractorClass = Class.forName("com.lowagie.text.pdf.parser.PdfTextExtractor");
             try {
@@ -123,12 +181,12 @@ public class PdfTextExtractionService {
                 // close best effort
             }
         } catch (Exception e) {
-            log.debug("Falha ao extrair PDF senha={}: {}", senha != null ? "***" : "(vazia)", e.getMessage());
+            log.debug("OpenPDF falhou senha={}: {}", senha != null ? "***" : "(vazia)", e.getMessage());
         }
         return paginas;
     }
 
-    private static Object abrirReader(Class<?> readerClass, byte[] pdfBytes, String senha) throws Exception {
+    private static Object abrirReaderOpenPdf(Class<?> readerClass, byte[] pdfBytes, String senha) throws Exception {
         if (senha != null && !senha.isBlank()) {
             return readerClass.getConstructor(byte[].class, byte[].class)
                 .newInstance(pdfBytes, senha.getBytes(StandardCharsets.UTF_8));
@@ -147,11 +205,17 @@ public class PdfTextExtractionService {
         if (!trimmed.isBlank()) {
             senhas.add(trimmed);
         }
+        if (!digitos.isBlank()) {
+            senhas.add(digitos);
+        }
         if (digitos.length() >= 5) {
             senhas.add(digitos.substring(0, 5));
         }
         if (digitos.length() >= 4) {
             senhas.add(digitos.substring(0, 4));
+        }
+        if (digitos.length() >= 6) {
+            senhas.add(digitos.substring(0, 6));
         }
         return new ArrayList<>(senhas);
     }

@@ -197,6 +197,13 @@
             <version>9.3.0</version>
         </dependency>
 
+        <!-- PDF protegido (faturas Itaú: senha = 5 primeiros dígitos do CPF) -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.31</version>
+        </dependency>
+
         <!-- Apache HttpClient para configuração SSL personalizada -->
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
