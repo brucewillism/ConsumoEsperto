@@ -12,7 +12,7 @@ import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.util.ApelidoNormalizador;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,8 +39,7 @@ public class SalarioAutomaticoService {
     private final TransacaoService transacaoService;
     private final CategoriaRepository categoriaRepository;
     private final UsuarioRepository usuarioRepository;
-    @Lazy
-    private final ContrachequeImportService contrachequeImportService;
+    private final ObjectProvider<ContrachequeImportService> contrachequeImportProvider;
 
     /**
      * @return {@code true} se criou a receita confirmada nesta invocação
@@ -84,7 +83,7 @@ public class SalarioAutomaticoService {
         cfg.setUltimoMesLancamentoAuto(ym);
         rendaConfigRepository.save(cfg);
         try {
-            contrachequeImportService.garantirEspelhoMesAtual(uid);
+            contrachequeImportProvider.getObject().garantirEspelhoMesAtual(uid);
         } catch (Exception e) {
             log.warn("Espelho de contracheque após salário automático userId={}: {}", uid, e.getMessage());
         }

@@ -237,15 +237,16 @@ public class SchemaAutoPatchService {
             }
             for (String rawSchema : schemas) {
                 String schema = rawSchema.replace("\"", "");
+                String fkName = "fk_" + schema + "_usuario_renda_config_conta_bancaria";
                 executeDdlAutocommit(
                     "ALTER TABLE " + schema + ".usuario_renda_config "
                         + "ADD COLUMN IF NOT EXISTS conta_bancaria_id BIGINT"
                 );
                 executeDdlAutocommit(
                     "DO $$ BEGIN "
-                        + "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_usuario_renda_config_conta_bancaria') THEN "
+                        + "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '" + fkName + "') THEN "
                         + "ALTER TABLE " + schema + ".usuario_renda_config "
-                        + "ADD CONSTRAINT fk_usuario_renda_config_conta_bancaria "
+                        + "ADD CONSTRAINT " + fkName + " "
                         + "FOREIGN KEY (conta_bancaria_id) REFERENCES public.contas_bancarias(id) ON DELETE SET NULL; "
                         + "END IF; END $$"
                 );

@@ -17,7 +17,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,8 +60,7 @@ public class ContrachequeImportService {
     private final ScoreService scoreService;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final PlanejamentoFiscalService planejamentoFiscalService;
-    @Lazy
-    private final SalarioAutomaticoService salarioAutomaticoService;
+    private final ObjectProvider<SalarioAutomaticoService> salarioAutomaticoProvider;
     private final ObjectProvider<ContrachequeImportService> selfProvider;
 
     public ContrachequeDTO processarPdf(Long usuarioId, byte[] pdfBytes) {
@@ -492,7 +490,9 @@ public class ContrachequeImportService {
             int diaEfetivo = Math.min(diaPagamento, competencia.lengthOfMonth());
             tx.setDataTransacao(competencia.atDay(diaEfetivo).atStartOfDay());
             tx.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
-            salarioAutomaticoService.resolverContaDestinoSalarioPorUsuario(usuarioId).ifPresent(tx::setContaBancariaId);
+            salarioAutomaticoProvider.getObject()
+                .resolverContaDestinoSalarioPorUsuario(usuarioId)
+                .ifPresent(tx::setContaBancariaId);
             transacaoService.criarTransacao(tx, usuarioId);
         }
 
