@@ -162,6 +162,7 @@ public class FaturaPdfImportService {
         int anoReferencia = resolverAnoReferenciaFatura(extracted);
         layoutEfetivo.complementarLancamentosDoTexto(textoPdf, itens, anoReferencia);
         itens = layoutEfetivo.sanitizarLancamentos(itens);
+        enriquecerParcelasNosItens(itens);
         complementarItensComTaxasDeclaradas(itens, extracted, parseDate(extracted.path("dataFechamento").asText("")));
         for (ImportacaoFaturaItemDTO item : itens) {
             boolean novo = buscarExistentes(usuarioId, item).isEmpty();
@@ -188,6 +189,7 @@ public class FaturaPdfImportService {
             }
         }
         layoutEfetivo.finalizarLancamentosDoTexto(textoPdf, itens, valorTotal, anoReferencia);
+        enriquecerParcelasNosItens(itens);
         imp.setValorTotal(valorTotal);
         BigDecimal pagamentoMinimo = readMoney(extracted.path("pagamentoMinimo"));
         if (pagamentoMinimo.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {
@@ -1317,6 +1319,15 @@ public class FaturaPdfImportService {
         }
     }
 
+    private static void enriquecerParcelasNosItens(List<ImportacaoFaturaItemDTO> itens) {
+        if (itens == null) {
+            return;
+        }
+        for (ImportacaoFaturaItemDTO item : itens) {
+            aplicarParcelamentoDaDescricao(item);
+        }
+    }
+
     private static void aplicarParcelamentoDaDescricao(ImportacaoFaturaItemDTO item) {
         if (item == null || item.getDescricao() == null || item.getDescricao().isBlank()) {
             return;
@@ -1330,30 +1341,34 @@ public class FaturaPdfImportService {
         java.util.regex.Matcher slash = java.util.regex.Pattern
             .compile("(?i)(?:parc(?:ela)?\\.?\\s*)?(\\d{1,2})\\s*/\\s*(\\d{1,2})")
             .matcher(descricao);
-        if (slash.find()) {
-            preencherParcelas(item, slash.group(1), slash.group(2));
-            return;
+        while (slash.find()) {
+            if (tentarPreencherParcelas(item, slash.group(1), slash.group(2))) {
+                return;
+            }
         }
         java.util.regex.Matcher de = java.util.regex.Pattern
             .compile("(?i)(?:parc(?:ela)?\\.?\\s*)?(\\d{1,2})\\s*(?:de|DE)\\s*(\\d{1,2})")
             .matcher(descricao);
         if (de.find()) {
-            preencherParcelas(item, de.group(1), de.group(2));
+            tentarPreencherParcelas(item, de.group(1), de.group(2));
         }
     }
 
-    private static void preencherParcelas(ImportacaoFaturaItemDTO item, String atualRaw, String totalRaw) {
+    private static boolean tentarPreencherParcelas(ImportacaoFaturaItemDTO item, String atualRaw, String totalRaw) {
         try {
             int atual = Integer.parseInt(atualRaw);
             int total = Integer.parseInt(totalRaw);
             if (atual >= 1 && total > 1 && atual <= total) {
                 item.setParcelaAtual(atual);
                 item.setTotalParcelas(total);
+                return true;
             }
         } catch (Exception ignored) {
-            // Mantém os campos vazios se a descrição tiver um padrão ambíguo.
+            // tenta próximo padrão na descrição (ex.: data DD/MM antes da parcela NN/NN no Itaú)
         }
+        return false;
     }
+
 
     /** Agrupa linhas da fatura por “estabelecimento” para evitar N×M alertas no WhatsApp. */
     private static String chaveEstabelecimentoFatura(String descricao) {

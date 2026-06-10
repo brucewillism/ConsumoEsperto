@@ -67,6 +67,19 @@ class ItauFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiParcelaQuandoDataPrefixadaNaDescricao() {
+        String texto = """
+            LANÇAMENTOS: compras e saques
+            15/03 AMAZON MARKETPLACE 03/12 89,90
+            Total desta fatura R$ 89,90
+            """;
+        List<ImportacaoFaturaItemDTO> itens = ItauFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(1, itens.size());
+        assertEquals(3, itens.get(0).getParcelaAtual());
+        assertEquals(12, itens.get(0).getTotalParcelas());
+    }
+
+    @Test
     void complementarInjetaEncargosQuandoIaOmitiu() {
         String texto = """
             LANÇAMENTOS: compras e saques

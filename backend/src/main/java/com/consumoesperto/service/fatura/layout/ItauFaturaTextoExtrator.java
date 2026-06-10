@@ -140,12 +140,17 @@ public final class ItauFaturaTextoExtrator {
             item.setValor(valor);
             if (m.group(5) != null && m.group(6) != null) {
                 try {
-                    item.setParcelaAtual(Integer.parseInt(m.group(5)));
-                    item.setTotalParcelas(Integer.parseInt(m.group(6)));
+                    int parcelaAtual = Integer.parseInt(m.group(5));
+                    int totalParcelas = Integer.parseInt(m.group(6));
+                    if (parcelaAtual >= 1 && totalParcelas > 1 && parcelaAtual <= totalParcelas) {
+                        item.setParcelaAtual(parcelaAtual);
+                        item.setTotalParcelas(totalParcelas);
+                    }
                 } catch (NumberFormatException ignored) {
                     // parcela opcional
                 }
             }
+            aplicarParcelaNaDescricao(item, descricao);
             if (!jaExiste(out, item)) {
                 out.add(item);
             }
@@ -365,5 +370,38 @@ public final class ItauFaturaTextoExtrator {
             return -1;
         }
         return texto.toLowerCase(Locale.ROOT).indexOf(needle.toLowerCase(Locale.ROOT));
+    }
+
+    /** «Parcela 04 de 06» ou último NN/NN válido na descrição (evita confundir data DD/MM com parcela). */
+    private static void aplicarParcelaNaDescricao(ImportacaoFaturaItemDTO item, String descricao) {
+        if (item.getParcelaAtual() != null && item.getTotalParcelas() != null && item.getTotalParcelas() > 1) {
+            return;
+        }
+        Matcher parcelaDe = Pattern.compile("(?i)parcela\\s+(\\d{1,2})\\s+de\\s+(\\d{1,2})").matcher(descricao);
+        if (parcelaDe.find()) {
+            preencherParcelaSeValida(item, parcelaDe.group(1), parcelaDe.group(2));
+            return;
+        }
+        Matcher slash = Pattern.compile("(?i)(?:parc(?:ela)?\\.?\\s*)?(\\d{1,2})\\s*/\\s*(\\d{1,2})").matcher(descricao);
+        while (slash.find()) {
+            if (preencherParcelaSeValida(item, slash.group(1), slash.group(2))) {
+                return;
+            }
+        }
+    }
+
+    private static boolean preencherParcelaSeValida(ImportacaoFaturaItemDTO item, String atualRaw, String totalRaw) {
+        try {
+            int atual = Integer.parseInt(atualRaw);
+            int total = Integer.parseInt(totalRaw);
+            if (atual >= 1 && total > 1 && atual <= total) {
+                item.setParcelaAtual(atual);
+                item.setTotalParcelas(total);
+                return true;
+            }
+        } catch (NumberFormatException ignored) {
+            // tenta próximo candidato
+        }
+        return false;
     }
 }
