@@ -1,44 +1,48 @@
 <h2 mat-dialog-title>Convidar parceiro(a)</h2>
 
-<mat-dialog-content class="ce-form-body convidar-form-body">
+<mat-dialog-content class="convidar-content">
   <p class="hint">
     Informe o e-mail ou o WhatsApp de quem vai compartilhar o orçamento. Pelo menos um dos dois é obrigatório.
   </p>
   <div class="ce-form-alert" *ngIf="conviteErro">{{ conviteErro }}</div>
 
-  <mat-form-field appearance="outline" subscriptSizing="fixed" floatLabel="always" class="full">
-    <mat-label>E-mail do convidado</mat-label>
-    <input
-      matInput
-      type="text"
-      [ngModel]="conviteEmail"
-      (ngModelChange)="onEmailInput($event)"
-      autocomplete="email"
-      [disabled]="salvando"
-    />
-  </mat-form-field>
+  <label class="field-label" for="convite-email">E-mail do convidado</label>
+  <input
+    id="convite-email"
+    class="convidar-input"
+    type="text"
+    [ngModel]="conviteEmail"
+    (ngModelChange)="onEmailInput($event)"
+    autocomplete="email"
+    [disabled]="salvando"
+  />
 
   <p class="ou">ou</p>
 
-  <mat-form-field appearance="outline" subscriptSizing="fixed" floatLabel="always" class="full">
-    <mat-label>WhatsApp do convidado</mat-label>
-    <input
-      matInput
-      type="tel"
-      inputmode="tel"
-      [ngModel]="conviteWhatsapp"
-      (ngModelChange)="onWhatsappInput($event)"
-      autocomplete="tel"
-      placeholder="(11) 99999-9999"
-      [disabled]="salvando"
-    />
-  </mat-form-field>
+  <label class="field-label" for="convite-whatsapp">WhatsApp do convidado</label>
+  <input
+    id="convite-whatsapp"
+    class="convidar-input"
+    type="tel"
+    inputmode="tel"
+    [ngModel]="conviteWhatsapp"
+    (ngModelChange)="onWhatsappInput($event)"
+    autocomplete="tel"
+    placeholder="(11) 99999-9999"
+    [disabled]="salvando"
+  />
 </mat-dialog-content>
 
-<mat-dialog-actions align="end">
-  <button type="button" mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
-  <button type="button" mat-raised-button color="primary" (click)="enviar()" [disabled]="salvando">
-    <mat-icon *ngIf="!salvando">send</mat-icon>
-    <span>{{ salvando ? 'Enviando…' : 'Enviar convite' }}</span>
+<mat-dialog-actions class="convidar-actions">
+  <button
+    type="button"
+    mat-raised-button
+    color="primary"
+    class="convidar-btn-enviar"
+    (click)="enviar()"
+    [disabled]="salvando"
+  >
+    {{ salvando ? 'Enviando…' : 'Enviar convite' }}
   </button>
+  <button type="button" mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
 </mat-dialog-actions>

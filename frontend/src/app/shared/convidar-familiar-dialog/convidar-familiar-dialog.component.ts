@@ -3,9 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatIconModule } from '@angular/material/icon';
 import { FamiliaService } from '../../services/familia.service';
 import { ToastService } from '../../services/toast.service';
 import {
@@ -24,15 +21,7 @@ export interface ConvidarFamiliarDialogResult {
 @Component({
   selector: 'app-convidar-familiar-dialog',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    MatDialogModule,
-    MatButtonModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatIconModule,
-  ],
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule],
   templateUrl: './convidar-familiar-dialog.component.html',
   styleUrl: './convidar-familiar-dialog.component.scss',
 })
