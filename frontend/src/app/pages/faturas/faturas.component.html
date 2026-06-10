@@ -249,6 +249,14 @@
               <span>Fatura paga</span>
             </div>
 
+            <div *ngIf="isParcial(fatura)" class="alerta parcial">
+              <mat-icon>payments</mat-icon>
+              <span>
+                Pagamento parcial registrado
+                <ng-container *ngIf="fatura.valorPago"> ({{ formatarMoeda(fatura.valorPago) }})</ng-container>
+              </span>
+            </div>
+
             <div *ngIf="isVencida(fatura)" class="alerta vencida">
               <mat-icon>warning</mat-icon>
               <span>Fatura vencida há {{ Math.abs(getDiasVencimento(fatura)) }} dia{{ Math.abs(getDiasVencimento(fatura)) !== 1 ? 's' : '' }}!</span>
@@ -260,7 +268,7 @@
               <mat-icon>list</mat-icon>
               Transações
             </button>
-            <button *ngIf="fatura.status === 'PENDING' || fatura.status === 'OVERDUE'"
+            <button *ngIf="fatura.status === 'PENDING' || fatura.status === 'OVERDUE' || fatura.status === 'PARTIAL'"
                     mat-button color="accent" 
                     (click)="abrirPagamentoFatura(fatura)"
                     [disabled]="acaoEmAndamento">

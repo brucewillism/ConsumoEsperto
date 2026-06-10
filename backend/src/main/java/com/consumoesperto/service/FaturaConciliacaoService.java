@@ -28,6 +28,8 @@ import java.time.LocalDateTime;
 public class FaturaConciliacaoService {
 
     private static final String CATEGORIA_PAGAMENTO_FATURA = "Pagamento de Fatura";
+    /** Tolerância para arredondamento importação PDF vs soma de lançamentos. */
+    private static final BigDecimal TOLERANCIA_QUITACAO = new BigDecimal("0.05");
 
     private final FaturaRepository faturaRepository;
     private final ContaBancariaService contaBancariaService;
@@ -40,12 +42,14 @@ public class FaturaConciliacaoService {
     public TransacaoDTO pagarFatura(Long usuarioId, PagamentoFaturaRequest request) {
         Fatura fatura = faturaRepository.findByIdAndCartaoCreditoUsuarioId(request.getFaturaId(), usuarioId)
             .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
+        reconciliarStatusPagamento(fatura);
         if (Boolean.TRUE.equals(fatura.getPaga()) || fatura.getStatus() == Fatura.StatusFatura.PAGA) {
             throw new IllegalStateException("Fatura já está paga.");
         }
 
         ContaBancaria conta = contaBancariaService.buscarEntidade(request.getContaBancariaId(), usuarioId);
-        BigDecimal valorFatura = fatura.getValorFatura() != null ? fatura.getValorFatura() : fatura.getValorTotal();
+        BigDecimal valorDevido = resolverValorDevido(fatura);
+        BigDecimal valorFatura = valorDevido;
         BigDecimal valor = request.getValor() != null ? request.getValor() : valorFatura;
         valor = valor.setScale(2, RoundingMode.HALF_UP);
         if (valor.compareTo(BigDecimal.ZERO) <= 0) {
@@ -79,8 +83,9 @@ public class FaturaConciliacaoService {
 
         LocalDateTime dataPag = pagamento.getDataTransacao();
         fatura.setDataPagamento(dataPag);
-        fatura.setValorPago(valor);
-        boolean quitacaoTotal = valor.compareTo(valorFatura) >= 0;
+        BigDecimal totalPago = somaPagamentosRegistrados(fatura);
+        fatura.setValorPago(totalPago);
+        boolean quitacaoTotal = quitacaoCompleta(totalPago, valorDevido);
         if (quitacaoTotal) {
             fatura.setPaga(true);
             fatura.setStatus(Fatura.StatusFatura.PAGA);
@@ -91,10 +96,91 @@ public class FaturaConciliacaoService {
         faturaRepository.save(fatura);
 
         saldoService.notificarAlteracaoSaldo(usuarioId);
-        log.info("[FATURA] Conciliação userId={} faturaId={} valor={} conta={}",
-            usuarioId, fatura.getId(), valor, conta.getId());
+        log.info("[FATURA] Conciliação userId={} faturaId={} valor={} totalPago={} devido={} status={}",
+            usuarioId, fatura.getId(), valor, totalPago, valorDevido, fatura.getStatus());
 
         return toDto(salva, conta.getNome());
+    }
+
+    /**
+     * Corrige faturas com pagamento registrado (PAGAMENTO_FATURA) mas status ainda aberto/parcial.
+     */
+    @Transactional
+    public boolean reconciliarStatusPagamento(Fatura fatura) {
+        if (fatura == null || fatura.getId() == null) {
+            return false;
+        }
+        if (fatura.getStatus() == Fatura.StatusFatura.PAGA || Boolean.TRUE.equals(fatura.getPaga())) {
+            return false;
+        }
+        BigDecimal devido = resolverValorDevido(fatura);
+        if (devido.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        BigDecimal totalPago = somaPagamentosRegistrados(fatura);
+        if (!quitacaoCompleta(totalPago, devido)) {
+            if (totalPago.compareTo(BigDecimal.ZERO) > 0
+                && fatura.getStatus() != Fatura.StatusFatura.PARCIAL) {
+                fatura.setValorPago(totalPago);
+                fatura.setPaga(false);
+                fatura.setStatus(Fatura.StatusFatura.PARCIAL);
+                faturaRepository.save(fatura);
+                log.info("[FATURA] Reconciliação parcial faturaId={} pago={} devido={}",
+                    fatura.getId(), totalPago, devido);
+                return true;
+            }
+            return false;
+        }
+        fatura.setValorPago(totalPago);
+        fatura.setPaga(true);
+        fatura.setStatus(Fatura.StatusFatura.PAGA);
+        if (fatura.getDataPagamento() == null) {
+            fatura.setDataPagamento(LocalDateTime.now());
+        }
+        faturaRepository.save(fatura);
+        log.info("[FATURA] Reconciliação quitada faturaId={} pago={} devido={}",
+            fatura.getId(), totalPago, devido);
+        return true;
+    }
+
+    BigDecimal resolverValorDevido(Fatura fatura) {
+        BigDecimal vf = fatura.getValorFatura();
+        BigDecimal vt = fatura.getValorTotal();
+        BigDecimal base = BigDecimal.ZERO;
+        if (vf != null && vf.compareTo(BigDecimal.ZERO) > 0) {
+            base = vf;
+        } else if (vt != null && vt.compareTo(BigDecimal.ZERO) > 0) {
+            base = vt;
+        }
+        if (fatura.getId() != null) {
+            BigDecimal somaDespesas = transacaoRepository.sumDespesaConfirmadaPorFaturaId(fatura.getId());
+            if (somaDespesas != null && somaDespesas.compareTo(BigDecimal.ZERO) > 0) {
+                if (base.compareTo(BigDecimal.ZERO) <= 0 || somaDespesas.compareTo(base) > 0) {
+                    base = somaDespesas;
+                }
+            }
+        }
+        return base.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal somaPagamentosRegistrados(Fatura fatura) {
+        if (fatura.getId() == null) {
+            return nz(fatura.getValorPago());
+        }
+        BigDecimal viaTransacoes = transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(fatura.getId());
+        BigDecimal viaCampo = nz(fatura.getValorPago());
+        return viaTransacoes.max(viaCampo).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static boolean quitacaoCompleta(BigDecimal totalPago, BigDecimal valorDevido) {
+        if (totalPago == null || valorDevido == null) {
+            return false;
+        }
+        return totalPago.add(TOLERANCIA_QUITACAO).compareTo(valorDevido) >= 0;
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     }
 
     private Categoria resolverCategoriaPagamento(Long usuarioId) {

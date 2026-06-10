@@ -533,6 +533,12 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   isVencida(fatura: CreditCardInvoice): boolean {
+    if (fatura.status === 'PAID' || fatura.status === 'PARTIAL') {
+      return false;
+    }
+    if (fatura.status === 'OVERDUE') {
+      return true;
+    }
     if (fatura.status !== 'PENDING') {
       return false;
     }
@@ -541,6 +547,10 @@ export class FaturasComponent implements OnInit, OnDestroy {
 
   isPaga(fatura: CreditCardInvoice): boolean {
     return fatura.status === 'PAID';
+  }
+
+  isParcial(fatura: CreditCardInvoice): boolean {
+    return fatura.status === 'PARTIAL';
   }
 
   getStatusColor(status: string): string {
@@ -556,6 +566,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
   getStatusText(status: string): string {
     switch (status) {
       case 'PAID': return 'Paga';
+      case 'PARTIAL': return 'Paga parcial';
       case 'PENDING': return 'Pendente';
       case 'OVERDUE': return 'Vencida';
       case 'PREVISTA': return 'Prevista';

@@ -97,6 +97,9 @@ export enum StatusFatura {
   PENDENTE = 'PENDENTE',
   
   /** Fatura com pagamento parcial */
+  PARCIAL = 'PARCIAL',
+
+  /** @deprecated alias legado — preferir PARCIAL */
   PARCIALMENTE_PAGA = 'PARCIALMENTE_PAGA',
 
   /** Ciclo futuro (projeção de parcelas) */
@@ -134,6 +137,9 @@ export interface FaturaDTO {
   
   /** Status atual da fatura (aberta, fechada, paga, etc.) */
   statusFatura: StatusFatura;
+
+  /** Indicador explícito de quitação no backend */
+  paga?: boolean;
   
   /** Número da fatura fornecido pelo banco (opcional) */
   numeroFatura?: string;

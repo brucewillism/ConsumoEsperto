@@ -8,6 +8,7 @@ export interface CreditCardInvoice {
   amount: number;
   dueDate: Date;
   closingDate: Date;
-  status: 'PENDING' | 'PAID' | 'OVERDUE' | 'PREVISTA';
+  status: 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'PREVISTA';
+  valorPago?: number;
   transactions: any[];
 }

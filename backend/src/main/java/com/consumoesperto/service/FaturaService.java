@@ -71,6 +71,8 @@ public class FaturaService {
 
     private final SugestaoContencaoJarvisRepository sugestaoContencaoJarvisRepository;
 
+    private final FaturaConciliacaoService faturaConciliacaoService;
+
     /**
      * Dias corridos entre o fechamento estimado e o vencimento (ex.: 10 = fechamento 10 dias antes do vencimento).
      * Override: {@code consumoesperto.fatura.dias-entre-fechamento-e-vencimento}.
@@ -121,6 +123,7 @@ public class FaturaService {
         // Busca a fatura pelo ID e valida se pertence ao usuário através do cartão
         Fatura fatura = faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
                 .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
+        faturaConciliacaoService.reconciliarStatusPagamento(fatura);
         return converterParaDTO(fatura);
     }
 
@@ -136,6 +139,9 @@ public class FaturaService {
     public List<FaturaDTO> buscarPorUsuarioId(Long usuarioId) {
         // Busca todas as faturas associadas aos cartões de crédito do usuário
         List<Fatura> faturas = faturaRepository.findByCartaoCreditoUsuarioId(usuarioId);
+        for (Fatura fatura : faturas) {
+            faturaConciliacaoService.reconciliarStatusPagamento(fatura);
+        }
         return faturas.stream()
                 .map(this::converterParaDTO)
                 .collect(Collectors.toList());

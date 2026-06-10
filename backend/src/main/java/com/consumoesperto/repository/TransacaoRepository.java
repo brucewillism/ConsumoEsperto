@@ -233,6 +233,11 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA")
     BigDecimal sumDespesaConfirmadaPorFaturaId(@Param("faturaId") Long faturaId);
 
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.fatura.id = :faturaId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.PAGAMENTO_FATURA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA")
+    BigDecimal sumPagamentoFaturaConfirmadoPorFaturaId(@Param("faturaId") Long faturaId);
+
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.fatura.cartaoCredito.id = :cartaoId "
         + "AND t.fatura.status IN (com.consumoesperto.model.Fatura$StatusFatura.ABERTA, com.consumoesperto.model.Fatura$StatusFatura.PARCIAL) "
         + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "

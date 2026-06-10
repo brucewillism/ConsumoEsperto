@@ -137,12 +137,13 @@ export class FaturaService {
     };
   }
 
-  private converterParaModelo(dto: FaturaDTO): Fatura {
+  private converterParaModelo(dto: FaturaDTO): Fatura & { paga?: boolean } {
     return {
       id: dto.id,
       valorFatura: dto.valorFatura ?? dto.valorTotal ?? 0,
       valorTotal: dto.valorTotal,
       valorPago: dto.valorPago,
+      paga: dto.paga,
       dataVencimento: dto.dataVencimento,
       dataFechamento: dto.dataFechamento,
       dataPagamento: dto.dataPagamento,
@@ -163,16 +164,20 @@ export class FaturaService {
     };
   }
 
-  private converterParaCreditCardInvoice(fatura: Fatura): CreditCardInvoice {
+  private converterParaCreditCardInvoice(fatura: Fatura & { paga?: boolean }): CreditCardInvoice {
     return {
       id: fatura.id?.toString() || '',
       cardId: fatura.cartaoCreditoId?.toString() || '',
       numeroFatura: fatura.numeroFatura,
       bankName: fatura.bankName || fatura.nomeCartao || fatura.banco || 'Banco',
       amount: fatura.valorFatura ?? fatura.valorTotal ?? fatura.valor ?? 0,
+      valorPago: Number(fatura.valorPago) || 0,
       dueDate: fatura.dataVencimento || fatura.dueDate || new Date(),
       closingDate: fatura.dataFechamento || fatura.closingDate || new Date(),
-      status: this.converterStatusParaCreditCard(fatura.statusFatura || fatura.status),
+      status: this.converterStatusParaCreditCard(
+        fatura.statusFatura || fatura.status,
+        fatura.paga
+      ),
       transactions: fatura.transactions || []
     };
   }
@@ -216,12 +221,31 @@ export class FaturaService {
     return StatusFatura.ABERTA;
   }
 
-  private converterStatusParaCreditCard(status: StatusFatura): 'PENDING' | 'PAID' | 'OVERDUE' | 'PREVISTA' {
-    switch (status) {
-      case StatusFatura.PAGA: return 'PAID';
-      case StatusFatura.VENCIDA: return 'OVERDUE';
-      case StatusFatura.PREVISTA: return 'PREVISTA';
-      default: return 'PENDING';
+  private converterStatusParaCreditCard(
+    status: StatusFatura | string | undefined,
+    paga?: boolean
+  ): 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'PREVISTA' {
+    if (paga === true) {
+      return 'PAID';
+    }
+    const norm = typeof status === 'string' ? status.toUpperCase() : status;
+    switch (norm) {
+      case StatusFatura.PAGA:
+      case 'PAGA':
+        return 'PAID';
+      case StatusFatura.PARCIAL:
+      case StatusFatura.PARCIALMENTE_PAGA:
+      case 'PARCIAL':
+      case 'PARCIALMENTE_PAGA':
+        return 'PARTIAL';
+      case StatusFatura.VENCIDA:
+      case 'VENCIDA':
+        return 'OVERDUE';
+      case StatusFatura.PREVISTA:
+      case 'PREVISTA':
+        return 'PREVISTA';
+      default:
+        return 'PENDING';
     }
   }
 
@@ -232,9 +256,12 @@ export class FaturaService {
     return `${ano}-${String(mes).padStart(2, '0')}-${cartaoId}-${Date.now()}`;
   }
 
-  private converterStatusDeCreditCard(status: 'PENDING' | 'PAID' | 'OVERDUE' | 'PREVISTA'): StatusFatura {
+  private converterStatusDeCreditCard(
+    status: 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'PREVISTA'
+  ): StatusFatura {
     switch (status) {
       case 'PAID': return StatusFatura.PAGA;
+      case 'PARTIAL': return StatusFatura.PARCIAL;
       case 'OVERDUE': return StatusFatura.VENCIDA;
       case 'PREVISTA': return StatusFatura.PREVISTA;
       default: return StatusFatura.ABERTA;
