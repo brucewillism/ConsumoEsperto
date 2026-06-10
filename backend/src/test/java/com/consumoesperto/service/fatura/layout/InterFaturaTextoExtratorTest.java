@@ -54,8 +54,8 @@ class InterFaturaTextoExtratorTest {
         destino.add(item("APPLE.COM/BILL", new BigDecimal("18.00"), LocalDate.of(2026, 4, 29), null, null));
         destino.add(item("PARC SALDO TOT", new BigDecimal("273.14"), fev21, 5, 6));
         destino.add(item("PARC SALDO TOT", new BigDecimal("273.14"), fev21, 6, 6));
-        destino.add(item("Parcelamento 1+5x", new BigDecimal("71.81"), null, null));
-        destino.add(item("IOF simulacao", new BigDecimal("12.00"), null, null));
+        destino.add(item("Parcelamento 1+5x", new BigDecimal("71.81"), null, null, null));
+        destino.add(item("IOF simulacao", new BigDecimal("12.00"), null, null, null));
 
         InterFaturaTextoExtrator.complementar(destino, TEXTO, 2026);
         assertEquals(3, destino.size());
@@ -80,7 +80,7 @@ class InterFaturaTextoExtratorTest {
         destino.add(item("APPLE.COM/BILL", new BigDecimal("18.00"), LocalDate.of(2026, 4, 29), null, null));
         destino.add(item("Total a pagar em encargos e IOF do rotativo", new BigDecimal("2.97"), LocalDate.of(2026, 5, 25), null, null));
         destino.add(item("PARC SALDO TOT", new BigDecimal("273.14"), fev21, 5, 6));
-        destino.add(item("Parcelamento 1+5x", new BigDecimal("71.81"), null, null));
+        destino.add(item("Parcelamento 1+5x", new BigDecimal("71.81"), null, null, null));
 
         InterFaturaTextoExtrator.finalizarListaInter(destino, TEXTO, new BigDecimal("291.14"), 2026);
         assertEquals(3, destino.size());

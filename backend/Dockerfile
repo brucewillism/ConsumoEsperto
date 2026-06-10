@@ -3,7 +3,7 @@ FROM maven:3.9-eclipse-temurin-17-alpine AS build
 WORKDIR /build
 COPY pom.xml .
 COPY src ./src
-RUN mvn -B -q -DskipTests package
+RUN mvn -B -q -Dmaven.test.skip=true package
 
 # Runtime — só JRE
 FROM eclipse-temurin:17-jre-alpine
