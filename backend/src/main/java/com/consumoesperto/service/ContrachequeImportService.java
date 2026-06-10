@@ -92,22 +92,32 @@ public class ContrachequeImportService {
         Optional<ContrachequeImportado> templateConfirmado = buscarTemplateConfirmado(usuarioId);
         if (templateConfirmado.isPresent()
             && !ehDecimoTerceiro(extracted, bruto, templateConfirmado.get())
-            && valoresEquivalentesAoTemplate(templateConfirmado.get(), bruto, liquido, totalDesc, descontos)) {
+            && totaisEquivalentesAoTemplate(templateConfirmado.get(), bruto, liquido, totalDesc)) {
+            ContrachequeImportado template = templateConfirmado.get();
+            List<DescontoFixoDTO> descontosEfetivos = resolverDescontosDetalhados(template, descontos);
             log.info(
-                "Contracheque userId={} reutiliza template id={} (valores iguais, não é 13º) — sem nova linha no histórico",
-                usuarioId, templateConfirmado.get().getId());
+                "Contracheque userId={} reutiliza template id={} (totais iguais, não é 13º) — competência {}/{}",
+                usuarioId, template.getId(), mes, ano);
+            ContrachequeImportado registro = garantirEspelhoCompetencia(
+                usuario, template, mes, ano, bruto, liquido, totalDesc, descontosEfetivos,
+                deltaBruto, auditoriaOk, extracted);
             rendaConfigService.salvar(
                 usuarioId,
                 bruto,
-                descontos,
+                descontosEfetivos,
                 rendaConfigService.obterDto(usuarioId).map(RendaConfigDTO::getDiaPagamento).orElse(5),
                 Boolean.TRUE);
-            ContrachequeDTO dto = toDto(templateConfirmado.get());
+            ContrachequeDTO dto = toDto(registro);
             List<String> insights = new ArrayList<>(dto.getInsights() != null ? dto.getInsights() : List.of());
             insights.add(0,
                 "Valores idênticos ao contracheque base — renda mantida. Reimporte só quando houver 13º salário ou mudança real.");
             dto.setInsights(insights);
             return dto;
+        }
+
+        if (templateConfirmado.isPresent()) {
+            descontos = resolverDescontosDetalhados(templateConfirmado.get(), descontos);
+            totalDesc = descontos.stream().map(DescontoFixoDTO::getValor).reduce(BigDecimal.ZERO, BigDecimal::add);
         }
 
         ContrachequeImportado c = new ContrachequeImportado();
@@ -120,7 +130,7 @@ public class ContrachequeImportService {
         c.setTotalDescontos(totalDesc.setScale(2, RoundingMode.HALF_UP));
         c.setAuditoriaDeltaBruto(deltaBruto);
         c.setAuditoriaSomaBrutoOk(auditoriaOk);
-        c.setDescontosJson(writeJson(descontos));
+        aplicarDescontosNoRegistro(c, descontos);
 
         List<String> insightList = new ArrayList<>(insights(extracted, bruto, totalDesc, descontos));
         if (!auditoriaOk && bruto.compareTo(BigDecimal.ZERO) > 0) {
@@ -130,18 +140,44 @@ public class ContrachequeImportService {
 
         c.setInsightsJson(writeJson(insightList));
 
-        for (DescontoFixoDTO d : descontos) {
-            ContrachequeDesconto line = new ContrachequeDesconto();
-            line.setContrachequeImportado(c);
-            line.setDescricao(d.getRotulo() != null && !d.getRotulo().isBlank() ? d.getRotulo().trim() : "Desconto");
-            line.setValor(d.getValor());
-            c.getDescontosDetalhados().add(line);
-        }
-
         return toDto(contrachequeRepository.save(c));
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * Garante cartão de contracheque no mês civil corrente (salário automático), espelhando o template confirmado.
+     */
+    @Transactional
+    public void garantirEspelhoMesAtual(Long usuarioId) {
+        Optional<ContrachequeImportado> templateOpt = buscarTemplateConfirmado(usuarioId);
+        if (templateOpt.isEmpty()) {
+            return;
+        }
+        ContrachequeImportado template = templateOpt.get();
+        Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
+        if (usuario == null) {
+            return;
+        }
+        YearMonth mesAtual = YearMonth.now(ZONA_BR);
+        int mes = mesAtual.getMonthValue();
+        int ano = mesAtual.getYear();
+        if (template.getMes() != null && template.getAno() != null
+            && template.getMes() == mes && template.getAno() == ano) {
+            return;
+        }
+        List<DescontoFixoDTO> descontos = obterDescontosDoRegistro(template);
+        BigDecimal bruto = template.getSalarioBruto();
+        BigDecimal liquido = template.getSalarioLiquido();
+        BigDecimal totalDesc = template.getTotalDescontos();
+        if (bruto == null || liquido == null || totalDesc == null) {
+            return;
+        }
+        BigDecimal delta = bruto.subtract(liquido.add(totalDesc)).setScale(2, RoundingMode.HALF_UP);
+        boolean auditoriaOk = Boolean.TRUE.equals(template.getAuditoriaSomaBrutoOk());
+        garantirEspelhoCompetencia(
+            usuario, template, mes, ano, bruto, liquido, totalDesc, descontos, delta, auditoriaOk, null);
+    }
+
+    @Transactional
     public List<ContrachequeDTO> listarHistorico(Long usuarioId) {
         List<ContrachequeImportado> rows = contrachequeRepository.findByUsuarioIdOrderByAnoDescMesDescDataCriacaoDesc(usuarioId);
         /** Um cartão por competência + empresa: importações repetidas (ex.: WhatsApp + web) ficam como linha só — a mais recente. */
@@ -150,6 +186,7 @@ public class ContrachequeImportService {
             String chave = c.getAno() + "|" + c.getMes() + "|" + normalizarEmpresaChave(c.getEmpresa());
             porChave.putIfAbsent(chave, c);
         }
+        repararDescontosDegenerados(usuarioId, porChave.values());
         String empresaReferencia = porChave.values().stream()
             .map(ContrachequeImportado::getEmpresa)
             .filter(e -> e != null && !e.isBlank() && !EMPRESA_NAO_IDENTIFICADA.equalsIgnoreCase(e.trim()))
@@ -231,12 +268,11 @@ public class ContrachequeImportService {
             .trim();
     }
 
-    private boolean valoresEquivalentesAoTemplate(
+    private boolean totaisEquivalentesAoTemplate(
         ContrachequeImportado template,
         BigDecimal bruto,
         BigDecimal liquido,
-        BigDecimal totalDesc,
-        List<DescontoFixoDTO> descontos
+        BigDecimal totalDesc
     ) {
         if (template == null) {
             return false;
@@ -247,24 +283,162 @@ public class ContrachequeImportService {
         if (!moedasQuaseIguais(template.getSalarioLiquido(), liquido, TOLERANCIA_REUTILIZACAO_TEMPLATE)) {
             return false;
         }
-        if (!moedasQuaseIguais(template.getTotalDescontos(), totalDesc, TOLERANCIA_REUTILIZACAO_TEMPLATE)) {
+        return moedasQuaseIguais(template.getTotalDescontos(), totalDesc, TOLERANCIA_REUTILIZACAO_TEMPLATE);
+    }
+
+    private List<DescontoFixoDTO> resolverDescontosDetalhados(ContrachequeImportado template, List<DescontoFixoDTO> extraidos) {
+        List<DescontoFixoDTO> referencia = obterDescontosDoRegistro(template);
+        if (!referencia.isEmpty() && descontosPrecisamSubstituicao(extraidos, referencia)) {
+            return referencia;
+        }
+        if (extraidos != null && !extraidos.isEmpty()) {
+            return extraidos;
+        }
+        return referencia;
+    }
+
+    private List<DescontoFixoDTO> obterDescontosDoRegistro(ContrachequeImportado c) {
+        if (c.getDescontosDetalhados() != null && !c.getDescontosDetalhados().isEmpty()) {
+            return c.getDescontosDetalhados().stream()
+                .map(l -> new DescontoFixoDTO(l.getDescricao(), l.getValor()))
+                .collect(Collectors.toList());
+        }
+        return readDescontos(c.getDescontosJson());
+    }
+
+    private boolean descontosDegenerados(List<DescontoFixoDTO> descontos) {
+        if (descontos == null || descontos.isEmpty()) {
+            return true;
+        }
+        if (descontos.size() == 1) {
+            String rotulo = normalizarTextoBusca(descontos.get(0).getRotulo());
+            return rotulo.contains("total") && rotulo.contains("desconto");
+        }
+        return false;
+    }
+
+    private boolean descontosPrecisamSubstituicao(List<DescontoFixoDTO> atuais, List<DescontoFixoDTO> referencia) {
+        if (referencia == null || referencia.isEmpty()) {
             return false;
         }
-        List<DescontoFixoDTO> base = readDescontos(template.getDescontosJson());
-        if (base.size() != descontos.size()) {
-            return false;
+        if (descontosDegenerados(atuais)) {
+            return true;
         }
-        for (int i = 0; i < base.size(); i++) {
-            DescontoFixoDTO a = base.get(i);
-            DescontoFixoDTO b = descontos.get(i);
-            if (!normalizarTextoBusca(a.getRotulo()).equals(normalizarTextoBusca(b.getRotulo()))) {
-                return false;
-            }
-            if (!moedasQuaseIguais(a.getValor(), b.getValor(), TOLERANCIA_REUTILIZACAO_TEMPLATE)) {
-                return false;
-            }
+        return atuais == null || atuais.size() < referencia.size();
+    }
+
+    private void aplicarDescontosNoRegistro(ContrachequeImportado c, List<DescontoFixoDTO> descontos) {
+        List<DescontoFixoDTO> limpos = descontos != null ? descontos : List.of();
+        c.setDescontosJson(writeJson(limpos));
+        c.getDescontosDetalhados().clear();
+        for (DescontoFixoDTO d : limpos) {
+            ContrachequeDesconto line = new ContrachequeDesconto();
+            line.setContrachequeImportado(c);
+            line.setDescricao(d.getRotulo() != null && !d.getRotulo().isBlank() ? d.getRotulo().trim() : "Desconto");
+            line.setValor(d.getValor());
+            c.getDescontosDetalhados().add(line);
         }
-        return true;
+    }
+
+    private ContrachequeImportado garantirEspelhoCompetencia(
+        Usuario usuario,
+        ContrachequeImportado template,
+        int mes,
+        int ano,
+        BigDecimal bruto,
+        BigDecimal liquido,
+        BigDecimal totalDesc,
+        List<DescontoFixoDTO> descontosEfetivos,
+        BigDecimal deltaBruto,
+        boolean auditoriaOk,
+        JsonNode extracted
+    ) {
+        Long usuarioId = usuario.getId();
+        if (template.getMes() != null && template.getAno() != null
+            && template.getMes() == mes && template.getAno() == ano) {
+            if (descontosPrecisamSubstituicao(obterDescontosDoRegistro(template), descontosEfetivos)) {
+                aplicarDescontosNoRegistro(template, descontosEfetivos);
+                return contrachequeRepository.save(template);
+            }
+            return template;
+        }
+
+        String empresaExtraida = extracted != null ? extracted.path("empresa").asText("") : "";
+        String empresa = resolverEmpresaNome(usuarioId, empresaExtraida);
+        String chaveEmpresa = normalizarEmpresaChave(empresa);
+        String chaveTemplate = normalizarEmpresaChave(template.getEmpresa());
+
+        Optional<ContrachequeImportado> existente = contrachequeRepository
+            .findByUsuarioIdOrderByAnoDescMesDescDataCriacaoDesc(usuarioId).stream()
+            .filter(row -> row.getMes() != null && row.getAno() != null && row.getMes() == mes && row.getAno() == ano)
+            .filter(row -> {
+                String chaveRow = normalizarEmpresaChave(row.getEmpresa());
+                return chaveRow.equals(chaveEmpresa) || chaveRow.equals(chaveTemplate) || "_".equals(chaveRow);
+            })
+            .findFirst();
+
+        if (existente.isPresent()) {
+            ContrachequeImportado c = existente.get();
+            c.setEmpresa(empresa);
+            c.setSalarioBruto(bruto);
+            c.setSalarioLiquido(liquido);
+            c.setTotalDescontos(totalDesc.setScale(2, RoundingMode.HALF_UP));
+            c.setAuditoriaDeltaBruto(deltaBruto);
+            c.setAuditoriaSomaBrutoOk(auditoriaOk);
+            aplicarDescontosNoRegistro(c, descontosEfetivos);
+            if (c.getStatus() == ContrachequeImportado.Status.PENDENTE) {
+                c.setStatus(ContrachequeImportado.Status.CONFIRMADO);
+                c.setDataConfirmacao(LocalDateTime.now());
+            }
+            return contrachequeRepository.save(c);
+        }
+
+        ContrachequeImportado espelho = new ContrachequeImportado();
+        espelho.setUsuario(usuario);
+        espelho.setEmpresa(empresa);
+        espelho.setMes(mes);
+        espelho.setAno(ano);
+        espelho.setSalarioBruto(bruto);
+        espelho.setSalarioLiquido(liquido);
+        espelho.setTotalDescontos(totalDesc.setScale(2, RoundingMode.HALF_UP));
+        espelho.setAuditoriaDeltaBruto(deltaBruto);
+        espelho.setAuditoriaSomaBrutoOk(auditoriaOk);
+        aplicarDescontosNoRegistro(espelho, descontosEfetivos);
+        List<String> insightList = new ArrayList<>(readStrings(template.getInsightsJson()));
+        if (insightList.isEmpty()) {
+            insightList = new ArrayList<>(insights(extracted, bruto, totalDesc, descontosEfetivos));
+        }
+        insightList.add(0, "Espelho automático do contracheque base — mesmos descontos detalhados do holerite importado.");
+        espelho.setInsightsJson(writeJson(insightList));
+        espelho.setStatus(ContrachequeImportado.Status.CONFIRMADO);
+        espelho.setDataConfirmacao(LocalDateTime.now());
+        return contrachequeRepository.save(espelho);
+    }
+
+    private void repararDescontosDegenerados(Long usuarioId, Iterable<ContrachequeImportado> registros) {
+        Optional<ContrachequeImportado> templateOpt = buscarTemplateConfirmado(usuarioId);
+        if (templateOpt.isEmpty()) {
+            return;
+        }
+        ContrachequeImportado template = templateOpt.get();
+        List<DescontoFixoDTO> referencia = obterDescontosDoRegistro(template);
+        if (referencia.isEmpty()) {
+            return;
+        }
+        for (ContrachequeImportado c : registros) {
+            if (c.getId() != null && c.getId().equals(template.getId())) {
+                continue;
+            }
+            List<DescontoFixoDTO> atuais = obterDescontosDoRegistro(c);
+            if (!descontosPrecisamSubstituicao(atuais, referencia)) {
+                continue;
+            }
+            if (!totaisEquivalentesAoTemplate(template, c.getSalarioBruto(), c.getSalarioLiquido(), c.getTotalDescontos())) {
+                continue;
+            }
+            aplicarDescontosNoRegistro(c, referencia);
+            contrachequeRepository.save(c);
+        }
     }
 
     private static boolean moedasQuaseIguais(BigDecimal a, BigDecimal b, BigDecimal tol) {
@@ -395,9 +569,11 @@ public class ContrachequeImportService {
     }
 
     private List<String> insights(JsonNode extracted, BigDecimal bruto, BigDecimal totalDesc, List<DescontoFixoDTO> descontos) {
-        List<String> ai = readStrings(extracted.path("insights").toString());
-        if (!ai.isEmpty()) {
-            return ai;
+        if (extracted != null && !extracted.isMissingNode()) {
+            List<String> ai = readStrings(extracted.path("insights").toString());
+            if (!ai.isEmpty()) {
+                return ai;
+            }
         }
         if (bruto.compareTo(BigDecimal.ZERO) <= 0) {
             return List.of();
