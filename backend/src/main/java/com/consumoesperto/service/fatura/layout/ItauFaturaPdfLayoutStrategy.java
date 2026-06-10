@@ -38,7 +38,12 @@ public class ItauFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
                 "demonstrativo",
                 "total desta fatura",
                 "valor total da fatura",
-                "pagamento total"
+                "pagamento total",
+                "vencimento",
+                "pagamento minimo",
+                "compras e saques",
+                "lancamentos",
+                "data estabelecimento"
             );
     }
 
@@ -69,5 +74,14 @@ public class ItauFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
             return bancoExtraidoIa;
         }
         return "Itaú";
+    }
+
+    @Override
+    public void complementarLancamentosDoTexto(
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        int anoReferencia
+    ) {
+        ItauFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
     }
 }

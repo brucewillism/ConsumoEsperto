@@ -22,6 +22,8 @@ import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutDetector;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutSupport;
 import com.consumoesperto.service.fatura.layout.GenericoFaturaPdfLayoutStrategy;
+import com.consumoesperto.service.fatura.layout.ItauFaturaPdfLayoutStrategy;
+import com.consumoesperto.service.fatura.layout.ItauFaturaTextoExtrator;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbMeta;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbPendente;
@@ -83,6 +85,7 @@ public class FaturaPdfImportService {
     private final ObjectProvider<FaturaPdfImportService> selfProvider;
     private final FaturaPdfLayoutDetector faturaPdfLayoutDetector;
     private final GenericoFaturaPdfLayoutStrategy genericoFaturaPdfLayoutStrategy;
+    private final ItauFaturaPdfLayoutStrategy itauFaturaPdfLayoutStrategy;
     private final PdfTextExtractionService pdfTextExtractionService;
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
@@ -134,16 +137,15 @@ public class FaturaPdfImportService {
         FaturaPdfLayoutStrategy layout,
         String textoPdf
     ) {
-        final FaturaPdfLayoutStrategy layoutEfetivo =
-            layout != null ? layout : genericoFaturaPdfLayoutStrategy;
+        FaturaPdfLayoutStrategy layoutEfetivo = layout != null ? layout : genericoFaturaPdfLayoutStrategy;
         String textoNorm = FaturaPdfLayoutSupport.norm(textoPdf);
-        String tipo = extracted.path("tipoDocumento").asText("");
         if (!documentoAceitoComoFaturaCartao(extracted, layoutEfetivo, textoNorm)) {
             throw new IllegalArgumentException("O PDF parece ser um extrato de conta, não uma fatura de cartão.");
         }
 
         String bancoExtraido = firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText(""));
         bancoExtraido = resolverBancoCartaoParaLocalizacao(bancoExtraido, textoNorm, layoutEfetivo);
+        layoutEfetivo = layoutParaProcessamento(layoutEfetivo, textoNorm, bancoExtraido);
         final String bancoParaLocalizar = bancoExtraido;
         CartaoCredito cartao = localizarCartao(usuarioId, bancoParaLocalizar)
             .orElseThrow(() -> new IllegalArgumentException(mensagemCartaoNaoEncontrado(usuarioId, bancoParaLocalizar)));
@@ -171,8 +173,18 @@ public class FaturaPdfImportService {
         List<String> auditorias = new ArrayList<>();
         auditorias.add("Leitura com layout " + layoutEfetivo.layout().getNomeExibicao() + ".");
         BigDecimal valorTotal = layoutEfetivo.resolverReferenciaConciliacao(extracted, valorTotalPdf, itens, auditorias);
+        if (valorTotal.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {
+            valorTotal = ItauFaturaTextoExtrator.extrairTotalFatura(textoPdf).orElse(valorTotal);
+            if (valorTotal.compareTo(BigDecimal.ZERO) > 0) {
+                auditorias.add("Total da fatura lido do texto do PDF (IA não preencheu valorTotal).");
+            }
+        }
         imp.setValorTotal(valorTotal);
-        imp.setPagamentoMinimo(readMoney(extracted.path("pagamentoMinimo")));
+        BigDecimal pagamentoMinimo = readMoney(extracted.path("pagamentoMinimo"));
+        if (pagamentoMinimo.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {
+            pagamentoMinimo = ItauFaturaTextoExtrator.extrairPagamentoMinimo(textoPdf).orElse(pagamentoMinimo);
+        }
+        imp.setPagamentoMinimo(pagamentoMinimo);
         imp.setItensJson(writeJson(itens));
         List<ImportacaoFaturaItemDTO> prevItens = List.of();
         List<ImportacaoFaturaCartao> anteriores = importacaoRepository
@@ -487,6 +499,22 @@ public class FaturaPdfImportService {
         return "Não encontrei cartão ativo correspondente a «" + ref + "». "
             + "Seus cartões ativos: " + lista + ". "
             + "Ajuste o nome ou banco do cartão em *Cartões* para coincidir com a fatura.";
+    }
+
+    private FaturaPdfLayoutStrategy layoutParaProcessamento(
+        FaturaPdfLayoutStrategy detectado,
+        String textoNorm,
+        String bancoResolvido
+    ) {
+        if (detectado != null && detectado.layout() != BancoFaturaLayout.GENERICO) {
+            return detectado;
+        }
+        if (BancoBrasilCatalog.bancosCorrespondem("itau", bancoResolvido)
+            && FaturaPdfLayoutSupport.contem(textoNorm, "itau", "itaú unibanco", "itaucard", "www itau com br", "cartao itau")) {
+            log.info("Layout Itaú aplicado por banco/texto (detecção inicial: {}).", detectado != null ? detectado.layout() : "n/a");
+            return itauFaturaPdfLayoutStrategy;
+        }
+        return detectado != null ? detectado : genericoFaturaPdfLayoutStrategy;
     }
 
     private String resolverBancoCartaoParaLocalizacao(
