@@ -767,6 +767,16 @@ a {
     overflow: visible !important;
   }
 
+  app-convidar-familiar-dialog .convidar-btn-enviar {
+    color: #042f2e !important;
+    -webkit-text-fill-color: #042f2e !important;
+    background: #2dd4bf !important;
+  }
+
+  app-convidar-familiar-dialog .convidar-btn-cancelar {
+    color: #cbd5e1 !important;
+    -webkit-text-fill-color: #cbd5e1 !important;
+  }
 }
 
 .ce-form-dialog .ce-form-row {

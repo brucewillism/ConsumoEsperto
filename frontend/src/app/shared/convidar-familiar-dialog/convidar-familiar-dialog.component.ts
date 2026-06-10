@@ -1,8 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { MatButtonModule } from '@angular/material/button';
 import { FamiliaService } from '../../services/familia.service';
 import { ToastService } from '../../services/toast.service';
 import {
@@ -21,9 +20,10 @@ export interface ConvidarFamiliarDialogResult {
 @Component({
   selector: 'app-convidar-familiar-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule],
+  imports: [CommonModule, FormsModule, MatDialogModule],
   templateUrl: './convidar-familiar-dialog.component.html',
   styleUrl: './convidar-familiar-dialog.component.scss',
+  encapsulation: ViewEncapsulation.None,
 })
 export class ConvidarFamiliarDialogComponent {
   private readonly familiaService = inject(FamiliaService);
@@ -42,6 +42,10 @@ export class ConvidarFamiliarDialogComponent {
 
   onWhatsappInput(raw: string): void {
     this.conviteWhatsapp = formatPhoneBrDisplay(raw);
+  }
+
+  fechar(): void {
+    this.dialogRef.close(null);
   }
 
   enviar(): void {

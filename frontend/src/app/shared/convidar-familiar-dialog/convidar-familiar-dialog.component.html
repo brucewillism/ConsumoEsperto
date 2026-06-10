@@ -32,16 +32,12 @@
     [disabled]="salvando"
   />
 
-  <button
-    type="button"
-    class="convidar-btn-enviar"
-    (click)="enviar()"
-    [disabled]="salvando"
-  >
-    {{ salvando ? 'Enviando…' : 'Enviar convite' }}
-  </button>
+  <div class="convidar-footer">
+    <button type="button" class="convidar-btn-enviar" (click)="enviar()" [disabled]="salvando">
+      Enviar convite
+    </button>
+    <button type="button" class="convidar-btn-cancelar" (click)="fechar()" [disabled]="salvando">
+      Cancelar
+    </button>
+  </div>
 </mat-dialog-content>
-
-<mat-dialog-actions align="end">
-  <button type="button" mat-button mat-dialog-close [disabled]="salvando">Cancelar</button>
-</mat-dialog-actions>
