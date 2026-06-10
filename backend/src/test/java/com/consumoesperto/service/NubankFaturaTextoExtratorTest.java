@@ -83,6 +83,30 @@ class NubankFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiPixQuandoOpenPdfColaDataAoEstabelecimento() {
+        String openPdf = """
+            Pagamentos e Financiamentos-R$ 1.863,70
+            02 MAIPagamento em 02 MAI?R$ 2.315,28
+            08 MAIPREFEITURA DE CAMARAGIBE
+            Total a pagar: R$ 307,20 (valor da transação de R$ 284,92 + R$ 1,68 de IOF + R$ 20,60 de juros).
+            R$ 307,20
+            15 MAIPamela Souza
+            Total a pagar: R$ 64,08 (valor da transação de R$ 60,00 + R$ 0,32 de IOF + R$ 3,76 de juros).
+            R$ 64,08
+            20 MAIPAY2M SOLUCOES FINANCEIRAS LTDA
+            Total a pagar: R$ 52,08 (valor da transação de R$ 50,00 + R$ 0,24 de IOF + R$ 1,85 de juros).
+            R$ 52,09
+            """;
+
+        List<ImportacaoFaturaItemDTO> pix = NubankFaturaTextoExtrator.extrairPixFinanciados(openPdf, 2026);
+
+        assertEquals(3, pix.size());
+        assertEquals(new BigDecimal("423.36"), pix.stream()
+            .map(ImportacaoFaturaItemDTO::getValor)
+            .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    @Test
     void extraiTotalComprasDoTexto() {
         assertEquals(
             new BigDecimal("2444.42"),

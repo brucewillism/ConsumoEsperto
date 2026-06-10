@@ -23,8 +23,11 @@ import java.util.regex.Pattern;
 public final class NubankFaturaTextoExtrator {
 
     private static final Pattern BLOCO_DATA = Pattern.compile(
-        "(?m)(\\d{2})\\s+(ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ|JAN|FEV|MAR)\\b",
+        "(?m)(\\d{2})\\s+(ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ|JAN|FEV|MAR)(?=\\s|[^a-z]|$)",
         Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+    );
+    private static final Pattern MES_COLADO = Pattern.compile(
+        "(?i)(\\d{2})\\s+(ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ|JAN|FEV|MAR)(?=[A-Za-z])"
     );
     private static final Pattern VALOR_RS = Pattern.compile(
         "(?:−|-)?R\\$\\s*([\\d.]+,\\d{2})",
@@ -38,7 +41,7 @@ public final class NubankFaturaTextoExtrator {
         "(?i)(?:parc(?:ela)?\\.?\\s*)?(\\d{1,2})\\s*/\\s*(\\d{1,2})"
     );
     private static final Pattern TOTAL_A_PAGAR = Pattern.compile(
-        "(?i)total a pagar[^\\d]{0,12}R\\$\\s*([\\d.]+,\\d{2})"
+        "(?i)total a pagar\\s*:?\\s*R\\$\\s*([\\d.]+,\\d{2})"
     );
     private static final Pattern MASCARA_CARTAO = Pattern.compile(
         "(?:[•●*\\.]{4}|xxxx)\\s*\\d{4}|(?m)^\\d{4}\\s*$",
@@ -64,6 +67,7 @@ public final class NubankFaturaTextoExtrator {
             return;
         }
         List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
+        injetarPixAusentes(doTexto, extrairPixFinanciados(textoPdf, anoReferencia));
         if (doTexto.size() >= 12) {
             mesclarPreferindoTexto(destino, doTexto);
             return;
@@ -101,11 +105,12 @@ public final class NubankFaturaTextoExtrator {
 
     public static List<ImportacaoFaturaItemDTO> extrairLancamentos(String textoPdf, int anoReferencia) {
         List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
-        int inicio = indexOfIgnoreCase(textoPdf, "TRANSAÇÕES DE");
+        String textoNorm = normalizarTextoNubank(textoPdf);
+        int inicio = indexOfIgnoreCase(textoNorm, "TRANSAÇÕES DE");
         if (inicio < 0) {
-            inicio = indexOfIgnoreCase(textoPdf, "TRANSAÇÕES");
+            inicio = indexOfIgnoreCase(textoNorm, "TRANSAÇÕES");
         }
-        String trecho = inicio >= 0 ? textoPdf.substring(inicio) : textoPdf;
+        String trecho = inicio >= 0 ? textoNorm.substring(inicio) : textoNorm;
         Matcher m = BLOCO_DATA.matcher(trecho);
         List<int[]> blocos = new ArrayList<>();
         while (m.find()) {
@@ -117,6 +122,66 @@ public final class NubankFaturaTextoExtrator {
             String bloco = trecho.substring(start, end).trim();
             parseBloco(bloco, anoReferencia).ifPresent(out::add);
         }
+        injetarPixAusentes(out, extrairPixFinanciados(textoNorm, anoReferencia));
+        return out;
+    }
+
+    /**
+     * Pix/boletos financiados na seção «Pagamentos e Financiamentos».
+     * Varredura global porque o OpenPDF costuma colar a data ao estabelecimento (08 MAIPREFEITURA).
+     */
+    public static List<ImportacaoFaturaItemDTO> extrairPixFinanciados(String textoPdf, int anoReferencia) {
+        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
+        if (textoPdf == null || textoPdf.isBlank()) {
+            return out;
+        }
+        String texto = normalizarTextoNubank(textoPdf);
+        int secao = indexOfIgnoreCase(texto, "Pagamentos e Financiamentos");
+        String trecho = secao >= 0 ? texto.substring(secao) : texto;
+        Matcher tm = TOTAL_A_PAGAR.matcher(trecho);
+        while (tm.find()) {
+            int fim = tm.end();
+            int inicio = Math.max(0, tm.start() - 420);
+            String contexto = trecho.substring(inicio, fim);
+            if (pareceSimulacaoOuResumoFatura(contexto)) {
+                continue;
+            }
+            LocalDate data = ultimaDataNoTrecho(contexto, anoReferencia).orElse(null);
+            if (data == null) {
+                continue;
+            }
+            BigDecimal valor = parseMoney(tm.group(1));
+            String descricao = extrairDescricaoPix(contexto);
+            if (descricao.isBlank() || valor.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
+            item.setData(data);
+            item.setDescricao(descricao + " (Pix/boleto no crédito)");
+            item.setValor(valor);
+            if (!jaExiste(out, item)) {
+                out.add(item);
+            }
+        }
+        return out;
+    }
+
+    static String normalizarTextoNubank(String textoPdf) {
+        if (textoPdf == null) {
+            return "";
+        }
+        String out = textoPdf.replace('\u00a0', ' ');
+        Matcher m = MES_COLADO.matcher(out);
+        StringBuilder sb = new StringBuilder();
+        int last = 0;
+        while (m.find()) {
+            sb.append(out, last, m.start());
+            sb.append(m.group(1)).append(' ').append(m.group(2)).append('\n');
+            last = m.end();
+        }
+        sb.append(out.substring(last));
+        out = sb.toString();
+        out = out.replaceAll("(?i)(Pagamentos e Financiamentos)\\s*-R\\$", "$1\n-R\\$");
         return out;
     }
 
@@ -126,13 +191,10 @@ public final class NubankFaturaTextoExtrator {
             return Optional.empty();
         }
         String norm = FaturaPdfLayoutSupport.norm(bloco);
-        if (norm.contains("estorno")
-            || norm.contains("pagamento em")
-            || norm.contains("saldo restante")
-            || norm.contains("pagamentos e financiamentos")) {
+        if (norm.contains("pagamentos e financiamentos") && !norm.contains("total a pagar")) {
             return Optional.empty();
         }
-        if (bloco.contains("−R$") || bloco.contains("-R$")) {
+        if (parecePagamentoOuCredito(bloco) && !norm.contains("total a pagar")) {
             return Optional.empty();
         }
 
@@ -264,6 +326,63 @@ public final class NubankFaturaTextoExtrator {
             }
         }
         return false;
+    }
+
+    private static void injetarPixAusentes(List<ImportacaoFaturaItemDTO> destino, List<ImportacaoFaturaItemDTO> pix) {
+        int inseridos = 0;
+        for (ImportacaoFaturaItemDTO item : pix) {
+            if (!jaExiste(destino, item)) {
+                destino.add(item);
+                inseridos++;
+                log.info("Pix Nubank complementado: '{}' = {}", item.getDescricao(), item.getValor());
+            }
+        }
+        if (inseridos > 0) {
+            log.info("Nubank: {} Pix/boleto(s) financiado(s) injetado(s) do texto.", inseridos);
+        }
+    }
+
+    private static boolean parecePagamentoOuCredito(String bloco) {
+        String n = FaturaPdfLayoutSupport.norm(bloco);
+        return n.contains("estorno")
+            || n.contains("pagamento em")
+            || n.contains("pagamento recebido")
+            || n.contains("saldo restante");
+    }
+
+    private static boolean pareceSimulacaoOuResumoFatura(String contexto) {
+        String n = FaturaPdfLayoutSupport.norm(contexto);
+        return n.contains("resumo da fatura")
+            || n.contains("parcelar em")
+            || n.contains("valor de entrada")
+            || n.contains("juros totais")
+            || n.contains("valor da parcela");
+    }
+
+    private static Optional<LocalDate> ultimaDataNoTrecho(String trecho, int anoReferencia) {
+        Matcher dm = BLOCO_DATA.matcher(trecho);
+        String dia = null;
+        String mes = null;
+        while (dm.find()) {
+            dia = dm.group(1);
+            mes = dm.group(2);
+        }
+        if (dia == null || mes == null) {
+            return Optional.empty();
+        }
+        return Optional.of(parseDataNubank(dia, mes, anoReferencia));
+    }
+
+    private static String extrairDescricaoPix(String contexto) {
+        String limpo = contexto;
+        limpo = limpo.replaceAll("(?is)total a pagar.*", "").trim();
+        limpo = limpo.replaceAll("(?m)^\\d{2}\\s+(?:ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ|JAN|FEV|MAR)\\s*", "");
+        limpo = limpo.replaceAll("(?i)R\\$\\s*[\\d.,]+.*", "").trim();
+        limpo = limpo.replaceAll("\\s+", " ");
+        if (limpo.length() > 120) {
+            limpo = limpo.substring(0, 120).trim();
+        }
+        return limpo;
     }
 
     private static boolean temMascaraCartao(String bloco) {
