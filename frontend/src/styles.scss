@@ -734,6 +734,12 @@ a {
   box-sizing: border-box;
 }
 
+/* .ce-form-body usa min-width:0 para grids — em modais isso colapsava os campos */
+.ce-form-dialog .mat-mdc-dialog-content.ce-form-body {
+  min-width: min(100%, 420px) !important;
+  width: 100%;
+}
+
 .ce-form-dialog .ce-form-body .mat-mdc-form-field,
 .ce-form-dialog .mat-mdc-form-field.full {
   width: 100%;

@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -26,7 +26,7 @@ export interface ConvidarFamiliarDialogResult {
   standalone: true,
   imports: [
     CommonModule,
-    ReactiveFormsModule,
+    FormsModule,
     MatDialogModule,
     MatButtonModule,
     MatFormFieldModule,
@@ -37,51 +37,48 @@ export interface ConvidarFamiliarDialogResult {
   styleUrl: './convidar-familiar-dialog.component.scss',
 })
 export class ConvidarFamiliarDialogComponent {
-  private readonly fb = inject(FormBuilder);
   private readonly familiaService = inject(FamiliaService);
   private readonly toast = inject(ToastService);
   private readonly dialogRef =
     inject(MatDialogRef<ConvidarFamiliarDialogComponent, ConvidarFamiliarDialogResult | null>);
 
-  readonly form = this.fb.nonNullable.group({
-    email: [''],
-    whatsapp: [''],
-  });
-
+  conviteEmail = '';
+  conviteWhatsapp = '';
   conviteErro = '';
   salvando = false;
 
   onEmailInput(raw: string): void {
-    this.form.controls.email.setValue(sanitizeEmailInput(raw), { emitEvent: false });
+    this.conviteEmail = sanitizeEmailInput(raw);
   }
 
   onWhatsappInput(raw: string): void {
-    this.form.controls.whatsapp.setValue(formatPhoneBrDisplay(raw), { emitEvent: false });
+    this.conviteWhatsapp = formatPhoneBrDisplay(raw);
   }
 
   enviar(): void {
     this.conviteErro = '';
-    this.form.controls.email.setErrors(null);
-    this.form.controls.whatsapp.setErrors(null);
 
-    const email = sanitizeEmailInput(this.form.controls.email.value).trim();
-    const whatsappDisplay = this.form.controls.whatsapp.value.trim();
+    const email = sanitizeEmailInput(this.conviteEmail).trim();
+    const whatsappDisplay = (this.conviteWhatsapp || '').trim();
     const temEmail = !!email;
     const temWhatsapp = isWhatsappBrValido(whatsappDisplay);
 
     if (!temEmail && !temWhatsapp) {
-      this.conviteErro = 'Informe o e-mail ou o WhatsApp do convidado.';
-      this.form.markAllAsTouched();
+      const msg = 'Informe o e-mail ou o WhatsApp do convidado.';
+      this.conviteErro = msg;
+      this.toast.warning(msg);
       return;
     }
     if (temEmail && !isEmailValido(email)) {
-      this.form.controls.email.setErrors({ email: true });
-      this.form.controls.email.markAsTouched();
+      const msg = 'Digite um e-mail válido.';
+      this.conviteErro = msg;
+      this.toast.warning(msg);
       return;
     }
     if (!temEmail && whatsappDisplay && !temWhatsapp) {
-      this.form.controls.whatsapp.setErrors({ telefone: true });
-      this.form.controls.whatsapp.markAsTouched();
+      const msg = 'Informe o WhatsApp com DDD (mínimo 10 dígitos).';
+      this.conviteErro = msg;
+      this.toast.warning(msg);
       return;
     }
 
@@ -97,7 +94,9 @@ export class ConvidarFamiliarDialogComponent {
       },
       error: (e) => {
         this.salvando = false;
-        this.conviteErro = resolveHttpError(e, 'Erro ao enviar convite.');
+        const msg = resolveHttpError(e, 'Erro ao enviar convite.');
+        this.conviteErro = msg;
+        this.toast.error(msg);
       },
     });
   }

@@ -114,7 +114,10 @@ export class FamiliaComponent implements OnInit {
   }
 
   abrirConvidar(): void {
-    openCeFormDialog(this.dialog, ConvidarFamiliarDialogComponent, { width: '520px' })
+    openCeFormDialog(this.dialog, ConvidarFamiliarDialogComponent, {
+      width: '520px',
+      minWidth: 'min(520px, 96vw)',
+    })
       .afterClosed()
       .subscribe((res) => {
         const convite = res as ConvidarFamiliarDialogResult | null | undefined;
