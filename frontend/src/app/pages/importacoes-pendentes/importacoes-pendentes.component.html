@@ -38,13 +38,13 @@
       <h2>Arraste a fatura PDF aqui</h2>
       <p>A IA faz a leitura e mostra a conciliação em tempo real antes de confirmar.</p>
       <label class="senha-pdf-field">
-        <span>Senha do PDF (Itaú: 5 primeiros dígitos do CPF; Inter: 6 primeiros dígitos)</span>
+        <span>Senha do PDF — só se o arquivo pedir (Itaú: 5 primeiros dígitos do CPF; Inter: 6). Nubank e outros: deixe vazio.</span>
         <input
           type="password"
           inputmode="numeric"
           maxlength="11"
           [(ngModel)]="senhaPdf"
-          placeholder="Ex.: 12345"
+          placeholder="Opcional"
           autocomplete="off"
         />
       </label>

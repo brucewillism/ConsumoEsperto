@@ -224,9 +224,11 @@ export class ImportacoesPendentesComponent implements OnInit {
       return;
     }
     this.enviandoPdf = true;
-    this.importacaoService.upload(file, this.senhaPdf).subscribe({
+    const senha = this.senhaPdf?.trim() || undefined;
+    this.importacaoService.upload(file, senha).subscribe({
       next: () => {
         this.toast.success('Fatura processada. Revise a conciliação antes de confirmar.');
+        this.senhaPdf = '';
         this.enviandoPdf = false;
         this.carregar();
       },

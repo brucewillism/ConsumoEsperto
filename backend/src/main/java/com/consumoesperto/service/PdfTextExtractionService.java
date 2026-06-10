@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
 
@@ -33,20 +34,32 @@ public class PdfTextExtractionService {
         if (pdfBytes == null || pdfBytes.length == 0) {
             throw new IllegalArgumentException("PDF vazio");
         }
-        List<String> senhas = montarSenhasTentativa(senhaInformada);
-        for (String senha : senhas) {
-            List<String> paginas = tentarExtrairPaginas(pdfBytes, senha);
+
+        boolean criptografado = pdfPareceCriptografado(pdfBytes);
+        String senhaLimpa = senhaInformada != null ? senhaInformada.trim() : "";
+
+        if (!criptografado) {
+            if (!senhaLimpa.isBlank()) {
+                log.debug("Senha informada ignorada: PDF não está criptografado.");
+            }
+            return extrairPdfAberto(pdfBytes);
+        }
+
+        List<String> paginas = tentarExtrairPaginas(pdfBytes, null);
+        if (temTextoUtil(paginas)) {
+            return paginas;
+        }
+        if (senhaLimpa.isBlank()) {
+            throw new IllegalArgumentException(mensagemPdfProtegidoItau(null));
+        }
+        for (String senha : montarVariantesSenha(senhaLimpa)) {
+            paginas = tentarExtrairPaginas(pdfBytes, senha);
             if (temTextoUtil(paginas)) {
-                if (senha != null) {
-                    log.info("PDF desbloqueado ({} página(s) com texto).", paginas.size());
-                }
+                log.info("PDF desbloqueado ({} página(s) com texto).", paginas.size());
                 return paginas;
             }
         }
-        if (pdfPareceCriptografado(pdfBytes)) {
-            throw new IllegalArgumentException(mensagemPdfProtegidoItau(senhaInformada));
-        }
-        return fallbackBinario(pdfBytes);
+        throw new IllegalArgumentException(mensagemPdfProtegidoItau(senhaInformada));
     }
 
     public String extrairTexto(byte[] pdfBytes) {
@@ -73,18 +86,13 @@ public class PdfTextExtractionService {
         if (pdfBytes == null || pdfBytes.length < 32) {
             return false;
         }
-        // Faturas Itaú costumam ter /Encrypt só no trailer (final do arquivo).
-        int[] offsets = {0, Math.max(0, pdfBytes.length - 65_536)};
-        for (int offset : offsets) {
-            int len = offset == 0
-                ? Math.min(pdfBytes.length, 65_536)
-                : pdfBytes.length - offset;
-            String chunk = new String(pdfBytes, offset, len, StandardCharsets.ISO_8859_1);
-            if (chunk.contains("/Encrypt")) {
-                return true;
-            }
+        try (PDDocument doc = PDDocument.load(pdfBytes)) {
+            return doc.isEncrypted();
+        } catch (InvalidPasswordException e) {
+            return true;
+        } catch (IOException e) {
+            return contemEncryptNoTrailer(pdfBytes);
         }
-        return false;
     }
 
     public boolean textoPareceFaturaLegivel(String texto) {
@@ -99,13 +107,42 @@ public class PdfTextExtractionService {
 
     public static String mensagemPdfProtegidoItau(String senhaInformada) {
         if (senhaInformada == null || senhaInformada.isBlank()) {
-            return "Este PDF está protegido por senha. Itaú: *5 primeiros dígitos do CPF*; "
-                + "Inter e outros: *6 primeiros dígitos do CPF*. "
-                + "Informe a senha no campo abaixo e envie o PDF novamente.";
+            return "Este PDF está protegido por senha. Informe a senha apenas nesses casos: "
+                + "Itaú (5 primeiros dígitos do CPF) ou Inter (6 primeiros dígitos). "
+                + "Nubank, Mercado Pago e a maioria dos bancos enviam PDF aberto — deixe o campo de senha vazio.";
         }
         return "Não consegui abrir o PDF com a senha informada. "
-            + "Itaú: *5 primeiros dígitos do CPF*; Inter: *6 primeiros dígitos do CPF* (somente números). "
-            + "Confira se é o CPF do titular que recebe a fatura no e-mail do banco.";
+            + "Itaú: 5 primeiros dígitos do CPF; Inter: 6 primeiros dígitos (somente números). "
+            + "Se o banco for Nubank ou outro sem senha, apague o campo e envie de novo.";
+    }
+
+    private List<String> extrairPdfAberto(byte[] pdfBytes) {
+        List<String> paginas = tentarExtrairPaginas(pdfBytes, null);
+        if (temTextoUtil(paginas)) {
+            return paginas;
+        }
+        if (paginas.stream().anyMatch(p -> p != null && !p.isBlank())) {
+            return paginas;
+        }
+        List<String> fallback = fallbackBinario(pdfBytes);
+        if (temTextoUtil(fallback) || fallback.stream().anyMatch(p -> p != null && !p.isBlank())) {
+            return fallback;
+        }
+        return paginas.isEmpty() ? fallback : paginas;
+    }
+
+    private static boolean contemEncryptNoTrailer(byte[] pdfBytes) {
+        int[] offsets = {0, Math.max(0, pdfBytes.length - 65_536)};
+        for (int offset : offsets) {
+            int len = offset == 0
+                ? Math.min(pdfBytes.length, 65_536)
+                : pdfBytes.length - offset;
+            String chunk = new String(pdfBytes, offset, len, StandardCharsets.ISO_8859_1);
+            if (chunk.contains("/Encrypt")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> tentarExtrairPaginas(byte[] pdfBytes, String senha) {
@@ -195,12 +232,9 @@ public class PdfTextExtractionService {
         return readerClass.getConstructor(byte[].class).newInstance((Object) pdfBytes);
     }
 
-    private static List<String> montarSenhasTentativa(String senhaInformada) {
+    /** Variantes da senha informada pelo usuário (somente PDFs criptografados). */
+    private static List<String> montarVariantesSenha(String senhaInformada) {
         Set<String> senhas = new LinkedHashSet<>();
-        senhas.add(null);
-        if (senhaInformada == null || senhaInformada.isBlank()) {
-            return new ArrayList<>(senhas);
-        }
         String trimmed = senhaInformada.trim();
         String digitos = trimmed.replaceAll("\\D", "");
         if (!trimmed.isBlank()) {

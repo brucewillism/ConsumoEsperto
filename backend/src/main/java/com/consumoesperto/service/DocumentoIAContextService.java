@@ -127,8 +127,8 @@ public class DocumentoIAContextService {
                 throw new IllegalArgumentException(PdfTextExtractionService.mensagemPdfProtegidoItau(senhaPdf));
             }
             throw new IllegalArgumentException(
-                "Não consegui ler texto suficiente do PDF. Arquivos protegidos por senha (comum em Itaú, Inter e Mastercard) "
-                    + "precisam da senha correta ou reexportação sem proteção.");
+                "Não consegui ler texto suficiente do PDF. Verifique se o arquivo está legível. "
+                    + "Senha só é necessária em PDFs protegidos (Itaú, Inter); Nubank e similares costumam vir abertos.");
         }
         log.info("[PDF-FULL-SCAN] layout={} paginasExtraidas={} caracteresTotais={}",
             layoutFatura.layout(), paginas.size(), fullText.length());

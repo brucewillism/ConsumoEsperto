@@ -523,8 +523,8 @@ public class FaturaPdfImportService {
         }
         if (semItens && semTotal) {
             throw new IllegalArgumentException(
-                "Não extraí lançamentos nem total desta fatura. Verifique se o PDF está legível "
-                    + "ou informe a senha (Itaú: 5 primeiros dígitos do CPF).");
+                "Não extraí lançamentos nem total desta fatura. Verifique se o PDF está legível. "
+                    + "Senha só é necessária em PDFs protegidos (ex.: Itaú, Inter).");
         }
     }
 
