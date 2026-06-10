@@ -5,6 +5,7 @@ import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
 import { FamiliaService } from '../../services/familia.service';
 import { ToastService } from '../../services/toast.service';
 import { CeInputMaskDirective } from '../directives/ce-input-mask.directive';
@@ -24,9 +25,11 @@ export interface ConvidarFamiliarDialogResult {
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
+    MatIconModule,
     CeInputMaskDirective,
   ],
   templateUrl: './convidar-familiar-dialog.component.html',
+  styleUrl: './convidar-familiar-dialog.component.scss',
 })
 export class ConvidarFamiliarDialogComponent {
   conviteEmail = '';

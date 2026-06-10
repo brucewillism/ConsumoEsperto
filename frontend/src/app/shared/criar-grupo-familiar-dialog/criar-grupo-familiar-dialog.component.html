@@ -1,9 +1,10 @@
 <h2 mat-dialog-title>Criar grupo familiar</h2>
 <mat-dialog-content class="ce-form-body">
   <div class="ce-form-alert" *ngIf="grupoErro">{{ grupoErro }}</div>
-  <mat-form-field appearance="outline" class="full">
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" floatLabel="always" class="full">
     <mat-label>Nome do grupo</mat-label>
-    <input matInput [(ngModel)]="nomeGrupo" placeholder="Ex.: Orçamento do Casal" [disabled]="salvando" />
+    <input matInput [(ngModel)]="nomeGrupo" autocomplete="off" [disabled]="salvando" />
+    <mat-hint>Ex.: Orçamento do Casal</mat-hint>
   </mat-form-field>
 </mat-dialog-content>
 <mat-dialog-actions align="end">
