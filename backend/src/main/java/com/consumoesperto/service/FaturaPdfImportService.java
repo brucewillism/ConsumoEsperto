@@ -121,10 +121,10 @@ public class FaturaPdfImportService {
             if (human != null) {
                 throw new AiUnavailableException(human);
             }
-            if (e instanceof RuntimeException re) {
-                throw re;
-            }
-            throw new RuntimeException(e);
+            String detalhe = e.getMessage() != null && !e.getMessage().isBlank()
+                ? e.getMessage()
+                : e.getClass().getSimpleName();
+            throw new IllegalArgumentException("Não consegui processar esta fatura: " + detalhe, e);
         }
     }
 

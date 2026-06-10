@@ -113,6 +113,14 @@ public final class InterFaturaTextoExtrator {
         if (destino == null || textoPdf == null || textoPdf.isBlank()) {
             return;
         }
+        try {
+            complementarInterno(destino, textoPdf, anoReferencia);
+        } catch (Exception e) {
+            log.warn("Inter complementar falhou (mantendo lista da IA): {}", e.getMessage(), e);
+        }
+    }
+
+    private static void complementarInterno(List<ImportacaoFaturaItemDTO> destino, String textoPdf, int anoReferencia) {
         podarEspurios(destino, textoPdf);
 
         List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
@@ -152,7 +160,7 @@ public final class InterFaturaTextoExtrator {
             }
         }
 
-        totalPdf.ifPresent(total -> finalizarListaInter(destino, textoPdf, total, anoReferencia));
+        podarEspurios(destino, textoPdf);
     }
 
     /**
@@ -168,6 +176,19 @@ public final class InterFaturaTextoExtrator {
         if (itens == null || textoPdf == null || textoPdf.isBlank()) {
             return;
         }
+        try {
+            finalizarListaInterInterno(itens, textoPdf, totalFatura, anoReferencia);
+        } catch (Exception e) {
+            log.warn("Inter finalizar falhou (mantendo lista atual): {}", e.getMessage(), e);
+        }
+    }
+
+    private static void finalizarListaInterInterno(
+        List<ImportacaoFaturaItemDTO> itens,
+        String textoPdf,
+        BigDecimal totalFatura,
+        int anoReferencia
+    ) {
         BigDecimal total = totalFatura != null && totalFatura.compareTo(BigDecimal.ZERO) > 0
             ? totalFatura
             : extrairTotalFatura(textoPdf).orElse(null);
@@ -210,10 +231,19 @@ public final class InterFaturaTextoExtrator {
     }
 
     public static List<ImportacaoFaturaItemDTO> extrairLancamentos(String textoPdf, int anoReferencia) {
-        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
         if (textoPdf == null || textoPdf.isBlank()) {
-            return out;
+            return List.of();
         }
+        try {
+            return extrairLancamentosInterno(textoPdf, anoReferencia);
+        } catch (Exception e) {
+            log.warn("Inter extrairLancamentos falhou: {}", e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    private static List<ImportacaoFaturaItemDTO> extrairLancamentosInterno(String textoPdf, int anoReferencia) {
+        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
         String norm = textoPdf.replace('\r', '\n');
         String trecho = recortarTrechoTransacoes(norm);
         Optional<LocalDate> dataCorte = extrairDataCorte(textoPdf);
@@ -226,7 +256,7 @@ public final class InterFaturaTextoExtrator {
             if (fim < 0) {
                 fim = norm.length();
             }
-            extrairLinhasDoTrecho(norm.substring(0, fim), ano, vencimento, dataCorte, out);
+            extrairLinhasDoTrecho(substringSeguro(norm, 0, fim), ano, vencimento, dataCorte, out);
         }
         return out;
     }
@@ -270,21 +300,57 @@ public final class InterFaturaTextoExtrator {
             fim = localizarFimTrecho(norm, 0);
         }
         int inicio = localizarInicioPrimeiroLancamento(norm, fim);
-        return norm.substring(inicio, fim);
+        if (inicio >= fim) {
+            fim = norm.length();
+            inicio = localizarInicioPrimeiroLancamento(norm, fim);
+        }
+        return substringSeguro(norm, inicio, fim);
     }
 
     private static int localizarIndiceProximas(String norm) {
+        int minPos = resolverInicioSecaoDetalhamento(norm);
         int idx = -1;
         for (String marcador : new String[] {
             "proximas faturas", "próximas faturas", "proxima fatura", "próxima fatura",
             "opcoes de pagamento", "opções de pagamento"
         }) {
             int found = indexOfIgnoreCase(norm, marcador);
-            if (found >= 0 && (idx < 0 || found < idx)) {
+            if (found >= minPos && (idx < 0 || found < idx)) {
                 idx = found;
             }
         }
         return idx;
+    }
+
+    private static int resolverInicioSecaoDetalhamento(String norm) {
+        int inicioMarcador = -1;
+        for (String marcador : MARCADORES_INICIO_TRANSACOES) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx >= 0 && (inicioMarcador < 0 || idx < inicioMarcador)) {
+                inicioMarcador = idx;
+            }
+        }
+        if (inicioMarcador >= 0) {
+            return inicioMarcador;
+        }
+        int corte = indexOfIgnoreCase(norm, "data de corte");
+        if (corte >= 0) {
+            int nl = norm.indexOf('\n', corte);
+            return nl >= 0 ? nl + 1 : corte;
+        }
+        return 0;
+    }
+
+    private static String substringSeguro(String texto, int ini, int fim) {
+        if (texto == null || texto.isEmpty()) {
+            return "";
+        }
+        int inicio = Math.max(0, Math.min(ini, texto.length()));
+        int fimSeguro = Math.max(inicio, Math.min(fim, texto.length()));
+        if (inicio >= fimSeguro) {
+            return "";
+        }
+        return texto.substring(inicio, fimSeguro);
     }
 
     private static int localizarInicioPrimeiroLancamento(String norm, int fim) {
@@ -400,10 +466,11 @@ public final class InterFaturaTextoExtrator {
             return false;
         }
         String norm = textoPdf.replace('\r', '\n').toLowerCase(Locale.ROOT);
+        int minPos = resolverInicioSecaoDetalhamento(norm);
         int limite = norm.length();
         for (String marcador : marcadores) {
             int idx = indexOfIgnoreCase(norm, marcador);
-            if (idx >= 0) {
+            if (idx >= minPos) {
                 limite = Math.min(limite, idx);
             }
         }
@@ -426,7 +493,10 @@ public final class InterFaturaTextoExtrator {
         if (item.getData() == null) {
             return false;
         }
-        String trecho = norm.substring(Math.max(0, ini), Math.min(fim, norm.length()));
+        String trecho = substringSeguro(norm, ini, fim);
+        if (trecho.isEmpty()) {
+            return false;
+        }
         String dataCurta = String.format("%02d/%02d",
             item.getData().getDayOfMonth(), item.getData().getMonthValue());
         int idx = trecho.indexOf(dataCurta);

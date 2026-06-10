@@ -72,6 +72,30 @@ class InterFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiLancamentosQuandoProximasApareceAntesDoDetalhamento() {
+        String textoDesordenado = """
+            Banco Inter
+            Próximas faturas (resumo)
+            Valor da fatura R$ 291,14
+            Data de vencimento 02/06/2026
+            Data de corte: 25/05/2026
+            Detalhamento da fatura
+            21/02 PARC SALDO TOT - R DO BRASIL TECNO R$ 273,14
+            Parcela 04 de 06
+            28/04 APPLE.COM/BILL R$ 11,50
+            29/04 APPLE.COM/BILL R$ 18,00
+            Próximas faturas
+            21/02 PARC SALDO TOT - R DO BRASIL TECNO R$ 273,14
+            Parcela 05 de 06
+            Opções de pagamento
+            1 + 5x R$ 71,81
+            """;
+        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(textoDesordenado, 2026);
+        assertEquals(3, itens.size());
+        assertEquals(1, itens.stream().filter(i -> i.getDescricao().contains("PARC")).count());
+    }
+
+    @Test
     void podaEncargosEParcelasFuturasDaIa() {
         List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
         LocalDate fev21 = LocalDate.of(2026, 2, 21);
