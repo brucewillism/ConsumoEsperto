@@ -152,8 +152,45 @@ public final class InterFaturaTextoExtrator {
             }
         }
 
-        podarEspurios(destino, textoPdf);
-        totalPdf.ifPresent(total -> reconciliarComTotal(destino, doTexto, total));
+        totalPdf.ifPresent(total -> finalizarListaInter(destino, textoPdf, total, anoReferencia));
+    }
+
+    /**
+     * Segunda passagem com o total conhecido — colapsa parcelas futuras repetidas (mesma data/valor)
+     * e remove linhas que só existem após «Próximas faturas» / «Opções de pagamento».
+     */
+    public static void finalizarListaInter(
+        List<ImportacaoFaturaItemDTO> itens,
+        String textoPdf,
+        BigDecimal totalFatura,
+        int anoReferencia
+    ) {
+        if (itens == null || textoPdf == null || textoPdf.isBlank()) {
+            return;
+        }
+        BigDecimal total = totalFatura != null && totalFatura.compareTo(BigDecimal.ZERO) > 0
+            ? totalFatura
+            : extrairTotalFatura(textoPdf).orElse(null);
+
+        podarEspurios(itens, textoPdf);
+
+        List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
+        if (total != null && !doTexto.isEmpty()) {
+            BigDecimal somaAtual = somaValores(itens);
+            BigDecimal somaTexto = somaValores(doTexto);
+            if (distanciaAoTotal(somaTexto, total).compareTo(distanciaAoTotal(somaAtual, total)) <= 0) {
+                itens.clear();
+                itens.addAll(doTexto);
+                podarEspurios(itens, textoPdf);
+                log.info("Inter finalizar: lista do texto ({} itens, soma {}).", itens.size(), somaValores(itens));
+            }
+        }
+
+        if (total != null && somaValores(itens).compareTo(total) > 0) {
+            removerValoresCitadosEmOpcoesPagamento(itens, textoPdf);
+            colapsarMesmaDataValorParcelaMenor(itens);
+            podarEspurios(itens, textoPdf);
+        }
     }
 
     /** Remove simulações, encargos e duplicatas de «Próximas faturas» mesmo quando a IA as incluiu. */
@@ -163,31 +200,12 @@ public final class InterFaturaTextoExtrator {
         }
         int antes = itens.size();
         itens.removeIf(i -> deveIgnorarDescricao(i.getDescricao()) || pareceLinhaEncargoInter(i.getDescricao()));
-        removerDuplicatasSecaoProximas(itens, textoPdf);
+        removerItensSoEmSecoesPosteriores(itens, textoPdf);
+        colapsarMesmaDataValorParcelaMenor(itens);
         deduplicarParcelasFuturasMesmoPlano(itens);
         int removidos = antes - itens.size();
         if (removidos > 0) {
             log.info("Inter poda: {} lançamento(s) espúrio(s) removido(s).", removidos);
-        }
-    }
-
-    private static void reconciliarComTotal(
-        List<ImportacaoFaturaItemDTO> destino,
-        List<ImportacaoFaturaItemDTO> doTexto,
-        BigDecimal total
-    ) {
-        if (destino == null || destino.isEmpty()) {
-            return;
-        }
-        BigDecimal soma = somaValores(destino);
-        if (distanciaAoTotal(soma, total).compareTo(new BigDecimal("1.00")) <= 0) {
-            return;
-        }
-        if (!doTexto.isEmpty() && distanciaAoTotal(somaValores(doTexto), total)
-            .compareTo(distanciaAoTotal(soma, total)) < 0) {
-            destino.clear();
-            destino.addAll(doTexto);
-            log.info("Inter reconciliação: lista trocada pelo texto (soma {} → total {}).", somaValores(doTexto), total);
         }
     }
 
@@ -196,11 +214,30 @@ public final class InterFaturaTextoExtrator {
         if (textoPdf == null || textoPdf.isBlank()) {
             return out;
         }
-        String trecho = recortarTrechoTransacoes(textoPdf);
+        String norm = textoPdf.replace('\r', '\n');
+        String trecho = recortarTrechoTransacoes(norm);
         Optional<LocalDate> dataCorte = extrairDataCorte(textoPdf);
         Optional<LocalDate> vencimento = extrairDataVencimento(textoPdf);
         int ano = vencimento.map(LocalDate::getYear).orElse(anoReferencia > 0 ? anoReferencia : YearMonth.now().getYear());
 
+        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out);
+        if (out.isEmpty()) {
+            int fim = localizarIndiceProximas(norm);
+            if (fim < 0) {
+                fim = norm.length();
+            }
+            extrairLinhasDoTrecho(norm.substring(0, fim), ano, vencimento, dataCorte, out);
+        }
+        return out;
+    }
+
+    private static void extrairLinhasDoTrecho(
+        String trecho,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out
+    ) {
         Matcher m = LINHA_LANCAMENTO.matcher(trecho);
         while (m.find()) {
             String descricao = limparDescricao(m.group(4));
@@ -225,110 +262,218 @@ public final class InterFaturaTextoExtrator {
                 out.add(item);
             }
         }
-        return out;
     }
 
-    private static String recortarTrechoTransacoes(String textoPdf) {
-        String norm = textoPdf.replace('\r', '\n');
-        int inicio = -1;
-        for (String marcador : MARCADORES_INICIO_TRANSACOES) {
-            int idx = indexOfIgnoreCase(norm, marcador);
-            if (idx >= 0 && (inicio < 0 || idx < inicio)) {
-                inicio = idx;
-            }
+    private static String recortarTrechoTransacoes(String norm) {
+        int fim = localizarIndiceProximas(norm);
+        if (fim < 0) {
+            fim = localizarFimTrecho(norm, 0);
         }
-        if (inicio < 0) {
-            int corte = indexOfIgnoreCase(norm, "data de corte");
-            if (corte >= 0) {
-                int nl = norm.indexOf('\n', corte);
-                inicio = nl >= 0 ? nl + 1 : corte;
-            }
-        }
-        if (inicio < 0) {
-            int resumo = indexOfIgnoreCase(norm, "resumo da fatura");
-            inicio = resumo >= 0 ? resumo : 0;
-        }
-        int fim = localizarFimTrecho(norm, inicio);
+        int inicio = localizarInicioPrimeiroLancamento(norm, fim);
         return norm.substring(inicio, fim);
     }
 
-    private static void removerDuplicatasSecaoProximas(List<ImportacaoFaturaItemDTO> itens, String textoPdf) {
-        String norm = textoPdf.replace('\r', '\n');
-        int proximas = indexOfIgnoreCase(norm, "proximas faturas");
-        if (proximas < 0) {
-            proximas = indexOfIgnoreCase(norm, "proxima fatura");
+    private static int localizarIndiceProximas(String norm) {
+        int idx = -1;
+        for (String marcador : new String[] {
+            "proximas faturas", "próximas faturas", "proxima fatura", "próxima fatura",
+            "opcoes de pagamento", "opções de pagamento"
+        }) {
+            int found = indexOfIgnoreCase(norm, marcador);
+            if (found >= 0 && (idx < 0 || found < idx)) {
+                idx = found;
+            }
         }
-        if (proximas < 0) {
-            return;
-        }
-        int fimAtual = proximas;
-        int inicioAtual = recortarInicioTransacoes(norm);
-        String trechoAtual = norm.substring(inicioAtual, fimAtual);
-        String trechoProximas = norm.substring(proximas, localizarFimTrecho(norm, proximas));
-        Set<String> chavesAtual = chavesLancamentosNoTrecho(trechoAtual);
-        Set<String> chavesProximas = chavesLancamentosNoTrecho(trechoProximas);
-        chavesProximas.removeAll(chavesAtual);
-        if (chavesProximas.isEmpty()) {
-            return;
-        }
-        itens.removeIf(item -> chavesProximas.contains(chaveLancamento(item)));
+        return idx;
     }
 
-    private static int recortarInicioTransacoes(String norm) {
-        int inicio = -1;
+    private static int localizarInicioPrimeiroLancamento(String norm, int fim) {
+        int searchFrom = 0;
+        int valorFatura = indexOfIgnoreCase(norm, "valor da fatura");
+        if (valorFatura >= 0) {
+            int nl = norm.indexOf('\n', valorFatura);
+            searchFrom = nl >= 0 ? nl + 1 : valorFatura;
+        }
+        int corte = indexOfIgnoreCase(norm, "data de corte");
+        if (corte >= 0) {
+            int nl = norm.indexOf('\n', corte);
+            searchFrom = Math.max(searchFrom, nl >= 0 ? nl + 1 : corte);
+        }
+        int inicioMarcador = -1;
         for (String marcador : MARCADORES_INICIO_TRANSACOES) {
             int idx = indexOfIgnoreCase(norm, marcador);
-            if (idx >= 0 && (inicio < 0 || idx < inicio)) {
-                inicio = idx;
+            if (idx >= 0 && idx < fim) {
+                inicioMarcador = inicioMarcador < 0 ? idx : Math.min(inicioMarcador, idx);
             }
         }
-        if (inicio < 0) {
-            int corte = indexOfIgnoreCase(norm, "data de corte");
-            if (corte >= 0) {
-                int nl = norm.indexOf('\n', corte);
-                inicio = nl >= 0 ? nl + 1 : corte;
-            }
+        if (inicioMarcador >= 0) {
+            searchFrom = Math.max(searchFrom, inicioMarcador);
         }
-        return Math.max(inicio, 0);
-    }
-
-    private static Set<String> chavesLancamentosNoTrecho(String trecho) {
-        Set<String> chaves = new LinkedHashSet<>();
-        Matcher m = LINHA_LANCAMENTO.matcher(trecho);
+        Pattern primeiraData = Pattern.compile("(?m)(\\d{2})/(\\d{2})(?:/\\d{4})?\\s+\\S");
+        Matcher m = primeiraData.matcher(norm);
         while (m.find()) {
-            String descricao = limparDescricao(m.group(4));
-            if (descricao.isBlank() || deveIgnorarDescricao(descricao) || pareceLinhaEncargoInter(descricao)) {
+            if (m.start() < searchFrom || m.start() >= fim) {
                 continue;
             }
-            BigDecimal valor = parseMoney(m.group(5));
-            ImportacaoFaturaItemDTO tmp = new ImportacaoFaturaItemDTO();
-            tmp.setDescricao(descricao);
-            tmp.setValor(valor);
-            aplicarParcelaDaDescricao(tmp, descricao);
-            aplicarParcelaLinhaSeguinte(trecho, m.end(), tmp);
-            chaves.add(chaveLancamento(descricao, valor, m.group(1), m.group(2), tmp.getParcelaAtual()));
+            String linha = linhaEm(norm, m.start());
+            String desc = limparDescricao(linha.replaceFirst("^\\d{2}/\\d{2}(?:/\\d{4})?\\s+", ""));
+            if (!deveIgnorarDescricao(desc) && !pareceLinhaEncargoInter(desc)) {
+                return m.start();
+            }
         }
-        return chaves;
+        return Math.max(searchFrom, 0);
     }
 
-    private static String chaveLancamento(ImportacaoFaturaItemDTO item) {
-        String dia = item.getData() != null ? String.format("%02d", item.getData().getDayOfMonth()) : "";
-        String mes = item.getData() != null ? String.format("%02d", item.getData().getMonthValue()) : "";
-        Integer parcela = item.getParcelaAtual();
-        return chaveLancamento(item.getDescricao(), item.getValor(), dia, mes, parcela);
+    private static String linhaEm(String norm, int pos) {
+        int ini = norm.lastIndexOf('\n', pos);
+        int fim = norm.indexOf('\n', pos);
+        if (ini < 0) {
+            ini = 0;
+        } else {
+            ini++;
+        }
+        if (fim < 0) {
+            fim = norm.length();
+        }
+        return norm.substring(ini, fim);
     }
 
-    private static String chaveLancamento(
-        String descricao,
-        BigDecimal valor,
-        String dia,
-        String mes,
-        Integer parcela
+    /** Mesma data+valor com parcelas diferentes (ex.: PARC 4/6, 5/6, 6/6) → fica só a menor parcela. */
+    private static void colapsarMesmaDataValorParcelaMenor(List<ImportacaoFaturaItemDTO> itens) {
+        Map<String, ImportacaoFaturaItemDTO> menorPorDataValor = new HashMap<>();
+        Map<String, Integer> contagem = new HashMap<>();
+        for (ImportacaoFaturaItemDTO item : itens) {
+            if (item.getData() == null || item.getValor() == null) {
+                continue;
+            }
+            String chave = chaveDataValor(item);
+            contagem.merge(chave, 1, Integer::sum);
+            ImportacaoFaturaItemDTO atual = menorPorDataValor.get(chave);
+            if (atual == null || parcelaPreferida(item, atual)) {
+                menorPorDataValor.put(chave, item);
+            }
+        }
+        Iterator<ImportacaoFaturaItemDTO> it = itens.iterator();
+        while (it.hasNext()) {
+            ImportacaoFaturaItemDTO item = it.next();
+            if (item.getData() == null || item.getValor() == null) {
+                continue;
+            }
+            String chave = chaveDataValor(item);
+            if (contagem.getOrDefault(chave, 0) < 2) {
+                continue;
+            }
+            if (item != menorPorDataValor.get(chave)) {
+                it.remove();
+            }
+        }
+    }
+
+    private static String chaveDataValor(ImportacaoFaturaItemDTO item) {
+        return item.getData() + "|" + item.getValor().setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    /** Menor parcelaAtual vence; sem parcela perde para quem tem parcela definida. */
+    private static boolean parcelaPreferida(ImportacaoFaturaItemDTO candidato, ImportacaoFaturaItemDTO atual) {
+        if (candidato.getParcelaAtual() == null) {
+            return false;
+        }
+        if (atual.getParcelaAtual() == null) {
+            return true;
+        }
+        return candidato.getParcelaAtual() < atual.getParcelaAtual();
+    }
+
+    private static void removerItensSoEmSecoesPosteriores(List<ImportacaoFaturaItemDTO> itens, String textoPdf) {
+        itens.removeIf(item -> apareceSomenteAposMarcadores(textoPdf, item,
+            "proximas faturas", "próximas faturas", "proxima fatura", "próxima fatura",
+            "opcoes de pagamento", "opções de pagamento",
+            "encargos em caso de pagamento"));
+    }
+
+    private static boolean apareceSomenteAposMarcadores(
+        String textoPdf,
+        ImportacaoFaturaItemDTO item,
+        String... marcadores
     ) {
-        String desc = FaturaPdfLayoutSupport.norm(descricao);
-        String vb = valor != null ? valor.setScale(2, RoundingMode.HALF_UP).toPlainString() : "0";
-        String p = parcela != null ? parcela.toString() : "";
-        return dia + "/" + mes + "|" + desc.substring(0, Math.min(desc.length(), 80)) + "|" + vb + "|" + p;
+        if (item.getValor() == null) {
+            return false;
+        }
+        String norm = textoPdf.replace('\r', '\n').toLowerCase(Locale.ROOT);
+        int limite = norm.length();
+        for (String marcador : marcadores) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx >= 0) {
+                limite = Math.min(limite, idx);
+            }
+        }
+        if (limite <= 0 || limite >= norm.length()) {
+            return false;
+        }
+        String valorBr = formatarValorBr(item.getValor());
+        boolean achouAntes = contemDataValorNoTrecho(norm, 0, limite, item, valorBr);
+        boolean achouDepois = contemDataValorNoTrecho(norm, limite, norm.length(), item, valorBr);
+        return achouDepois && !achouAntes;
+    }
+
+    private static boolean contemDataValorNoTrecho(
+        String norm,
+        int ini,
+        int fim,
+        ImportacaoFaturaItemDTO item,
+        String valorBr
+    ) {
+        if (item.getData() == null) {
+            return false;
+        }
+        String trecho = norm.substring(Math.max(0, ini), Math.min(fim, norm.length()));
+        String dataCurta = String.format("%02d/%02d",
+            item.getData().getDayOfMonth(), item.getData().getMonthValue());
+        int idx = trecho.indexOf(dataCurta);
+        while (idx >= 0) {
+            String janela = trecho.substring(idx, Math.min(idx + 160, trecho.length()));
+            if (janela.contains(valorBr)) {
+                return true;
+            }
+            idx = trecho.indexOf(dataCurta, idx + 1);
+        }
+        return false;
+    }
+
+    private static String formatarValorBr(BigDecimal valor) {
+        String plain = valor.setScale(2, RoundingMode.HALF_UP).toPlainString().replace('.', ',');
+        if (plain.contains(",")) {
+            String[] p = plain.split(",");
+            if (p[0].length() >= 4) {
+                String milhar = p[0];
+                String comPonto = milhar.substring(0, milhar.length() - 3) + "." + milhar.substring(milhar.length() - 3);
+                return comPonto + "," + p[1];
+            }
+        }
+        return plain;
+    }
+
+    private static void removerValoresCitadosEmOpcoesPagamento(List<ImportacaoFaturaItemDTO> itens, String textoPdf) {
+        String norm = textoPdf.replace('\r', '\n');
+        int opcoes = indexOfIgnoreCase(norm, "opcoes de pagamento");
+        if (opcoes < 0) {
+            opcoes = indexOfIgnoreCase(norm, "opções de pagamento");
+        }
+        if (opcoes < 0) {
+            return;
+        }
+        String secao = norm.substring(opcoes, Math.min(opcoes + 2_500, norm.length()));
+        Matcher vm = Pattern.compile("(\\d{1,3}(?:\\.\\d{3})*,\\d{2})").matcher(secao);
+        Set<BigDecimal> valores = new LinkedHashSet<>();
+        while (vm.find()) {
+            valores.add(parseMoney(vm.group(1)));
+        }
+        if (valores.isEmpty()) {
+            return;
+        }
+        itens.removeIf(item -> item.getValor() != null
+            && valores.stream().anyMatch(v -> v.subtract(item.getValor()).abs().compareTo(new BigDecimal("0.04")) <= 0)
+            && !contemDataValorNoTrecho(norm.toLowerCase(Locale.ROOT), 0, opcoes, item, formatarValorBr(item.getValor())));
     }
 
     private static void deduplicarParcelasFuturasMesmoPlano(List<ImportacaoFaturaItemDTO> itens) {

@@ -193,6 +193,9 @@ public class FaturaPdfImportService {
                 auditorias.add("Total da fatura lido do texto do PDF (IA não preencheu valorTotal).");
             }
         }
+        if (layoutEfetivo.layout() == BancoFaturaLayout.INTER) {
+            InterFaturaTextoExtrator.finalizarListaInter(itens, textoPdf, valorTotal, anoReferencia);
+        }
         imp.setValorTotal(valorTotal);
         BigDecimal pagamentoMinimo = readMoney(extracted.path("pagamentoMinimo"));
         if (pagamentoMinimo.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {
