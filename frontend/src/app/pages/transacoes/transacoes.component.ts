@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, DestroyRef, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -33,6 +33,7 @@ import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.dire
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError, valorMonetarioBrValidator } from '../../shared/utils/form.utils';
 import { AgendamentoPagamento, AgendamentoPagamentoService } from '../../services/agendamento-pagamento.service';
+import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alteracao-refresh.util';
 
 @Component({
   selector: 'app-transacoes',
@@ -59,6 +60,8 @@ import { AgendamentoPagamento, AgendamentoPagamentoService } from '../../service
   styleUrls: ['./transacoes.component.scss']
 })
 export class TransacoesComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   @ViewChild('dialogoTransacao') dialogoTransacao: unknown;
 
   transacoes: Transacao[] = [];
@@ -112,6 +115,15 @@ export class TransacoesComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    escutarAlteracoesFinanceiras(
+      this.financaAlteracao,
+      this.destroyRef,
+      () => {
+        this.carregarTransacoes({ silent: true });
+        this.carregarContas();
+      },
+      ['transacoes']
+    );
     this.definirDatasPadraoMesAtual();
     this.carregarTransacoes();
     this.carregarCategorias();
@@ -242,8 +254,8 @@ export class TransacoesComponent implements OnInit {
           'Fechar',
           { duration: 3000, panelClass: ['success-snackbar'] }
         );
-        this.financaAlteracao.notificar();
-        this.carregarTransacoes();
+        this.financaAlteracao.notificar('transacoes');
+        this.carregarTransacoes({ silent: true });
       },
       error: (err) => {
         this.salvandoTransacao = false;
@@ -273,7 +285,7 @@ export class TransacoesComponent implements OnInit {
         }
         this.confirmandoTransacaoIds = this.confirmandoTransacaoIds.filter((i) => i !== id);
         this.recalcularLista();
-        this.financaAlteracao.notificar();
+        this.financaAlteracao.notificar('transacoes');
         this.snackBar.open('Transação confirmada.', 'Fechar', { duration: 2500, panelClass: ['success-snackbar'] });
       },
       error: () => {
@@ -341,8 +353,8 @@ export class TransacoesComponent implements OnInit {
       next: () => {
         this.salvandoTransacao = false;
         this.snackBar.open('Transação excluída com sucesso!', 'Fechar', { duration: 3000, panelClass: ['success-snackbar'] });
-        this.financaAlteracao.notificar();
-        this.carregarTransacoes();
+        this.financaAlteracao.notificar('transacoes');
+        this.carregarTransacoes({ silent: true });
       },
       error: () => {
         this.salvandoTransacao = false;
@@ -392,8 +404,11 @@ export class TransacoesComponent implements OnInit {
     this.recalcularLista();
   }
 
-  private carregarTransacoes(): void {
-    this.loadingTransacoes = true;
+  private carregarTransacoes(options?: { silent?: boolean }): void {
+    const silent = options?.silent === true;
+    if (!silent) {
+      this.loadingTransacoes = true;
+    }
     this.transacaoService.buscarPorUsuario().subscribe({
       next: (transacoes) => {
         this.transacoes = transacoes ?? [];

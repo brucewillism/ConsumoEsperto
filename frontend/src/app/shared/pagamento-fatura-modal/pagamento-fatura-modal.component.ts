@@ -319,7 +319,7 @@ export class PagamentoFaturaModalComponent implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.enviando = false;
-          this.financaAlteracao.notificar();
+          this.financaAlteracao.notificar('pagamento-fatura');
           this.snackBar.open('Fatura paga e conciliada com sucesso', 'Fechar', {
             duration: 3500,
             panelClass: ['success-snackbar'],

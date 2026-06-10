@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, TemplateRef } from '@angular/core';
+import { Component, DestroyRef, OnInit, OnDestroy, TemplateRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -30,6 +30,7 @@ import { resolveHttpError } from '../../shared/utils/form.utils';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
+import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alteracao-refresh.util';
 
 @Component({
   selector: 'app-faturas',
@@ -56,6 +57,8 @@ import { ConfirmDialogService } from '../../services/confirm-dialog.service';
   styleUrls: ['./faturas.component.scss']
 })
 export class FaturasComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly bancosBrasil = BANCOS_BRASIL;
   faturas: CreditCardInvoice[] = [];
   faturasFiltradas: CreditCardInvoice[] = [];
@@ -96,6 +99,12 @@ export class FaturasComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    escutarAlteracoesFinanceiras(
+      this.financaAlteracao,
+      this.destroyRef,
+      () => this.loadData({ silent: true }),
+      ['faturas', 'pagamento-fatura']
+    );
     this.loadData();
   }
 
@@ -104,8 +113,11 @@ export class FaturasComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  public loadData(): void {
-    this.loading = true;
+  public loadData(options?: { silent?: boolean }): void {
+    const silent = options?.silent === true;
+    if (!silent) {
+      this.loading = true;
+    }
 
     forkJoin({
       faturas: this.faturaService.getFaturasCartao().pipe(
@@ -141,9 +153,9 @@ export class FaturasComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Recarrega faturas do backend (usado após pagamento/edição). */
   carregarFaturas(): void {
-    this.aplicarFiltros();
-    this.calcularResumos();
+    this.loadData({ silent: true });
   }
 
   /** Resumo só das faturas exibidas na timeline (respeita filtros). */
@@ -170,8 +182,8 @@ export class FaturasComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe((criada) => {
         if (criada) {
-          this.financaAlteracao.notificar();
-          this.loadData();
+          this.financaAlteracao.notificar('faturas');
+          this.loadData({ silent: true });
         }
       });
   }
@@ -215,7 +227,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
             this.removerFaturaDaLista(fatura);
             this.aplicarFiltros();
             this.calcularResumos();
-            this.financaAlteracao.notificar();
+            this.financaAlteracao.notificar('faturas');
             this.snackBar.open('Fatura excluída com sucesso!', 'Fechar', {
               duration: 3000,
               panelClass: ['success-snackbar'],
@@ -274,7 +286,6 @@ export class FaturasComponent implements OnInit, OnDestroy {
       .afterClosed()
       .subscribe((ok) => {
         if (ok) {
-          this.financaAlteracao.notificar();
           this.carregarFaturas();
         }
       });

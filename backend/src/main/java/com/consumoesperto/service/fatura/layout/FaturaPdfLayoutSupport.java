@@ -41,9 +41,13 @@ public final class FaturaPdfLayoutSupport {
             "data de vencimento",
             "fechamento da fatura",
             "total da fatura",
+            "total para pagamento",
+            "demonstrativo de fatura",
             "lancamentos no cartao",
+            "lancamentos do cartao",
             "transacoes de",
-            "movimentacoes na fatura"
+            "movimentacoes na fatura",
+            "compras e saques"
         );
     }
 }

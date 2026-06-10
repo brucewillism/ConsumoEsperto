@@ -1,4 +1,4 @@
-import { Component, OnInit, TemplateRef, ViewChild } from '@angular/core';
+import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -26,6 +26,7 @@ import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { forkJoin } from 'rxjs';
+import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alteracao-refresh.util';
 
 @Component({
   selector: 'app-metas',
@@ -50,6 +51,8 @@ import { forkJoin } from 'rxjs';
   styleUrl: './metas.component.scss'
 })
 export class MetasComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   @ViewChild('editMetaTpl') editMetaTpl!: TemplateRef<unknown>;
 
   metas: MetaFinanceira[] = [];
@@ -83,11 +86,20 @@ export class MetasComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    escutarAlteracoesFinanceiras(
+      this.financaAlteracao,
+      this.destroyRef,
+      () => this.carregar({ silent: true }),
+      ['metas']
+    );
     this.carregar();
   }
 
-  carregar(): void {
-    this.carregando = true;
+  carregar(options?: { silent?: boolean }): void {
+    const silent = options?.silent === true;
+    if (!silent) {
+      this.carregando = true;
+    }
     forkJoin({
       renda: this.metaService.rendaMedia(),
       lista: this.metaService.listar()
@@ -170,8 +182,8 @@ export class MetasComponent implements OnInit {
       .afterClosed()
       .subscribe((criada) => {
         if (criada) {
-          this.financaAlteracao.notificar();
-          this.carregar();
+          this.financaAlteracao.notificar('metas');
+          this.carregar({ silent: true });
         }
       });
   }
@@ -219,8 +231,8 @@ export class MetasComponent implements OnInit {
         if (res.alertaComprometimento) {
           this.toast.warning(res.alertaComprometimento);
         }
-        this.financaAlteracao.notificar();
-        this.carregar();
+        this.financaAlteracao.notificar('metas');
+        this.carregar({ silent: true });
       },
       error: (e) => {
         this.salvando = false;
@@ -242,8 +254,8 @@ export class MetasComponent implements OnInit {
       this.metaService.excluir(id).subscribe({
         next: () => {
           this.toast.success('Meta removida.');
-          this.financaAlteracao.notificar();
-          this.carregar();
+          this.financaAlteracao.notificar('metas');
+          this.carregar({ silent: true });
         },
         error: () => this.toast.error('Erro ao remover meta.')
       });

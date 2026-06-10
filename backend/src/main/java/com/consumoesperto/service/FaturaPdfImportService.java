@@ -17,6 +17,7 @@ import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.exception.AiUnavailableException;
 import com.consumoesperto.util.AiErroHumanizer;
 import com.consumoesperto.util.BancoBrasilCatalog;
+import com.consumoesperto.service.fatura.layout.BancoFaturaLayout;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutDetector;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutSupport;
@@ -99,7 +100,7 @@ public class FaturaPdfImportService {
         try {
             String textoPdf = pdfTextExtractionService.extrairTexto(pdfBytes);
             FaturaPdfLayoutStrategy layout = faturaPdfLayoutDetector.detectarTexto(textoPdf);
-            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes, layout);
+            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes, layout, false);
             return selfProvider.getObject().processarExtracao(usuarioId, extracted, layout, textoPdf);
         } catch (IllegalArgumentException e) {
             throw e;
@@ -137,7 +138,7 @@ public class FaturaPdfImportService {
             layout != null ? layout : genericoFaturaPdfLayoutStrategy;
         String textoNorm = FaturaPdfLayoutSupport.norm(textoPdf);
         String tipo = extracted.path("tipoDocumento").asText("");
-        if (!"FATURA_CARTAO".equalsIgnoreCase(tipo) && !pareceFaturaCartao(extracted)) {
+        if (!documentoAceitoComoFaturaCartao(extracted, layoutEfetivo, textoNorm)) {
             throw new IllegalArgumentException("O PDF parece ser um extrato de conta, não uma fatura de cartão.");
         }
 
@@ -195,6 +196,24 @@ public class FaturaPdfImportService {
         return toDto(salvo);
     }
 
+    boolean documentoAceitoComoFaturaCartao(
+        JsonNode extracted,
+        FaturaPdfLayoutStrategy layout,
+        String textoPdfNormalizado
+    ) {
+        if (pareceFaturaCartao(extracted)) {
+            return true;
+        }
+        if (layout != null
+            && layout.layout() != BancoFaturaLayout.GENERICO
+            && layout.reconhece(textoPdfNormalizado)
+            && FaturaPdfLayoutSupport.pareceFaturaCartao(textoPdfNormalizado)) {
+            log.info("Aceitando PDF como fatura pelo layout detectado: {}", layout.layout());
+            return true;
+        }
+        return false;
+    }
+
     public boolean pareceFaturaCartao(JsonNode extracted) {
         if (extracted == null || extracted.isMissingNode() || extracted.isNull()) {
             return false;
@@ -203,9 +222,10 @@ public class FaturaPdfImportService {
         if ("FATURA_CARTAO".equalsIgnoreCase(tipo)) {
             return true;
         }
-        if (!"EXTRATO_CONTA".equalsIgnoreCase(tipo)) {
-            return false;
-        }
+        return temSinaisEstruturaisFaturaCartao(extracted);
+    }
+
+    static boolean temSinaisEstruturaisFaturaCartao(JsonNode extracted) {
         boolean temCartao = !firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText("")).isBlank();
         boolean temVencimento = parseDate(extracted.path("dataVencimento").asText("")) != null;
         boolean temTotal = readMoney(extracted.path("valorTotal")).compareTo(BigDecimal.ZERO) > 0;

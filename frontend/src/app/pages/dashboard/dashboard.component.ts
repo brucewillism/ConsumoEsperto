@@ -263,6 +263,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // Controle de carregamento para evitar duplicação
   private isLoadingData = false;
   private lastLoadTime = 0;
+  private pendingSilentReload = false;
 
   /** Polling 60s — cancelado em ngOnDestroy */
   private pollingSubscription?: Subscription;
@@ -345,7 +346,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ) {
     this.financaAlteracao.alteracoes$
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.loadDashboardData({ silent: true, completo: false }));
+      .subscribe(() => this.loadDashboardData({ silent: true, completo: false, force: true }));
   }
 
   /**
@@ -510,7 +511,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             { duration: 6000 }
           );
           this.sugestoesContencaoJarvis = this.sugestoesContencaoJarvis.filter((x) => x.id !== id);
-          this.financaAlteracao.notificar();
+          this.financaAlteracao.notificar('dashboard');
         },
         error: () => {
           this.sugestaoContencaoEmAcao = null;
@@ -533,7 +534,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             { duration: 6000 }
           );
           this.sugestoesModoViagemJarvis = this.sugestoesModoViagemJarvis.filter((x) => x !== s);
-          this.financaAlteracao.notificar();
+          this.financaAlteracao.notificar('dashboard');
         },
         error: () => {
           this.modoViagemEmAcao = false;
@@ -624,7 +625,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((criada) => {
         if (criada) {
-          this.financaAlteracao.notificar();
+          this.financaAlteracao.notificar('dashboard');
         }
       });
   }
@@ -640,20 +641,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * financeiros do usuário autenticado. SEM DADOS MOCK.
    * Implementa controle anti-duplicação.
    */
-  public loadDashboardData(options?: { silent?: boolean; completo?: boolean }) {
+  public loadDashboardData(options?: { silent?: boolean; completo?: boolean; force?: boolean }) {
     const silent = options?.silent === true;
     const completo = options?.completo === true;
+    const force = options?.force === true;
 
     if (!silent) {
       this.dashboardService.prepararNovaRecargaCompleta();
     }
     if (this.isLoadingData) {
+      if (force) {
+        this.pendingSilentReload = true;
+      }
       console.log('⚠️ Carregamento já em andamento, ignorando chamada duplicada');
       return;
     }
 
     const now = Date.now();
-    if (now - this.lastLoadTime < 2000) {
+    if (!force && now - this.lastLoadTime < 2000) {
       console.log('⚠️ Carregamento muito frequente, aguardando cooldown');
       return;
     }
@@ -1341,6 +1346,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.isLoadingData = false;
       this.isSilentRefreshing = false;
       this.persistirDashboardNoCache();
+      if (this.pendingSilentReload) {
+        this.pendingSilentReload = false;
+        queueMicrotask(() => this.loadDashboardData({ silent: true, completo: false, force: true }));
+      }
     };
 
     const agendarComplementosPesados = (despesasCat: RelatorioCategoriaMesAtual) => {
@@ -1650,7 +1659,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           if (res.previsaoAjustada?.pontos?.length) {
             this.dashboardService.aplicarPrevisaoPosOtimizacao(res.previsaoAjustada);
           }
-          this.financaAlteracao.notificar();
+          this.financaAlteracao.notificar('dashboard');
           const msg = (res.mensagemJarvis ?? 'Protocolo aplicado.')
             .replace(/\*([^*]+)\*/g, '$1')
             .trim();

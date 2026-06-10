@@ -1,4 +1,4 @@
-import { Component, OnInit, TemplateRef, ViewChild } from '@angular/core';
+import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -20,6 +20,7 @@ import { BANCOS_BRASIL } from '../../shared/constants/bancos-brasil';
 import { parseValorBrasileiro, sanitizeCardNumberInput } from '../../shared/utils/form.utils';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
+import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alteracao-refresh.util';
 
 @Component({
   selector: 'app-cartoes',
@@ -43,6 +44,8 @@ import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/w
   styleUrls: ['./cartoes.component.scss']
 })
 export class CartoesComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   @ViewChild('editCartaoTpl') editCartaoTpl!: TemplateRef<unknown>;
 
   readonly bancosBrasil = BANCOS_BRASIL;
@@ -65,11 +68,20 @@ export class CartoesComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    escutarAlteracoesFinanceiras(
+      this.financaAlteracao,
+      this.destroyRef,
+      () => this.loadData({ silent: true }),
+      ['cartoes']
+    );
     this.loadData();
   }
 
-  loadData(): void {
-    this.loading = true;
+  loadData(options?: { silent?: boolean }): void {
+    const silent = options?.silent === true;
+    if (!silent) {
+      this.loading = true;
+    }
     this.error = null;
     this.cartaoCreditoService.buscarPorUsuario().subscribe({
       next: (cartoes) => {
@@ -90,8 +102,8 @@ export class CartoesComponent implements OnInit {
       .afterClosed()
       .subscribe((criado) => {
         if (criado) {
-          this.financaAlteracao.notificar();
-          this.loadData();
+          this.financaAlteracao.notificar('cartoes');
+          this.loadData({ silent: true });
         }
       });
   }
@@ -181,8 +193,8 @@ export class CartoesComponent implements OnInit {
         this.acaoEmAndamento = false;
         this.dialog.closeAll();
         this.cartaoEmEdicao = null;
-        this.financaAlteracao.notificar();
-        this.loadData();
+        this.financaAlteracao.notificar('cartoes');
+        this.loadData({ silent: true });
       },
       error: () => {
         this.acaoEmAndamento = false;
@@ -219,8 +231,8 @@ export class CartoesComponent implements OnInit {
           });
           this.acaoEmAndamento = false;
           this.cartaoProcessandoId = null;
-          this.financaAlteracao.notificar();
-          this.loadData();
+          this.financaAlteracao.notificar('cartoes');
+          this.loadData({ silent: true });
         },
         error: () => {
           this.acaoEmAndamento = false;

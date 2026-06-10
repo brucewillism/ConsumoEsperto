@@ -93,10 +93,23 @@ public class DocumentoIAContextService {
     }
 
     public JsonNode extrairDocumentoPdf(Long usuarioId, byte[] pdfBytes) {
-        return extrairDocumentoPdf(usuarioId, pdfBytes, faturaPdfLayoutDetector.detectar(pdfBytes));
+        return extrairDocumentoPdf(usuarioId, pdfBytes, faturaPdfLayoutDetector.detectar(pdfBytes), true);
     }
 
     public JsonNode extrairDocumentoPdf(Long usuarioId, byte[] pdfBytes, FaturaPdfLayoutStrategy layoutFatura) {
+        return extrairDocumentoPdf(usuarioId, pdfBytes, layoutFatura, true);
+    }
+
+    /**
+     * @param classificacaoAmpla {@code true} para WhatsApp/contracheque (vários tipos de PDF);
+     *                           {@code false} força extração só de fatura de cartão (importação dedicada).
+     */
+    public JsonNode extrairDocumentoPdf(
+        Long usuarioId,
+        byte[] pdfBytes,
+        FaturaPdfLayoutStrategy layoutFatura,
+        boolean classificacaoAmpla
+    ) {
         List<String> paginas = pdfTextExtractionService.extrairTextoPorPagina(pdfBytes);
         String fullText = juntarPaginas(paginas);
         if (fullText.length() < 80) {
@@ -109,9 +122,11 @@ public class DocumentoIAContextService {
         List<String> trechos = fatiarTextoParaModelo(paginas);
         JsonNode extracted;
         if (trechos.size() == 1) {
-            extracted = extrairJsonPrimeiroTrecho(usuarioId, trechos.get(0), true, LogAuditoria.PDF_EXTRACAO_COMPLETA, layoutFatura);
+            extracted = extrairJsonPrimeiroTrecho(
+                usuarioId, trechos.get(0), classificacaoAmpla, LogAuditoria.PDF_EXTRACAO_COMPLETA, layoutFatura);
         } else {
-            extracted = extrairJsonPrimeiroTrecho(usuarioId, trechos.get(0), true, LogAuditoria.PDF_CHUNK, layoutFatura);
+            extracted = extrairJsonPrimeiroTrecho(
+                usuarioId, trechos.get(0), classificacaoAmpla, LogAuditoria.PDF_CHUNK, layoutFatura);
             for (int i = 1; i < trechos.size(); i++) {
                 JsonNode cont = extrairLancamentosContinuacao(usuarioId, trechos.get(i), i + 1, trechos.size(), layoutFatura);
                 mesclarFragmentoExtracaoNoAlvo(extracted, cont);

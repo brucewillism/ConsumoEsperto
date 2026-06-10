@@ -1,4 +1,4 @@
-import { Component, OnInit, TemplateRef, ViewChild } from '@angular/core';
+import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -22,6 +22,7 @@ import { TransferenciaModalComponent } from '../../shared/transferencia-modal/tr
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '../../shared/utils/form.utils';
+import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alteracao-refresh.util';
 
 @Component({
   selector: 'app-contas-bancarias',
@@ -46,6 +47,8 @@ import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '
   styleUrl: './contas-bancarias.component.scss',
 })
 export class ContasBancariasComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   @ViewChild('formTpl') formTpl!: TemplateRef<unknown>;
 
   contas: ContaBancaria[] = [];
@@ -77,12 +80,24 @@ export class ContasBancariasComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    escutarAlteracoesFinanceiras(
+      this.financaAlteracao,
+      this.destroyRef,
+      () => {
+        this.carregar({ silent: true });
+        this.carregarHistorico({ silent: true });
+      },
+      ['contas', 'transferencia']
+    );
     this.carregar();
     this.carregarHistorico();
   }
 
-  carregarHistorico(): void {
-    this.loadingHistorico = true;
+  carregarHistorico(options?: { silent?: boolean }): void {
+    const silent = options?.silent === true;
+    if (!silent) {
+      this.loadingHistorico = true;
+    }
     this.transferenciaService.listarHistorico().subscribe({
       next: (lista) => {
         this.historicoTransferencias = lista ?? [];
@@ -106,8 +121,8 @@ export class ContasBancariasComponent implements OnInit {
       .afterClosed()
       .subscribe((ok) => {
         if (ok) {
-          this.carregar();
-          this.carregarHistorico();
+          this.carregar({ silent: true });
+          this.carregarHistorico({ silent: true });
         }
       });
   }
@@ -120,8 +135,11 @@ export class ContasBancariasComponent implements OnInit {
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('pt-BR');
   }
 
-  carregar(): void {
-    this.loading = true;
+  carregar(options?: { silent?: boolean }): void {
+    const silent = options?.silent === true;
+    if (!silent) {
+      this.loading = true;
+    }
     this.contaService.listar(true).subscribe({
       next: (contas) => {
         this.contas = contas ?? [];
@@ -188,8 +206,8 @@ export class ContasBancariasComponent implements OnInit {
       next: () => {
         this.salvando = false;
         this.dialog.closeAll();
-        this.financaAlteracao.notificar();
-        this.carregar();
+        this.financaAlteracao.notificar('contas');
+        this.carregar({ silent: true });
         this.snackBar.open(this.editando ? 'Conta atualizada' : 'Conta criada', 'Fechar', { duration: 2500 });
       },
       error: (err) => {
@@ -214,8 +232,8 @@ export class ContasBancariasComponent implements OnInit {
         }
         this.contaService.inativar(conta.id!).subscribe({
           next: () => {
-            this.financaAlteracao.notificar();
-            this.carregar();
+            this.financaAlteracao.notificar('contas');
+            this.carregar({ silent: true });
             this.snackBar.open('Conta inativada', 'Fechar', { duration: 2500 });
           },
           error: () => this.snackBar.open('Erro ao inativar', 'Fechar', { duration: 3000 }),

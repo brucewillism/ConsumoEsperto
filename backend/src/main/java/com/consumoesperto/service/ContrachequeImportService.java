@@ -26,11 +26,13 @@ import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,7 +43,9 @@ public class ContrachequeImportService {
     private static final ZoneId ZONA_BR = ZoneId.of("America/Sao_Paulo");
 
     private static final BigDecimal TOLERANCIA_AUDITORIA_BRUTO = new BigDecimal("0.05");
+    private static final BigDecimal TOLERANCIA_REUTILIZACAO_TEMPLATE = new BigDecimal("0.50");
     private static final NumberFormat BRL_AUDIT = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+    private static final String EMPRESA_NAO_IDENTIFICADA = "Empresa não identificada";
 
     private static final TypeReference<List<DescontoFixoDTO>> DESCONTO_LIST = new TypeReference<>() {};
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {};
@@ -83,11 +87,34 @@ public class ContrachequeImportService {
         boolean auditoriaOk = bruto.compareTo(BigDecimal.ZERO) <= 0
             || deltaBruto.abs().compareTo(TOLERANCIA_AUDITORIA_BRUTO) <= 0;
 
+        int mes = extracted.path("mes").asInt(YearMonth.now().getMonthValue());
+        int ano = extracted.path("ano").asInt(YearMonth.now().getYear());
+        Optional<ContrachequeImportado> templateConfirmado = buscarTemplateConfirmado(usuarioId);
+        if (templateConfirmado.isPresent()
+            && !ehDecimoTerceiro(extracted, bruto, templateConfirmado.get())
+            && valoresEquivalentesAoTemplate(templateConfirmado.get(), bruto, liquido, totalDesc, descontos)) {
+            log.info(
+                "Contracheque userId={} reutiliza template id={} (valores iguais, não é 13º) — sem nova linha no histórico",
+                usuarioId, templateConfirmado.get().getId());
+            rendaConfigService.salvar(
+                usuarioId,
+                bruto,
+                descontos,
+                rendaConfigService.obterDto(usuarioId).map(RendaConfigDTO::getDiaPagamento).orElse(5),
+                Boolean.TRUE);
+            ContrachequeDTO dto = toDto(templateConfirmado.get());
+            List<String> insights = new ArrayList<>(dto.getInsights() != null ? dto.getInsights() : List.of());
+            insights.add(0,
+                "Valores idênticos ao contracheque base — renda mantida. Reimporte só quando houver 13º salário ou mudança real.");
+            dto.setInsights(insights);
+            return dto;
+        }
+
         ContrachequeImportado c = new ContrachequeImportado();
         c.setUsuario(usuario);
-        c.setEmpresa(extracted.path("empresa").asText("Empresa não identificada"));
-        c.setMes(extracted.path("mes").asInt(YearMonth.now().getMonthValue()));
-        c.setAno(extracted.path("ano").asInt(YearMonth.now().getYear()));
+        c.setEmpresa(resolverEmpresaNome(usuarioId, extracted.path("empresa").asText("")));
+        c.setMes(mes);
+        c.setAno(ano);
         c.setSalarioBruto(bruto);
         c.setSalarioLiquido(liquido);
         c.setTotalDescontos(totalDesc.setScale(2, RoundingMode.HALF_UP));
@@ -123,7 +150,24 @@ public class ContrachequeImportService {
             String chave = c.getAno() + "|" + c.getMes() + "|" + normalizarEmpresaChave(c.getEmpresa());
             porChave.putIfAbsent(chave, c);
         }
-        return porChave.values().stream().map(this::toDto).collect(Collectors.toList());
+        String empresaReferencia = porChave.values().stream()
+            .map(ContrachequeImportado::getEmpresa)
+            .filter(e -> e != null && !e.isBlank() && !EMPRESA_NAO_IDENTIFICADA.equalsIgnoreCase(e.trim()))
+            .findFirst()
+            .orElse(null);
+        return porChave.values().stream()
+            .map(c -> enriquecerDtoHistorico(c, empresaReferencia))
+            .collect(Collectors.toList());
+    }
+
+    private ContrachequeDTO enriquecerDtoHistorico(ContrachequeImportado c, String empresaReferencia) {
+        ContrachequeDTO dto = toDto(c);
+        if (empresaReferencia != null
+            && dto.getEmpresa() != null
+            && EMPRESA_NAO_IDENTIFICADA.equalsIgnoreCase(dto.getEmpresa().trim())) {
+            dto.setEmpresa(empresaReferencia);
+        }
+        return dto;
     }
 
     private static String normalizarEmpresaChave(String empresa) {
@@ -131,6 +175,103 @@ public class ContrachequeImportService {
             return "_";
         }
         return empresa.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+    }
+
+    private Optional<ContrachequeImportado> buscarTemplateConfirmado(Long usuarioId) {
+        return contrachequeRepository.findByUsuarioIdOrderByAnoDescMesDescDataCriacaoDesc(usuarioId).stream()
+            .filter(c -> c.getStatus() == ContrachequeImportado.Status.CONFIRMADO)
+            .findFirst();
+    }
+
+    private String resolverEmpresaNome(Long usuarioId, String extraido) {
+        if (extraido != null && !extraido.isBlank() && !EMPRESA_NAO_IDENTIFICADA.equalsIgnoreCase(extraido.trim())) {
+            return extraido.trim();
+        }
+        return buscarTemplateConfirmado(usuarioId)
+            .map(ContrachequeImportado::getEmpresa)
+            .filter(e -> e != null && !e.isBlank() && !EMPRESA_NAO_IDENTIFICADA.equalsIgnoreCase(e.trim()))
+            .orElse(EMPRESA_NAO_IDENTIFICADA);
+    }
+
+    private boolean ehDecimoTerceiro(JsonNode extracted, BigDecimal bruto, ContrachequeImportado template) {
+        String blob = normalizarTextoBusca(
+            extracted.path("empresa").asText("")
+                + " " + extracted.path("insights").toString()
+                + " " + extracted.path("descontos").toString());
+        if (blob.contains("13 salario")
+            || blob.contains("decimo terceiro")
+            || blob.contains("gratificacao natalina")
+            || blob.contains("natalina")
+            || blob.contains("13o")
+            || blob.contains("13º")) {
+            return true;
+        }
+        int mes = extracted.path("mes").asInt(0);
+        if ((mes == 11 || mes == 12)
+            && template != null
+            && template.getSalarioBruto() != null
+            && bruto != null
+            && template.getSalarioBruto().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal diff = bruto.subtract(template.getSalarioBruto()).abs();
+            BigDecimal pct = diff.divide(template.getSalarioBruto(), 4, RoundingMode.HALF_UP);
+            return pct.compareTo(new BigDecimal("0.08")) > 0;
+        }
+        return false;
+    }
+
+    private static String normalizarTextoBusca(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return Normalizer.normalize(raw, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9 ]", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+    }
+
+    private boolean valoresEquivalentesAoTemplate(
+        ContrachequeImportado template,
+        BigDecimal bruto,
+        BigDecimal liquido,
+        BigDecimal totalDesc,
+        List<DescontoFixoDTO> descontos
+    ) {
+        if (template == null) {
+            return false;
+        }
+        if (!moedasQuaseIguais(template.getSalarioBruto(), bruto, TOLERANCIA_REUTILIZACAO_TEMPLATE)) {
+            return false;
+        }
+        if (!moedasQuaseIguais(template.getSalarioLiquido(), liquido, TOLERANCIA_REUTILIZACAO_TEMPLATE)) {
+            return false;
+        }
+        if (!moedasQuaseIguais(template.getTotalDescontos(), totalDesc, TOLERANCIA_REUTILIZACAO_TEMPLATE)) {
+            return false;
+        }
+        List<DescontoFixoDTO> base = readDescontos(template.getDescontosJson());
+        if (base.size() != descontos.size()) {
+            return false;
+        }
+        for (int i = 0; i < base.size(); i++) {
+            DescontoFixoDTO a = base.get(i);
+            DescontoFixoDTO b = descontos.get(i);
+            if (!normalizarTextoBusca(a.getRotulo()).equals(normalizarTextoBusca(b.getRotulo()))) {
+                return false;
+            }
+            if (!moedasQuaseIguais(a.getValor(), b.getValor(), TOLERANCIA_REUTILIZACAO_TEMPLATE)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean moedasQuaseIguais(BigDecimal a, BigDecimal b, BigDecimal tol) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return a.subtract(b).abs().compareTo(tol) <= 0;
     }
 
     @Transactional(readOnly = true)

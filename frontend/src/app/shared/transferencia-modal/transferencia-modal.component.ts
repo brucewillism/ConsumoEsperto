@@ -125,7 +125,7 @@ export class TransferenciaModalComponent implements OnInit {
       .subscribe({
         next: () => {
           this.enviando = false;
-          this.financaAlteracao.notificar();
+          this.financaAlteracao.notificar('transferencia');
           this.snackBar.open('Transferência realizada com sucesso', 'Fechar', {
             duration: 3000,
             panelClass: ['success-snackbar'],
