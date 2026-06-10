@@ -455,14 +455,15 @@ public final class InterFaturaTextoExtrator {
 
     private static void removerValoresCitadosEmOpcoesPagamento(List<ImportacaoFaturaItemDTO> itens, String textoPdf) {
         String norm = textoPdf.replace('\r', '\n');
-        int opcoes = indexOfIgnoreCase(norm, "opcoes de pagamento");
-        if (opcoes < 0) {
-            opcoes = indexOfIgnoreCase(norm, "opções de pagamento");
+        int indiceOpcoes = indexOfIgnoreCase(norm, "opcoes de pagamento");
+        if (indiceOpcoes < 0) {
+            indiceOpcoes = indexOfIgnoreCase(norm, "opções de pagamento");
         }
-        if (opcoes < 0) {
+        if (indiceOpcoes < 0) {
             return;
         }
-        String secao = norm.substring(opcoes, Math.min(opcoes + 2_500, norm.length()));
+        final int limiteOpcoes = indiceOpcoes;
+        String secao = norm.substring(limiteOpcoes, Math.min(limiteOpcoes + 2_500, norm.length()));
         Matcher vm = Pattern.compile("(\\d{1,3}(?:\\.\\d{3})*,\\d{2})").matcher(secao);
         Set<BigDecimal> valores = new LinkedHashSet<>();
         while (vm.find()) {
@@ -473,7 +474,7 @@ public final class InterFaturaTextoExtrator {
         }
         itens.removeIf(item -> item.getValor() != null
             && valores.stream().anyMatch(v -> v.subtract(item.getValor()).abs().compareTo(new BigDecimal("0.04")) <= 0)
-            && !contemDataValorNoTrecho(norm.toLowerCase(Locale.ROOT), 0, opcoes, item, formatarValorBr(item.getValor())));
+            && !contemDataValorNoTrecho(norm.toLowerCase(Locale.ROOT), 0, limiteOpcoes, item, formatarValorBr(item.getValor())));
     }
 
     private static void deduplicarParcelasFuturasMesmoPlano(List<ImportacaoFaturaItemDTO> itens) {
