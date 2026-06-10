@@ -3,8 +3,10 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.DescontoFixoDTO;
 import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.RendaConfigRequest;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.RendaConfig;
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.RendaConfigRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -31,17 +33,20 @@ public class RendaConfigService {
     private static final TypeReference<List<DescontoFixoDTO>> LIST_DESCONTO = new TypeReference<>() {};
 
     private final RendaConfigRepository rendaConfigRepository;
+    private final ContaBancariaRepository contaBancariaRepository;
     private final UsuarioRepository usuarioRepository;
     private final ObjectMapper objectMapper;
     private final SalarioAutomaticoService salarioAutomaticoService;
 
     public RendaConfigService(
         RendaConfigRepository rendaConfigRepository,
+        ContaBancariaRepository contaBancariaRepository,
         UsuarioRepository usuarioRepository,
         ObjectMapper objectMapper,
         @Lazy SalarioAutomaticoService salarioAutomaticoService
     ) {
         this.rendaConfigRepository = rendaConfigRepository;
+        this.contaBancariaRepository = contaBancariaRepository;
         this.usuarioRepository = usuarioRepository;
         this.objectMapper = objectMapper;
         this.salarioAutomaticoService = salarioAutomaticoService;
@@ -64,6 +69,18 @@ public class RendaConfigService {
         List<DescontoFixoDTO> descontos,
         Integer diaPagamento,
         Boolean receitaAutomaticaAtiva
+    ) {
+        return salvar(usuarioId, salarioBruto, descontos, diaPagamento, receitaAutomaticaAtiva, null);
+    }
+
+    @Transactional
+    public RendaConfigDTO salvar(
+        Long usuarioId,
+        BigDecimal salarioBruto,
+        List<DescontoFixoDTO> descontos,
+        Integer diaPagamento,
+        Boolean receitaAutomaticaAtiva,
+        Long contaBancariaId
     ) {
         if (salarioBruto == null || salarioBruto.compareTo(BigDecimal.ZERO) < 0) {
             salarioBruto = BigDecimal.ZERO;
@@ -102,6 +119,13 @@ public class RendaConfigService {
         }
         if (diaPagamento != null) {
             cfg.setDiaPagamento(Math.max(1, Math.min(31, diaPagamento)));
+        } else if (cfg.getDiaPagamento() == null) {
+            cfg.setDiaPagamento(SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO);
+        }
+        if (contaBancariaId != null) {
+            ContaBancaria conta = contaBancariaRepository.findByIdAndUsuarioId(contaBancariaId, usuarioId)
+                .orElseThrow(() -> new IllegalArgumentException("Conta bancária não encontrada."));
+            cfg.setContaBancaria(conta);
         }
         boolean registroNovo = cfg.getId() == null;
         if (receitaAutomaticaAtiva != null) {
@@ -316,7 +340,7 @@ public class RendaConfigService {
                 .orElse(null);
         }
         if (dia == null) {
-            throw new IllegalArgumentException("Indique o dia de pagamento (1-31).");
+            dia = SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO;
         }
         Boolean auto = req.getReceitaAutomaticaAtiva();
         return salvar(
@@ -324,7 +348,8 @@ public class RendaConfigService {
             req.getSalarioBruto() != null ? req.getSalarioBruto() : BigDecimal.ZERO,
             req.getDescontosFixos() != null ? req.getDescontosFixos() : new ArrayList<>(),
             dia,
-            auto
+            auto,
+            req.getContaBancariaId()
         );
     }
 
@@ -352,6 +377,8 @@ public class RendaConfigService {
             .totalDescontos(totalDesc.setScale(2, RoundingMode.HALF_UP))
             .percentualDescontosSobreBruto(pct)
             .receitaAutomaticaAtiva(c.isReceitaAutomaticaAtiva())
+            .contaBancariaId(c.getContaBancaria() != null ? c.getContaBancaria().getId() : null)
+            .contaBancariaNome(c.getContaBancaria() != null ? c.getContaBancaria().getNome() : null)
             .build();
     }
 

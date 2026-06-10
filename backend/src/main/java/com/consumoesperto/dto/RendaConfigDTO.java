@@ -22,6 +22,9 @@ public class RendaConfigDTO {
     /** Percentual dos descontos sobre o bruto (0–100+), null se bruto zero. */
     private BigDecimal percentualDescontosSobreBruto;
     private boolean receitaAutomaticaAtiva;
+    /** Carteira que recebe o salário automático (ex.: conta Itaú). */
+    private Long contaBancariaId;
+    private String contaBancariaNome;
 
     public static RendaConfigDTO vazio() {
         return RendaConfigDTO.builder()

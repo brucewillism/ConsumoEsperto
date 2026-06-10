@@ -11,4 +11,6 @@ public class RendaConfigRequest {
     private List<DescontoFixoDTO> descontosFixos;
     private Integer diaPagamento;
     private Boolean receitaAutomaticaAtiva;
+    /** Conta destino do salário automático (opcional; senão usa conta Itaú ou padrão). */
+    private Long contaBancariaId;
 }

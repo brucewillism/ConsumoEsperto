@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +61,8 @@ public class ContrachequeImportService {
     private final ScoreService scoreService;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final PlanejamentoFiscalService planejamentoFiscalService;
+    @Lazy
+    private final SalarioAutomaticoService salarioAutomaticoService;
     private final ObjectProvider<ContrachequeImportService> selfProvider;
 
     public ContrachequeDTO processarPdf(Long usuarioId, byte[] pdfBytes) {
@@ -105,7 +108,9 @@ public class ContrachequeImportService {
                 usuarioId,
                 bruto,
                 descontosEfetivos,
-                rendaConfigService.obterDto(usuarioId).map(RendaConfigDTO::getDiaPagamento).orElse(5),
+                rendaConfigService.obterDto(usuarioId)
+                    .map(RendaConfigDTO::getDiaPagamento)
+                    .orElse(SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO),
                 Boolean.TRUE);
             ContrachequeDTO dto = toDto(registro);
             List<String> insights = new ArrayList<>(dto.getInsights() != null ? dto.getInsights() : List.of());
@@ -467,7 +472,7 @@ public class ContrachequeImportService {
         int diaPagamento = rendaConfigService.obterDto(usuarioId)
             .map(RendaConfigDTO::getDiaPagamento)
             .filter(d -> d != null && d >= 1 && d <= 31)
-            .orElse(5);
+            .orElse(SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO);
         rendaConfigService.salvar(usuarioId, c.getSalarioBruto(), descontos, diaPagamento, Boolean.TRUE);
 
         YearMonth competencia = YearMonth.of(c.getAno(), c.getMes());
@@ -484,8 +489,10 @@ public class ContrachequeImportService {
             tx.setValor(c.getSalarioLiquido());
             tx.setTipoTransacao(TransacaoDTO.TipoTransacao.RECEITA);
             tx.setCategoriaId(resolveCategoriaSalario(usuarioId));
-            tx.setDataTransacao(competencia.atEndOfMonth().atStartOfDay());
+            int diaEfetivo = Math.min(diaPagamento, competencia.lengthOfMonth());
+            tx.setDataTransacao(competencia.atDay(diaEfetivo).atStartOfDay());
             tx.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
+            salarioAutomaticoService.resolverContaDestinoSalarioPorUsuario(usuarioId).ifPresent(tx::setContaBancariaId);
             transacaoService.criarTransacao(tx, usuarioId);
         }
 

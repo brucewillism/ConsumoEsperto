@@ -53,6 +53,7 @@ public class SchemaAutoPatchService {
         ensureUsuarioAiConfigTable();
         ensureUsuarioAiConfigEvolutionApiKeyColumn();
         ensureUsuarioRendaConfigTable();
+        ensureRendaConfigContaBancariaColumn();
         ensureMetasFinanceirasTable();
         ensureGrupoFamiliarTables();
         ensureOrcamentosTable();
@@ -210,6 +211,7 @@ public class SchemaAutoPatchService {
                         + "salario_liquido NUMERIC(19,2) NOT NULL DEFAULT 0,"
                         + "receita_automatica_ativa BOOLEAN NOT NULL DEFAULT FALSE,"
                         + "ultimo_mes_lancamento_auto INTEGER,"
+                        + "conta_bancaria_id BIGINT,"
                         + "data_atualizacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
                         + ")"
                 );
@@ -217,6 +219,40 @@ public class SchemaAutoPatchService {
             }
         } catch (Exception e) {
             log.warn("Falha ao CREATE usuario_renda_config: {}", e.getMessage());
+        }
+    }
+
+    private void ensureRendaConfigContaBancariaColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuario_renda_config' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + schema + ".usuario_renda_config "
+                        + "ADD COLUMN IF NOT EXISTS conta_bancaria_id BIGINT"
+                );
+                executeDdlAutocommit(
+                    "DO $$ BEGIN "
+                        + "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_usuario_renda_config_conta_bancaria') THEN "
+                        + "ALTER TABLE " + schema + ".usuario_renda_config "
+                        + "ADD CONSTRAINT fk_usuario_renda_config_conta_bancaria "
+                        + "FOREIGN KEY (conta_bancaria_id) REFERENCES public.contas_bancarias(id) ON DELETE SET NULL; "
+                        + "END IF; END $$"
+                );
+            }
+            log.info("Schema patch: coluna conta_bancaria_id verificada em usuario_renda_config.");
+        } catch (Exception e) {
+            log.warn("Falha ao ADD conta_bancaria_id em usuario_renda_config: {}", e.getMessage());
         }
     }
 

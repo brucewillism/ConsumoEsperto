@@ -36,6 +36,11 @@ public class RendaConfig {
     @Column(name = "dia_pagamento")
     private Integer diaPagamento;
 
+    /** Conta que recebe o salário automático (ex.: Itaú). Se nulo, procura conta com «Itaú» no nome. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conta_bancaria_id")
+    private ContaBancaria contaBancaria;
+
     @Column(name = "salario_liquido", nullable = false, precision = 19, scale = 2)
     private BigDecimal salarioLiquido = BigDecimal.ZERO;
 
