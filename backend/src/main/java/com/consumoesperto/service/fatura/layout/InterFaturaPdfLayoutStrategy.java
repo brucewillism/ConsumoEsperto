@@ -60,11 +60,11 @@ public class InterFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
         for (ImportacaoFaturaItemDTO item : itens) {
             String n = FaturaPdfLayoutSupport.norm(item.getDescricao());
             if (InterFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())
+                || InterFaturaTextoExtrator.pareceLinhaEncargoInter(item.getDescricao())
                 || n.contains("parcelar fatura")
                 || n.contains("limite disponivel")
                 || n.contains("valor financiado")
                 || n.contains("taxa efetiva")
-                || n.contains("encargos rotativos")
                 || n.matches(".*\\d\\s*\\+\\s*\\d+x.*")) {
                 continue;
             }

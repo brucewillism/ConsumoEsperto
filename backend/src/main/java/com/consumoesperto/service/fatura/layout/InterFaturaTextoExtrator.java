@@ -8,9 +8,14 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,9 +33,11 @@ public final class InterFaturaTextoExtrator {
     private static final Pattern PARCELA_TEXTO = Pattern.compile(
         "(?i)parcela\\s+(\\d{1,2})\\s+de\\s+(\\d{1,2})"
     );
-    private static final Pattern TOTAL_FATURA = Pattern.compile(
-        "(?i)(?:valor da fatura|total da fatura|total a pagar|fatura atual)"
-            + "[^\\d]{0,100}(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
+    private static final Pattern VALOR_FATURA_RESUMO = Pattern.compile(
+        "(?i)valor da fatura[^\\d]{0,100}(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
+    );
+    private static final Pattern TOTAL_FATURA_RESUMO = Pattern.compile(
+        "(?i)total da fatura[^\\d]{0,100}(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
     );
     private static final Pattern DATA_CORTE = Pattern.compile(
         "(?i)data de corte:?\\s*(\\d{2})/(\\d{2})/(\\d{4})"
@@ -79,15 +86,16 @@ public final class InterFaturaTextoExtrator {
         if (textoPdf == null || textoPdf.isBlank()) {
             return Optional.empty();
         }
-        Matcher m = TOTAL_FATURA.matcher(textoPdf);
-        BigDecimal melhor = null;
-        while (m.find()) {
-            BigDecimal valor = parseMoney(m.group(1));
-            if (valor.compareTo(BigDecimal.ZERO) > 0) {
-                melhor = valor;
-            }
+        String resumo = textoPdf.length() > 4_500 ? textoPdf.substring(0, 4_500) : textoPdf;
+        Matcher valor = VALOR_FATURA_RESUMO.matcher(resumo);
+        if (valor.find()) {
+            return Optional.of(parseMoney(valor.group(1)));
         }
-        return Optional.ofNullable(melhor);
+        Matcher total = TOTAL_FATURA_RESUMO.matcher(resumo);
+        if (total.find()) {
+            return Optional.of(parseMoney(total.group(1)));
+        }
+        return Optional.empty();
     }
 
     public static Optional<LocalDate> extrairDataCorte(String textoPdf) {
@@ -105,46 +113,81 @@ public final class InterFaturaTextoExtrator {
         if (destino == null || textoPdf == null || textoPdf.isBlank()) {
             return;
         }
+        podarEspurios(destino, textoPdf);
+
         List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
-        if (doTexto.isEmpty()) {
-            return;
-        }
         Optional<BigDecimal> totalPdf = extrairTotalFatura(textoPdf);
         BigDecimal somaTexto = somaValores(doTexto);
         BigDecimal somaDestino = somaValores(destino);
 
         boolean textoMaisProximoDoTotal = totalPdf.isPresent()
+            && !doTexto.isEmpty()
             && distanciaAoTotal(somaTexto, totalPdf.get())
                 .compareTo(distanciaAoTotal(somaDestino, totalPdf.get())) < 0;
         boolean textoBateComTotal = totalPdf.isPresent()
+            && !doTexto.isEmpty()
             && distanciaAoTotal(somaTexto, totalPdf.get()).compareTo(new BigDecimal("1.00")) <= 0;
 
-        if (destino.isEmpty()) {
-            destino.addAll(doTexto);
-            log.info("Inter texto: {} lançamento(s) extraído(s) do PDF (IA vazia).", doTexto.size());
-            return;
-        }
-        if (textoMaisProximoDoTotal || textoBateComTotal) {
+        if (!doTexto.isEmpty() && (destino.isEmpty() || textoMaisProximoDoTotal || textoBateComTotal)) {
             int tamanhoAnterior = destino.size();
+            BigDecimal somaAnterior = somaDestino;
             destino.clear();
             destino.addAll(doTexto);
             log.info(
-                "Inter texto: lista substituída por {} lançamento(s) do PDF (IA tinha {} com soma {}).",
+                "Inter texto: lista substituída por {} lançamento(s) do PDF (antes: {} soma {}).",
                 doTexto.size(),
                 tamanhoAnterior,
-                somaDestino
+                somaAnterior
             );
-            return;
-        }
-        int inseridos = 0;
-        for (ImportacaoFaturaItemDTO candidato : doTexto) {
-            if (!jaExiste(destino, candidato)) {
-                destino.add(candidato);
-                inseridos++;
+        } else if (!doTexto.isEmpty()) {
+            int inseridos = 0;
+            for (ImportacaoFaturaItemDTO candidato : doTexto) {
+                if (!jaExiste(destino, candidato)) {
+                    destino.add(candidato);
+                    inseridos++;
+                }
+            }
+            if (inseridos > 0) {
+                log.info("Inter texto: {} lançamento(s) complementar(es) injetado(s).", inseridos);
             }
         }
-        if (inseridos > 0) {
-            log.info("Inter texto: {} lançamento(s) complementar(es) injetado(s).", inseridos);
+
+        podarEspurios(destino, textoPdf);
+        totalPdf.ifPresent(total -> reconciliarComTotal(destino, doTexto, total));
+    }
+
+    /** Remove simulações, encargos e duplicatas de «Próximas faturas» mesmo quando a IA as incluiu. */
+    public static void podarEspurios(List<ImportacaoFaturaItemDTO> itens, String textoPdf) {
+        if (itens == null || itens.isEmpty() || textoPdf == null || textoPdf.isBlank()) {
+            return;
+        }
+        int antes = itens.size();
+        itens.removeIf(i -> deveIgnorarDescricao(i.getDescricao()) || pareceLinhaEncargoInter(i.getDescricao()));
+        removerDuplicatasSecaoProximas(itens, textoPdf);
+        deduplicarParcelasFuturasMesmoPlano(itens);
+        int removidos = antes - itens.size();
+        if (removidos > 0) {
+            log.info("Inter poda: {} lançamento(s) espúrio(s) removido(s).", removidos);
+        }
+    }
+
+    private static void reconciliarComTotal(
+        List<ImportacaoFaturaItemDTO> destino,
+        List<ImportacaoFaturaItemDTO> doTexto,
+        BigDecimal total
+    ) {
+        if (destino == null || destino.isEmpty()) {
+            return;
+        }
+        BigDecimal soma = somaValores(destino);
+        if (distanciaAoTotal(soma, total).compareTo(new BigDecimal("1.00")) <= 0) {
+            return;
+        }
+        if (!doTexto.isEmpty() && distanciaAoTotal(somaValores(doTexto), total)
+            .compareTo(distanciaAoTotal(soma, total)) < 0) {
+            destino.clear();
+            destino.addAll(doTexto);
+            log.info("Inter reconciliação: lista trocada pelo texto (soma {} → total {}).", somaValores(doTexto), total);
         }
     }
 
@@ -195,11 +238,144 @@ public final class InterFaturaTextoExtrator {
             }
         }
         if (inicio < 0) {
+            int corte = indexOfIgnoreCase(norm, "data de corte");
+            if (corte >= 0) {
+                int nl = norm.indexOf('\n', corte);
+                inicio = nl >= 0 ? nl + 1 : corte;
+            }
+        }
+        if (inicio < 0) {
             int resumo = indexOfIgnoreCase(norm, "resumo da fatura");
             inicio = resumo >= 0 ? resumo : 0;
         }
         int fim = localizarFimTrecho(norm, inicio);
         return norm.substring(inicio, fim);
+    }
+
+    private static void removerDuplicatasSecaoProximas(List<ImportacaoFaturaItemDTO> itens, String textoPdf) {
+        String norm = textoPdf.replace('\r', '\n');
+        int proximas = indexOfIgnoreCase(norm, "proximas faturas");
+        if (proximas < 0) {
+            proximas = indexOfIgnoreCase(norm, "proxima fatura");
+        }
+        if (proximas < 0) {
+            return;
+        }
+        int fimAtual = proximas;
+        int inicioAtual = recortarInicioTransacoes(norm);
+        String trechoAtual = norm.substring(inicioAtual, fimAtual);
+        String trechoProximas = norm.substring(proximas, localizarFimTrecho(norm, proximas));
+        Set<String> chavesAtual = chavesLancamentosNoTrecho(trechoAtual);
+        Set<String> chavesProximas = chavesLancamentosNoTrecho(trechoProximas);
+        chavesProximas.removeAll(chavesAtual);
+        if (chavesProximas.isEmpty()) {
+            return;
+        }
+        itens.removeIf(item -> chavesProximas.contains(chaveLancamento(item)));
+    }
+
+    private static int recortarInicioTransacoes(String norm) {
+        int inicio = -1;
+        for (String marcador : MARCADORES_INICIO_TRANSACOES) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx >= 0 && (inicio < 0 || idx < inicio)) {
+                inicio = idx;
+            }
+        }
+        if (inicio < 0) {
+            int corte = indexOfIgnoreCase(norm, "data de corte");
+            if (corte >= 0) {
+                int nl = norm.indexOf('\n', corte);
+                inicio = nl >= 0 ? nl + 1 : corte;
+            }
+        }
+        return Math.max(inicio, 0);
+    }
+
+    private static Set<String> chavesLancamentosNoTrecho(String trecho) {
+        Set<String> chaves = new LinkedHashSet<>();
+        Matcher m = LINHA_LANCAMENTO.matcher(trecho);
+        while (m.find()) {
+            String descricao = limparDescricao(m.group(4));
+            if (descricao.isBlank() || deveIgnorarDescricao(descricao) || pareceLinhaEncargoInter(descricao)) {
+                continue;
+            }
+            BigDecimal valor = parseMoney(m.group(5));
+            ImportacaoFaturaItemDTO tmp = new ImportacaoFaturaItemDTO();
+            tmp.setDescricao(descricao);
+            tmp.setValor(valor);
+            aplicarParcelaDaDescricao(tmp, descricao);
+            aplicarParcelaLinhaSeguinte(trecho, m.end(), tmp);
+            chaves.add(chaveLancamento(descricao, valor, m.group(1), m.group(2), tmp.getParcelaAtual()));
+        }
+        return chaves;
+    }
+
+    private static String chaveLancamento(ImportacaoFaturaItemDTO item) {
+        String dia = item.getData() != null ? String.format("%02d", item.getData().getDayOfMonth()) : "";
+        String mes = item.getData() != null ? String.format("%02d", item.getData().getMonthValue()) : "";
+        Integer parcela = item.getParcelaAtual();
+        return chaveLancamento(item.getDescricao(), item.getValor(), dia, mes, parcela);
+    }
+
+    private static String chaveLancamento(
+        String descricao,
+        BigDecimal valor,
+        String dia,
+        String mes,
+        Integer parcela
+    ) {
+        String desc = FaturaPdfLayoutSupport.norm(descricao);
+        String vb = valor != null ? valor.setScale(2, RoundingMode.HALF_UP).toPlainString() : "0";
+        String p = parcela != null ? parcela.toString() : "";
+        return dia + "/" + mes + "|" + desc.substring(0, Math.min(desc.length(), 80)) + "|" + vb + "|" + p;
+    }
+
+    private static void deduplicarParcelasFuturasMesmoPlano(List<ImportacaoFaturaItemDTO> itens) {
+        Map<String, ImportacaoFaturaItemDTO> menorParcelaPorGrupo = new HashMap<>();
+        Map<String, Integer> contagemPorGrupo = new HashMap<>();
+        for (ImportacaoFaturaItemDTO item : itens) {
+            String grupo = grupoParcelamento(item);
+            if (grupo == null) {
+                continue;
+            }
+            contagemPorGrupo.merge(grupo, 1, Integer::sum);
+            ImportacaoFaturaItemDTO atual = menorParcelaPorGrupo.get(grupo);
+            if (atual == null || parcelaMenorQue(item, atual)) {
+                menorParcelaPorGrupo.put(grupo, item);
+            }
+        }
+        Iterator<ImportacaoFaturaItemDTO> it = itens.iterator();
+        while (it.hasNext()) {
+            ImportacaoFaturaItemDTO item = it.next();
+            String grupo = grupoParcelamento(item);
+            if (grupo == null || contagemPorGrupo.getOrDefault(grupo, 0) < 2) {
+                continue;
+            }
+            if (item != menorParcelaPorGrupo.get(grupo)) {
+                it.remove();
+            }
+        }
+    }
+
+    private static String grupoParcelamento(ImportacaoFaturaItemDTO item) {
+        if (item.getParcelaAtual() == null || item.getValor() == null) {
+            return null;
+        }
+        String n = FaturaPdfLayoutSupport.norm(item.getDescricao());
+        n = n.replaceAll("parcela\\s+\\d+\\s+de\\s+\\d+", " ")
+            .replaceAll("\\d+\\s*/\\s*\\d+", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+        if (!n.contains("parc")) {
+            return null;
+        }
+        return n + "|" + item.getValor().setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    private static boolean parcelaMenorQue(ImportacaoFaturaItemDTO a, ImportacaoFaturaItemDTO b) {
+        return a.getParcelaAtual() != null && b.getParcelaAtual() != null
+            && a.getParcelaAtual() < b.getParcelaAtual();
     }
 
     private static int localizarFimTrecho(String norm, int inicio) {
@@ -302,7 +478,8 @@ public final class InterFaturaTextoExtrator {
         if (n.isBlank()) {
             return true;
         }
-        return n.contains("limite de credito")
+        return pareceLinhaEncargoInter(descricao)
+            || n.contains("limite de credito")
             || n.contains("limite disponivel")
             || n.contains("opcoes de pagamento")
             || n.contains("parcelar fatura")
@@ -317,12 +494,28 @@ public final class InterFaturaTextoExtrator {
             || n.contains("saldo restante")
             || n.contains("fatura anterior")
             || n.contains("valor financiado")
-            || n.contains("iof do rotativo")
             || n.contains("taxa efetiva")
-            || n.contains("encargos rotativos")
             || n.contains("simulacao")
             || n.matches(".*\\d\\s*\\+\\s*\\d+x.*")
             || n.matches(".*ate\\s+\\d+\\s*x.*");
+    }
+
+    static boolean pareceLinhaEncargoInter(String descricao) {
+        String n = FaturaPdfLayoutSupport.norm(descricao);
+        if (n.isBlank()) {
+            return false;
+        }
+        return n.startsWith("total a pagar")
+            || n.contains("total a pagar em")
+            || n.contains("encargos e iof")
+            || n.contains("iof do rotativo")
+            || n.contains("iof adicional")
+            || n.contains("iof diario")
+            || n.contains("encargos rotativos")
+            || n.contains("juros do rotativo")
+            || n.contains("juros rotativos")
+            || n.contains("encargos em caso")
+            || n.contains("valor total financiado");
     }
 
     private static BigDecimal parseMoney(String raw) {

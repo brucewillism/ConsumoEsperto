@@ -20,14 +20,15 @@ class InterFaturaTextoExtratorTest {
         Data de vencimento 02/06/2026
         Data de corte: 25/05/2026
         Detalhamento da fatura
-        21/02 PARC SALDO TOT - R DO BRASIL TECNO R$ 273,14
+        21/02 PARC SALDO TOT - R DO BRASIL TECNO R$ 261,64
         Parcela 04 de 06
-        23/04 APPLE.COM/BILL R$ 11,50
+        28/04 APPLE.COM/BILL R$ 11,50
         29/04 APPLE.COM/BILL R$ 18,00
+        25/05 Total a pagar em encargos e IOF do rotativo R$ 2,97
         Próximas faturas
-        21/02 PARC SALDO TOT - R DO BRASIL TECNO R$ 273,14
+        21/02 PARC SALDO TOT - R DO BRASIL TECNO R$ 261,64
         Parcela 05 de 06
-        21/02 PARC SALDO TOT - R DO BRASIL TECNO R$ 273,14
+        21/02 PARC SALDO TOT - R DO BRASIL TECNO R$ 261,64
         Parcela 06 de 06
         Opções de pagamento
         1 + 5x R$ 71,81
@@ -49,11 +50,11 @@ class InterFaturaTextoExtratorTest {
     @Test
     void complementarSubstituiListaInfladaDaIa() {
         List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
-        destino.add(item("PARC SALDO TOT", new BigDecimal("273.14"), 4, 6));
+        destino.add(item("PARC SALDO TOT", new BigDecimal("261.64"), 4, 6));
         destino.add(item("APPLE.COM/BILL", new BigDecimal("11.50"), null, null));
         destino.add(item("APPLE.COM/BILL", new BigDecimal("18.00"), null, null));
-        destino.add(item("PARC SALDO TOT", new BigDecimal("273.14"), 5, 6));
-        destino.add(item("PARC SALDO TOT", new BigDecimal("273.14"), 6, 6));
+        destino.add(item("PARC SALDO TOT", new BigDecimal("261.64"), 5, 6));
+        destino.add(item("PARC SALDO TOT", new BigDecimal("261.64"), 6, 6));
         destino.add(item("Parcelamento 1+5x", new BigDecimal("71.81"), null, null));
         destino.add(item("IOF simulacao", new BigDecimal("12.00"), null, null));
 
@@ -70,6 +71,26 @@ class InterFaturaTextoExtratorTest {
     void ignoraSimulacaoParcelamento() {
         assertTrue(InterFaturaTextoExtrator.deveIgnorarDescricao("1 + 5x R$ 71,81"));
         assertTrue(InterFaturaTextoExtrator.deveIgnorarDescricao("Opções de pagamento"));
+        assertTrue(InterFaturaTextoExtrator.pareceLinhaEncargoInter(
+            "Total a pagar em encargos e IOF do rotativo"));
+    }
+
+    @Test
+    void podaEncargosEParcelasFuturasDaIa() {
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        destino.add(item("PARC SALDO TOT", new BigDecimal("261.64"), 4, 6));
+        destino.add(item("APPLE.COM/BILL", new BigDecimal("11.50"), null, null));
+        destino.add(item("APPLE.COM/BILL", new BigDecimal("18.00"), null, null));
+        destino.add(item("Total a pagar em encargos e IOF do rotativo", new BigDecimal("2.97"), null, null));
+        destino.add(item("PARC SALDO TOT", new BigDecimal("261.64"), 5, 6));
+        destino.add(item("Parcelamento 1+5x", new BigDecimal("71.81"), null, null));
+
+        InterFaturaTextoExtrator.podarEspurios(destino, TEXTO);
+        BigDecimal soma = destino.stream()
+            .map(ImportacaoFaturaItemDTO::getValor)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(new BigDecimal("291.14"), soma);
+        assertEquals(3, destino.size());
     }
 
     private static ImportacaoFaturaItemDTO item(

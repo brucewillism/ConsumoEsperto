@@ -1207,7 +1207,9 @@ public class FaturaPdfImportService {
             || n.contains("valor financiado")
             || n.contains("iof do rotativo")
             || n.contains("taxa efetiva mensal")
-            || n.contains("encargos rotativos")) {
+            || n.contains("encargos rotativos")
+            || n.contains("total a pagar em encargos")
+            || n.contains("encargos e iof")) {
             return true;
         }
         // Simulação Mercado Pago / Inter: "1 + [9]x R$ 120,58" ou "Até 1 + 9x"
