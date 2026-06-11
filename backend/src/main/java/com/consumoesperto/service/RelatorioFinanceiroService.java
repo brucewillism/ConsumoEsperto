@@ -91,7 +91,7 @@ public class RelatorioFinanceiroService {
         Map<String, Object> nucleo = transacaoService.resumoFinanceiroMes(usuarioId, yearMonth);
         BigDecimal totalReceitas = BigDecimal.valueOf((Double) nucleo.get("totalReceitas"));
         BigDecimal totalDespesas = BigDecimal.valueOf((Double) nucleo.get("totalDespesas"));
-        BigDecimal saldo = BigDecimal.valueOf((Double) nucleo.get("saldo"));
+        BigDecimal saldo = BigDecimal.valueOf((Double) nucleo.get("fluxoMes"));
 
         // Buscar faturas vencendo no mês especificado
         List<Fatura> faturasVencendo = faturaRepository.findByUsuarioIdAndDataVencimentoBetween(

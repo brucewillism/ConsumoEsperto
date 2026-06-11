@@ -243,7 +243,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   totalSpent = 0;        // Total gasto no mês (confirmado — alinhado ao resumo da API)
   totalIncome = 0;       // Total recebido no mês (confirmado — alinhado ao resumo da API)
   receitasPrevistasMes = 0; // Gap salarial previsto (renda config − já confirmado)
-  balance = 0;           // Saldo atual (receitas - despesas)
+  balance = 0;           // Saldo atual (soma dos saldos nominais das contas ativas)
   creditCardLimit = 0;   // Limite total do cartão de crédito
   creditCardUsed = 0;    // Valor usado do cartão de crédito
   
@@ -735,10 +735,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
       ? despesasConfirmadas
       : this.calcularTotalPorTipo(transacoesMes, 'DESPESA', true);
     this.receitasPrevistasMes = Math.max(0, this.coercerValorMonetario(resumoMes?.receitasPrevistas));
-    // Saldo do mês corrente (alinhado a "Receitas/Gastos do mês"). O endpoint /transacoes/resumo
-    // usa saldo acumulado histórico (todas as confirmações) e distorce o card junto aos totais mensais.
+    // Saldo Atual: soma nominal das contas bancárias ativas (campo saldo do /resumo-mes-atual).
+    const patrimonioLiquido = this.coercerValorMonetario(
+      (resumoMes as { patrimonioLiquido?: number } | undefined)?.patrimonioLiquido
+    );
     if (resumoMes != null && resumoMes.saldo != null && !Number.isNaN(Number(resumoMes.saldo))) {
       this.balance = Number(resumoMes.saldo);
+    } else if (!Number.isNaN(patrimonioLiquido)) {
+      this.balance = patrimonioLiquido;
     } else {
       this.balance = this.totalIncome - this.totalSpent;
     }
@@ -925,7 +929,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         title: 'Saldo Atual',
         value: this.formatCurrency(this.balance),
-        change: 'Receitas do mês − despesas do mês (mesma base dos cards ao lado)',
+        change: 'Soma dos saldos nominais das contas bancárias ativas',
         changeType: this.balance >= 0 ? 'positive' : 'negative',
         icon: 'fas fa-wallet',
         color: '#3699ff'

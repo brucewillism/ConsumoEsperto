@@ -542,6 +542,7 @@ public class TransacaoService {
      * contagem de linhas no período (todas as transações não excluídas, com ou sem categoria/cartão).
      * Usado pelo dashboard, relatório JSON e PDF para manter números alinhados.
      */
+    @Transactional(readOnly = true)
     public Map<String, Object> resumoFinanceiroMes(Long usuarioId, YearMonth yearMonth) {
         return resumoFinanceiroMes(usuarioId, yearMonth, true);
     }
@@ -549,6 +550,7 @@ public class TransacaoService {
     /**
      * @param incluirProjecao quando false, omite {@link SaldoService#calcularProjecaoMes} (resposta rápida para o dashboard).
      */
+    @Transactional(readOnly = true)
     public Map<String, Object> resumoFinanceiroMes(Long usuarioId, YearMonth yearMonth, boolean incluirProjecao) {
         LocalDateTime inicio = yearMonth.atDay(1).atStartOfDay();
         LocalDateTime fim = yearMonth.atEndOfMonth().atTime(23, 59, 59);
@@ -561,14 +563,19 @@ public class TransacaoService {
         totalReceitas = totalReceitas != null ? totalReceitas : BigDecimal.ZERO;
         totalDespesas = totalDespesas != null ? totalDespesas : BigDecimal.ZERO;
         totalInvestimentos = totalInvestimentos != null ? totalInvestimentos : BigDecimal.ZERO;
-        BigDecimal saldo = totalReceitas.subtract(totalDespesas).subtract(totalInvestimentos);
+        BigDecimal fluxoMes = totalReceitas.subtract(totalDespesas).subtract(totalInvestimentos);
+        // Card "Saldo Atual" do dashboard: soma nominal das contas bancárias ativas (não fluxo do mês).
+        BigDecimal saldoAtual = yearMonth.equals(YearMonth.now())
+            ? saldoService.patrimonioLiquido(usuarioId)
+            : fluxoMes;
         long totalLinhas = transacaoRepository.countTransacoesUsuarioNoPeriodo(usuarioId, inicio, fim);
         Map<String, Object> resumo = new HashMap<>();
         resumo.put("totalTransacoes", totalLinhas);
         resumo.put("totalReceitas", totalReceitas.doubleValue());
         resumo.put("totalDespesas", totalDespesas.doubleValue());
         resumo.put("totalInvestimentos", totalInvestimentos.doubleValue());
-        resumo.put("saldo", saldo.doubleValue());
+        resumo.put("fluxoMes", fluxoMes.doubleValue());
+        resumo.put("saldo", saldoAtual.doubleValue());
         if (incluirProjecao && yearMonth.equals(YearMonth.now())) {
             SaldoService.ProjecaoMesCaixa projecao = saldoService.calcularProjecaoMes(usuarioId);
             resumo.put("patrimonioLiquido", projecao.patrimonioLiquido().doubleValue());
