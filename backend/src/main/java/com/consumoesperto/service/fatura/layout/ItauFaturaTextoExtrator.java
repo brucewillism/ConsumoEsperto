@@ -66,6 +66,9 @@ public final class ItauFaturaTextoExtrator {
         "^(?:\\s*)(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s+(\\d{1,2})/(\\d{1,2})\\s*$",
         Pattern.CASE_INSENSITIVE
     );
+    private static final Pattern LINHA_SO_PARCELA = Pattern.compile(
+        "^(\\d{1,2})/(\\d{1,2})\\s*$"
+    );
     private static final Pattern LINHA_SO_VALOR = Pattern.compile(
         "^(?:\\s*)(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$",
         Pattern.CASE_INSENSITIVE
@@ -159,7 +162,8 @@ public final class ItauFaturaTextoExtrator {
         if (destino == null || textoPdf == null || textoPdf.isBlank()) {
             return;
         }
-        List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
+        List<ImportacaoFaturaItemDTO> doTexto = new ArrayList<>(extrairLancamentos(textoPdf, anoReferencia));
+        mesclarItensComParcelas(extrairLancamentosDemonstrativo(textoPdf, anoReferencia), doTexto);
         if (doTexto.isEmpty()) {
             return;
         }
@@ -175,6 +179,7 @@ public final class ItauFaturaTextoExtrator {
         if (destino.isEmpty() || textoMaisCompleto || textoMaisProximoDoTotal) {
             mesclarPreferindoTexto(destino, doTexto);
             reconciliarComTotalFatura(destino, textoPdf, anoReferencia, totalPdf);
+            propagarParcelasTextoParaDestino(destino, doTexto);
             return;
         }
         int inseridos = 0;
@@ -187,7 +192,109 @@ public final class ItauFaturaTextoExtrator {
         if (inseridos > 0) {
             log.info("Itaú texto: {} lançamento(s) complementar(es) injetado(s).", inseridos);
         }
+        propagarParcelasTextoParaDestino(destino, doTexto);
         reconciliarComTotalFatura(destino, textoPdf, anoReferencia, totalPdf);
+    }
+
+    /**
+     * Quando a IA já trouxe todos os lançamentos sem parcelas, copia parcelaAtual/totalParcelas
+     * dos itens extraídos deterministicamente do PDF (mesmo valor + data + descrição similar).
+     */
+    static void propagarParcelasTextoParaDestino(
+        List<ImportacaoFaturaItemDTO> destino,
+        List<ImportacaoFaturaItemDTO> doTexto
+    ) {
+        if (destino == null || doTexto == null || destino.isEmpty() || doTexto.isEmpty()) {
+            return;
+        }
+        int enriquecidos = 0;
+        for (ImportacaoFaturaItemDTO dest : destino) {
+            if (dest.getTotalParcelas() != null && dest.getTotalParcelas() > 1) {
+                continue;
+            }
+            for (ImportacaoFaturaItemDTO txt : doTexto) {
+                if (txt.getTotalParcelas() == null || txt.getTotalParcelas() <= 1) {
+                    continue;
+                }
+                if (!correspondeLancamento(dest, txt)) {
+                    continue;
+                }
+                dest.setParcelaAtual(txt.getParcelaAtual());
+                dest.setTotalParcelas(txt.getTotalParcelas());
+                enriquecidos++;
+                break;
+            }
+        }
+        if (enriquecidos > 0) {
+            log.info("Itaú texto: {} lançamento(s) enriquecido(s) com parcelas do PDF.", enriquecidos);
+        }
+    }
+
+    private static boolean correspondeLancamento(ImportacaoFaturaItemDTO a, ImportacaoFaturaItemDTO b) {
+        if (a.getValor() == null || b.getValor() == null) {
+            return false;
+        }
+        if (a.getValor().subtract(b.getValor()).abs().compareTo(new BigDecimal("0.04")) > 0) {
+            return false;
+        }
+        if (a.getData() != null && b.getData() != null && !a.getData().equals(b.getData())) {
+            return false;
+        }
+        String descA = FaturaPdfLayoutSupport.norm(a.getDescricao());
+        String descB = FaturaPdfLayoutSupport.norm(b.getDescricao());
+        if (descA.isBlank() || descB.isBlank()) {
+            return true;
+        }
+        return descA.equals(descB) || descA.contains(descB) || descB.contains(descA);
+    }
+
+    private static void mesclarItensComParcelas(List<ImportacaoFaturaItemDTO> origem, List<ImportacaoFaturaItemDTO> destino) {
+        if (origem == null || destino == null) {
+            return;
+        }
+        for (ImportacaoFaturaItemDTO item : origem) {
+            if (item.getTotalParcelas() == null || item.getTotalParcelas() <= 1) {
+                continue;
+            }
+            boolean achou = false;
+            for (ImportacaoFaturaItemDTO existente : destino) {
+                if (!correspondeLancamento(existente, item)) {
+                    continue;
+                }
+                if (existente.getTotalParcelas() == null || existente.getTotalParcelas() <= 1) {
+                    existente.setParcelaAtual(item.getParcelaAtual());
+                    existente.setTotalParcelas(item.getTotalParcelas());
+                }
+                achou = true;
+                break;
+            }
+            if (!achou && !jaExiste(destino, item)) {
+                destino.add(item);
+            }
+        }
+    }
+
+    /** Bloco «Demonstrativo de compras parceladas» costuma trazer NN/NN que a IA omite. */
+    private static List<ImportacaoFaturaItemDTO> extrairLancamentosDemonstrativo(String textoPdf, int anoReferencia) {
+        if (textoPdf == null || textoPdf.isBlank()) {
+            return List.of();
+        }
+        String norm = textoPdf.replace('\r', '\n');
+        int inicio = indexOfIgnoreCase(norm, "demonstrativo de compras parceladas");
+        if (inicio < 0) {
+            return List.of();
+        }
+        int fim = norm.length();
+        String restante = norm.substring(inicio);
+        for (String marcador : MARCADORES_INICIO_PROXIMAS) {
+            int idx = indexOfIgnoreCase(restante, marcador);
+            if (idx > 30) {
+                fim = Math.min(fim, inicio + idx);
+            }
+        }
+        List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
+        extrairLinhasComData(norm.substring(inicio, fim), anoReferencia, out);
+        return out;
     }
 
     /**
@@ -554,6 +661,22 @@ public final class ItauFaturaTextoExtrator {
                     out.add(item);
                 }
                 i++;
+                continue;
+            }
+            if (i + 2 < linhas.length) {
+                Matcher soParcela = LINHA_SO_PARCELA.matcher(prox);
+                String terceira = linhas[i + 2].trim();
+                Matcher valorTerceira = LINHA_SO_VALOR.matcher(terceira);
+                if (soParcela.matches() && valorTerceira.matches()) {
+                    ImportacaoFaturaItemDTO item = montarItemMultilinha(
+                        dataDesc.group(1), dataDesc.group(2), dataDesc.group(3),
+                        descricao, valorTerceira.group(1), anoReferencia);
+                    aplicarParcelaNoItem(item, soParcela.group(1), soParcela.group(2));
+                    if (!jaExiste(out, item)) {
+                        out.add(item);
+                    }
+                    i += 2;
+                }
             }
         }
     }

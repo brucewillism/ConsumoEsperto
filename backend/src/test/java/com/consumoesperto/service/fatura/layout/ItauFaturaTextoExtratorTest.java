@@ -192,6 +192,39 @@ class ItauFaturaTextoExtratorTest {
     }
 
     @Test
+    void complementarPropagaParcelasQuandoIaJaTrouxeLancamentos() {
+        String texto = """
+            LANÇAMENTOS: compras e saques
+            05/05 LOJA EXEMPLO 89,90 03/12
+            Total desta fatura R$ 89,90
+            """;
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        ImportacaoFaturaItemDTO ia = new ImportacaoFaturaItemDTO();
+        ia.setDescricao("LOJA EXEMPLO");
+        ia.setValor(new BigDecimal("89.90"));
+        ia.setData(java.time.LocalDate.of(2026, 5, 5));
+        destino.add(ia);
+        ItauFaturaTextoExtrator.complementar(destino, texto, 2026);
+        assertEquals(3, destino.get(0).getParcelaAtual());
+        assertEquals(12, destino.get(0).getTotalParcelas());
+    }
+
+    @Test
+    void extraiLancamentoMultilinhaTresLinhas() {
+        String texto = """
+            LANÇAMENTOS: compras e saques
+            05/05 AMAZON MARKETPLACE
+            03/10
+            89,90
+            Total desta fatura R$ 89,90
+            """;
+        List<ImportacaoFaturaItemDTO> itens = ItauFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(1, itens.size());
+        assertEquals(3, itens.get(0).getParcelaAtual());
+        assertEquals(10, itens.get(0).getTotalParcelas());
+    }
+
+    @Test
     void complementarInjetaEncargosQuandoIaOmitiu() {
         String texto = """
             LANÇAMENTOS: compras e saques

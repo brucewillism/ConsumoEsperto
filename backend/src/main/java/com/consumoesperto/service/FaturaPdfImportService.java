@@ -647,6 +647,7 @@ public class FaturaPdfImportService {
     private int conciliarExistentesComFatura(List<com.consumoesperto.model.Transacao> existentes, Fatura fatura, ImportacaoFaturaItemDTO item) {
         enriquecerParcelasNosItens(List.of(item));
         int count = 0;
+        boolean parcelasAtualizadas = false;
         for (com.consumoesperto.model.Transacao tx : existentes) {
             if (tx.getFatura() == null || tx.getFatura().getId() == null || !tx.getFatura().getId().equals(fatura.getId())) {
                 tx.setFatura(fatura);
@@ -658,12 +659,18 @@ public class FaturaPdfImportService {
                 enriquecerParcelasNosItens(List.of(parcelaRef));
             }
             if (parcelaRef.getParcelaAtual() != null && parcelaRef.getTotalParcelas() != null && parcelaRef.getTotalParcelas() > 1) {
+                boolean mudou = tx.getParcelaAtual() == null || !tx.getParcelaAtual().equals(parcelaRef.getParcelaAtual())
+                    || tx.getTotalParcelas() == null || !tx.getTotalParcelas().equals(parcelaRef.getTotalParcelas())
+                    || tx.getGrupoParcelaId() == null || tx.getGrupoParcelaId().isBlank();
                 tx.setParcelaAtual(parcelaRef.getParcelaAtual());
                 tx.setTotalParcelas(parcelaRef.getTotalParcelas());
                 tx.setGrupoParcelaId(parcelGroupId(fatura, parcelaRef));
+                if (mudou) {
+                    parcelasAtualizadas = true;
+                }
             }
         }
-        if (count > 0) {
+        if (count > 0 || parcelasAtualizadas) {
             transacaoRepository.saveAll(existentes);
         }
         return count;
