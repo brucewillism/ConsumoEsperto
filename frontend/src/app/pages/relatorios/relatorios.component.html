@@ -108,10 +108,11 @@
           <div class="resumo-icon" [class.resumo-icon--positivo]="resumo.saldo >= 0" [class.resumo-icon--negativo]="resumo.saldo < 0">
             {{ resumo.saldo >= 0 ? '💰' : '⚠️' }}
           </div>
-          <span class="label">Saldo</span>
+          <span class="label">Saldo Atual</span>
           <span class="valor" [class.positivo]="resumo.saldo >= 0" [class.negativo]="resumo.saldo < 0">
             R$ {{ resumo.saldo | number:'1.2-2' }}
           </span>
+          <span class="resumo-hint">Soma dos saldos nominais das contas bancárias ativas</span>
         </div>
       </mat-card-content>
     </mat-card>

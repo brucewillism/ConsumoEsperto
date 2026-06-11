@@ -82,6 +82,7 @@ export class RelatoriosComponent implements OnInit {
     totalReceitas: 0,
     totalDespesas: 0,
     saldo: 0,
+    fluxoMes: 0,
     totalTransacoes: 0
   };
 
@@ -192,7 +193,9 @@ export class RelatoriosComponent implements OnInit {
         this.gruposParcelamentoJuros = buildGrupoParcelamentoTemJuros(this.transacoes ?? []);
         this.resumo.totalReceitas = Number(resumoMensal?.totalReceitas || 0);
         this.resumo.totalDespesas = Number(resumoMensal?.totalDespesas || 0);
-        this.resumo.saldo = Number(resumoMensal?.saldo || 0);
+        this.resumo.fluxoMes = Number(resumoMensal?.fluxoMes ?? (this.resumo.totalReceitas - this.resumo.totalDespesas));
+        const patrimonio = Number(resumoMensal?.patrimonioLiquido);
+        this.resumo.saldo = Number(resumoMensal?.saldo ?? (!Number.isNaN(patrimonio) ? patrimonio : this.resumo.fluxoMes));
         this.resumo.totalTransacoes = this.transacoes.length;
         this.carregando = false;
         this.dadosCarregados = true;
