@@ -1,6 +1,7 @@
 package com.consumoesperto.service.fatura.layout;
 
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
+import com.consumoesperto.dto.ProjecaoFaturaMesDTO;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
@@ -8,9 +9,12 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.text.Normalizer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,9 +26,34 @@ import java.util.regex.Pattern;
 public final class ItauFaturaTextoExtrator {
 
     private static final Pattern LINHA_LANCAMENTO = Pattern.compile(
-        "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(.+?)\\s+(?:(\\d{1,2})/(\\d{1,2})\\s+)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
+        "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(.+?)\\s+(?:(\\d{1,2})/(\\d{1,2})\\s+)?(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
         Pattern.CASE_INSENSITIVE
     );
+    private static final Pattern LINHA_PROXIMA_FATURA = Pattern.compile(
+        "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final String[] MARCADORES_INICIO_PROXIMAS = {
+        "compras parceladas - proximas faturas",
+        "compras parceladas - próximas faturas",
+        "compras parceladas proximas faturas",
+        "compras parceladas proximas",
+        "total das proximas faturas",
+        "proximas faturas",
+        "próximas faturas",
+        "proxima fatura",
+        "próxima fatura"
+    };
+    private static final String[] MARCADORES_FIM_PROXIMAS = {
+        "limite de credito",
+        "limite de crédito",
+        "simulacao de parcelamento",
+        "simulação de parcelamento",
+        "pontos itau",
+        "pontos itaú",
+        "opcoes de pagamento",
+        "opções de pagamento"
+    };
     /** Encargos, IOF e anuidade costumam vir sem data no bloco «Encargos financeiros». */
     private static final Pattern LINHA_ENCARGO_SEM_DATA = Pattern.compile(
         "(?i)^\\s*([A-Za-zÀ-ú][A-Za-zÀ-ú0-9\\s./\\-]{2,}?)\\s+(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$"
@@ -109,6 +138,50 @@ public final class ItauFaturaTextoExtrator {
             log.info("Itaú texto: {} lançamento(s) complementar(es) injetado(s).", inseridos);
         }
         reconciliarComTotalFatura(destino, textoPdf, anoReferencia, totalPdf);
+    }
+
+    /**
+     * Secção «Compras parceladas - próximas faturas» do PDF Itaú (totais por vencimento futuro).
+     */
+    public static List<ProjecaoFaturaMesDTO> extrairProximasFaturas(String textoPdf, int anoReferencia) {
+        if (textoPdf == null || textoPdf.isBlank()) {
+            return List.of();
+        }
+        String norm = textoPdf.replace('\r', '\n');
+        int inicio = -1;
+        for (String marcador : MARCADORES_INICIO_PROXIMAS) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx >= 0 && (inicio < 0 || idx < inicio)) {
+                inicio = idx;
+            }
+        }
+        if (inicio < 0) {
+            return List.of();
+        }
+        int fim = norm.length();
+        String restante = norm.substring(inicio);
+        for (String marcador : MARCADORES_FIM_PROXIMAS) {
+            int idx = indexOfIgnoreCase(restante, marcador);
+            if (idx > 20) {
+                fim = Math.min(fim, inicio + idx);
+            }
+        }
+        String trecho = norm.substring(inicio, fim);
+        Map<String, ProjecaoFaturaMesDTO> porMes = new LinkedHashMap<>();
+        Matcher m = LINHA_PROXIMA_FATURA.matcher(trecho);
+        while (m.find()) {
+            LocalDate venc = parseDataItau(m.group(1), m.group(2), m.group(3), anoReferencia);
+            BigDecimal valor = parseMoney(m.group(4));
+            if (valor.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            String chave = venc.toString();
+            porMes.putIfAbsent(chave, new ProjecaoFaturaMesDTO(chave, valor));
+        }
+        if (!porMes.isEmpty()) {
+            log.info("Itaú próximas faturas: {} mês(es) projetado(s).", porMes.size());
+        }
+        return new ArrayList<>(porMes.values());
     }
 
     public static List<ImportacaoFaturaItemDTO> extrairLancamentos(String textoPdf, int anoReferencia) {
@@ -369,7 +442,15 @@ public final class ItauFaturaTextoExtrator {
         if (texto == null || needle == null) {
             return -1;
         }
-        return texto.toLowerCase(Locale.ROOT).indexOf(needle.toLowerCase(Locale.ROOT));
+        return semAcentos(texto).toLowerCase(Locale.ROOT)
+            .indexOf(semAcentos(needle).toLowerCase(Locale.ROOT));
+    }
+
+    private static String semAcentos(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return Normalizer.normalize(raw, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
     }
 
     /** «Parcela 04 de 06» ou último NN/NN válido na descrição (evita confundir data DD/MM com parcela). */

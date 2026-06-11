@@ -3,6 +3,7 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.ConfirmarImportacaoFaturaRequest;
 import com.consumoesperto.dto.ImportacaoFaturaDTO;
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
+import com.consumoesperto.dto.ProjecaoFaturaMesDTO;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.exception.DivergenciaFaturaException;
 import com.consumoesperto.model.CartaoCredito;
@@ -63,6 +64,7 @@ public class FaturaPdfImportService {
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {};
     /** Metadados internos da conciliação; não exibir ao usuário em WhatsApp/bullets. */
     static final String META_ANUIDADE_CKSM_PREFIX = "__ANUIDADE_CKSM__";
+    static final String META_PROJECAO_FATURA_ITAU_PREFIX = "__PROJECAO_FATURA_ITAU__:";
 
     public record ResultadoConfirmacaoFatura(int criadas, int conciliadas, int futuras) {
         public int registrosNaFaturaAtual() {
@@ -87,11 +89,13 @@ public class FaturaPdfImportService {
     private final GenericoFaturaPdfLayoutStrategy genericoFaturaPdfLayoutStrategy;
     private final ItauFaturaPdfLayoutStrategy itauFaturaPdfLayoutStrategy;
     private final PdfTextExtractionService pdfTextExtractionService;
+    private final CartaoCreditoService cartaoCreditoService;
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
     public static boolean isBulletVisivelAoUsuario(String linhaAuditoria) {
         return linhaAuditoria != null
             && !linhaAuditoria.startsWith(META_ANUIDADE_CKSM_PREFIX)
+            && !linhaAuditoria.startsWith(META_PROJECAO_FATURA_ITAU_PREFIX)
             && !linhaAuditoria.startsWith(SaldoAnteriorFaturaBbSupport.META_SALDO_ANTERIOR_BB_PREFIX);
     }
 
@@ -212,6 +216,9 @@ public class FaturaPdfImportService {
         BigDecimal somaItens = somaValoresItens(itens);
         SaldoAnteriorFaturaBbSupport.detectar(extracted, banco, valorTotal, somaItens, itens, ultimaFatura)
             .ifPresent(p -> SaldoAnteriorFaturaBbSupport.registrarPendenciaNasAuditorias(auditorias, p));
+        if (BancoBrasilCatalog.bancosCorrespondem(banco, "itau") && textoPdf != null && !textoPdf.isBlank()) {
+            registrarProjecoesItauNasAuditorias(auditorias, textoPdf, anoReferencia);
+        }
         imp.setAuditoriaJson(writeJson(auditorias));
         imp.setNovosDetectados((int) itens.stream().filter(ImportacaoFaturaItemDTO::isNovo).count());
         ImportacaoFaturaCartao salvo = importacaoRepository.save(imp);
@@ -332,6 +339,13 @@ public class FaturaPdfImportService {
                 + " Você pode confirmar mesmo assim e completar os lançamentos faltantes depois, ou reimportar o PDF.");
         }
         Fatura fatura = resolverFatura(imp);
+        if (imp.getCartaoCredito() != null) {
+            try {
+                cartaoCreditoService.vincularFaturasDeCartoesInativosCorrespondentes(imp.getCartaoCredito());
+            } catch (Exception e) {
+                log.warn("Falha ao vincular faturas inativas na confirmação importacaoId={}: {}", importacaoId, e.getMessage());
+            }
+        }
         Set<Long> faturasParaSincronizar = new HashSet<>();
         faturasParaSincronizar.add(fatura.getId());
         int criadas = 0;
@@ -364,6 +378,22 @@ public class FaturaPdfImportService {
             transacaoService.criarTransacao(dto, usuarioId, false, false);
             futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item, faturasParaSincronizar);
             criadas++;
+        }
+        for (ImportacaoFaturaItemDTO item : itens) {
+            if (item.getTotalParcelas() != null && item.getTotalParcelas() > 1) {
+                futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item, faturasParaSincronizar);
+            }
+        }
+        futuras += criarFaturasPrevistasProjetadasItau(usuarioId, imp, fatura, faturasParaSincronizar);
+        if (futuras == 0 && BancoBrasilCatalog.bancosCorrespondem(imp.getBancoCartao(), "itau")) {
+            long itensParcelados = itens.stream()
+                .filter(i -> i.getTotalParcelas() != null && i.getTotalParcelas() > 1)
+                .count();
+            List<ProjecaoFaturaMesDTO> proj = lerProjecoesItauDaAuditoria(imp.getAuditoriaJson());
+            if (itensParcelados == 0 && proj.isEmpty()) {
+                log.warn("[FaturaPDF] Itaú confirmado sem faturas futuras: PDF sem secção «próximas faturas» "
+                    + "e sem itens parcelados detectados (importacaoId={}).", importacaoId);
+            }
         }
         imp.setFatura(fatura);
         imp.setStatus(ImportacaoFaturaCartao.Status.CONFIRMADA);
@@ -666,6 +696,92 @@ public class FaturaPdfImportService {
             transacaoService.criarTransacao(dto, usuarioId, false, false);
             faturasParaSincronizar.add(faturaFutura.getId());
             criadas++;
+        }
+        return criadas;
+    }
+
+    private void registrarProjecoesItauNasAuditorias(List<String> auditorias, String textoPdf, int anoReferencia) {
+        List<ProjecaoFaturaMesDTO> projecoes = ItauFaturaTextoExtrator.extrairProximasFaturas(textoPdf, anoReferencia);
+        if (projecoes.isEmpty()) {
+            return;
+        }
+        try {
+            auditorias.add(META_PROJECAO_FATURA_ITAU_PREFIX + objectMapper.writeValueAsString(projecoes));
+        } catch (Exception e) {
+            log.warn("Falha ao serializar projeções Itaú: {}", e.getMessage());
+        }
+    }
+
+    private List<ProjecaoFaturaMesDTO> lerProjecoesItauDaAuditoria(String auditoriaJson) {
+        for (String linha : readAuditorias(auditoriaJson)) {
+            if (linha == null || !linha.startsWith(META_PROJECAO_FATURA_ITAU_PREFIX)) {
+                continue;
+            }
+            String json = linha.substring(META_PROJECAO_FATURA_ITAU_PREFIX.length());
+            try {
+                return objectMapper.readValue(json, new TypeReference<List<ProjecaoFaturaMesDTO>>() {});
+            } catch (Exception e) {
+                log.warn("Falha ao ler projeções Itaú da auditoria: {}", e.getMessage());
+            }
+        }
+        return List.of();
+    }
+
+    /**
+     * Cria faturas PREVISTA a partir da secção «próximas faturas» do PDF Itaú.
+     */
+    private int criarFaturasPrevistasProjetadasItau(
+        Long usuarioId,
+        ImportacaoFaturaCartao imp,
+        Fatura faturaAtual,
+        Set<Long> faturasParaSincronizar
+    ) {
+        if (imp.getCartaoCredito() == null || faturaAtual == null || faturaAtual.getDataVencimento() == null) {
+            return 0;
+        }
+        if (!BancoBrasilCatalog.bancosCorrespondem(imp.getBancoCartao(), "itau")) {
+            return 0;
+        }
+        List<ProjecaoFaturaMesDTO> projecoes = lerProjecoesItauDaAuditoria(imp.getAuditoriaJson());
+        if (projecoes.isEmpty()) {
+            return 0;
+        }
+        YearMonth mesAtual = YearMonth.from(faturaAtual.getDataVencimento());
+        int criadas = 0;
+        for (ProjecaoFaturaMesDTO proj : projecoes) {
+            if (proj.getVencimento() == null || proj.getValor() == null
+                || proj.getValor().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            LocalDate venc;
+            try {
+                venc = LocalDate.parse(proj.getVencimento());
+            } catch (Exception e) {
+                continue;
+            }
+            if (!YearMonth.from(venc).isAfter(mesAtual)) {
+                continue;
+            }
+            Fatura prevista = faturaService.obterOuCriarFaturaParaVencimentoAlvo(usuarioId, imp.getCartaoCredito(), venc);
+            if (prevista.getId() == null) {
+                continue;
+            }
+            boolean jaTemLancamento = !transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(prevista.getId()).isEmpty();
+            if (!jaTemLancamento) {
+                TransacaoDTO dto = new TransacaoDTO();
+                dto.setDescricao("Projeção Itaú — compras parceladas (" + YearMonth.from(venc) + ")");
+                dto.setValor(proj.getValor());
+                dto.setTipoTransacao(TransacaoDTO.TipoTransacao.DESPESA);
+                dto.setDataTransacao(venc.atStartOfDay());
+                dto.setFaturaId(prevista.getId());
+                dto.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
+                transacaoService.criarTransacao(dto, usuarioId, false, false);
+                criadas++;
+            }
+            faturasParaSincronizar.add(prevista.getId());
+        }
+        if (criadas > 0) {
+            log.info("[FaturaPDF] Itaú: {} fatura(s) PREVISTA(s) gerada(s) a partir de próximas faturas.", criadas);
         }
         return criadas;
     }

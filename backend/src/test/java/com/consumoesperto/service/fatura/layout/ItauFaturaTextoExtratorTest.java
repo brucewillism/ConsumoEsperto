@@ -80,6 +80,36 @@ class ItauFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiProximasFaturasSemAcentoNoPdf() {
+        String texto = """
+            Total desta fatura R$ 45,90
+            COMPRAS PARCELADAS - PROXIMAS FATURAS
+            02/07/2026 320,50
+            Limite de credito
+            """;
+        var proj = ItauFaturaTextoExtrator.extrairProximasFaturas(texto, 2026);
+        assertEquals(1, proj.size());
+        assertEquals("2026-07-02", proj.get(0).getVencimento());
+    }
+
+    @Test
+    void extraiProximasFaturas() {
+        String texto = """
+            LANÇAMENTOS: compras e saques
+            05/05 MERCADO CENTRAL 45,90
+            Total desta fatura R$ 45,90
+            Compras parceladas - próximas faturas
+            02/07/2026 320,50
+            02/08/2026 180,00
+            Limite de crédito
+            """;
+        var proj = ItauFaturaTextoExtrator.extrairProximasFaturas(texto, 2026);
+        assertEquals(2, proj.size());
+        assertEquals(new BigDecimal("320.50"), proj.get(0).getValor());
+        assertEquals("2026-07-02", proj.get(0).getVencimento());
+    }
+
+    @Test
     void complementarInjetaEncargosQuandoIaOmitiu() {
         String texto = """
             LANÇAMENTOS: compras e saques
