@@ -259,6 +259,25 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         + "ORDER BY t.dataTransacao ASC, t.id ASC")
     List<Transacao> findByFaturaIdWithContaOrderByDataTransacaoAscIdAsc(@Param("faturaId") Long faturaId);
 
+    @Query("SELECT t FROM Transacao t JOIN FETCH t.contaBancaria "
+        + "WHERE t.fatura.id = :faturaId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.PAGAMENTO_FATURA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "ORDER BY t.dataTransacao ASC, t.id ASC")
+    List<Transacao> findPagamentosFaturaConfirmadosComContaPorFaturaId(@Param("faturaId") Long faturaId);
+
+    @Query(
+        value = "SELECT t.conta_bancaria_id, t.valor FROM transacoes t "
+            + "WHERE t.fatura_id = :faturaId "
+            + "AND t.tipo_transacao = 'PAGAMENTO_FATURA' "
+            + "AND t.status_conferencia = 'CONFIRMADA' "
+            + "AND t.conta_bancaria_id IS NOT NULL "
+            + "AND t.excluido = false "
+            + "ORDER BY t.data_transacao ASC, t.id ASC",
+        nativeQuery = true
+    )
+    List<Object[]> findPagamentosNativosEstornoPorFaturaId(@Param("faturaId") Long faturaId);
+
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "

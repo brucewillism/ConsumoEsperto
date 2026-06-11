@@ -151,15 +151,18 @@ export class CartoesComponent implements OnInit {
     return Math.min(100, Math.max(0, pct));
   }
 
-  corBarraUtilizacao(cartao: CartaoCredito): 'primary' | 'accent' | 'warn' {
-    const pct = this.getPercentualUso(cartao);
+  classeBarraUtilizacao(cartao: CartaoCredito): string {
     if (!cartao.ativo) {
-      return 'warn';
+      return 'barra-inativa';
     }
-    if (pct >= 80) {
-      return 'accent';
+    const pct = this.getPercentualUso(cartao);
+    if (pct <= 50) {
+      return 'barra-verde';
     }
-    return 'primary';
+    if (pct <= 80) {
+      return 'barra-amarela';
+    }
+    return 'barra-vermelha';
   }
 
   abrirEdicaoCartao(cartao: CartaoCredito): void {

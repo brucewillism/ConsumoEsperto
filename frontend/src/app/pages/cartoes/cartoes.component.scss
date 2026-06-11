@@ -523,6 +523,26 @@
           .progresso-mat {
             height: 8px;
             border-radius: 4px;
+
+            &.barra-verde {
+              --mdc-linear-progress-active-indicator-color: #22c55e;
+              --mdc-linear-progress-track-color: rgba(34, 197, 94, 0.22);
+            }
+
+            &.barra-amarela {
+              --mdc-linear-progress-active-indicator-color: #eab308;
+              --mdc-linear-progress-track-color: rgba(234, 179, 8, 0.22);
+            }
+
+            &.barra-vermelha {
+              --mdc-linear-progress-active-indicator-color: #ef4444;
+              --mdc-linear-progress-track-color: rgba(239, 68, 68, 0.22);
+            }
+
+            &.barra-inativa {
+              --mdc-linear-progress-active-indicator-color: #94a3b8;
+              --mdc-linear-progress-track-color: rgba(148, 163, 184, 0.22);
+            }
           }
 
           .progresso-dica {

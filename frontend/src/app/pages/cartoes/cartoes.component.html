@@ -150,9 +150,9 @@
               </div>
               <mat-progress-bar
                 class="progresso-mat"
+                [ngClass]="classeBarraUtilizacao(cartao)"
                 mode="determinate"
                 [value]="getPercentualUso(cartao)"
-                [color]="corBarraUtilizacao(cartao)"
               ></mat-progress-bar>
               <p class="progresso-dica" *ngIf="getPercentualUso(cartao) <= 0">
                 Nenhuma fatura pendente vinculada. Importe o PDF da fatura deste cartão para atualizar o uso.

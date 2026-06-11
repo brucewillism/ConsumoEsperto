@@ -78,6 +78,15 @@ public class SaldoMovimentacaoService {
         aplicarDelta(transacao.getContaBancaria().getId(), impacto.negate());
     }
 
+    /** Crédito direto na conta (ex.: estorno de pagamento de fatura quando o JOIN JPA não carrega a carteira). */
+    @Transactional
+    public void creditarConta(Long contaBancariaId, BigDecimal valor) {
+        if (contaBancariaId == null || valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        aplicarDelta(contaBancariaId, scale(valor));
+    }
+
     /**
      * Transferência interna TED/PIX — patrimônio total inalterado.
      */

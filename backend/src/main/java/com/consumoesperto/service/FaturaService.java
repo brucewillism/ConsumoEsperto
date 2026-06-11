@@ -309,9 +309,10 @@ public class FaturaService {
         if (faturaId == null) {
             return 0;
         }
+        boolean estornouPagamentoNaConta = estornarPagamentosDaFaturaNaConta(faturaId);
         List<Transacao> txs = transacaoRepository.findByFaturaIdWithContaOrderByDataTransacaoAscIdAsc(faturaId);
         if (txs.isEmpty()) {
-            if (statusExigeEstornoDePagamento(statusFatura)) {
+            if (statusExigeEstornoDePagamento(statusFatura) && !estornouPagamentoNaConta) {
                 log.warn(
                     "Fatura id={} com status {} não possui transações vinculadas. Exclusão sem estorno de saldo.",
                     faturaId, statusFatura
@@ -319,10 +320,9 @@ public class FaturaService {
             }
             return 0;
         }
-        boolean estornouPagamentoNaConta = false;
         for (Transacao tx : txs) {
-            if (saldoMovimentacaoService.impactoConfirmado(tx).compareTo(BigDecimal.ZERO) != 0) {
-                estornouPagamentoNaConta = true;
+            if (tx.getTipoTransacao() == Transacao.TipoTransacao.PAGAMENTO_FATURA) {
+                continue;
             }
             saldoMovimentacaoService.aplicarExclusao(tx);
         }
@@ -339,6 +339,56 @@ public class FaturaService {
         }
         log.info("Fatura id={}: {} transação(ões) removida(s) com estorno de saldo quando aplicável.", faturaId, txs.size());
         return txs.size();
+    }
+
+    /**
+     * Estorna pagamentos da fatura na conta bancária antes de remover os lançamentos.
+     * Usa consulta dedicada + fallback nativo (conta_bancaria_id no banco) para não perder o crédito.
+     */
+    private boolean estornarPagamentosDaFaturaNaConta(Long faturaId) {
+        boolean estornou = false;
+        List<Transacao> pagamentos = transacaoRepository.findPagamentosFaturaConfirmadosComContaPorFaturaId(faturaId);
+        for (Transacao pagamento : pagamentos) {
+            BigDecimal impacto = saldoMovimentacaoService.impactoConfirmado(pagamento);
+            if (impacto.compareTo(BigDecimal.ZERO) == 0) {
+                continue;
+            }
+            saldoMovimentacaoService.aplicarExclusao(pagamento);
+            estornou = true;
+            log.info(
+                "Fatura id={}: estorno de pagamento R$ {} na conta id={}.",
+                faturaId,
+                pagamento.getValor(),
+                pagamento.getContaBancaria().getId()
+            );
+        }
+        if (!estornou) {
+            estornou = estornarPagamentosNativoFallback(faturaId);
+        }
+        return estornou;
+    }
+
+    private boolean estornarPagamentosNativoFallback(Long faturaId) {
+        boolean estornou = false;
+        for (Object[] row : transacaoRepository.findPagamentosNativosEstornoPorFaturaId(faturaId)) {
+            if (row == null || row.length < 2 || row[0] == null || row[1] == null) {
+                continue;
+            }
+            Long contaId = row[0] instanceof Number n ? n.longValue() : null;
+            BigDecimal valor = row[1] instanceof BigDecimal bd
+                ? bd
+                : new BigDecimal(row[1].toString());
+            if (contaId == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            saldoMovimentacaoService.creditarConta(contaId, valor);
+            estornou = true;
+            log.info(
+                "Fatura id={}: estorno nativo de pagamento R$ {} na conta id={}.",
+                faturaId, valor, contaId
+            );
+        }
+        return estornou;
     }
 
     private static boolean statusExigeEstornoDePagamento(Fatura.StatusFatura status) {
