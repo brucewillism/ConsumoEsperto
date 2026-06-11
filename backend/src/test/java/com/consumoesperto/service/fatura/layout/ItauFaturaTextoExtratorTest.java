@@ -107,6 +107,34 @@ class ItauFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiLancamentoMultilinhaComParcela() {
+        String texto = """
+            LANÇAMENTOS: compras e saques
+            05/05 AMAZON MARKETPLACE SAO PAULO
+            03/10 89,90
+            Total desta fatura R$ 89,90
+            """;
+        List<ImportacaoFaturaItemDTO> itens = ItauFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(1, itens.size());
+        assertEquals(3, itens.get(0).getParcelaAtual());
+        assertEquals(10, itens.get(0).getTotalParcelas());
+    }
+
+    @Test
+    void extraiProximasFaturasMultilinha() {
+        String texto = """
+            Compras parceladas - proximas faturas
+            05/07/2026
+            1.234,56
+            Limite de credito
+            """;
+        var proj = ItauFaturaTextoExtrator.extrairProximasFaturas(texto, 2026);
+        assertEquals(1, proj.size());
+        assertEquals(new BigDecimal("1234.56"), proj.get(0).getValor());
+        assertEquals("2026-07-05", proj.get(0).getVencimento());
+    }
+
+    @Test
     void extraiProximasFaturas() {
         String texto = """
             LANÇAMENTOS: compras e saques

@@ -65,6 +65,7 @@ public class FaturaPdfImportService {
     /** Metadados internos da conciliação; não exibir ao usuário em WhatsApp/bullets. */
     static final String META_ANUIDADE_CKSM_PREFIX = "__ANUIDADE_CKSM__";
     static final String META_PROJECAO_FATURA_ITAU_PREFIX = "__PROJECAO_FATURA_ITAU__:";
+    static final String META_TRECHO_PROXIMAS_ITAU_PREFIX = "__TRECHO_PROXIMAS_ITAU__:";
 
     public record ResultadoConfirmacaoFatura(int criadas, int conciliadas, int futuras) {
         public int registrosNaFaturaAtual() {
@@ -96,6 +97,7 @@ public class FaturaPdfImportService {
         return linhaAuditoria != null
             && !linhaAuditoria.startsWith(META_ANUIDADE_CKSM_PREFIX)
             && !linhaAuditoria.startsWith(META_PROJECAO_FATURA_ITAU_PREFIX)
+            && !linhaAuditoria.startsWith(META_TRECHO_PROXIMAS_ITAU_PREFIX)
             && !linhaAuditoria.startsWith(SaldoAnteriorFaturaBbSupport.META_SALDO_ANTERIOR_BB_PREFIX);
     }
 
@@ -348,6 +350,8 @@ public class FaturaPdfImportService {
         }
         Set<Long> faturasParaSincronizar = new HashSet<>();
         faturasParaSincronizar.add(fatura.getId());
+        enriquecerParcelasNosItens(itens);
+        propagarParcelasItensParaTransacoesNaFatura(usuarioId, imp, fatura, itens);
         int criadas = 0;
         int conciliadas = 0;
         int futuras = 0;
@@ -390,7 +394,8 @@ public class FaturaPdfImportService {
             long itensParcelados = itens.stream()
                 .filter(i -> i.getTotalParcelas() != null && i.getTotalParcelas() > 1)
                 .count();
-            List<ProjecaoFaturaMesDTO> proj = lerProjecoesItauDaAuditoria(imp.getAuditoriaJson());
+            int anoRef = fatura.getDataVencimento() != null ? fatura.getDataVencimento().getYear() : YearMonth.now().getYear();
+            List<ProjecaoFaturaMesDTO> proj = lerProjecoesItauDaAuditoria(imp.getAuditoriaJson(), anoRef);
             if (itensParcelados == 0 && proj.isEmpty()) {
                 log.warn("[FaturaPDF] Itaú confirmado sem faturas futuras: PDF sem secção «próximas faturas» "
                     + "e sem itens parcelados detectados (importacaoId={}).", importacaoId);
@@ -758,9 +763,13 @@ public class FaturaPdfImportService {
     }
 
     private void registrarProjecoesItauNasAuditorias(List<String> auditorias, String textoPdf, int anoReferencia) {
+        String trecho = ItauFaturaTextoExtrator.recortarTrechoProximasFaturas(textoPdf);
+        if (!trecho.isBlank()) {
+            auditorias.add(META_TRECHO_PROXIMAS_ITAU_PREFIX + trecho);
+        }
         List<ProjecaoFaturaMesDTO> projecoes = ItauFaturaTextoExtrator.extrairProximasFaturas(textoPdf, anoReferencia);
         if (projecoes.isEmpty()) {
-            if (ItauFaturaTextoExtrator.possuiSecaoProximasFaturas(textoPdf)) {
+            if (!trecho.isBlank()) {
                 log.warn("[FaturaPDF] Itaú: secção «próximas faturas» encontrada no PDF, mas nenhum valor foi extraído.");
             }
             return;
@@ -772,19 +781,101 @@ public class FaturaPdfImportService {
         }
     }
 
-    private List<ProjecaoFaturaMesDTO> lerProjecoesItauDaAuditoria(String auditoriaJson) {
-        for (String linha : readAuditorias(auditoriaJson)) {
+    private List<ProjecaoFaturaMesDTO> lerProjecoesItauDaAuditoria(String auditoriaJson, int anoReferencia) {
+        List<String> auditorias = readAuditorias(auditoriaJson);
+        for (String linha : auditorias) {
             if (linha == null || !linha.startsWith(META_PROJECAO_FATURA_ITAU_PREFIX)) {
                 continue;
             }
             String json = linha.substring(META_PROJECAO_FATURA_ITAU_PREFIX.length());
             try {
-                return objectMapper.readValue(json, new TypeReference<List<ProjecaoFaturaMesDTO>>() {});
+                List<ProjecaoFaturaMesDTO> proj = objectMapper.readValue(json, new TypeReference<List<ProjecaoFaturaMesDTO>>() {});
+                if (!proj.isEmpty()) {
+                    return proj;
+                }
             } catch (Exception e) {
                 log.warn("Falha ao ler projeções Itaú da auditoria: {}", e.getMessage());
             }
         }
+        for (String linha : auditorias) {
+            if (linha == null || !linha.startsWith(META_TRECHO_PROXIMAS_ITAU_PREFIX)) {
+                continue;
+            }
+            String trecho = linha.substring(META_TRECHO_PROXIMAS_ITAU_PREFIX.length());
+            List<ProjecaoFaturaMesDTO> proj = ItauFaturaTextoExtrator.extrairProjecoesDoTrecho(trecho, anoReferencia);
+            if (!proj.isEmpty()) {
+                log.info("[FaturaPDF] Itaú: {} projeção(ões) relida(s) do trecho «próximas faturas» na confirmação.", proj.size());
+                return proj;
+            }
+        }
         return List.of();
+    }
+
+    private void propagarParcelasItensParaTransacoesNaFatura(
+        Long usuarioId,
+        ImportacaoFaturaCartao imp,
+        Fatura fatura,
+        List<ImportacaoFaturaItemDTO> itens
+    ) {
+        if (fatura.getId() == null || itens == null || itens.isEmpty()) {
+            return;
+        }
+        List<com.consumoesperto.model.Transacao> txs =
+            transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(fatura.getId());
+        if (txs.isEmpty()) {
+            return;
+        }
+        int atualizadas = 0;
+        for (ImportacaoFaturaItemDTO item : itens) {
+            if (item.getParcelaAtual() == null || item.getTotalParcelas() == null || item.getTotalParcelas() <= 1) {
+                continue;
+            }
+            for (com.consumoesperto.model.Transacao tx : txs) {
+                if (!correspondeItemTransacao(item, tx)) {
+                    continue;
+                }
+                boolean mudou = false;
+                if (tx.getParcelaAtual() == null || !tx.getParcelaAtual().equals(item.getParcelaAtual())) {
+                    tx.setParcelaAtual(item.getParcelaAtual());
+                    mudou = true;
+                }
+                if (tx.getTotalParcelas() == null || !tx.getTotalParcelas().equals(item.getTotalParcelas())) {
+                    tx.setTotalParcelas(item.getTotalParcelas());
+                    mudou = true;
+                }
+                if (tx.getGrupoParcelaId() == null || tx.getGrupoParcelaId().isBlank()) {
+                    tx.setGrupoParcelaId(parcelGroupId(imp, item));
+                    mudou = true;
+                }
+                if (mudou) {
+                    atualizadas++;
+                }
+            }
+        }
+        if (atualizadas > 0) {
+            transacaoRepository.saveAll(txs);
+            log.info("[FaturaPDF] {} transação(ões) da fatura id={} atualizada(s) com parcelas do PDF.",
+                atualizadas, fatura.getId());
+        }
+    }
+
+    private static boolean correspondeItemTransacao(ImportacaoFaturaItemDTO item, com.consumoesperto.model.Transacao tx) {
+        if (item.getValor() == null || tx.getValor() == null) {
+            return false;
+        }
+        if (item.getValor().subtract(tx.getValor()).abs().compareTo(new BigDecimal("0.04")) > 0) {
+            return false;
+        }
+        if (item.getData() != null && tx.getDataTransacao() != null
+            && !item.getData().equals(tx.getDataTransacao().toLocalDate())) {
+            return false;
+        }
+        String descItem = norm(item.getDescricao());
+        String descTx = norm(tx.getDescricao());
+        if (descItem.isBlank() || descTx.isBlank()) {
+            return true;
+        }
+        return descItem.equals(descTx) || descItem.contains(descTx) || descTx.contains(descItem);
     }
 
     /**
@@ -802,7 +893,10 @@ public class FaturaPdfImportService {
         if (!BancoBrasilCatalog.bancosCorrespondem(imp.getBancoCartao(), "itau")) {
             return 0;
         }
-        List<ProjecaoFaturaMesDTO> projecoes = lerProjecoesItauDaAuditoria(imp.getAuditoriaJson());
+        int anoReferencia = faturaAtual.getDataVencimento() != null
+            ? faturaAtual.getDataVencimento().getYear()
+            : YearMonth.now().getYear();
+        List<ProjecaoFaturaMesDTO> projecoes = lerProjecoesItauDaAuditoria(imp.getAuditoriaJson(), anoReferencia);
         if (projecoes.isEmpty()) {
             return 0;
         }
