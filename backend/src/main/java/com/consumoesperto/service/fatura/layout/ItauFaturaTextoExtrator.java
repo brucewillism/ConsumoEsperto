@@ -33,12 +33,18 @@ public final class ItauFaturaTextoExtrator {
         "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
         Pattern.CASE_INSENSITIVE
     );
+    private static final Pattern LINHA_PROXIMA_FATURA_VALOR_ANTES = Pattern.compile(
+        "(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s+(?:em\\s+)?(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?",
+        Pattern.CASE_INSENSITIVE
+    );
+    /** Ordem: marcadores mais específicos primeiro (não usar o índice mais cedo no PDF). */
     private static final String[] MARCADORES_INICIO_PROXIMAS = {
         "compras parceladas - proximas faturas",
         "compras parceladas - próximas faturas",
         "compras parceladas proximas faturas",
         "compras parceladas proximas",
         "total das proximas faturas",
+        "valores projetados para as proximas faturas",
         "proximas faturas",
         "próximas faturas",
         "proxima fatura",
@@ -143,18 +149,16 @@ public final class ItauFaturaTextoExtrator {
     /**
      * Secção «Compras parceladas - próximas faturas» do PDF Itaú (totais por vencimento futuro).
      */
+    public static boolean possuiSecaoProximasFaturas(String textoPdf) {
+        return localizarInicioProximasFaturas(textoPdf) >= 0;
+    }
+
     public static List<ProjecaoFaturaMesDTO> extrairProximasFaturas(String textoPdf, int anoReferencia) {
         if (textoPdf == null || textoPdf.isBlank()) {
             return List.of();
         }
         String norm = textoPdf.replace('\r', '\n');
-        int inicio = -1;
-        for (String marcador : MARCADORES_INICIO_PROXIMAS) {
-            int idx = indexOfIgnoreCase(norm, marcador);
-            if (idx >= 0 && (inicio < 0 || idx < inicio)) {
-                inicio = idx;
-            }
-        }
+        int inicio = localizarInicioProximasFaturas(norm);
         if (inicio < 0) {
             return List.of();
         }
@@ -170,18 +174,43 @@ public final class ItauFaturaTextoExtrator {
         Map<String, ProjecaoFaturaMesDTO> porMes = new LinkedHashMap<>();
         Matcher m = LINHA_PROXIMA_FATURA.matcher(trecho);
         while (m.find()) {
-            LocalDate venc = parseDataItau(m.group(1), m.group(2), m.group(3), anoReferencia);
-            BigDecimal valor = parseMoney(m.group(4));
-            if (valor.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
-            String chave = venc.toString();
-            porMes.putIfAbsent(chave, new ProjecaoFaturaMesDTO(chave, valor));
+            registrarProjecao(porMes, m.group(1), m.group(2), m.group(3), m.group(4), anoReferencia);
+        }
+        Matcher mInv = LINHA_PROXIMA_FATURA_VALOR_ANTES.matcher(trecho);
+        while (mInv.find()) {
+            registrarProjecao(porMes, mInv.group(2), mInv.group(3), mInv.group(4), mInv.group(1), anoReferencia);
         }
         if (!porMes.isEmpty()) {
             log.info("Itaú próximas faturas: {} mês(es) projetado(s).", porMes.size());
         }
         return new ArrayList<>(porMes.values());
+    }
+
+    private static int localizarInicioProximasFaturas(String norm) {
+        for (String marcador : MARCADORES_INICIO_PROXIMAS) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx >= 0) {
+                return idx;
+            }
+        }
+        return -1;
+    }
+
+    private static void registrarProjecao(
+        Map<String, ProjecaoFaturaMesDTO> porMes,
+        String dia,
+        String mes,
+        String anoRaw,
+        String valorRaw,
+        int anoReferencia
+    ) {
+        LocalDate venc = parseDataItau(dia, mes, anoRaw, anoReferencia);
+        BigDecimal valor = parseMoney(valorRaw);
+        if (valor.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        String chave = venc.toString();
+        porMes.putIfAbsent(chave, new ProjecaoFaturaMesDTO(chave, valor));
     }
 
     public static List<ImportacaoFaturaItemDTO> extrairLancamentos(String textoPdf, int anoReferencia) {

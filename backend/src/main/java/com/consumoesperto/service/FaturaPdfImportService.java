@@ -384,6 +384,7 @@ public class FaturaPdfImportService {
                 futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item, faturasParaSincronizar);
             }
         }
+        futuras += criarParcelasFuturasDasTransacoesNaFatura(usuarioId, imp, fatura, faturasParaSincronizar);
         futuras += criarFaturasPrevistasProjetadasItau(usuarioId, imp, fatura, faturasParaSincronizar);
         if (futuras == 0 && BancoBrasilCatalog.bancosCorrespondem(imp.getBancoCartao(), "itau")) {
             long itensParcelados = itens.stream()
@@ -639,16 +640,22 @@ public class FaturaPdfImportService {
     }
 
     private int conciliarExistentesComFatura(List<com.consumoesperto.model.Transacao> existentes, Fatura fatura, ImportacaoFaturaItemDTO item) {
+        enriquecerParcelasNosItens(List.of(item));
         int count = 0;
         for (com.consumoesperto.model.Transacao tx : existentes) {
             if (tx.getFatura() == null || tx.getFatura().getId() == null || !tx.getFatura().getId().equals(fatura.getId())) {
                 tx.setFatura(fatura);
                 count++;
             }
-            if (item.getParcelaAtual() != null && item.getTotalParcelas() != null && item.getTotalParcelas() > 1) {
-                tx.setParcelaAtual(item.getParcelaAtual());
-                tx.setTotalParcelas(item.getTotalParcelas());
-                tx.setGrupoParcelaId(parcelGroupId(fatura, item));
+            ImportacaoFaturaItemDTO parcelaRef = item;
+            if (item.getParcelaAtual() == null || item.getTotalParcelas() == null || item.getTotalParcelas() <= 1) {
+                parcelaRef = itemDeTransacaoParaParcelamento(tx);
+                enriquecerParcelasNosItens(List.of(parcelaRef));
+            }
+            if (parcelaRef.getParcelaAtual() != null && parcelaRef.getTotalParcelas() != null && parcelaRef.getTotalParcelas() > 1) {
+                tx.setParcelaAtual(parcelaRef.getParcelaAtual());
+                tx.setTotalParcelas(parcelaRef.getTotalParcelas());
+                tx.setGrupoParcelaId(parcelGroupId(fatura, parcelaRef));
             }
         }
         if (count > 0) {
@@ -700,9 +707,62 @@ public class FaturaPdfImportService {
         return criadas;
     }
 
+    private int criarParcelasFuturasDasTransacoesNaFatura(
+        Long usuarioId,
+        ImportacaoFaturaCartao imp,
+        Fatura fatura,
+        Set<Long> faturasParaSincronizar
+    ) {
+        if (fatura.getId() == null) {
+            return 0;
+        }
+        List<com.consumoesperto.model.Transacao> txs =
+            transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(fatura.getId());
+        int criadas = 0;
+        for (com.consumoesperto.model.Transacao tx : txs) {
+            ImportacaoFaturaItemDTO ref = itemDeTransacaoParaParcelamento(tx);
+            enriquecerParcelasNosItens(List.of(ref));
+            if (ref.getParcelaAtual() == null || ref.getTotalParcelas() == null || ref.getTotalParcelas() <= 1) {
+                continue;
+            }
+            boolean txAtualizada = false;
+            if (tx.getParcelaAtual() == null || tx.getTotalParcelas() == null) {
+                tx.setParcelaAtual(ref.getParcelaAtual());
+                tx.setTotalParcelas(ref.getTotalParcelas());
+                txAtualizada = true;
+            }
+            if (tx.getGrupoParcelaId() == null || tx.getGrupoParcelaId().isBlank()) {
+                tx.setGrupoParcelaId(parcelGroupId(imp, ref));
+                txAtualizada = true;
+            }
+            if (txAtualizada) {
+                transacaoRepository.save(tx);
+            }
+            criadas += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, ref, faturasParaSincronizar);
+        }
+        if (criadas > 0) {
+            log.info("[FaturaPDF] {} parcela(s) futura(s) gerada(s) a partir das transações da fatura id={}.",
+                criadas, fatura.getId());
+        }
+        return criadas;
+    }
+
+    private static ImportacaoFaturaItemDTO itemDeTransacaoParaParcelamento(com.consumoesperto.model.Transacao tx) {
+        ImportacaoFaturaItemDTO ref = new ImportacaoFaturaItemDTO();
+        ref.setDescricao(tx.getDescricao());
+        ref.setValor(tx.getValor());
+        ref.setData(tx.getDataTransacao() != null ? tx.getDataTransacao().toLocalDate() : null);
+        ref.setParcelaAtual(tx.getParcelaAtual());
+        ref.setTotalParcelas(tx.getTotalParcelas());
+        return ref;
+    }
+
     private void registrarProjecoesItauNasAuditorias(List<String> auditorias, String textoPdf, int anoReferencia) {
         List<ProjecaoFaturaMesDTO> projecoes = ItauFaturaTextoExtrator.extrairProximasFaturas(textoPdf, anoReferencia);
         if (projecoes.isEmpty()) {
+            if (ItauFaturaTextoExtrator.possuiSecaoProximasFaturas(textoPdf)) {
+                log.warn("[FaturaPDF] Itaú: secção «próximas faturas» encontrada no PDF, mas nenhum valor foi extraído.");
+            }
             return;
         }
         try {

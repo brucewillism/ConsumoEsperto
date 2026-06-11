@@ -80,6 +80,20 @@ class ItauFaturaTextoExtratorTest {
     }
 
     @Test
+    void ignoraMencaoGenericaEUsaSecaoComprasParceladas() {
+        String texto = """
+            proxima fatura estimada em breve
+            Total desta fatura R$ 100,00
+            Compras parceladas - proximas faturas
+            05/07/2026 1.200,00
+            Limite de credito
+            """;
+        var proj = ItauFaturaTextoExtrator.extrairProximasFaturas(texto, 2026);
+        assertEquals(1, proj.size());
+        assertEquals(new BigDecimal("1200.00"), proj.get(0).getValor());
+    }
+
+    @Test
     void extraiProximasFaturasSemAcentoNoPdf() {
         String texto = """
             Total desta fatura R$ 45,90
