@@ -264,10 +264,11 @@ public class FaturaService {
      * @param usuarioId ID do usuário solicitante (para validação de acesso)
      * @throws RuntimeException se a fatura não for encontrada ou não pertencer ao usuário
      */
+    @Transactional
     public void deletarFatura(Long id, Long usuarioId) {
         Fatura fatura = faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
                 .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
-        removerTransacoesDaFatura(fatura.getId(), usuarioId, true);
+        removerTransacoesDaFatura(fatura.getId(), usuarioId, true, fatura.getStatusFatura());
         faturaRepository.delete(fatura);
     }
 
@@ -280,7 +281,7 @@ public class FaturaService {
         List<Fatura> faturas = faturaRepository.findByCartaoCreditoUsuarioId(usuarioId);
         int transacoesRemovidas = 0;
         for (Fatura fatura : faturas) {
-            transacoesRemovidas += removerTransacoesDaFatura(fatura.getId(), usuarioId, false);
+            transacoesRemovidas += removerTransacoesDaFatura(fatura.getId(), usuarioId, false, fatura.getStatusFatura());
         }
         saldoService.notificarAlteracaoSaldo(usuarioId);
         List<ImportacaoFaturaCartao> importacoes = importacaoFaturaCartaoRepository.findByUsuarioId(usuarioId);
@@ -299,16 +300,38 @@ public class FaturaService {
         return faturasRemovidas;
     }
 
-    private int removerTransacoesDaFatura(Long faturaId, Long usuarioId, boolean notificarSaldo) {
+    private int removerTransacoesDaFatura(
+        Long faturaId,
+        Long usuarioId,
+        boolean notificarSaldo,
+        Fatura.StatusFatura statusFatura
+    ) {
         if (faturaId == null) {
             return 0;
         }
         List<Transacao> txs = transacaoRepository.findByFaturaIdWithContaOrderByDataTransacaoAscIdAsc(faturaId);
         if (txs.isEmpty()) {
+            if (statusExigeEstornoDePagamento(statusFatura)) {
+                log.warn(
+                    "Fatura id={} com status {} não possui transações vinculadas. Exclusão sem estorno de saldo.",
+                    faturaId, statusFatura
+                );
+            }
             return 0;
         }
+        boolean estornouPagamentoNaConta = false;
         for (Transacao tx : txs) {
+            if (saldoMovimentacaoService.impactoConfirmado(tx).compareTo(BigDecimal.ZERO) != 0) {
+                estornouPagamentoNaConta = true;
+            }
             saldoMovimentacaoService.aplicarExclusao(tx);
+        }
+        if (statusExigeEstornoDePagamento(statusFatura) && !estornouPagamentoNaConta) {
+            log.warn(
+                "Fatura id={} com status {} sem conta de pagamento associada (nenhum PAGAMENTO_FATURA confirmado com conta). "
+                    + "Exclusão prossegue sem estorno.",
+                faturaId, statusFatura
+            );
         }
         transacaoRepository.deleteAll(txs);
         if (notificarSaldo && usuarioId != null) {
@@ -316,6 +339,10 @@ public class FaturaService {
         }
         log.info("Fatura id={}: {} transação(ões) removida(s) com estorno de saldo quando aplicável.", faturaId, txs.size());
         return txs.size();
+    }
+
+    private static boolean statusExigeEstornoDePagamento(Fatura.StatusFatura status) {
+        return status == Fatura.StatusFatura.PAGA || status == Fatura.StatusFatura.PARCIAL;
     }
 
     /**

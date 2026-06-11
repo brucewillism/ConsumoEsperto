@@ -54,6 +54,8 @@ public class CartaoCreditoService {
     private final FaturaRepository faturaRepository;
 
     private final TransacaoRepository transacaoRepository;
+
+    private final FaturaService faturaService;
     
     // Repositório para validação e busca de usuários
     private final UsuarioRepository usuarioRepository;
@@ -520,7 +522,11 @@ public class CartaoCreditoService {
         cartaoCreditoRepository.findByIdAndUsuarioId(cartaoId, usuarioId)
             .orElseThrow(() -> new RuntimeException("Cartão não encontrado"));
         List<Fatura> faturas = faturaRepository.findByCartaoCreditoId(cartaoId);
-        faturaRepository.deleteAll(faturas);
+        for (Fatura fatura : faturas) {
+            if (fatura.getId() != null) {
+                faturaService.deletarFatura(fatura.getId(), usuarioId);
+            }
+        }
     }
 
     /**

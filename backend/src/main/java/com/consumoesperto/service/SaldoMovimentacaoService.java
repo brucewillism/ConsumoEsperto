@@ -113,7 +113,7 @@ public class SaldoMovimentacaoService {
     }
 
     /** Só movimenta conta quando confirmada, com carteira; despesas de cartão/fatura não movimentam, exceto PAGAMENTO_FATURA. */
-    BigDecimal impactoConfirmado(Transacao transacao) {
+    public BigDecimal impactoConfirmado(Transacao transacao) {
         if (transacao == null) {
             return BigDecimal.ZERO;
         }

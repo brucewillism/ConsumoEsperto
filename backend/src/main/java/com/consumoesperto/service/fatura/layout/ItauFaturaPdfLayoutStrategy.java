@@ -56,7 +56,15 @@ public class ItauFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
             + "NUNCA 1064.10 por causa de '10/10'. Milhar só com ponto brasileiro explícito ('1.064,10'). "
             + "Inclua TODAS as seções que compõem o total: compras e saques, produtos e serviços (anuidade), "
             + "Encargos financeiros (IOF, juros rotativos, multa). bancoCartao='Itaú'. "
-            + "Ignore limites, pontos e simulações.";
+            + "Ignore limites, pontos e simulações. "
+            + "REGRAS ESPECÍFICAS ITAÚ: parcelas no formato 'XX/XX' no texto do lançamento (ex.: '02/10', '3/12') "
+            + "— preencha parcelaAtual e totalParcelas em cada lançamento; não confunda DD/MM (data) com parcela "
+            + "(ex.: em '15/03 LOJA 03/12 89,90' a parcela é 03/12, não 15/03). "
+            + "Também aceite valor antes da parcela na mesma linha (ex.: 'LOJA 89,90 03/12'). "
+            + "'Melhor dia de compra' e data de fechamento NÃO indicam fatura aberta — use dataVencimento para o ciclo. "
+            + "Quando parcelaAtual < totalParcelas, o backend gera faturas futuras; garanta parcelaAtual/totalParcelas "
+            + "corretos em todos os lançamentos parcelados. "
+            + "Não duplique a seção 'Compras parceladas - próximas faturas' nos lançamentos do mês atual.";
     }
 
     @Override

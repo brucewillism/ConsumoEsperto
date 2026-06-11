@@ -35,7 +35,7 @@ public final class ItauFaturaTextoExtrator {
         Pattern.CASE_INSENSITIVE
     );
     private static final Pattern LINHA_PROXIMA_FATURA = Pattern.compile(
-        "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
+        "^(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$",
         Pattern.CASE_INSENSITIVE
     );
     private static final Pattern LINHA_PROXIMA_FATURA_VALOR_ANTES = Pattern.compile(
@@ -43,7 +43,7 @@ public final class ItauFaturaTextoExtrator {
         Pattern.CASE_INSENSITIVE
     );
     private static final Pattern LINHA_PROXIMA_FATURA_MES_ANO = Pattern.compile(
-        "(\\d{2})/(\\d{4})\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
+        "^(\\d{2})/(\\d{4})\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$",
         Pattern.CASE_INSENSITIVE
     );
     /** Itaú costuma listar só mês/ano: {@code 07/26 1.234,56} (sem dia). */
@@ -234,20 +234,9 @@ public final class ItauFaturaTextoExtrator {
             return List.of();
         }
         Map<String, ProjecaoFaturaMesDTO> porMes = new LinkedHashMap<>();
-        Matcher m = LINHA_PROXIMA_FATURA.matcher(trecho);
-        while (m.find()) {
-            registrarProjecao(porMes, m.group(1), m.group(2), m.group(3), m.group(4), anoReferencia);
+        for (String linha : trecho.split("\n")) {
+            registrarProjecaoDaLinha(linha, anoReferencia, porMes);
         }
-        Matcher mInv = LINHA_PROXIMA_FATURA_VALOR_ANTES.matcher(trecho);
-        while (mInv.find()) {
-            registrarProjecao(porMes, mInv.group(2), mInv.group(3), mInv.group(4), mInv.group(1), anoReferencia);
-        }
-        Matcher mMesAno = LINHA_PROXIMA_FATURA_MES_ANO.matcher(trecho);
-        while (mMesAno.find()) {
-            registrarProjecao(porMes, "01", mMesAno.group(1), mMesAno.group(2), mMesAno.group(3), anoReferencia);
-        }
-        extrairProjecoesMesAnoCurto(trecho, anoReferencia, porMes);
-        extrairProjecoesMesAbreviado(trecho, anoReferencia, porMes);
         extrairProjecoesMultilinha(trecho, anoReferencia, porMes);
         if (!porMes.isEmpty()) {
             log.info("Itaú próximas faturas: {} mês(es) projetado(s).", porMes.size());
@@ -255,41 +244,54 @@ public final class ItauFaturaTextoExtrator {
         return new ArrayList<>(porMes.values());
     }
 
-    private static void extrairProjecoesMesAnoCurto(String trecho, int anoReferencia, Map<String, ProjecaoFaturaMesDTO> porMes) {
-        for (String linha : trecho.split("\n")) {
-            String t = linha.trim();
-            Matcher m = LINHA_PROXIMA_MES_ANO_CURTO.matcher(t);
-            if (!m.matches()) {
-                continue;
-            }
-            int mes = Integer.parseInt(m.group(1));
-            int anoRaw = Integer.parseInt(m.group(2));
-            if (mes < 1 || mes > 12 || anoRaw < 20 || anoRaw > 99) {
-                continue;
-            }
-            registrarProjecao(porMes, "01", String.format("%02d", mes), String.valueOf(anoRaw), m.group(3), anoReferencia);
+    private static void registrarProjecaoDaLinha(String linha, int anoReferencia, Map<String, ProjecaoFaturaMesDTO> porMes) {
+        String t = linha != null ? linha.trim() : "";
+        if (t.isBlank() || t.length() > 80 || deveIgnorarDescricao(t)) {
+            return;
         }
-    }
-
-    private static void extrairProjecoesMesAbreviado(String trecho, int anoReferencia, Map<String, ProjecaoFaturaMesDTO> porMes) {
-        for (String linha : trecho.split("\n")) {
-            String t = linha.trim();
-            Matcher m = LINHA_PROXIMA_MES_ABREV.matcher(t);
-            if (!m.matches()) {
-                continue;
+        Matcher abrev = LINHA_PROXIMA_MES_ABREV.matcher(t);
+        if (abrev.matches()) {
+            Integer mes = mesDeAbreviacao(abrev.group(1));
+            if (mes != null) {
+                registrarProjecao(porMes, "01", String.format("%02d", mes), abrev.group(2), abrev.group(3), anoReferencia);
             }
-            Integer mes = mesDeAbreviacao(m.group(1));
-            if (mes == null) {
-                continue;
+            return;
+        }
+        Matcher mesAnoCurto = LINHA_PROXIMA_MES_ANO_CURTO.matcher(t);
+        if (mesAnoCurto.matches()) {
+            int mes = Integer.parseInt(mesAnoCurto.group(1));
+            int anoRaw = Integer.parseInt(mesAnoCurto.group(2));
+            if (mes >= 1 && mes <= 12 && anoRaw >= 20 && anoRaw <= 99) {
+                registrarProjecao(
+                    porMes, "01", String.format("%02d", mes), String.valueOf(anoRaw), mesAnoCurto.group(3), anoReferencia
+                );
             }
+            return;
+        }
+        Matcher mesAno = LINHA_PROXIMA_FATURA_MES_ANO.matcher(t);
+        if (mesAno.matches()) {
+            registrarProjecao(porMes, "01", mesAno.group(1), mesAno.group(2), mesAno.group(3), anoReferencia);
+            return;
+        }
+        Matcher valorAntes = LINHA_PROXIMA_FATURA_VALOR_ANTES.matcher(t);
+        if (valorAntes.matches()) {
             registrarProjecao(
-                porMes,
-                "01",
-                String.format("%02d", mes),
-                m.group(2),
-                m.group(3),
-                anoReferencia
+                porMes, valorAntes.group(2), valorAntes.group(3), valorAntes.group(4), valorAntes.group(1), anoReferencia
             );
+            return;
+        }
+        Matcher proxima = LINHA_PROXIMA_FATURA.matcher(t);
+        if (proxima.matches()) {
+            String anoRaw = proxima.group(3);
+            int mes = Integer.parseInt(proxima.group(2));
+            if (anoRaw == null || anoRaw.isBlank()) {
+                int dia = Integer.parseInt(proxima.group(1));
+                if (mes > 12 && dia >= 1 && dia <= 12) {
+                    registrarProjecao(porMes, "01", String.format("%02d", dia), proxima.group(2), proxima.group(4), anoReferencia);
+                    return;
+                }
+            }
+            registrarProjecao(porMes, proxima.group(1), proxima.group(2), anoRaw, proxima.group(4), anoReferencia);
         }
     }
 
@@ -363,14 +365,7 @@ public final class ItauFaturaTextoExtrator {
         Map<String, ProjecaoFaturaMesDTO> porMes
     ) {
         for (String linha : trecho.split("\n")) {
-            String t = linha.trim();
-            if (t.isBlank() || t.length() > 50 || deveIgnorarDescricao(t)) {
-                continue;
-            }
-            Matcher m = LINHA_PROXIMA_FATURA.matcher(t);
-            if (m.matches()) {
-                registrarProjecao(porMes, m.group(1), m.group(2), m.group(3), m.group(4), anoReferencia);
-            }
+            registrarProjecaoDaLinha(linha, anoReferencia, porMes);
         }
     }
 
@@ -415,13 +410,18 @@ public final class ItauFaturaTextoExtrator {
         String valorRaw,
         int anoReferencia
     ) {
-        LocalDate venc = parseDataItau(dia, mes, anoRaw, anoReferencia);
+        LocalDate venc;
+        try {
+            venc = parseDataItau(dia, mes, anoRaw, anoReferencia);
+        } catch (Exception e) {
+            return;
+        }
         BigDecimal valor = parseMoney(valorRaw);
         if (valor.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-        String chave = venc.toString();
-        porMes.putIfAbsent(chave, new ProjecaoFaturaMesDTO(chave, valor));
+        String chave = YearMonth.from(venc).toString();
+        porMes.putIfAbsent(chave, new ProjecaoFaturaMesDTO(venc.toString(), valor));
     }
 
     public static List<ImportacaoFaturaItemDTO> extrairLancamentos(String textoPdf, int anoReferencia) {
@@ -792,12 +792,12 @@ public final class ItauFaturaTextoExtrator {
         if (anoTxt != null && !anoTxt.isBlank()) {
             int a = Integer.parseInt(anoTxt);
             ano = a < 100 ? 2000 + a : a;
+        } else if (m > 12 && d >= 1 && d <= 12) {
+            ano = m < 100 ? 2000 + m : m;
+            m = d;
+            d = 1;
         }
-        try {
-            return LocalDate.of(ano, m, d);
-        } catch (Exception e) {
-            return LocalDate.of(anoReferencia > 0 ? anoReferencia : YearMonth.now().getYear(), m, Math.min(d, 28));
-        }
+        return LocalDate.of(ano, m, Math.min(d, YearMonth.of(ano, m).lengthOfMonth()));
     }
 
     private static BigDecimal parseMoney(String raw) {
