@@ -84,10 +84,15 @@
 .saldo-nominal-hint {
   font-size: 12px;
   color: #9ca3af;
+}
 
-  &.saldo-negativo {
-    color: #fca5a5;
-  }
+.saldo-restante-hint {
+  font-size: 12px;
+  color: #86efac;
+}
+
+.saldo-negativo {
+  color: #fca5a5;
 }
 
 .conta-head {

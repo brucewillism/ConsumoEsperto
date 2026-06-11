@@ -38,11 +38,20 @@
           <span class="badge badge-negativo" *ngIf="saldoNegativo(c) && !temChequeEspecial(c)">⚠ Saldo negativo</span>
         </div>
         <div class="saldo-bloco" *ngIf="temChequeEspecial(c); else saldoSimples">
-          <strong class="saldo-disponivel-destaque">{{ brl(saldoDisponivelConta(c)) }}</strong>
-          <span class="saldo-disponivel-legenda">disponível</span>
-          <small class="saldo-nominal-hint" [class.saldo-negativo]="saldoNegativo(c)">
-            Saldo {{ brl(c.saldoAtual) }}
-          </small>
+          <ng-container *ngIf="saldoNegativo(c); else saldoComChequePositivo">
+            <strong class="saldo-negativo">{{ brl(c.saldoAtual) }}</strong>
+            <span class="saldo-disponivel-legenda">saldo</span>
+            <small class="saldo-restante-hint">
+              Restante {{ brl(saldoDisponivelConta(c)) }}
+            </small>
+          </ng-container>
+          <ng-template #saldoComChequePositivo>
+            <strong class="saldo-disponivel-destaque">{{ brl(saldoDisponivelConta(c)) }}</strong>
+            <span class="saldo-disponivel-legenda">disponível</span>
+            <small class="saldo-nominal-hint">
+              Saldo {{ brl(c.saldoAtual) }}
+            </small>
+          </ng-template>
         </div>
         <ng-template #saldoSimples>
           <strong [class.saldo-negativo]="saldoNegativo(c)">{{ brl(c.saldoAtual) }}</strong>
@@ -50,7 +59,7 @@
       </div>
       <p class="cheque-info" *ngIf="saldoNegativo(c) && temChequeEspecial(c)">
         Usando {{ brl(chequeEspecialUtilizado(c)) }} de {{ brl(c.limiteChequeEspecial || 0) }} do cheque especial
-        · Restante para usar: {{ brl(saldoDisponivelConta(c)) }}
+        · Saldo {{ brl(c.saldoAtual) }}
       </p>
       <p class="cheque-info disponivel" *ngIf="!saldoNegativo(c) && temChequeEspecial(c)">
         Cheque especial disponível: {{ brl(c.limiteChequeEspecial || 0) }}
