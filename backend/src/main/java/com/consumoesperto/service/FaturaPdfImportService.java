@@ -66,6 +66,7 @@ public class FaturaPdfImportService {
     static final String META_ANUIDADE_CKSM_PREFIX = "__ANUIDADE_CKSM__";
     static final String META_PROJECAO_FATURA_ITAU_PREFIX = "__PROJECAO_FATURA_ITAU__:";
     static final String META_TRECHO_PROXIMAS_ITAU_PREFIX = "__TRECHO_PROXIMAS_ITAU__:";
+    static final String META_TEXTO_PDF_ITAU_PREFIX = "__TEXTO_PDF_ITAU__:";
 
     public record ResultadoConfirmacaoFatura(int criadas, int conciliadas, int futuras) {
         public int registrosNaFaturaAtual() {
@@ -98,6 +99,7 @@ public class FaturaPdfImportService {
             && !linhaAuditoria.startsWith(META_ANUIDADE_CKSM_PREFIX)
             && !linhaAuditoria.startsWith(META_PROJECAO_FATURA_ITAU_PREFIX)
             && !linhaAuditoria.startsWith(META_TRECHO_PROXIMAS_ITAU_PREFIX)
+            && !linhaAuditoria.startsWith(META_TEXTO_PDF_ITAU_PREFIX)
             && !linhaAuditoria.startsWith(SaldoAnteriorFaturaBbSupport.META_SALDO_ANTERIOR_BB_PREFIX);
     }
 
@@ -218,8 +220,8 @@ public class FaturaPdfImportService {
         BigDecimal somaItens = somaValoresItens(itens);
         SaldoAnteriorFaturaBbSupport.detectar(extracted, banco, valorTotal, somaItens, itens, ultimaFatura)
             .ifPresent(p -> SaldoAnteriorFaturaBbSupport.registrarPendenciaNasAuditorias(auditorias, p));
-        if (BancoBrasilCatalog.bancosCorrespondem(banco, "itau") && textoPdf != null && !textoPdf.isBlank()) {
-            registrarProjecoesItauNasAuditorias(auditorias, textoPdf, anoReferencia);
+        if (BancoBrasilCatalog.bancosCorrespondem(banco, "itau")) {
+            registrarDiagnosticoEArmazenamentoItau(auditorias, textoPdf, anoReferencia, itens);
         }
         imp.setAuditoriaJson(writeJson(auditorias));
         imp.setNovosDetectados((int) itens.stream().filter(ImportacaoFaturaItemDTO::isNovo).count());
@@ -328,6 +330,9 @@ public class FaturaPdfImportService {
                     + "ou importar *apenas* o saldo atual (responda *sim* ou *não* no WhatsApp ou use os botões em Importações pendentes).");
         }
         List<ImportacaoFaturaItemDTO> itens = readItens(imp.getItensJson());
+        if (BancoBrasilCatalog.bancosCorrespondem(imp.getBancoCartao(), "itau")) {
+            reaplicarExtracaoItauAntesConfirmar(imp, itens);
+        }
         log.info("Confirmando importação fatura importacaoId={} userId={} itens={} novos={}",
             importacaoId, usuarioId, itens.size(), imp.getNovosDetectados());
         Set<Integer> indices = request != null && request.getIndices() != null && !request.getIndices().isEmpty()
@@ -769,6 +774,65 @@ public class FaturaPdfImportService {
         return ref;
     }
 
+    private void registrarDiagnosticoEArmazenamentoItau(
+        List<String> auditorias,
+        String textoPdf,
+        int anoReferencia,
+        List<ImportacaoFaturaItemDTO> itens
+    ) {
+        if (textoPdf == null || textoPdf.isBlank()) {
+            auditorias.add(
+                "Itaú: texto do PDF vazio — parcelas e faturas previstas podem falhar. "
+                    + "Confirme a senha (5 primeiros dígitos do CPF) e reenvie o PDF.");
+            return;
+        }
+        String recorte = ItauFaturaTextoExtrator.recortarTextoParaAuditoria(textoPdf);
+        if (!recorte.isBlank()) {
+            auditorias.add(META_TEXTO_PDF_ITAU_PREFIX + recorte);
+        }
+        long comParcela = itens.stream()
+            .filter(i -> i.getTotalParcelas() != null && i.getTotalParcelas() > 1)
+            .count();
+        List<ProjecaoFaturaMesDTO> proj = ItauFaturaTextoExtrator.extrairProximasFaturas(textoPdf, anoReferencia);
+        auditorias.add(String.format(
+            "Itaú: texto PDF %d caracteres; %d de %d lançamentos com parcela; %d mês(es) nas próximas faturas.",
+            textoPdf.length(), comParcela, itens.size(), proj.size()
+        ));
+        registrarProjecoesItauNasAuditorias(auditorias, textoPdf, anoReferencia);
+    }
+
+    private void reaplicarExtracaoItauAntesConfirmar(ImportacaoFaturaCartao imp, List<ImportacaoFaturaItemDTO> itens) {
+        String texto = lerTextoPdfItauDaAuditoria(imp.getAuditoriaJson());
+        if (texto.isBlank()) {
+            log.warn("[FaturaPDF] Itaú confirmar: sem texto PDF na auditoria (importacaoId={}).", imp.getId());
+            return;
+        }
+        int anoRef = imp.getDataVencimento() != null
+            ? imp.getDataVencimento().getYear()
+            : YearMonth.now().getYear();
+        long antes = itens.stream()
+            .filter(i -> i.getTotalParcelas() != null && i.getTotalParcelas() > 1)
+            .count();
+        ItauFaturaTextoExtrator.complementar(itens, texto, anoRef);
+        enriquecerParcelasNosItens(itens);
+        long depois = itens.stream()
+            .filter(i -> i.getTotalParcelas() != null && i.getTotalParcelas() > 1)
+            .count();
+        if (depois > antes) {
+            log.info("[FaturaPDF] Itaú confirmar: {} lançamento(s) enriquecido(s) com parcelas (antes={}).",
+                depois - antes, antes);
+        }
+    }
+
+    private String lerTextoPdfItauDaAuditoria(String auditoriaJson) {
+        for (String linha : readAuditorias(auditoriaJson)) {
+            if (linha != null && linha.startsWith(META_TEXTO_PDF_ITAU_PREFIX)) {
+                return linha.substring(META_TEXTO_PDF_ITAU_PREFIX.length());
+            }
+        }
+        return "";
+    }
+
     private void registrarProjecoesItauNasAuditorias(List<String> auditorias, String textoPdf, int anoReferencia) {
         String trecho = ItauFaturaTextoExtrator.recortarTrechoProximasFaturas(textoPdf);
         if (!trecho.isBlank()) {
@@ -904,6 +968,15 @@ public class FaturaPdfImportService {
             ? faturaAtual.getDataVencimento().getYear()
             : YearMonth.now().getYear();
         List<ProjecaoFaturaMesDTO> projecoes = lerProjecoesItauDaAuditoria(imp.getAuditoriaJson(), anoReferencia);
+        if (projecoes.isEmpty()) {
+            String texto = lerTextoPdfItauDaAuditoria(imp.getAuditoriaJson());
+            if (!texto.isBlank()) {
+                projecoes = ItauFaturaTextoExtrator.extrairProximasFaturas(texto, anoReferencia);
+                if (!projecoes.isEmpty()) {
+                    log.info("[FaturaPDF] Itaú: {} projeção(ões) extraída(s) do texto PDF na confirmação.", projecoes.size());
+                }
+            }
+        }
         if (projecoes.isEmpty()) {
             return 0;
         }

@@ -225,6 +225,43 @@ class ItauFaturaTextoExtratorTest {
     }
 
     @Test
+    void naoCortaLancamentosEmProximaFaturaDoCabecalho() {
+        String texto = """
+            proxima fatura R$ 100,00
+            resumo da conta
+            LANÇAMENTOS: compras e saques
+            05/05 LOJA 89,90 03/12
+            06/06 OUTRA 50,00
+            Total desta fatura R$ 139,90
+            compras parceladas - proximas faturas
+            07/26 500,00
+            """;
+        List<ImportacaoFaturaItemDTO> itens = ItauFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(2, itens.size());
+        var proj = ItauFaturaTextoExtrator.extrairProximasFaturas(texto, 2026);
+        assertEquals(1, proj.size());
+        assertEquals(new BigDecimal("500.00"), proj.get(0).getValor());
+    }
+
+    @Test
+    void complementarPropagaParcelaPorValorUnicoQuandoDescricaoDiverge() {
+        String texto = """
+            LANÇAMENTOS: compras e saques
+            05/05 LOJA EXEMPLO 89,90 03/12
+            Total desta fatura R$ 89,90
+            """;
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        ImportacaoFaturaItemDTO ia = new ImportacaoFaturaItemDTO();
+        ia.setDescricao("PAGAMENTO DIVERSOS");
+        ia.setValor(new BigDecimal("89.90"));
+        ia.setData(java.time.LocalDate.of(2026, 5, 5));
+        destino.add(ia);
+        ItauFaturaTextoExtrator.complementar(destino, texto, 2026);
+        assertEquals(3, destino.get(0).getParcelaAtual());
+        assertEquals(12, destino.get(0).getTotalParcelas());
+    }
+
+    @Test
     void complementarInjetaEncargosQuandoIaOmitiu() {
         String texto = """
             LANÇAMENTOS: compras e saques

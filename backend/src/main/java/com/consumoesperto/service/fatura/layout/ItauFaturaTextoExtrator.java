@@ -115,15 +115,25 @@ public final class ItauFaturaTextoExtrator {
         "Total desta fatura", "Total da fatura", "Total para pagamento",
         "Simulação de parcelamento", "Limite de crédito"
     };
-    private static final String[] MARCADORES_INICIO_SECAO = {
+    /** Evita «compras e saques» genérico no cabeçalho/resumo (antes da tabela real). */
+    private static final String[] MARCADORES_INICIO_PRIORITARIOS = {
         "LANÇAMENTOS: compras e saques",
         "LANÇAMENTOS compras e saques",
         "LANÇAMENTOS: produtos e serviços",
         "LANÇAMENTOS produtos e serviços",
         "Encargos financeiros",
         "LANÇAMENTOS",
-        "compras e saques",
+        "DATA ESTABELECIMENTO VALOR PARCELA",
         "DATA ESTABELECIMENTO"
+    };
+    private static final String[] MARCADORES_INICIO_GENERICO = {
+        "compras e saques"
+    };
+    private static final String[] MARCADORES_FIM_LANCAMENTOS = {
+        "compras parceladas - proximas faturas",
+        "compras parceladas - próximas faturas",
+        "compras parceladas proximas faturas",
+        "demonstrativo de compras parceladas"
     };
     private static final Pattern TOTAL_FATURA = Pattern.compile(
         "(?i)(?:total(?:\\s+desta)?\\s+fatura|total\\s+para\\s+pagamento|valor\\s+total(?:\\s+da\\s+fatura)?)"
@@ -225,9 +235,38 @@ public final class ItauFaturaTextoExtrator {
                 break;
             }
         }
+        for (ImportacaoFaturaItemDTO dest : destino) {
+            if (dest.getTotalParcelas() != null && dest.getTotalParcelas() > 1) {
+                continue;
+            }
+            List<ImportacaoFaturaItemDTO> candidatos = doTexto.stream()
+                .filter(txt -> txt.getTotalParcelas() != null && txt.getTotalParcelas() > 1)
+                .filter(txt -> correspondeLancamentoValorData(dest, txt))
+                .toList();
+            if (candidatos.size() != 1) {
+                continue;
+            }
+            ImportacaoFaturaItemDTO txt = candidatos.get(0);
+            dest.setParcelaAtual(txt.getParcelaAtual());
+            dest.setTotalParcelas(txt.getTotalParcelas());
+            enriquecidos++;
+        }
         if (enriquecidos > 0) {
             log.info("Itaú texto: {} lançamento(s) enriquecido(s) com parcelas do PDF.", enriquecidos);
         }
+    }
+
+    private static boolean correspondeLancamentoValorData(ImportacaoFaturaItemDTO a, ImportacaoFaturaItemDTO b) {
+        if (a.getValor() == null || b.getValor() == null) {
+            return false;
+        }
+        if (a.getValor().subtract(b.getValor()).abs().compareTo(new BigDecimal("0.04")) > 0) {
+            return false;
+        }
+        if (a.getData() != null && b.getData() != null && !a.getData().equals(b.getData())) {
+            return false;
+        }
+        return true;
     }
 
     private static boolean correspondeLancamento(ImportacaoFaturaItemDTO a, ImportacaoFaturaItemDTO b) {
@@ -772,32 +811,90 @@ public final class ItauFaturaTextoExtrator {
         }
     }
 
+    /**
+     * Trecho compacto para persistir na auditoria e reprocessar na confirmação
+     * (lançamentos + demonstrativo parcelado + próximas faturas).
+     */
+    public static String recortarTextoParaAuditoria(String textoPdf) {
+        if (textoPdf == null || textoPdf.isBlank()) {
+            return "";
+        }
+        String norm = textoPdf.replace('\r', '\n');
+        StringBuilder sb = new StringBuilder();
+        String lanc = recortarTrechosLancamentos(textoPdf);
+        if (!lanc.isBlank()) {
+            sb.append(lanc);
+        }
+        int inicioDemo = indexOfIgnoreCase(norm, "demonstrativo de compras parceladas");
+        if (inicioDemo >= 0) {
+            int fimDemo = norm.length();
+            String restanteDemo = norm.substring(inicioDemo);
+            for (String marcador : MARCADORES_INICIO_PROXIMAS) {
+                int idx = indexOfIgnoreCase(restanteDemo, marcador);
+                if (idx > 30) {
+                    fimDemo = Math.min(fimDemo, inicioDemo + idx);
+                }
+            }
+            if (sb.length() > 0) {
+                sb.append('\n');
+            }
+            sb.append(norm, inicioDemo, Math.min(fimDemo, norm.length()));
+        }
+        String prox = recortarTrechoProximasFaturas(textoPdf);
+        if (!prox.isBlank()) {
+            if (sb.length() > 0) {
+                sb.append('\n');
+            }
+            sb.append(prox);
+        }
+        String result = sb.toString();
+        final int max = 100_000;
+        return result.length() > max ? result.substring(0, max) : result;
+    }
+
     /** Do primeiro bloco de lançamentos até o total da fatura (inclui encargos e produtos/serviços). */
     private static String recortarTrechosLancamentos(String textoPdf) {
         String norm = textoPdf.replace('\r', '\n');
-        int inicio = -1;
-        for (String marcador : MARCADORES_INICIO_SECAO) {
-            int idx = indexOfIgnoreCase(norm, marcador);
-            if (idx >= 0 && (inicio < 0 || idx < inicio)) {
-                inicio = idx;
-            }
-        }
-        if (inicio < 0) {
-            inicio = 0;
-        }
+        int inicio = localizarInicioSecaoLancamentos(norm);
         int fim = localizarFimTrecho(norm, inicio);
         return norm.substring(inicio, fim);
+    }
+
+    private static int localizarInicioSecaoLancamentos(String norm) {
+        int melhor = -1;
+        for (String marcador : MARCADORES_INICIO_PRIORITARIOS) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx >= 0 && (melhor < 0 || idx < melhor)) {
+                melhor = idx;
+            }
+        }
+        if (melhor >= 0) {
+            return melhor;
+        }
+        int lancamentos = indexOfIgnoreCase(norm, "LANÇAMENTOS");
+        for (String marcador : MARCADORES_INICIO_GENERICO) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx < 0) {
+                continue;
+            }
+            if (lancamentos >= 0 && idx >= lancamentos) {
+                return idx;
+            }
+            if (idx > 400) {
+                return idx;
+            }
+        }
+        return 0;
     }
 
     private static int localizarFimTrecho(String norm, int inicio) {
         int fim = norm.length();
         String restante = norm.substring(inicio);
-        int proximas = indexOfIgnoreCase(restante, "compras parceladas");
-        if (proximas < 0) {
-            proximas = indexOfIgnoreCase(restante, "proximas faturas");
-        }
-        if (proximas > 40) {
-            fim = Math.min(fim, inicio + proximas);
+        for (String marcador : MARCADORES_FIM_LANCAMENTOS) {
+            int idx = indexOfIgnoreCase(restante, marcador);
+            if (idx > 40) {
+                fim = Math.min(fim, inicio + idx);
+            }
         }
         for (String marcador : MARCADORES_FIM_FATURA) {
             int idx = indexOfIgnoreCase(restante, marcador);
