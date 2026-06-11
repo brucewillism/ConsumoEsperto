@@ -73,6 +73,10 @@ public class FaturaService {
 
     private final FaturaConciliacaoService faturaConciliacaoService;
 
+    private final SaldoMovimentacaoService saldoMovimentacaoService;
+
+    private final SaldoService saldoService;
+
     /**
      * Dias corridos entre o fechamento estimado e o vencimento (ex.: 10 = fechamento 10 dias antes do vencimento).
      * Override: {@code consumoesperto.fatura.dias-entre-fechamento-e-vencimento}.
@@ -263,7 +267,7 @@ public class FaturaService {
     public void deletarFatura(Long id, Long usuarioId) {
         Fatura fatura = faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
                 .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
-        removerTransacoesDaFatura(fatura.getId());
+        removerTransacoesDaFatura(fatura.getId(), usuarioId, true);
         faturaRepository.delete(fatura);
     }
 
@@ -276,8 +280,9 @@ public class FaturaService {
         List<Fatura> faturas = faturaRepository.findByCartaoCreditoUsuarioId(usuarioId);
         int transacoesRemovidas = 0;
         for (Fatura fatura : faturas) {
-            transacoesRemovidas += removerTransacoesDaFatura(fatura.getId());
+            transacoesRemovidas += removerTransacoesDaFatura(fatura.getId(), usuarioId, false);
         }
+        saldoService.notificarAlteracaoSaldo(usuarioId);
         List<ImportacaoFaturaCartao> importacoes = importacaoFaturaCartaoRepository.findByUsuarioId(usuarioId);
         for (ImportacaoFaturaCartao imp : importacoes) {
             sugestaoContencaoJarvisRepository.deleteAll(
@@ -294,14 +299,22 @@ public class FaturaService {
         return faturasRemovidas;
     }
 
-    private int removerTransacoesDaFatura(Long faturaId) {
+    private int removerTransacoesDaFatura(Long faturaId, Long usuarioId, boolean notificarSaldo) {
         if (faturaId == null) {
             return 0;
         }
-        List<Transacao> txs = transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(faturaId);
-        if (!txs.isEmpty()) {
-            transacaoRepository.deleteAll(txs);
+        List<Transacao> txs = transacaoRepository.findByFaturaIdWithContaOrderByDataTransacaoAscIdAsc(faturaId);
+        if (txs.isEmpty()) {
+            return 0;
         }
+        for (Transacao tx : txs) {
+            saldoMovimentacaoService.aplicarExclusao(tx);
+        }
+        transacaoRepository.deleteAll(txs);
+        if (notificarSaldo && usuarioId != null) {
+            saldoService.notificarAlteracaoSaldo(usuarioId);
+        }
+        log.info("Fatura id={}: {} transação(ões) removida(s) com estorno de saldo quando aplicável.", faturaId, txs.size());
         return txs.size();
     }
 

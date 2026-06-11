@@ -255,6 +255,10 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     List<Transacao> findByFaturaIdOrderByDataTransacaoAscIdAsc(Long faturaId);
 
+    @Query("SELECT t FROM Transacao t LEFT JOIN FETCH t.contaBancaria WHERE t.fatura.id = :faturaId "
+        + "ORDER BY t.dataTransacao ASC, t.id ASC")
+    List<Transacao> findByFaturaIdWithContaOrderByDataTransacaoAscIdAsc(@Param("faturaId") Long faturaId);
+
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "

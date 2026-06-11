@@ -29,6 +29,11 @@ public final class ItauFaturaTextoExtrator {
         "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(.+?)\\s+(?:(\\d{1,2})/(\\d{1,2})\\s+)?(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
         Pattern.CASE_INSENSITIVE
     );
+    /** Itaú: coluna VALOR antes de PARCELA — ex. {@code 05/05 LOJA 89,90 03/12}. */
+    private static final Pattern LINHA_LANCAMENTO_PARCELA_APOS_VALOR = Pattern.compile(
+        "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(.+?)\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s+(\\d{1,2})/(\\d{1,2})\\s*$",
+        Pattern.CASE_INSENSITIVE
+    );
     private static final Pattern LINHA_PROXIMA_FATURA = Pattern.compile(
         "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
         Pattern.CASE_INSENSITIVE
@@ -41,11 +46,24 @@ public final class ItauFaturaTextoExtrator {
         "(\\d{2})/(\\d{4})\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
         Pattern.CASE_INSENSITIVE
     );
+    /** Itaú costuma listar só mês/ano: {@code 07/26 1.234,56} (sem dia). */
+    private static final Pattern LINHA_PROXIMA_MES_ANO_CURTO = Pattern.compile(
+        "^(\\d{2})/(\\d{2})\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$",
+        Pattern.CASE_INSENSITIVE
+    );
+    /** Ex.: {@code jul/26 1.234,56} ou {@code JUL 2026 1.234,56}. */
+    private static final Pattern LINHA_PROXIMA_MES_ABREV = Pattern.compile(
+        "(?i)^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[/.\\s-]*(\\d{2,4})\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$"
+    );
     private static final Pattern LINHA_DATA_DESCRICAO = Pattern.compile(
         "^(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(.+)$"
     );
     private static final Pattern LINHA_PARCELA_VALOR = Pattern.compile(
         "^(?:\\s*)(\\d{1,2})/(\\d{1,2})\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern LINHA_VALOR_PARCELA = Pattern.compile(
+        "^(?:\\s*)(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s+(\\d{1,2})/(\\d{1,2})\\s*$",
         Pattern.CASE_INSENSITIVE
     );
     private static final Pattern LINHA_SO_VALOR = Pattern.compile(
@@ -61,8 +79,14 @@ public final class ItauFaturaTextoExtrator {
         "compras parceladas - próximas faturas",
         "compras parceladas proximas faturas",
         "compras parceladas proximas",
+        "demonstrativo de compras parceladas e proximas faturas",
         "demonstrativo de compras parceladas",
         "compras parceladas e proximas",
+        "resumo das proximas faturas",
+        "valores das proximas faturas",
+        "parcelas a vencer",
+        "lancamentos futuros",
+        "lançamentos futuros",
         "total das proximas faturas",
         "valores projetados para as proximas faturas",
         "proximas faturas",
@@ -198,7 +222,11 @@ public final class ItauFaturaTextoExtrator {
         if (trecho.isBlank()) {
             return List.of();
         }
-        return extrairProjecoesDoTrecho(trecho, anoReferencia);
+        List<ProjecaoFaturaMesDTO> proj = extrairProjecoesDoTrecho(trecho, anoReferencia);
+        if (!proj.isEmpty()) {
+            return proj;
+        }
+        return extrairProjecoesAposTotalFatura(textoPdf, anoReferencia);
     }
 
     public static List<ProjecaoFaturaMesDTO> extrairProjecoesDoTrecho(String trecho, int anoReferencia) {
@@ -218,11 +246,72 @@ public final class ItauFaturaTextoExtrator {
         while (mMesAno.find()) {
             registrarProjecao(porMes, "01", mMesAno.group(1), mMesAno.group(2), mMesAno.group(3), anoReferencia);
         }
+        extrairProjecoesMesAnoCurto(trecho, anoReferencia, porMes);
+        extrairProjecoesMesAbreviado(trecho, anoReferencia, porMes);
         extrairProjecoesMultilinha(trecho, anoReferencia, porMes);
         if (!porMes.isEmpty()) {
             log.info("Itaú próximas faturas: {} mês(es) projetado(s).", porMes.size());
         }
         return new ArrayList<>(porMes.values());
+    }
+
+    private static void extrairProjecoesMesAnoCurto(String trecho, int anoReferencia, Map<String, ProjecaoFaturaMesDTO> porMes) {
+        for (String linha : trecho.split("\n")) {
+            String t = linha.trim();
+            Matcher m = LINHA_PROXIMA_MES_ANO_CURTO.matcher(t);
+            if (!m.matches()) {
+                continue;
+            }
+            int mes = Integer.parseInt(m.group(1));
+            int anoRaw = Integer.parseInt(m.group(2));
+            if (mes < 1 || mes > 12 || anoRaw < 20 || anoRaw > 99) {
+                continue;
+            }
+            registrarProjecao(porMes, "01", String.format("%02d", mes), String.valueOf(anoRaw), m.group(3), anoReferencia);
+        }
+    }
+
+    private static void extrairProjecoesMesAbreviado(String trecho, int anoReferencia, Map<String, ProjecaoFaturaMesDTO> porMes) {
+        for (String linha : trecho.split("\n")) {
+            String t = linha.trim();
+            Matcher m = LINHA_PROXIMA_MES_ABREV.matcher(t);
+            if (!m.matches()) {
+                continue;
+            }
+            Integer mes = mesDeAbreviacao(m.group(1));
+            if (mes == null) {
+                continue;
+            }
+            registrarProjecao(
+                porMes,
+                "01",
+                String.format("%02d", mes),
+                m.group(2),
+                m.group(3),
+                anoReferencia
+            );
+        }
+    }
+
+    private static Integer mesDeAbreviacao(String abrev) {
+        if (abrev == null) {
+            return null;
+        }
+        return switch (abrev.toLowerCase(Locale.ROOT)) {
+            case "jan" -> 1;
+            case "fev" -> 2;
+            case "mar" -> 3;
+            case "abr" -> 4;
+            case "mai" -> 5;
+            case "jun" -> 6;
+            case "jul" -> 7;
+            case "ago" -> 8;
+            case "set" -> 9;
+            case "out" -> 10;
+            case "nov" -> 11;
+            case "dez" -> 12;
+            default -> null;
+        };
     }
 
     private static void extrairProjecoesMultilinha(String trecho, int anoReferencia, Map<String, ProjecaoFaturaMesDTO> porMes) {
@@ -243,6 +332,48 @@ public final class ItauFaturaTextoExtrator {
         }
     }
 
+    private static List<ProjecaoFaturaMesDTO> extrairProjecoesAposTotalFatura(String textoPdf, int anoReferencia) {
+        String norm = textoPdf.replace('\r', '\n');
+        int inicio = indexOfIgnoreCase(norm, "total desta fatura");
+        if (inicio < 0) {
+            inicio = indexOfIgnoreCase(norm, "total para pagamento");
+        }
+        if (inicio < 0) {
+            return List.of();
+        }
+        int fim = norm.length();
+        String restante = norm.substring(inicio);
+        for (String marcador : MARCADORES_FIM_PROXIMAS) {
+            int idx = indexOfIgnoreCase(restante, marcador);
+            if (idx > 40) {
+                fim = Math.min(fim, inicio + idx);
+            }
+        }
+        Map<String, ProjecaoFaturaMesDTO> porMes = new LinkedHashMap<>();
+        extrairProjecoesLinhasCurtas(norm.substring(inicio, fim), anoReferencia, porMes);
+        if (!porMes.isEmpty()) {
+            log.info("Itaú próximas faturas (heurística pós-total): {} mês(es).", porMes.size());
+        }
+        return new ArrayList<>(porMes.values());
+    }
+
+    private static void extrairProjecoesLinhasCurtas(
+        String trecho,
+        int anoReferencia,
+        Map<String, ProjecaoFaturaMesDTO> porMes
+    ) {
+        for (String linha : trecho.split("\n")) {
+            String t = linha.trim();
+            if (t.isBlank() || t.length() > 50 || deveIgnorarDescricao(t)) {
+                continue;
+            }
+            Matcher m = LINHA_PROXIMA_FATURA.matcher(t);
+            if (m.matches()) {
+                registrarProjecao(porMes, m.group(1), m.group(2), m.group(3), m.group(4), anoReferencia);
+            }
+        }
+    }
+
     private static int localizarInicioProximasFaturas(String norm) {
         for (String marcador : MARCADORES_INICIO_PROXIMAS) {
             int idx = indexOfIgnoreCase(norm, marcador);
@@ -250,7 +381,30 @@ public final class ItauFaturaTextoExtrator {
                 return idx;
             }
         }
+        String collapsed = norm.replace('\n', ' ');
+        for (String marcador : MARCADORES_INICIO_PROXIMAS) {
+            int idx = indexOfIgnoreCase(collapsed, marcador);
+            if (idx >= 0) {
+                return localizarIndiceAproximadoNoOriginal(norm, marcador);
+            }
+        }
+        String[] linhas = norm.split("\n");
+        for (int i = 0; i < linhas.length - 1; i++) {
+            String duo = semAcentos(linhas[i] + " " + linhas[i + 1]).toLowerCase(Locale.ROOT);
+            for (String marcador : MARCADORES_INICIO_PROXIMAS) {
+                String m = semAcentos(marcador).toLowerCase(Locale.ROOT);
+                if (duo.contains(m)) {
+                    return norm.indexOf(linhas[i]);
+                }
+            }
+        }
         return -1;
+    }
+
+    private static int localizarIndiceAproximadoNoOriginal(String norm, String marcador) {
+        String primeiro = marcador.split("\\s+")[0];
+        int idx = indexOfIgnoreCase(norm, primeiro);
+        return idx >= 0 ? idx : 0;
     }
 
     private static void registrarProjecao(
@@ -315,7 +469,30 @@ public final class ItauFaturaTextoExtrator {
                 out.add(item);
             }
         }
+        extrairLinhasParcelaAposValor(trecho, anoReferencia, out);
         extrairLinhasMultilinha(trecho, anoReferencia, out);
+    }
+
+    private static void extrairLinhasParcelaAposValor(String trecho, int anoReferencia, List<ImportacaoFaturaItemDTO> out) {
+        Matcher m = LINHA_LANCAMENTO_PARCELA_APOS_VALOR.matcher(trecho);
+        while (m.find()) {
+            String descricao = limparDescricao(m.group(4));
+            if (descricao.isBlank() || deveIgnorarDescricao(descricao)) {
+                continue;
+            }
+            BigDecimal valor = parseMoney(m.group(5));
+            if (valor.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
+            item.setData(parseDataItau(m.group(1), m.group(2), m.group(3), anoReferencia));
+            item.setDescricao(descricao);
+            item.setValor(valor);
+            aplicarParcelaNoItem(item, m.group(6), m.group(7));
+            if (!jaExiste(out, item)) {
+                out.add(item);
+            }
+        }
     }
 
     /**
@@ -348,16 +525,19 @@ public final class ItauFaturaTextoExtrator {
                 ImportacaoFaturaItemDTO item = montarItemMultilinha(
                     dataDesc.group(1), dataDesc.group(2), dataDesc.group(3),
                     descricao, parcelaValor.group(3), anoReferencia);
-                try {
-                    int atual = Integer.parseInt(parcelaValor.group(1));
-                    int total = Integer.parseInt(parcelaValor.group(2));
-                    if (atual >= 1 && total > 1 && atual <= total) {
-                        item.setParcelaAtual(atual);
-                        item.setTotalParcelas(total);
-                    }
-                } catch (NumberFormatException ignored) {
-                    // parcela opcional
+                aplicarParcelaNoItem(item, parcelaValor.group(1), parcelaValor.group(2));
+                if (!jaExiste(out, item)) {
+                    out.add(item);
                 }
+                i++;
+                continue;
+            }
+            Matcher valorParcela = LINHA_VALOR_PARCELA.matcher(prox);
+            if (valorParcela.matches()) {
+                ImportacaoFaturaItemDTO item = montarItemMultilinha(
+                    dataDesc.group(1), dataDesc.group(2), dataDesc.group(3),
+                    descricao, valorParcela.group(1), anoReferencia);
+                aplicarParcelaNoItem(item, valorParcela.group(2), valorParcela.group(3));
                 if (!jaExiste(out, item)) {
                     out.add(item);
                 }
@@ -404,19 +584,28 @@ public final class ItauFaturaTextoExtrator {
         String proxima = trecho.substring(posAposMatch, fimLinha).trim();
         Matcher parcelaValor = LINHA_PARCELA_VALOR.matcher(proxima);
         if (parcelaValor.matches()) {
-            try {
-                int atual = Integer.parseInt(parcelaValor.group(1));
-                int total = Integer.parseInt(parcelaValor.group(2));
-                if (atual >= 1 && total > 1 && atual <= total) {
-                    item.setParcelaAtual(atual);
-                    item.setTotalParcelas(total);
-                }
-            } catch (NumberFormatException ignored) {
-                // parcela opcional
-            }
+            aplicarParcelaNoItem(item, parcelaValor.group(1), parcelaValor.group(2));
+            return;
+        }
+        Matcher valorParcela = LINHA_VALOR_PARCELA.matcher(proxima);
+        if (valorParcela.matches()) {
+            aplicarParcelaNoItem(item, valorParcela.group(2), valorParcela.group(3));
             return;
         }
         aplicarParcelaNaDescricao(item, proxima);
+    }
+
+    private static void aplicarParcelaNoItem(ImportacaoFaturaItemDTO item, String atualRaw, String totalRaw) {
+        try {
+            int atual = Integer.parseInt(atualRaw);
+            int total = Integer.parseInt(totalRaw);
+            if (atual >= 1 && total > 1 && atual <= total) {
+                item.setParcelaAtual(atual);
+                item.setTotalParcelas(total);
+            }
+        } catch (NumberFormatException ignored) {
+            // parcela opcional
+        }
     }
 
     private static void extrairEncargosFinanceiros(String textoPdf, List<ImportacaoFaturaItemDTO> out) {
@@ -668,17 +857,10 @@ public final class ItauFaturaTextoExtrator {
     }
 
     private static boolean preencherParcelaSeValida(ImportacaoFaturaItemDTO item, String atualRaw, String totalRaw) {
-        try {
-            int atual = Integer.parseInt(atualRaw);
-            int total = Integer.parseInt(totalRaw);
-            if (atual >= 1 && total > 1 && atual <= total) {
-                item.setParcelaAtual(atual);
-                item.setTotalParcelas(total);
-                return true;
-            }
-        } catch (NumberFormatException ignored) {
-            // tenta próximo candidato
-        }
-        return false;
+        int antesAtual = item.getParcelaAtual() != null ? item.getParcelaAtual() : 0;
+        int antesTotal = item.getTotalParcelas() != null ? item.getTotalParcelas() : 0;
+        aplicarParcelaNoItem(item, atualRaw, totalRaw);
+        return (item.getParcelaAtual() != null && item.getParcelaAtual() != antesAtual)
+            || (item.getTotalParcelas() != null && item.getTotalParcelas() != antesTotal);
     }
 }
