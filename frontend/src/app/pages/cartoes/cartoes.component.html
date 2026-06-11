@@ -148,13 +148,15 @@
                 <span>Utilização do Limite</span>
                 <span>{{ formatarPercentual(getPercentualUso(cartao)) }}</span>
               </div>
-              <div class="progresso-bar">
-                <div
-                  class="progresso-fill"
-                  [style.width.%]="getPercentualUso(cartao)"
-                  [style.background-color]="getCorBarraUtilizacao(cartao)">
-                </div>
-              </div>
+              <mat-progress-bar
+                class="progresso-mat"
+                mode="determinate"
+                [value]="getPercentualUso(cartao)"
+                [color]="corBarraUtilizacao(cartao)"
+              ></mat-progress-bar>
+              <p class="progresso-dica" *ngIf="getPercentualUso(cartao) <= 0">
+                Nenhuma fatura pendente vinculada. Importe o PDF da fatura deste cartão para atualizar o uso.
+              </p>
             </div>
           </mat-card-content>
           

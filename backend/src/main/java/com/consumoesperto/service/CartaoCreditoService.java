@@ -16,10 +16,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -178,6 +181,13 @@ public class CartaoCreditoService {
      */
     public List<CartaoCreditoDTO> buscarPorUsuarioId(Long usuarioId) {
         List<CartaoCredito> cartoes = cartaoCreditoRepository.findByUsuarioIdAndAtivoTrue(usuarioId);
+        for (CartaoCredito cartao : cartoes) {
+            try {
+                vincularFaturasDeCartoesInativosCorrespondentes(cartao);
+            } catch (Exception e) {
+                log.warn("Falha ao vincular faturas inativas ao cartão id={}: {}", cartao.getId(), e.getMessage());
+            }
+        }
         return cartoes.stream()
                 .map(this::converterParaDTO)
                 .collect(Collectors.toList());
@@ -559,11 +569,111 @@ public class CartaoCreditoService {
     /**
      * Limite comprometido no cartão: maior valor entre (a) despesas confirmadas em faturas não quitadas
      * e (b) soma de {@code valorFatura} pendentes (inclui VENCIDA e PREVISTA, não só ABERTA/PARCIAL).
+     * Considera também cartões inativos da mesma família (mesmo banco + final), para não perder faturas
+     * após recadastro do cartão na app.
      */
     public BigDecimal calcularLimiteUtilizadoAberto(Long cartaoId) {
-        BigDecimal porTransacoes = nz(transacaoRepository.sumDespesaConfirmadaFaturasNaoPagasPorCartaoId(cartaoId));
-        BigDecimal porFaturas = nz(faturaRepository.sumValorFaturasPendentesPorCartaoId(cartaoId));
+        if (cartaoId == null) {
+            return BigDecimal.ZERO;
+        }
+        return cartaoCreditoRepository.findById(cartaoId)
+            .map(this::calcularLimiteUtilizadoCartao)
+            .orElse(BigDecimal.ZERO);
+    }
+
+    private BigDecimal calcularLimiteUtilizadoCartao(CartaoCredito cartao) {
+        BigDecimal porTransacoes = BigDecimal.ZERO;
+        BigDecimal porFaturas = BigDecimal.ZERO;
+        for (Long id : resolverIdsCartoesFamilia(cartao)) {
+            porTransacoes = porTransacoes.add(nz(transacaoRepository.sumDespesaConfirmadaFaturasNaoPagasPorCartaoId(id)));
+            porFaturas = porFaturas.add(nz(faturaRepository.sumValorFaturasPendentesPorCartaoId(id)));
+        }
         return porTransacoes.max(porFaturas);
+    }
+
+    /**
+     * Move faturas de cartões inativos equivalentes (ex.: Itaú recriado) para o cartão ativo.
+     */
+    @Transactional
+    public void vincularFaturasDeCartoesInativosCorrespondentes(CartaoCredito ativo) {
+        if (ativo == null || ativo.getId() == null || !Boolean.TRUE.equals(ativo.getAtivo())) {
+            return;
+        }
+        Usuario usuario = ativo.getUsuario();
+        if (usuario == null || usuario.getId() == null) {
+            return;
+        }
+        Long usuarioId = usuario.getId();
+        for (CartaoCredito inativo : cartaoCreditoRepository.findByUsuarioId(usuarioId)) {
+            if (inativo.getId() == null || Objects.equals(inativo.getId(), ativo.getId())) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(inativo.getAtivo())) {
+                continue;
+            }
+            if (!cartaoMesmaFamilia(ativo, inativo)) {
+                continue;
+            }
+            long qtd = faturaRepository.countByCartaoCreditoId(inativo.getId());
+            if (qtd <= 0) {
+                continue;
+            }
+            log.info("[CartaoCredito] Vinculando {} fatura(s) do cartão inativo id={} ao ativo id={} ({} / {})",
+                qtd, inativo.getId(), ativo.getId(), ativo.getBanco(), ativo.getNumeroCartao());
+            reatribuirFaturasParaOutroCartao(inativo.getId(), ativo.getId(), usuarioId);
+        }
+    }
+
+    private List<Long> resolverIdsCartoesFamilia(CartaoCredito ref) {
+        Set<Long> ids = new LinkedHashSet<>();
+        if (ref.getId() != null) {
+            ids.add(ref.getId());
+        }
+        if (!Boolean.TRUE.equals(ref.getAtivo()) || ref.getUsuario() == null || ref.getUsuario().getId() == null) {
+            return new ArrayList<>(ids);
+        }
+        for (CartaoCredito outro : cartaoCreditoRepository.findByUsuarioId(ref.getUsuario().getId())) {
+            if (outro.getId() == null || Objects.equals(outro.getId(), ref.getId())) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(outro.getAtivo())) {
+                continue;
+            }
+            if (cartaoMesmaFamilia(ref, outro)) {
+                ids.add(outro.getId());
+            }
+        }
+        return new ArrayList<>(ids);
+    }
+
+    private static boolean cartaoMesmaFamilia(CartaoCredito a, CartaoCredito b) {
+        if (!mesmoEmissorBancario(a, b)) {
+            return false;
+        }
+        String finaisA = ultimosDigitosCartao(a.getNumeroCartao());
+        String finaisB = ultimosDigitosCartao(b.getNumeroCartao());
+        if (!finaisA.isBlank() && !finaisB.isBlank()) {
+            return finaisA.equals(finaisB);
+        }
+        return true;
+    }
+
+    private static boolean mesmoEmissorBancario(CartaoCredito a, CartaoCredito b) {
+        return BancoBrasilCatalog.bancosCorrespondem(a.getBanco(), b.getBanco())
+            || BancoBrasilCatalog.bancosCorrespondem(a.getBanco(), b.getNome())
+            || BancoBrasilCatalog.bancosCorrespondem(a.getNome(), b.getBanco())
+            || BancoBrasilCatalog.bancosCorrespondem(a.getNome(), b.getNome());
+    }
+
+    private static String ultimosDigitosCartao(String numero) {
+        if (numero == null) {
+            return "";
+        }
+        String digits = numero.replaceAll("\\D", "");
+        if (digits.length() <= 4) {
+            return digits;
+        }
+        return digits.substring(digits.length() - 4);
     }
 
     private static BigDecimal nz(BigDecimal v) {
@@ -647,9 +757,7 @@ public class CartaoCreditoService {
         dto.setDataAtualizacao(cartaoCredito.getDataAtualizacao());
 
         BigDecimal limite = cartaoCredito.getLimiteCredito() != null ? cartaoCredito.getLimiteCredito() : BigDecimal.ZERO;
-        BigDecimal utilizado = cartaoCredito.getId() != null
-            ? calcularLimiteUtilizadoAberto(cartaoCredito.getId())
-            : BigDecimal.ZERO;
+        BigDecimal utilizado = calcularLimiteUtilizadoCartao(cartaoCredito);
         dto.setLimiteUtilizado(utilizado);
         dto.setLimiteDisponivel(limite.subtract(utilizado).max(BigDecimal.ZERO));
         return dto;

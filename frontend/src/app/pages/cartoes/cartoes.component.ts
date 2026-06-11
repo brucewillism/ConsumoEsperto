@@ -7,6 +7,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -16,7 +17,7 @@ import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { NovoCartaoDialogComponent } from '../../shared/novo-cartao-dialog/novo-cartao-dialog.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { CartaoCredito } from '../../models/cartao-credito.model';
-import { BANCOS_BRASIL } from '../../shared/constants/bancos-brasil';
+import { BANCOS_BRASIL, getBancoCorBr, getBancoNomeBr } from '../../shared/constants/bancos-brasil';
 import { parseValorBrasileiro, sanitizeCardNumberInput } from '../../shared/utils/form.utils';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
@@ -33,6 +34,7 @@ import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alterac
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatProgressBarModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatDialogModule,
@@ -113,24 +115,11 @@ export class CartoesComponent implements OnInit {
   }
 
   getBancoColor(banco: string): string {
-    const cores: { [key: string]: string } = {
-      'itau': '#EC7000',
-      'nubank': '#8A05BE',
-      'inter': '#FF7A00'
-    };
-    return cores[banco.toLowerCase()] || '#666';
+    return getBancoCorBr(banco);
   }
 
-  /**
-   * Obtém nome do banco
-   */
   getBancoNome(banco: string): string {
-    const nomes: { [key: string]: string } = {
-      'itau': 'Itaú',
-      'nubank': 'Nubank',
-      'inter': 'Banco Inter'
-    };
-    return nomes[banco.toLowerCase()] || banco;
+    return getBancoNomeBr(banco);
   }
 
   formatarMoeda(value: number): string {
@@ -162,18 +151,15 @@ export class CartoesComponent implements OnInit {
     return Math.min(100, Math.max(0, pct));
   }
 
-  getCorBarraUtilizacao(cartao: CartaoCredito): string {
+  corBarraUtilizacao(cartao: CartaoCredito): 'primary' | 'accent' | 'warn' {
     const pct = this.getPercentualUso(cartao);
-    if (pct <= 0) {
-      return 'transparent';
-    }
     if (!cartao.ativo) {
-      return '#f44336';
+      return 'warn';
     }
     if (pct >= 80) {
-      return '#ff9800';
+      return 'accent';
     }
-    return '#4caf50';
+    return 'primary';
   }
 
   abrirEdicaoCartao(cartao: CartaoCredito): void {
