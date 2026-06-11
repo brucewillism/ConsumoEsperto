@@ -264,4 +264,12 @@ export class ContasBancariasComponent implements OnInit {
   saldoNegativo(c: ContaBancaria): boolean {
     return (Number(c.saldoAtual) || 0) < 0;
   }
+
+  /** Saldo + limite de cheque especial (mesma regra do pagamento de fatura). */
+  saldoDisponivelConta(c: ContaBancaria): number {
+    if (c.saldoDisponivel != null && !Number.isNaN(Number(c.saldoDisponivel))) {
+      return Number(c.saldoDisponivel);
+    }
+    return (Number(c.saldoAtual) || 0) + (Number(c.limiteChequeEspecial) || 0);
+  }
 }
