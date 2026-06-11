@@ -149,9 +149,10 @@
                 <span>{{ formatarPercentual(getPercentualUso(cartao)) }}</span>
               </div>
               <div class="progresso-bar">
-                <div class="progresso-fill" 
-                     [style.width.%]="getPercentualUso(cartao)"
-                     [style.background-color]="cartao.ativo ? '#4caf50' : '#f44336'">
+                <div
+                  class="progresso-fill"
+                  [style.width.%]="getPercentualUso(cartao)"
+                  [style.background-color]="getCorBarraUtilizacao(cartao)">
                 </div>
               </div>
             </div>

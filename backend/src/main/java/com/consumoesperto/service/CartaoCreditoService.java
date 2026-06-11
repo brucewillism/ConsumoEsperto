@@ -557,15 +557,17 @@ public class CartaoCreditoService {
     }
 
     /**
-     * Soma das despesas confirmadas nas faturas ABERTA/PARCIAL do cartão; se zero, usa o acumulado legado nas faturas.
+     * Limite comprometido no cartão: maior valor entre (a) despesas confirmadas em faturas não quitadas
+     * e (b) soma de {@code valorFatura} pendentes (inclui VENCIDA e PREVISTA, não só ABERTA/PARCIAL).
      */
     public BigDecimal calcularLimiteUtilizadoAberto(Long cartaoId) {
-        BigDecimal a = transacaoRepository.sumDespesaConfirmadaFaturasNaoPagasPorCartaoId(cartaoId);
-        if (a != null && a.compareTo(BigDecimal.ZERO) > 0) {
-            return a;
-        }
-        BigDecimal b = faturaRepository.sumValorFaturasAbertasPorCartaoId(cartaoId);
-        return b != null ? b : BigDecimal.ZERO;
+        BigDecimal porTransacoes = nz(transacaoRepository.sumDespesaConfirmadaFaturasNaoPagasPorCartaoId(cartaoId));
+        BigDecimal porFaturas = nz(faturaRepository.sumValorFaturasPendentesPorCartaoId(cartaoId));
+        return porTransacoes.max(porFaturas);
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
     }
 
     /**

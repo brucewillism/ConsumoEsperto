@@ -158,7 +158,22 @@ export class CartoesComponent implements OnInit {
   getPercentualUso(cartao: CartaoCredito): number {
     const limite = cartao.limiteCredito || 0;
     if (limite <= 0) return 0;
-    return (this.getLimiteUtilizado(cartao) / limite) * 100;
+    const pct = (this.getLimiteUtilizado(cartao) / limite) * 100;
+    return Math.min(100, Math.max(0, pct));
+  }
+
+  getCorBarraUtilizacao(cartao: CartaoCredito): string {
+    const pct = this.getPercentualUso(cartao);
+    if (pct <= 0) {
+      return 'transparent';
+    }
+    if (!cartao.ativo) {
+      return '#f44336';
+    }
+    if (pct >= 80) {
+      return '#ff9800';
+    }
+    return '#4caf50';
   }
 
   abrirEdicaoCartao(cartao: CartaoCredito): void {
