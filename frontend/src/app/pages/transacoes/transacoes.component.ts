@@ -343,18 +343,20 @@ export class TransacoesComponent implements OnInit {
         (transacao.descricao || '')
           .replace(/\s*\(\d+\/\d+\)\s*$/, '')
           .trim() || 'Compra';
-      this.dialog
+      const parcelRef = this.dialog
         .open(ParcelamentoDeleteChoiceDialogComponent, {
           width: '440px',
           maxWidth: '96vw',
           maxHeight: '90vh',
+          disableClose: true,
           panelClass: 'parcelamento-delete-dialog',
           data: {
             descricao: base,
             parcelaAtual: transacao.parcelaAtual!,
             totalParcelas: transacao.totalParcelas!
           }
-        })
+        });
+      parcelRef
         .afterClosed()
         .subscribe((modo) => {
           if (modo === false || modo == null) {

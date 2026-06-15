@@ -13,6 +13,7 @@ import {
   WhatsappEvolutionQrDialogComponent,
   WhatsappEvolutionQrDialogData,
 } from '../../shared/whatsapp-evolution-qr-dialog.component';
+import { wireCeDialogBackdropClose } from '../../shared/ce-form-dialog.util';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 import { WhatsappParidadeService, WhatsappParityItem } from '../../services/whatsapp-paridade.service';
@@ -172,13 +173,14 @@ export class WhatsappConfigComponent implements OnInit {
             evolutionWarning: response.evolutionWarning ?? null,
             evolutionManagerUrl: response.evolutionManagerUrl ?? null,
           };
-          this.dialog.open(WhatsappEvolutionQrDialogComponent, {
+          const qrRef = this.dialog.open(WhatsappEvolutionQrDialogComponent, {
             width: '480px',
             maxWidth: '95vw',
             panelClass: 'ce-whatsapp-qr-dialog',
             data: dados,
-            disableClose: false,
+            disableClose: true,
           });
+          wireCeDialogBackdropClose(qrRef, () => 'dismissed' as const);
         } else if (response?.evolutionWarning) {
           this.toastService.warning(response.evolutionWarning);
         }

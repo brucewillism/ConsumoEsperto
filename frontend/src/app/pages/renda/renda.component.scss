@@ -109,8 +109,15 @@ $jarvis-bg: #0d0e12;
 
 .fiscal-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
+  align-items: start;
+
+  mat-form-field,
+  .mat-mdc-form-field {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .fiscal-toggle-row {
@@ -123,6 +130,17 @@ $jarvis-bg: #0d0e12;
   border-radius: 12px;
   background: rgba(123, 31, 162, 0.08);
   border: 1px solid rgba(123, 31, 162, 0.22);
+
+  .discount-tech-head,
+  .discount-tech-row {
+    grid-template-columns: minmax(96px, 108px) minmax(0, 1fr) minmax(100px, auto);
+  }
+
+  .discount-tech-row > span:first-child {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .fiscal-preview-aviso {

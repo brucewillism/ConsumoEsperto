@@ -58,7 +58,7 @@
   <form [formGroup]="form" (ngSubmit)="confirmar()" *ngIf="!carregandoContas" class="form-pagamento">
     <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
       <mat-label>Escolha a conta de débito</mat-label>
-      <mat-select formControlName="contaBancariaId" required>
+      <mat-select formControlName="contaBancariaId" required panelClass="exec-select-panel">
         <mat-option *ngFor="let c of contas" [value]="c.id">
           {{ c.nome }} — disp. {{ brl(saldoDisponivelConta(c)) }}
         </mat-option>

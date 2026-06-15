@@ -17,10 +17,12 @@ export class ConfirmDialogService {
       width: '480px',
       maxWidth: '96vw',
       maxHeight: '88vh',
+      disableClose: true,
       panelClass: 'jarvis-confirm-dialog',
       autoFocus: 'first-toggler',
       data: this.normalizar(data),
     });
+    // Confirmação: só fecha pelos botões (não pelo backdrop)
     return ref.afterClosed().pipe(map((v) => !!v));
   }
 

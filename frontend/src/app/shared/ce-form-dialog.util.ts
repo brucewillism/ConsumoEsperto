@@ -16,6 +16,24 @@ function stabilizeFormFields(): void {
   });
 }
 
+/**
+ * Com {@code disableClose: true}, cliques em mat-select dentro do modal não disparam
+ * fechamento acidental. O backdrop continua a fechar ao clicar fora.
+ */
+export function wireCeDialogBackdropClose<T, R = unknown>(
+  ref: MatDialogRef<T, R>,
+  onBackdrop?: () => R | void
+): void {
+  ref.backdropClick().subscribe(() => {
+    if (onBackdrop) {
+      const result = onBackdrop();
+      ref.close(result as R);
+    } else {
+      ref.close();
+    }
+  });
+}
+
 export function openCeFormDialog<T, D = unknown, R = unknown>(
   dialog: MatDialog,
   componentOrTemplate: ComponentType<T> | TemplateRef<T>,
@@ -23,10 +41,12 @@ export function openCeFormDialog<T, D = unknown, R = unknown>(
 ): MatDialogRef<T, R> {
   const ref = dialog.open<T, D, R>(componentOrTemplate, {
     maxWidth: '96vw',
+    disableClose: true,
     ...config,
     panelClass: mergePanelClass(config),
   });
 
+  wireCeDialogBackdropClose(ref);
   ref.afterOpened().subscribe(() => stabilizeFormFields());
   return ref;
 }

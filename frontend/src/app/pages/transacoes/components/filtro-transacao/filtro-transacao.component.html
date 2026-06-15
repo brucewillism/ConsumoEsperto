@@ -6,7 +6,8 @@
         <mat-select
           [ngModel]="filtroTipo"
           (ngModelChange)="filtroTipoChange.emit($event)"
-          [disabled]="disabled">
+          [disabled]="disabled"
+          panelClass="exec-select-panel">
           <mat-option value="">Todos</mat-option>
           <mat-option value="RECEITA">Receitas</mat-option>
           <mat-option value="DESPESA">Despesas</mat-option>

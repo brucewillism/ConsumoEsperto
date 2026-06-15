@@ -13,7 +13,7 @@
         <div class="filtros-row">
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Período</mat-label>
-            <mat-select formControlName="periodo">
+            <mat-select formControlName="periodo" panelClass="exec-select-panel">
               <mat-option value="mesAtual">📅 Mês atual (calendário)</mat-option>
               <mat-option value="7">📅 Últimos 7 dias</mat-option>
               <mat-option value="30">📅 Últimos 30 dias</mat-option>
@@ -39,7 +39,7 @@
 
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Tipo de Transação</mat-label>
-            <mat-select formControlName="tipoTransacao">
+            <mat-select formControlName="tipoTransacao" panelClass="exec-select-panel">
               <mat-option value="">💰 Todos</mat-option>
               <mat-option value="RECEITA">📈 Receitas</mat-option>
               <mat-option value="DESPESA">📉 Despesas</mat-option>
@@ -48,7 +48,7 @@
 
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Cartão de Crédito</mat-label>
-            <mat-select formControlName="cartaoId">
+            <mat-select formControlName="cartaoId" panelClass="exec-select-panel">
               <mat-option value="">💳 Todos</mat-option>
               <mat-option *ngFor="let cartao of cartoes" [value]="cartao.id">💳 {{ cartao.nome }}</mat-option>
             </mat-select>
@@ -56,7 +56,7 @@
 
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Ano-calendário (IR)</mat-label>
-            <mat-select formControlName="anoIr">
+            <mat-select formControlName="anoIr" panelClass="exec-select-panel">
               <mat-option *ngFor="let a of anosIrCalendario" [value]="a">{{ a }}</mat-option>
             </mat-select>
           </mat-form-field>

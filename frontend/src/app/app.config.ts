@@ -87,6 +87,7 @@ export const appConfig: ApplicationConfig = {
       deps: [Overlay],
       useFactory: (overlay: Overlay) => ({
         maxHeight: '90vh',
+        disableClose: true,
         scrollStrategy: overlay.scrollStrategies.noop(),
       }),
     },

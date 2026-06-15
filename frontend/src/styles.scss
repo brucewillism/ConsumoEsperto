@@ -928,6 +928,57 @@ a {
   }
 }
 
+/* mat-select — altura, largura e texto truncado consistentes em toda a app */
+.mat-mdc-form-field-type-mat-select {
+  width: 100%;
+  min-width: 0;
+
+  .mat-mdc-form-field-infix {
+    display: flex;
+    align-items: center;
+    min-height: 56px;
+    padding-top: 14px !important;
+    padding-bottom: 14px !important;
+  }
+
+  .mat-mdc-select {
+    display: block;
+    width: 100%;
+  }
+
+  .mat-mdc-select-trigger {
+    width: 100%;
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .mat-mdc-select-value,
+  .mat-mdc-select-value-text,
+  .mat-mdc-select-min-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  &.mat-focused:not(.mat-form-field-invalid) .mat-mdc-form-field-focus-overlay {
+    opacity: 0 !important;
+  }
+}
+
+.fiscal-row,
+.filtros-row,
+.filtros-grid,
+.ce-form-row,
+.fiscal-form {
+  > .mat-mdc-form-field,
+  > mat-form-field {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 /* Layout padrão para formulários Material */
 .ce-form-body {
   display: flex;
@@ -1008,7 +1059,8 @@ a {
 
 /* Painéis de mat-select — tema escuro em todos os formulários (Faturas, Relatórios, etc.) */
 .cdk-overlay-pane:has(.mat-mdc-select-panel) {
-  z-index: 4000 !important;
+  z-index: 1400 !important;
+  pointer-events: auto !important;
 }
 
 .mat-mdc-select-panel,
