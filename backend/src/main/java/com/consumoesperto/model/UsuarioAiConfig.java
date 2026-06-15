@@ -71,4 +71,11 @@ public class UsuarioAiConfig {
     /** JSON array, ex: ["GROQ","OPENAI","OLLAMA"] */
     @Column(name = "provider_order", length = 500)
     private String providerOrderJson;
+
+    /**
+     * Utilizador pediu «Desligar Evolution» — a API pode continuar a reportar {@code open};
+     * a app trata como desligado até novo pareamento.
+     */
+    @Column(name = "evolution_session_suppressed", nullable = false)
+    private boolean evolutionSessionSuppressed = false;
 }

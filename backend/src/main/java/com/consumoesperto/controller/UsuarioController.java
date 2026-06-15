@@ -252,7 +252,6 @@ public class UsuarioController {
                 ));
             }
             Long uid = usuarioOpt.get().getId();
-            evolutionPairingService.clearWaSessionDisconnectedByUser(uid);
             EvolutionInstanceLifecycleService.PrepareInstanceResult prep =
                 evolutionInstanceLifecycleService.prepareInstanceForPairing(uid);
             evolutionInstanceLifecycleService.primeInstanceForQrConnect(uid);

@@ -242,31 +242,33 @@ public class EvolutionInstanceSettingsService {
         }
         String name = instanceName.trim();
         if (sessionSticky && stabilizedInstances.contains(name)) {
-            log.debug("Evolution [{}]: sessão sticky estabilizada — sem restart/presença", name);
+            log.debug("Evolution [{}]: sessão sticky estabilizada — sem reconfiguração", name);
             return;
         }
+
         long now = System.currentTimeMillis();
         Long last = lastConnectPrivacyApplyMs.get(name);
         boolean debounced = last != null && now - last < CONNECT_PRIVACY_DEBOUNCE_MS;
         if (!debounced) {
             lastConnectPrivacyApplyMs.put(name, now);
             applyPrivacySettingsQuietly(name);
-            if (!sessionSticky) {
-                Optional<JsonNode> found = fetchSettings(name);
-                boolean settingsOk = found.map(this::settingsMatchGhostMode).orElse(false);
-                if (!settingsOk && restartOnConnect) {
-                    restartInstanceQuietly(name);
-                    applyPrivacySettingsQuietly(name);
-                }
+            Optional<JsonNode> found = fetchSettings(name);
+            boolean settingsOk = found.map(this::settingsMatchGhostMode).orElse(false);
+            // alwaysOnline/readMessages só passam a valer na sessão activa após restart na Evolution
+            if (!settingsOk || restartOnConnect || sessionSticky) {
+                restartInstanceQuietly(name);
+                applyPrivacySettingsQuietly(name);
             }
         }
-        if (setUnavailablePresence && !sessionSticky) {
+
+        if (setUnavailablePresence) {
             applyPresenceUnavailable(name);
             schedulePresenceRetries(name);
         }
+
         if (sessionSticky) {
             stabilizedInstances.add(name);
-            log.info("Evolution [{}]: sessão sticky estabilizada após ligação", name);
+            log.info("Evolution [{}]: sessão sticky estabilizada após configuração inicial", name);
         }
     }
 
@@ -274,7 +276,7 @@ public class EvolutionInstanceSettingsService {
      * Após actividade do bot (webhook), WhatsApp volta a «online» — reagenda unavailable (~1 min).
      */
     public void schedulePresenceRefreshAfterActivity(String instanceName) {
-        if (sessionSticky || presenceRefreshAfterMessageMs <= 0) {
+        if (presenceRefreshAfterMessageMs <= 0) {
             return;
         }
         if (!setUnavailablePresence || instanceName == null || instanceName.isBlank() || !apiConfigured()) {
@@ -302,12 +304,25 @@ public class EvolutionInstanceSettingsService {
 
     /** Job periódico: instâncias open voltam a presença unavailable (notificações no telemóvel). */
     public void refreshPresenceForConnectedInstances() {
-        if (sessionSticky || !setUnavailablePresence || !apiConfigured()) {
+        if (!setUnavailablePresence || !apiConfigured()) {
             return;
         }
         for (String name : fetchConnectedInstanceNames()) {
             applyPresenceUnavailable(name);
         }
+    }
+
+    /**
+     * Reaplica settings de privacidade (sem restart) + presença unavailable.
+     * Seguro com {@code sessionSticky} — mantém notificações no telemóvel sem derrubar a sessão.
+     */
+    public void maintainPhoneFriendlySession(String instanceName) {
+        if (instanceName == null || instanceName.isBlank() || !apiConfigured()) {
+            return;
+        }
+        String name = instanceName.trim();
+        applyPrivacySettingsQuietly(name);
+        applyPresenceUnavailable(name);
     }
 
     private void applyPrivacySettingsQuietly(String instanceName) {

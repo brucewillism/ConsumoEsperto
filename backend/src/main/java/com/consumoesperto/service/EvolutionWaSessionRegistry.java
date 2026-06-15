@@ -1,6 +1,10 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.model.UsuarioAiConfig;
+import com.consumoesperto.repository.UsuarioAiConfigRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -8,26 +12,40 @@ import java.util.concurrent.ConcurrentHashMap;
  * Quando o utilizador pede «Desligar Evolution», a API Evolution costuma manter
  * {@code connectionState: open} em cache mesmo após logout. Este registo faz a app
  * tratar a sessão como desligada até novo pareamento QR.
+ *
+ * O estado persiste em {@link UsuarioAiConfig#evolutionSessionSuppressed} para sobreviver
+ * a reinícios do backend.
  */
 @Component
+@RequiredArgsConstructor
 public class EvolutionWaSessionRegistry {
 
-    private final ConcurrentHashMap<Long, Long> suppressedUntilEpochMs = new ConcurrentHashMap<>();
+    private final UsuarioAiConfigRepository usuarioAiConfigRepository;
+
     /** Evita apagar/recriar instância a cada 5 s no polling do modal QR. */
     private final ConcurrentHashMap<Long, Long> lastInstanceRecreateAtMs = new ConcurrentHashMap<>();
 
+    @Transactional
     public void markUserDisconnected(Long usuarioId) {
         if (usuarioId == null) {
             return;
         }
-        suppressedUntilEpochMs.put(usuarioId, Long.MAX_VALUE);
+        usuarioAiConfigRepository.findByUsuarioId(usuarioId).ifPresent(cfg -> {
+            cfg.setEvolutionSessionSuppressed(true);
+            usuarioAiConfigRepository.save(cfg);
+        });
     }
 
+    @Transactional
     public void clearUserDisconnected(Long usuarioId) {
-        if (usuarioId != null) {
-            suppressedUntilEpochMs.remove(usuarioId);
-            lastInstanceRecreateAtMs.remove(usuarioId);
+        if (usuarioId == null) {
+            return;
         }
+        lastInstanceRecreateAtMs.remove(usuarioId);
+        usuarioAiConfigRepository.findByUsuarioId(usuarioId).ifPresent(cfg -> {
+            cfg.setEvolutionSessionSuppressed(false);
+            usuarioAiConfigRepository.save(cfg);
+        });
     }
 
     /**
@@ -56,21 +74,13 @@ public class EvolutionWaSessionRegistry {
         }
     }
 
+    @Transactional(readOnly = true)
     public boolean isUserDisconnected(Long usuarioId) {
         if (usuarioId == null) {
             return false;
         }
-        Long until = suppressedUntilEpochMs.get(usuarioId);
-        if (until == null) {
-            return false;
-        }
-        if (until == Long.MAX_VALUE) {
-            return true;
-        }
-        if (System.currentTimeMillis() > until) {
-            suppressedUntilEpochMs.remove(usuarioId);
-            return false;
-        }
-        return true;
+        return usuarioAiConfigRepository.findByUsuarioId(usuarioId)
+            .map(UsuarioAiConfig::isEvolutionSessionSuppressed)
+            .orElse(false);
     }
 }

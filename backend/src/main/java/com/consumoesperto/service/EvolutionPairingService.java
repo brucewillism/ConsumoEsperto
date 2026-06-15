@@ -490,11 +490,17 @@ public class EvolutionPairingService {
             .map(UsuarioAiConfig::getUsuario)
             .filter(u -> u != null && u.getId() != null)
             .map(Usuario::getId)
-            .ifPresent(this::clearWaSessionDisconnectedByUser);
+            .ifPresent(uid -> {
+                if (!evolutionWaSessionRegistry.isUserDisconnected(uid)) {
+                    clearWaSessionDisconnectedByUser(uid);
+                }
+            });
         if (globalInstanceName().equalsIgnoreCase(inst)) {
             resolveUsuarioIdForEvolutionWebhook(inst).ifPresent(uid -> {
-                adoptGlobalInstanceForPairing(uid);
-                clearWaSessionDisconnectedByUser(uid);
+                if (!evolutionWaSessionRegistry.isUserDisconnected(uid)) {
+                    adoptGlobalInstanceForPairing(uid);
+                    clearWaSessionDisconnectedByUser(uid);
+                }
             });
         }
         evolutionInstanceSettingsService.ensurePhoneFriendlyOnConnect(inst);

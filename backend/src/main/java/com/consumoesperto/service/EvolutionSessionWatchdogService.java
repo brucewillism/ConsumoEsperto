@@ -90,6 +90,56 @@ public class EvolutionSessionWatchdogService {
             boolean ghost = evolutionPairingService.isGhostOpenStaleInstance(cred);
             if (ghost) {
                 attemptRecoverInstance(name, "ghost-open-stale");
+                continue;
+            }
+            boolean open = evolutionPairingService.isRealWaSessionOpen(cred);
+            if (open) {
+                evolutionInstanceLifecycleService.ensureInstanceWebhook(name);
+            }
+        }
+    }
+
+    /**
+     * Keepalive periódico: sessões abertas mantêm webhook, settings e presença unavailable
+     * sem restart destrutivo — evita Jarvis «morto» após dias de inactividade.
+     */
+    @Scheduled(fixedDelayString = "${consumoesperto.evolution.keepalive.interval-ms:14400000}")
+    public void sessionKeepalive() {
+        if (!watchdogEnabled) {
+            return;
+        }
+        for (UsuarioAiConfig cfg : usuarioAiConfigRepository.findAll()) {
+            if (cfg == null || cfg.getUsuario() == null || cfg.getUsuario().getId() == null) {
+                continue;
+            }
+            Long userId = cfg.getUsuario().getId();
+            if (evolutionWaSessionRegistry.isUserDisconnected(userId)) {
+                continue;
+            }
+            String instance = cfg.getEvolutionInstanceName();
+            if (instance == null || instance.isBlank()) {
+                continue;
+            }
+            String name = instance.trim();
+            evolutionPairingService.invalidatePairingCredCache(userId);
+            EvolutionPairingService.ResolvedEvolutionCred cred = evolutionPairingService.resolveCredentials(userId);
+            if (cred == null || cred.instanceName == null || cred.instanceName.isBlank()) {
+                continue;
+            }
+            if (evolutionPairingService.isGhostOpenStaleInstance(cred)) {
+                attemptRecoverInstance(name, "keepalive-ghost");
+                continue;
+            }
+            if (!evolutionPairingService.isRealWaSessionOpen(cred)) {
+                attemptRecoverInstance(name, "keepalive-not-open");
+                continue;
+            }
+            try {
+                evolutionInstanceLifecycleService.ensureInstanceWebhook(name);
+                evolutionPairingService.attemptSessionReconnect(name);
+                evolutionInstanceSettingsService.maintainPhoneFriendlySession(name);
+            } catch (Exception e) {
+                log.debug("Evolution keepalive [{}]: {}", name, e.getMessage());
             }
         }
     }
@@ -107,12 +157,14 @@ public class EvolutionSessionWatchdogService {
             evolutionInstanceLifecycleService.ensureInstanceWebhook(instanceName);
             if (evolutionPairingService.attemptSessionReconnect(instanceName)) {
                 log.info("Evolution watchdog: instance={} reconectada sem restart (motivo={})", instanceName, reason);
+                evolutionInstanceSettingsService.maintainPhoneFriendlySession(instanceName);
                 evolutionInstanceSettingsService.markInstanceStabilized(instanceName);
                 return;
             }
             boolean restarted = evolutionInstanceSettingsService.restartInstance(instanceName);
             log.info("Evolution watchdog: instance={} restart={} reason={}", instanceName, restarted, reason);
             if (restarted && evolutionPairingService.attemptSessionReconnect(instanceName)) {
+                evolutionInstanceSettingsService.maintainPhoneFriendlySession(instanceName);
                 evolutionInstanceSettingsService.markInstanceStabilized(instanceName);
             }
         } catch (Exception e) {

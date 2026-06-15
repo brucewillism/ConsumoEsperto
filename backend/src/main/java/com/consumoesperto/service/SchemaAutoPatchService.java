@@ -52,6 +52,7 @@ public class SchemaAutoPatchService {
     public void applyPatches() {
         ensureUsuarioAiConfigTable();
         ensureUsuarioAiConfigEvolutionApiKeyColumn();
+        ensureUsuarioAiConfigEvolutionSessionSuppressedColumn();
         ensureUsuarioRendaConfigTable();
         ensureRendaConfigContaBancariaColumn();
         ensureRendaConfigTipoRendaColumns();
@@ -161,6 +162,29 @@ public class SchemaAutoPatchService {
             }
         } catch (Exception e) {
             log.warn("Falha ao CREATE usuario_ai_config: {}", e.getMessage());
+        }
+    }
+
+    private void ensureUsuarioAiConfigEvolutionSessionSuppressedColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuario_ai_config' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedTable = schema + ".usuario_ai_config";
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedTable
+                        + " ADD COLUMN IF NOT EXISTS evolution_session_suppressed BOOLEAN NOT NULL DEFAULT FALSE"
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Falha ao adicionar evolution_session_suppressed em usuario_ai_config: {}", e.getMessage());
         }
     }
 
