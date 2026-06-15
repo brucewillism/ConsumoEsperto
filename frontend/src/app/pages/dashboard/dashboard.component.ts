@@ -14,7 +14,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { QuickTransacaoDialogComponent } from '../../shared/quick-transacao-dialog/quick-transacao-dialog.component';
 import { TransacaoService } from '../../services/transacao.service';
@@ -125,7 +126,7 @@ interface ChartData {
     MatProgressSpinnerModule,
     MatIconModule,
     MatTooltipModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     PrevisaoFuturoChartComponent,
     LoadingIndicatorComponent,
     ChartMetodologiaComponent,

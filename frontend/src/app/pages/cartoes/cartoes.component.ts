@@ -10,7 +10,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
@@ -37,7 +38,7 @@ import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alterac
     MatProgressBarModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     FormsModule,
     PageLoadingComponent,
     WhatsappParityHintComponent,

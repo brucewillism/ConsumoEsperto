@@ -8,6 +8,7 @@ import { DateAdapter, MAT_DATE_FORMATS, MAT_DATE_LOCALE } from '@angular/materia
 import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { BR_DATE_FORMATS, BrDateAdapter } from './shared/locale/br-date.adapter';
+import { provideCeOverlayScrollSupport } from './shared/ce-overlay-scroll.util';
 
 import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 
@@ -81,16 +82,18 @@ export const appConfig: ApplicationConfig = {
       }
     },
 
-    // Evita cdk-global-scrollblock impedir rolagem dentro de modais e mat-select
+    // Bloqueia scroll da página; áreas com cdkScrollable (directive global) continuam roláveis
     {
       provide: MAT_DIALOG_DEFAULT_OPTIONS,
       deps: [Overlay],
       useFactory: (overlay: Overlay) => ({
         maxHeight: '90vh',
         disableClose: true,
-        scrollStrategy: overlay.scrollStrategies.noop(),
+        scrollStrategy: overlay.scrollStrategies.block(),
       }),
     },
+
+    provideCeOverlayScrollSupport(),
 
     // Chart.js (ng2-charts v8) — registra controllers/plugins (line, doughnut, filler…)
     provideCharts(withDefaultRegisterables()),

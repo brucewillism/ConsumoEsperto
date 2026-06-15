@@ -47,6 +47,14 @@ export function openCeFormDialog<T, D = unknown, R = unknown>(
   });
 
   wireCeDialogBackdropClose(ref);
-  ref.afterOpened().subscribe(() => stabilizeFormFields());
+  ref.afterOpened().subscribe(() => {
+    document.documentElement.classList.add('ce-modal-open');
+    stabilizeFormFields();
+  });
+  ref.afterClosed().subscribe(() => {
+    if (!document.querySelector('.cdk-overlay-container .mat-mdc-dialog-container')) {
+      document.documentElement.classList.remove('ce-modal-open');
+    }
+  });
   return ref;
 }

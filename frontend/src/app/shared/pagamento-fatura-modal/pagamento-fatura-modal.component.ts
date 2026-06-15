@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../ce-dialog-imports';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -47,7 +48,7 @@ const ALIASES_PROVEDOR: Record<string, string[]> = {
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,

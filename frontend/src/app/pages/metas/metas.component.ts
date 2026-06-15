@@ -8,7 +8,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSliderModule } from '@angular/material/slider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { NovaMetaDialogComponent } from '../../shared/nova-meta-dialog/nova-meta-dialog.component';
@@ -41,7 +42,7 @@ import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alterac
     MatSliderModule,
     MatIconModule,
     MatSelectModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     ChartMetodologiaComponent,
     CeInputMaskDirective,
     PageLoadingComponent,

@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../ce-dialog-imports';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -23,7 +24,7 @@ import { parseValorBrasileiro } from '../utils/form.utils';
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,

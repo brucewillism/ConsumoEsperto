@@ -6,7 +6,8 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { MatIconModule } from '@angular/material/icon';
 import { forkJoin, of } from 'rxjs';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
@@ -31,7 +32,7 @@ import { ToastService } from '../../services/toast.service';
     MatFormFieldModule,
     MatInputModule,
     MatProgressBarModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     MatIconModule,
   ],
   templateUrl: './familia.component.html',

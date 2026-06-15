@@ -1,4 +1,3 @@
-import { ScrollingModule } from '@angular/cdk/scrolling';
 import { Component, DestroyRef, OnInit, OnDestroy, TemplateRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
@@ -12,7 +11,7 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
-import { MatDialogModule, MatDialog } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil, catchError, of, forkJoin } from 'rxjs';
 
@@ -27,6 +26,7 @@ import { PagamentoFaturaModalComponent } from '../../shared/pagamento-fatura-mod
 import { NovaFaturaDialogComponent } from '../../shared/nova-fatura-dialog/nova-fatura-dialog.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { openCeFormDialog, wireCeDialogBackdropClose } from '../../shared/ce-form-dialog.util';
+import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
@@ -49,8 +49,7 @@ import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alterac
     MatChipsModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
-    MatDialogModule,
-    ScrollingModule,
+    ...CE_DIALOG_IMPORTS,
     FormsModule,
     PageLoadingComponent,
     WhatsappParityHintComponent,

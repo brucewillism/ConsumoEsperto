@@ -1,7 +1,8 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../ce-dialog-imports';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -30,7 +31,7 @@ export interface NovoOrcamentoDialogData {
   imports: [
     CommonModule,
     FormsModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,

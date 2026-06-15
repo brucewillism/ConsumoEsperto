@@ -4,7 +4,8 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -38,7 +39,7 @@ import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alterac
     MatSelectModule,
     MatCheckboxModule,
     MatSnackBarModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     MatProgressSpinnerModule,
     CeInputMaskDirective,
     WhatsappParityHintComponent,

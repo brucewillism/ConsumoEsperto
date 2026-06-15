@@ -1,7 +1,8 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../ce-dialog-imports';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -12,7 +13,7 @@ import { resolveHttpError } from '../utils/form.utils';
 @Component({
   selector: 'app-criar-grupo-familiar-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatInputModule],
+  imports: [CommonModule, FormsModule, ...CE_DIALOG_IMPORTS, MatButtonModule, MatFormFieldModule, MatInputModule],
   templateUrl: './criar-grupo-familiar-dialog.component.html',
   styleUrl: './criar-grupo-familiar-dialog.component.scss',
 })

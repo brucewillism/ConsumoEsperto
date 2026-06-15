@@ -1,7 +1,8 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../ce-dialog-imports';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -27,7 +28,7 @@ export interface NovaFaturaDialogData {
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,

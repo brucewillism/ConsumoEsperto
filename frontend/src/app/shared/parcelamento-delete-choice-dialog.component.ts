@@ -1,6 +1,7 @@
 import { Component, Inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from './ce-dialog-imports';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import type { ModoParcelamentoDelete } from '../models/transacao.model';
@@ -14,7 +15,7 @@ export interface ParcelamentoDeleteChoiceDialogData {
 @Component({
   selector: 'app-parcelamento-delete-choice-dialog',
   standalone: true,
-  imports: [MatDialogModule, MatButtonModule, MatRadioModule, FormsModule],
+  imports: [...CE_DIALOG_IMPORTS, MatButtonModule, MatRadioModule, FormsModule],
   template: `
     <h2 mat-dialog-title>Excluir parcela</h2>
     <mat-dialog-content>

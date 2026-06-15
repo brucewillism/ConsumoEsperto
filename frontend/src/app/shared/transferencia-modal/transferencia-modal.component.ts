@@ -9,7 +9,8 @@ import {
   Validators,
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../ce-dialog-imports';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -36,7 +37,7 @@ function contasDistintas(group: AbstractControl): ValidationErrors | null {
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,

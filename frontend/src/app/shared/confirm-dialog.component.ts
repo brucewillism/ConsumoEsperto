@@ -1,5 +1,6 @@
 import { Component, Inject } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from './ce-dialog-imports';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
@@ -15,7 +16,7 @@ export interface ConfirmDialogData {
 @Component({
   selector: 'app-confirm-dialog',
   standalone: true,
-  imports: [MatDialogModule, MatButtonModule, MatIconModule],
+  imports: [...CE_DIALOG_IMPORTS, MatButtonModule, MatIconModule],
   template: `
     <div class="jarvis-confirm-icon" [class.destructive]="data.destructive">
       <mat-icon>{{ data.destructive ? 'warning_amber' : 'help_outline' }}</mat-icon>

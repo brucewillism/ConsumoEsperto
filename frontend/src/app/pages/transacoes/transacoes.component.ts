@@ -4,7 +4,8 @@ import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { ParcelamentoDeleteChoiceDialogComponent } from '../../shared/parcelamento-delete-choice-dialog.component';
@@ -46,7 +47,7 @@ import { timeout, finalize } from 'rxjs/operators';
     MatCardModule,
     MatButtonModule,
     MatIconModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,

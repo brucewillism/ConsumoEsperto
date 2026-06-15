@@ -311,9 +311,8 @@
         </button>
       </header>
 
-      <mat-dialog-content
-        class="transacoes-modal-body"
-        cdkScrollable
+      <div
+        class="transacoes-modal-body ce-dialog-scroll"
         *ngIf="transacoesDaFatura(faturaTransacoesSelecionada).length; else semTransacoes"
       >
         <div class="transacoes-tabela" role="table" aria-label="Lançamentos da fatura">
@@ -346,13 +345,13 @@
             <span class="col-valor mono" role="cell">{{ formatarMoeda(transacao.valor || transacao.amount || 0) }}</span>
           </div>
         </div>
-      </mat-dialog-content>
+      </div>
 
       <ng-template #semTransacoes>
-        <mat-dialog-content class="sem-transacoes-modal">
+        <div class="sem-transacoes-modal">
           <mat-icon>receipt_long</mat-icon>
           <p>Nenhum lançamento encontrado para esta fatura.</p>
-        </mat-dialog-content>
+        </div>
       </ng-template>
     </div>
   </ng-template>

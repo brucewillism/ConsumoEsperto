@@ -1,7 +1,8 @@
 import { Component, inject, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../ce-dialog-imports';
 import { FamiliaService } from '../../services/familia.service';
 import { ToastService } from '../../services/toast.service';
 import {
@@ -20,7 +21,7 @@ export interface ConvidarFamiliarDialogResult {
 @Component({
   selector: 'app-convidar-familiar-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule],
+  imports: [CommonModule, FormsModule, ...CE_DIALOG_IMPORTS],
   templateUrl: './convidar-familiar-dialog.component.html',
   styleUrl: './convidar-familiar-dialog.component.scss',
   encapsulation: ViewEncapsulation.None,

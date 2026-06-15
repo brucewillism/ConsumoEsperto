@@ -9,7 +9,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { forkJoin } from 'rxjs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
@@ -36,7 +37,7 @@ import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/w
     MatProgressBarModule,
     MatSelectModule,
     MatCheckboxModule,
-    MatDialogModule,
+    ...CE_DIALOG_IMPORTS,
     MatProgressSpinnerModule,
     ChartMetodologiaComponent,
     PageLoadingComponent,

@@ -2,7 +2,8 @@ import { Component, Inject, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription, timer, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { CE_DIALOG_IMPORTS } from './ce-dialog-imports';
 import { MatButtonModule } from '@angular/material/button';
 import { UsuarioService } from '../services/usuario.service';
 import { ToastService } from '../services/toast.service';
@@ -25,7 +26,7 @@ export interface WhatsappEvolutionQrDialogData {
 @Component({
   selector: 'app-whatsapp-evolution-qr-dialog',
   standalone: true,
-  imports: [CommonModule, MatDialogModule, MatButtonModule, LoadingIndicatorComponent],
+  imports: [CommonModule, ...CE_DIALOG_IMPORTS, MatButtonModule, LoadingIndicatorComponent],
   template: `
     <h2 mat-dialog-title>Pareamento WhatsApp (Evolution)</h2>
 
