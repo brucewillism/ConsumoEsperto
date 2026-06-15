@@ -14,7 +14,8 @@ public class EvolutionWebhookAsyncProcessor {
     private final WhatsAppCommandService whatsAppCommandService;
     private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
 
-    @Async("whatsappWebhookExecutor")
+    /** Processamento pesado (IA/OCR) no cerebroExecutor — evita bloquear o pool curto do webhook. */
+    @Async("cerebroExecutor")
     public void processEvolutionMessageAsync(EvolutionIncomingMessageDTO incoming, Long userId, String evolutionInstanceName) {
         try {
             whatsAppCommandService.processIncomingEvolutionMessage(incoming, userId, evolutionInstanceName);

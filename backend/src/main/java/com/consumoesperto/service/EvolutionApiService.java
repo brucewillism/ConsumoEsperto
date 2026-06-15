@@ -29,6 +29,7 @@ public class EvolutionApiService {
 
     private final EvolutionBotEchoFilterService evolutionBotEchoFilterService;
     private final ObjectMapper objectMapper;
+    private final EvolutionSessionWatchdogService evolutionSessionWatchdogService;
 
     private RestTemplate restTemplate;
 
@@ -86,6 +87,7 @@ public class EvolutionApiService {
             if (!response.getStatusCode().is2xxSuccessful() && !response.getStatusCode().is3xxRedirection()) {
                 log.error("[EvolutionApi] Falha HTTP ao enviar texto: {} instance={} destino={} [J.A.R.V.I.S. Offline]",
                     response.getStatusCode(), instance, number);
+                evolutionSessionWatchdogService.onSendFailure(instance);
                 return false;
             }
             registerOutgoingFromResponse(number, response.getBody());
@@ -95,9 +97,11 @@ public class EvolutionApiService {
             return false;
         } catch (ResourceAccessException ex) {
             log.error("[EvolutionApi] Evolution offline ou timeout ao enviar mensagem (rede): {} [J.A.R.V.I.S. Offline]", ex.getMessage());
+            evolutionSessionWatchdogService.onSendFailure(resolveInstanceName(evolutionInstanceOverride));
             return false;
         } catch (RestClientException ex) {
             log.error("[EvolutionApi] Erro de cliente HTTP Evolution ao enviar mensagem: {} [J.A.R.V.I.S. Offline]", ex.getMessage(), ex);
+            evolutionSessionWatchdogService.onSendFailure(resolveInstanceName(evolutionInstanceOverride));
             return false;
         } catch (RuntimeException ex) {
             log.error("[EvolutionApi] Erro ao enviar mensagem pela Evolution: {} [J.A.R.V.I.S. Offline]", ex.getMessage(), ex);

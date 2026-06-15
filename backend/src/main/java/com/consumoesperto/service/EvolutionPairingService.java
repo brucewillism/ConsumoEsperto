@@ -620,6 +620,46 @@ public class EvolutionPairingService {
         return isRealWaSessionOpen(cred) && !isGhostOpenStaleInstance(cred);
     }
 
+    /**
+     * Tenta reactivar sessão guardada (GET /instance/connect) sem pedir novo QR.
+     * Usado pelo watchdog quando a ligação cai mas as credenciais ainda existem na Evolution.
+     */
+    public boolean attemptSessionReconnect(String instanceName) {
+        if (instanceName == null || instanceName.isBlank()
+            || evolutionUrl == null || evolutionUrl.isBlank()
+            || evolutionApiKey == null || evolutionApiKey.isBlank()) {
+            return false;
+        }
+        String name = instanceName.trim();
+        ResolvedEvolutionCred cred = new ResolvedEvolutionCred(name, evolutionApiKey.trim());
+        if (isRealWaSessionOpen(cred) && !isGhostOpenStaleInstance(cred)) {
+            return true;
+        }
+        try {
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "instance/connect/" + name);
+            evolutionGet(url, cred.apiKeyHeader);
+            Thread.sleep(2_500L);
+            invalidatePairingCredCacheForInstance(name);
+            return isRealWaSessionOpen(cred) && !isGhostOpenStaleInstance(cred);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception e) {
+            log.debug("Evolution reconnect [{}]: {}", name, e.getMessage());
+            return false;
+        }
+    }
+
+    private void invalidatePairingCredCacheForInstance(String instanceName) {
+        if (instanceName == null || instanceName.isBlank()) {
+            return;
+        }
+        usuarioAiConfigRepository.findByEvolutionInstanceNameIgnoreCase(instanceName.trim())
+            .map(UsuarioAiConfig::getUsuario)
+            .filter(u -> u != null && u.getId() != null)
+            .ifPresent(u -> invalidatePairingCredCache(u.getId()));
+    }
+
     @Transactional(readOnly = true)
     public Optional<String> fetchInstancesConnectionStatus(String instanceName) {
         if (evolutionUrl == null || evolutionUrl.isBlank()

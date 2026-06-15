@@ -239,6 +239,7 @@ public class EvolutionInstanceLifecycleService {
 
         evolutionPairingService.markWaSessionDisconnectedByUser(usuarioId);
         out.put("sessionMarkedDisconnected", true);
+        evolutionInstanceSettingsService.clearInstanceStabilized(instanceName);
 
         evolutionPairingService.invalidatePairingCredCache(usuarioId);
         Optional<String> after = evolutionPairingService.fetchConnectionStateForUser(usuarioId);
@@ -537,6 +538,11 @@ public class EvolutionInstanceLifecycleService {
     private void applyGhostPrivacySettingsQuietly(String instanceName) {
         evolutionInstanceSettingsService.applyGhostPrivacySettings(instanceName)
             .ifPresent(msg -> log.debug("Evolution privacy settings [{}]: {}", instanceName, msg));
+    }
+
+    /** Reaplica webhook + base64 após restart ou sessão stale. */
+    public void ensureInstanceWebhook(String instanceName) {
+        configureInstanceWebhookQuietly(instanceName);
     }
 
     private void configureInstanceWebhookQuietly(String instanceName) {

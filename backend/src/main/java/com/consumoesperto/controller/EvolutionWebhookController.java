@@ -10,6 +10,7 @@ import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.service.EvolutionWebhookAsyncProcessor;
 import com.consumoesperto.service.EvolutionWebhookDedupService;
 import com.consumoesperto.service.EvolutionBotEchoFilterService;
+import com.consumoesperto.service.EvolutionSessionWatchdogService;
 import com.consumoesperto.service.WhatsappAccountProvisioner;
 import com.consumoesperto.service.WhatsAppBotAllowlist;
 import com.consumoesperto.service.WhatsAppCommandService;
@@ -43,6 +44,7 @@ public class EvolutionWebhookController {
     private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
     private final EvolutionPairingService evolutionPairingService;
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
+    private final EvolutionSessionWatchdogService evolutionSessionWatchdogService;
 
     /**
      * Evolution API v2.3+ também POSTa variantes como {@code /webhook/messages-upsert}; o destino nos logs
@@ -152,6 +154,7 @@ public class EvolutionWebhookController {
             return ResponseEntity.ok(Map.of("status", "ignored", "reason", ignoreReason));
         }
         whatsAppUserMappingService.ensureLinkedIfEmpty(userId, incoming.getFromJid());
+        evolutionSessionWatchdogService.touchWebhookActivity(instance);
         whatsAppCommandService.sendJarvisInstantAck(incoming, userId, instance);
         log.info("Evolution webhook enfileirado (async): userId={} remoteJid={} fromMe={} msgKey={}", userId, incoming.getFromJid(), incoming.isFromMe(), incoming.getMessageKeyId());
         evolutionWebhookAsyncProcessor.processEvolutionMessageAsync(incoming, userId, instance);
@@ -166,6 +169,10 @@ public class EvolutionWebhookController {
             if (alt != null && !alt.isBlank()) {
                 fromJid = alt;
             } else {
+                String participant = key.path("participant").asText("");
+                if (participant != null && !participant.isBlank() && participant.contains("@s.whatsapp.net")) {
+                    fromJid = participant;
+                } else {
                 String sender = payloadRoot.path("sender").asText("");
                 if (sender.isBlank()) {
                     sender = payloadRoot.path("body").path("sender").asText("");
@@ -176,6 +183,7 @@ public class EvolutionWebhookController {
                     } else if (sender.replaceAll("\\D", "").length() >= 10) {
                         fromJid = sender.replaceAll("\\D", "") + "@s.whatsapp.net";
                     }
+                }
                 }
             }
         }
@@ -357,11 +365,15 @@ public class EvolutionWebhookController {
             data.path("instanceName").asText("")
         );
         log.info("Evolution CONNECTION_UPDATE event={} instance={} state={}", event, instance, state);
+        if (instance != null && !instance.isBlank() && EvolutionSessionWatchdogService.isConnectionLostState(state)) {
+            evolutionSessionWatchdogService.onConnectionLost(instance.trim(), state);
+        }
         if ("open".equalsIgnoreCase(state) && instance != null && !instance.isBlank()) {
             String inst = instance.trim();
             evolutionInstanceSettingsService.onInstanceConnected(inst);
             if (evolutionPairingService.isVerifiedConnectedInstance(inst)) {
                 evolutionPairingService.onVerifiedInstanceConnected(inst);
+                evolutionInstanceSettingsService.markInstanceStabilized(inst);
             } else {
                 log.info(
                     "Evolution CONNECTION_UPDATE open ignorado para limpar «desligado» (instância {} — sessão fantasma ou não confirmada)",

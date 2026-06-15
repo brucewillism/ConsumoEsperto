@@ -142,8 +142,10 @@ public class WhatsAppBotAllowlist {
         if (remoteJid == null || remoteJid.isBlank() || userId == null) {
             return false;
         }
+        // WhatsApp migra JIDs para @lid; o webhook resolve remoteJidAlt quando possível.
+        // Se ainda vier @lid na conversa consigo mesmo, aceita quando o utilizador tem número vinculado.
         if (remoteJid.contains("@lid")) {
-            return false;
+            return hasProfileWhatsappLinked(userId) || !ownerDigits(userId).isEmpty();
         }
         // Chat interno WhatsApp: instância já identificou o inquilino (ce-uN).
         if (isWhatsAppNotesToSelfJid(remoteJid)) {

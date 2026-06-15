@@ -32,9 +32,9 @@ public class AsyncConfig {
     @Bean(name = "cerebroExecutor")
     public Executor cerebroExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(6);
-        executor.setQueueCapacity(200);
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(12);
+        executor.setQueueCapacity(300);
         executor.setThreadNamePrefix("CerebroAsync-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(20);

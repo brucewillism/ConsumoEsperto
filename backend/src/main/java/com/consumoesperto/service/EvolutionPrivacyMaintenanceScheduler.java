@@ -13,8 +13,11 @@ public class EvolutionPrivacyMaintenanceScheduler {
 
     private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
 
-    @Value("${consumoesperto.evolution.privacy.presence-refresh-enabled:true}")
+    @Value("${consumoesperto.evolution.privacy.presence-refresh-enabled:false}")
     private boolean presenceRefreshEnabled;
+
+    @Value("${consumoesperto.evolution.session.sticky:true}")
+    private boolean sessionSticky;
 
     public EvolutionPrivacyMaintenanceScheduler(EvolutionInstanceSettingsService evolutionInstanceSettingsService) {
         this.evolutionInstanceSettingsService = evolutionInstanceSettingsService;
@@ -22,7 +25,7 @@ public class EvolutionPrivacyMaintenanceScheduler {
 
     @Scheduled(fixedDelayString = "${consumoesperto.evolution.privacy.presence-refresh-interval-ms:60000}")
     public void refreshPresenceForOpenInstances() {
-        if (!presenceRefreshEnabled) {
+        if (!presenceRefreshEnabled || sessionSticky) {
             return;
         }
         evolutionInstanceSettingsService.refreshPresenceForConnectedInstances();
