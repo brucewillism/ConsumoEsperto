@@ -666,6 +666,8 @@
   }
 
   .transacoes-modal-body {
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
@@ -674,13 +676,15 @@
   }
 
   .transacoes-modal-scroll {
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     max-height: min(62vh, calc(90vh - 88px));
     overflow-x: hidden;
     overflow-y: auto;
     padding-right: 12px;
     direction: ltr;
     scrollbar-gutter: stable;
+    touch-action: pan-y;
     background: var(--exec-surface);
   }
 

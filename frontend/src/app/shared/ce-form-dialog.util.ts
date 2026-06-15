@@ -16,15 +16,30 @@ function stabilizeFormFields(): void {
   });
 }
 
-function isBackdropPointerEvent(event: PointerEvent, backdrop: HTMLElement): boolean {
-  const target = event.target as HTMLElement | null;
-  if (!target || target !== backdrop) return false;
-  if (target.closest('.cdk-overlay-pane')) return false;
-  return true;
+function getDialogContainerForRef<T>(ref: MatDialogRef<T, unknown>): HTMLElement | null {
+  const containers = document.querySelectorAll<HTMLElement>(
+    '.cdk-overlay-container .mat-mdc-dialog-container'
+  );
+  return containers.length ? containers[containers.length - 1] : null;
+}
+
+function isBackdropClick(event: MouseEvent, backdrop: HTMLElement, dialog: HTMLElement | null): boolean {
+  if (event.target !== backdrop) return false;
+  if (!dialog) return true;
+
+  const rect = dialog.getBoundingClientRect();
+  const gutter = 24;
+  const { clientX: x, clientY: y } = event;
+  return !(
+    x >= rect.left - gutter &&
+    x <= rect.right + gutter &&
+    y >= rect.top - gutter &&
+    y <= rect.bottom + gutter
+  );
 }
 
 /**
- * Fecha ao clicar no backdrop — ignora cliques em painéis overlay (dialog, mat-select, calendário).
+ * Fecha ao clicar no backdrop — usa click (não pointerdown) e ignora a zona do dialog + scrollbar.
  */
 export function wireCeDialogBackdropClose<T, R = unknown>(
   ref: MatDialogRef<T, R>,
@@ -37,8 +52,10 @@ export function wireCeDialogBackdropClose<T, R = unknown>(
     const backdrop = backdrops.length ? backdrops[backdrops.length - 1] : null;
     if (!backdrop) return;
 
-    const onPointerDown = (event: PointerEvent): void => {
-      if (!isBackdropPointerEvent(event, backdrop)) return;
+    const dialog = getDialogContainerForRef(ref);
+
+    const onClick = (event: MouseEvent): void => {
+      if (!isBackdropClick(event, backdrop, dialog)) return;
 
       if (onBackdrop) {
         const result = onBackdrop();
@@ -48,27 +65,8 @@ export function wireCeDialogBackdropClose<T, R = unknown>(
       }
     };
 
-    backdrop.addEventListener('pointerdown', onPointerDown);
-    ref.afterClosed().subscribe(() => backdrop.removeEventListener('pointerdown', onPointerDown));
-  });
-}
-
-function wireCeDialogPanelShield<T>(ref: MatDialogRef<T, unknown>): void {
-  ref.afterOpened().subscribe(() => {
-    const containers = document.querySelectorAll<HTMLElement>(
-      '.cdk-overlay-container .mat-mdc-dialog-container'
-    );
-    const container = containers[containers.length - 1];
-    if (!container) return;
-
-    const pane = container.closest('.cdk-overlay-pane') ?? container;
-    const stop = (event: Event) => event.stopPropagation();
-    pane.addEventListener('pointerdown', stop, true);
-    pane.addEventListener('mousedown', stop, true);
-    ref.afterClosed().subscribe(() => {
-      pane.removeEventListener('pointerdown', stop, true);
-      pane.removeEventListener('mousedown', stop, true);
-    });
+    backdrop.addEventListener('click', onClick);
+    ref.afterClosed().subscribe(() => backdrop.removeEventListener('click', onClick));
   });
 }
 
@@ -78,7 +76,6 @@ export function wireCeDialogBehavior<T, R = unknown>(
   onBackdrop?: () => R | void
 ): void {
   wireCeDialogBackdropClose(ref, onBackdrop);
-  wireCeDialogPanelShield(ref);
   ref.afterOpened().subscribe(() => stabilizeFormFields());
 }
 

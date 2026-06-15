@@ -1448,6 +1448,8 @@ html.ce-modal-open .sidebar-nav {
   }
 
   .transacoes-modal-body {
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
@@ -1456,7 +1458,8 @@ html.ce-modal-open .sidebar-nav {
   }
 
   .transacoes-modal-scroll.ce-dialog-scroll {
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     max-height: min(62vh, calc(90vh - 88px));
     overflow-x: hidden !important;
     overflow-y: auto !important;

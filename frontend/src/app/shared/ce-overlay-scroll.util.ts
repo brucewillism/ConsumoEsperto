@@ -4,6 +4,18 @@ import { EnvironmentProviders, NgZone, inject, provideEnvironmentInitializer } f
 const OVERLAY_PANEL_SELECTORS =
   '.mat-mdc-select-panel, .mat-mdc-autocomplete-panel, .mat-mdc-menu-panel';
 
+const SCROLLABLE_SELECTORS = [
+  '.ce-dialog-scroll',
+  '.transacoes-modal-scroll',
+  'mat-dialog-content',
+  '.mat-mdc-dialog-content',
+  '.mat-mdc-select-panel',
+  '.mat-mdc-select-panel .mdc-list',
+  '.mat-mdc-autocomplete-panel',
+  '.mat-mdc-menu-panel',
+  '.modal-body',
+].join(', ');
+
 let modalLockCount = 0;
 let wheelTrapHandler: ((event: WheelEvent) => void) | null = null;
 let overlayObserver: MutationObserver | null = null;
@@ -12,12 +24,34 @@ function hasOpenDialog(): boolean {
   return !!document.querySelector('.cdk-overlay-container .mat-mdc-dialog-container');
 }
 
-function isInsideOverlayUi(target: Element | null): boolean {
-  return !!target?.closest('.cdk-overlay-container');
+function elementAtPointer(event: WheelEvent): Element | null {
+  return document.elementFromPoint(event.clientX, event.clientY);
+}
+
+function isPointerOverOverlayUi(event: WheelEvent): boolean {
+  return !!elementAtPointer(event)?.closest('.cdk-overlay-container');
+}
+
+function findScrollableAtPointer(event: WheelEvent): HTMLElement | null {
+  const el = elementAtPointer(event);
+  if (!el) return null;
+  return el.closest(SCROLLABLE_SELECTORS) as HTMLElement | null;
+}
+
+function canScrollElement(el: HTMLElement, deltaY: number): boolean {
+  const { scrollTop, scrollHeight, clientHeight } = el;
+  if (scrollHeight <= clientHeight + 1) return false;
+  if (deltaY < 0) return scrollTop > 0;
+  return scrollTop + clientHeight < scrollHeight - 1;
+}
+
+function applyWheelScroll(el: HTMLElement, deltaY: number): void {
+  el.scrollTop += deltaY;
 }
 
 /**
- * Bloqueia scroll da página quando há modal aberto — sem position:fixed (preserva scroll nativo nos overlays).
+ * Bloqueia scroll da página quando há modal aberto.
+ * Usa elementFromPoint — touchpad e roda do mouse reportam target incorreto.
  */
 export function lockPageScroll(): void {
   modalLockCount += 1;
@@ -32,9 +66,21 @@ export function lockPageScroll(): void {
     if (!hasOpenDialog() && !document.documentElement.classList.contains('ce-modal-open')) {
       return;
     }
-    if (isInsideOverlayUi(event.target as Element)) {
+
+    const scrollable = findScrollableAtPointer(event);
+    if (scrollable) {
+      if (canScrollElement(scrollable, event.deltaY)) {
+        applyWheelScroll(scrollable, event.deltaY);
+      }
+      event.preventDefault();
       return;
     }
+
+    if (isPointerOverOverlayUi(event)) {
+      event.preventDefault();
+      return;
+    }
+
     event.preventDefault();
   };
 
