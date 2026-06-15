@@ -417,19 +417,18 @@ public class EvolutionPairingService {
 
     @Transactional(readOnly = true)
     public boolean isInstanceConnectedForUser(Long usuarioId) {
+        if (evolutionWaSessionRegistry.isUserDisconnected(usuarioId)) {
+            return false;
+        }
         ResolvedEvolutionCred cred = pairingCredSnapshot(usuarioId).cred;
-        if (isRealWaSessionOpen(cred)) {
-            if (evolutionWaSessionRegistry.isUserDisconnected(usuarioId)) {
-                clearWaSessionDisconnectedByUser(usuarioId);
-            }
+        if (cred.instanceName != null && isVerifiedConnectedInstance(cred.instanceName)) {
             evolutionInstanceSettingsService.ensurePhoneFriendlyOnConnect(cred.instanceName);
             return true;
         }
         if (pairingFallbackToGlobalInstance && isDedicatedEvolutionInstance(cred.instanceName)) {
             ResolvedEvolutionCred globalCred = globalInstanceCred();
-            if (isRealWaSessionOpen(globalCred)) {
+            if (isVerifiedConnectedInstance(globalCred.instanceName)) {
                 adoptGlobalInstanceForPairing(usuarioId);
-                clearWaSessionDisconnectedByUser(usuarioId);
                 evolutionInstanceSettingsService.ensurePhoneFriendlyOnConnect(globalCred.instanceName);
                 return true;
             }

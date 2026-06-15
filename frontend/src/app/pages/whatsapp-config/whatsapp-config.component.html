@@ -19,7 +19,9 @@
           <span *ngIf="evolutionInstanceName" class="muted"> — {{ evolutionInstanceName }}</span>
         </span>
         <span *ngIf="numeroAtual && evolutionWaConnected === false" class="status-warn">
-          Sessão WhatsApp (Evolution): <strong>desligada</strong> — escaneie o QR ao vincular ou use Desvincular.
+          Sessão WhatsApp (Evolution): <strong>desligada</strong>
+          <span *ngIf="evolutionInstanceName" class="muted"> — {{ evolutionInstanceName }}</span>
+          — use <strong>Atualizar vínculo</strong> para escanear um QR novo.
         </span>
         <span *ngIf="evolutionWaConnected === null && numeroAtual" class="status-muted">
           A verificar ligação com a Evolution…

@@ -113,7 +113,10 @@ export class WhatsappConfigComponent implements OnInit {
   atualizarStatusEvolution(): void {
     this.usuarioService.getEvolutionWhatsappConnectionStatus().subscribe({
       next: (st) => {
-        this.evolutionWaConnected = st.connected === true || st.evolutionWaConnected === true;
+        const suppressed = st.sessionMarkedDisconnected === true;
+        this.evolutionWaConnected = suppressed
+          ? false
+          : st.connected === true || st.evolutionWaConnected === true;
         if (st.instanceName) {
           this.evolutionInstanceName = st.instanceName;
         }

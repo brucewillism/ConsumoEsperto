@@ -1,3 +1,4 @@
+import { ScrollingModule } from '@angular/cdk/scrolling';
 import { Component, DestroyRef, OnInit, OnDestroy, TemplateRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
@@ -49,6 +50,7 @@ import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alterac
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatDialogModule,
+    ScrollingModule,
     FormsModule,
     PageLoadingComponent,
     WhatsappParityHintComponent,

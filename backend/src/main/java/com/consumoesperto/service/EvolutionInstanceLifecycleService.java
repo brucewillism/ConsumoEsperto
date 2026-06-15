@@ -248,6 +248,22 @@ public class EvolutionInstanceLifecycleService {
             evolutionPairingService.resolveCredentials(usuarioId);
         boolean apiStillOpen = evolutionPairingService.isRealWaSessionOpen(credFinal)
             || after.filter(this::connectionStateLooksConnected).isPresent();
+        if (apiStillOpen && !rotated) {
+            log.warn(
+                "Evolution disconnect: API ainda reporta open em {} — a forçar rotação de instância",
+                finalInstance
+            );
+            finalInstance = recycleStaleInstance(usuarioId, finalInstance, true);
+            rotated = !finalInstance.equals(instanceName);
+            out.put("instanceRotated", rotated);
+            out.put("instanceName", finalInstance);
+            evolutionPairingService.invalidatePairingCredCache(usuarioId);
+            after = evolutionPairingService.fetchConnectionStateForUser(usuarioId);
+            after.ifPresent(s -> out.put("connectionStateAfter", s));
+            credFinal = evolutionPairingService.resolveCredentials(usuarioId);
+            apiStillOpen = evolutionPairingService.isRealWaSessionOpen(credFinal)
+                || after.filter(this::connectionStateLooksConnected).isPresent();
+        }
         out.put("evolutionApiReportsOpen", apiStillOpen);
 
         out.put("evolutionWaConnected", false);

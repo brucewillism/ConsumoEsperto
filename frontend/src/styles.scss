@@ -1296,20 +1296,28 @@ app-root {
   }
 }
 
-/* Modal de transações da fatura — superfície opaca como os demais diálogos */
+/* Modal de transações da fatura — superfície opaca, scroll no corpo, cliques não vazam */
 .cdk-overlay-pane.fatura-transacoes-dialog {
+  width: min(920px, 94vw) !important;
+  max-width: 94vw !important;
+  pointer-events: auto !important;
+
   .mat-mdc-dialog-container {
     --mdc-dialog-container-color: var(--exec-surface);
+    width: 100%;
     padding: 0;
     max-height: 90vh;
     overflow: hidden;
     background: var(--exec-surface) !important;
+    pointer-events: auto !important;
   }
 
   .mat-mdc-dialog-surface,
   .mdc-dialog__surface {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-height: 0;
     max-height: 90vh;
     overflow: hidden;
     padding: 0 !important;
@@ -1321,6 +1329,36 @@ app-root {
       0 0 0 1px rgba(0, 229, 255, 0.12),
       0 18px 48px rgba(0, 0, 0, 0.65) !important;
     opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .transacoes-modal {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    max-height: 90vh;
+    overflow: hidden;
+    pointer-events: auto;
+  }
+
+  .mat-mdc-dialog-content.transacoes-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 12px 20px 20px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    max-height: min(62vh, calc(90vh - 88px)) !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    pointer-events: auto;
+  }
+
+  .mat-mdc-dialog-content.sem-transacoes-modal {
+    overflow: visible !important;
+    max-height: none !important;
   }
 }
 
