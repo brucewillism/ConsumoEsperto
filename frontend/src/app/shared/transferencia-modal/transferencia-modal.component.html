@@ -14,7 +14,7 @@
   <form [formGroup]="form" (ngSubmit)="confirmar()" *ngIf="!carregandoContas">
     <mat-form-field appearance="outline" class="full">
       <mat-label>Conta de origem</mat-label>
-      <mat-select formControlName="contaOrigemId" required>
+      <mat-select formControlName="contaOrigemId" required panelClass="exec-select-panel">
         <mat-option *ngFor="let c of contas" [value]="c.id">
           {{ c.nome }} — {{ brl(c.saldoAtual) }}
         </mat-option>
@@ -24,7 +24,7 @@
 
     <mat-form-field appearance="outline" class="full">
       <mat-label>Conta de destino</mat-label>
-      <mat-select formControlName="contaDestinoId" required>
+      <mat-select formControlName="contaDestinoId" required panelClass="exec-select-panel">
         <mat-option *ngFor="let c of contas" [value]="c.id">
           {{ c.nome }} — {{ brl(c.saldoAtual) }}
         </mat-option>

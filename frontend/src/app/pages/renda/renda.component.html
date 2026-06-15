@@ -21,7 +21,7 @@
     <div class="fiscal-form" *ngIf="!carregandoConfig">
       <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
         <mat-label>Modelo de renda</mat-label>
-        <mat-select name="tipoConfiguracaoRenda" [(ngModel)]="tipoConfiguracaoRenda">
+        <mat-select name="tipoConfiguracaoRenda" [(ngModel)]="tipoConfiguracaoRenda" panelClass="exec-select-panel">
           <mat-option *ngFor="let t of tiposRenda" [value]="t.valor">
             {{ t.rotulo }} — {{ t.descricao }}
           </mat-option>
@@ -39,7 +39,7 @@
           </mat-form-field>
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Dia de pagamento</mat-label>
-            <mat-select name="diaPagamento" [(ngModel)]="diaPagamento">
+            <mat-select name="diaPagamento" [(ngModel)]="diaPagamento" panelClass="exec-select-panel">
               <mat-option *ngFor="let d of diasPagamento" [value]="d">Dia {{ d }}</mat-option>
             </mat-select>
           </mat-form-field>
@@ -59,7 +59,7 @@
           </mat-form-field>
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Dia do recebimento</mat-label>
-            <mat-select name="diaPagamentoUnico" [(ngModel)]="diaPagamento">
+            <mat-select name="diaPagamentoUnico" [(ngModel)]="diaPagamento" panelClass="exec-select-panel">
               <mat-option *ngFor="let d of diasPagamento" [value]="d">Dia {{ d }}</mat-option>
             </mat-select>
           </mat-form-field>
@@ -110,6 +110,7 @@
             name="tipoRecebimento13"
             [(ngModel)]="fiscal.tipoRecebimento13"
             (selectionChange)="onTipoRecebimentoChange()"
+            panelClass="exec-select-panel"
           >
             <mat-option [value]="'DUAS_PARCELAS'">Duas parcelas (adiantamento + saldo)</mat-option>
             <mat-option [value]="'PARCELA_UNICA'">Parcela única (tudo de uma vez)</mat-option>
@@ -118,7 +119,7 @@
 
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Dia do pagamento do 13º</mat-label>
-          <mat-select name="diaPagamento13" [(ngModel)]="fiscal.diaPagamento13">
+          <mat-select name="diaPagamento13" [(ngModel)]="fiscal.diaPagamento13" panelClass="exec-select-panel">
             <mat-option [value]="null">Mesmo dia do salário mensal</mat-option>
             <mat-option *ngFor="let d of diasPagamento" [value]="d">Dia {{ d }}</mat-option>
           </mat-select>
@@ -128,14 +129,14 @@
       <div class="fiscal-row" *ngIf="fiscal.tipoRecebimento13 === 'DUAS_PARCELAS'">
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Mês da 1ª parcela (50% bruto)</mat-label>
-          <mat-select name="mesPrimeiraParcela" [(ngModel)]="fiscal.mesPrimeiraParcela">
+          <mat-select name="mesPrimeiraParcela" [(ngModel)]="fiscal.mesPrimeiraParcela" panelClass="exec-select-panel">
             <mat-option *ngFor="let m of meses" [value]="m.valor">{{ m.rotulo }}</mat-option>
           </mat-select>
         </mat-form-field>
 
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Mês da 2ª parcela (saldo líquido)</mat-label>
-          <mat-select name="mesSegundaParcela" [(ngModel)]="fiscal.mesSegundaParcela">
+          <mat-select name="mesSegundaParcela" [(ngModel)]="fiscal.mesSegundaParcela" panelClass="exec-select-panel">
             <mat-option *ngFor="let m of meses" [value]="m.valor">{{ m.rotulo }}</mat-option>
           </mat-select>
         </mat-form-field>
@@ -144,7 +145,7 @@
       <div class="fiscal-row" *ngIf="fiscal.tipoRecebimento13 === 'PARCELA_UNICA'">
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Mês do pagamento integral</mat-label>
-          <mat-select name="mesParcelaUnica" [(ngModel)]="fiscal.mesParcelaUnica">
+          <mat-select name="mesParcelaUnica" [(ngModel)]="fiscal.mesParcelaUnica" panelClass="exec-select-panel">
             <mat-option *ngFor="let m of meses" [value]="m.valor">{{ m.rotulo }}</mat-option>
           </mat-select>
         </mat-form-field>

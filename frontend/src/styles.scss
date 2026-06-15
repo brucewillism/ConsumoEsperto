@@ -642,6 +642,18 @@ a {
   max-width: 96vw !important;
 }
 
+.cdk-overlay-pane.mat-mdc-dialog-panel .mat-mdc-dialog-surface {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mat-mdc-dialog-container .mat-mdc-dialog-actions {
+  flex-shrink: 0;
+}
+
 .mat-mdc-dialog-surface {
   border: 1px solid var(--hud-cyan-border) !important;
   background: var(--exec-surface) !important;
@@ -688,7 +700,13 @@ a {
 }
 
 .mat-mdc-dialog-container .mat-mdc-dialog-content {
-  overflow: visible !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  max-height: min(62vh, calc(90vh - 140px)) !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   color: var(--text-secondary);
 }
 
@@ -733,14 +751,30 @@ a {
 }
 
 .ce-form-dialog .mat-mdc-dialog-surface {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
   padding: 20px 24px 16px;
 }
 
 .ce-form-dialog .mat-mdc-dialog-content {
   padding-top: 4px !important;
-  max-height: none !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(62vh, calc(90vh - 140px)) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   min-width: min(100%, 420px);
   box-sizing: border-box;
+}
+
+.ce-form-dialog .mat-mdc-dialog-actions {
+  flex-shrink: 0;
+  padding: 12px 0 0;
+  margin: 0;
 }
 
 /* .ce-form-body usa min-width:0 para grids — em modais isso colapsava os campos */
@@ -753,11 +787,6 @@ a {
 .ce-form-dialog .mat-mdc-form-field.full {
   width: 100%;
   display: block;
-}
-
-.ce-form-dialog .mat-mdc-dialog-actions {
-  padding: 12px 0 0;
-  margin: 0;
 }
 
 /* Modal convite família — evita colapso de campos e botão primário fora da tela */
@@ -989,10 +1018,18 @@ a {
   border: 1px solid rgba(148, 163, 184, 0.35) !important;
   border-radius: 10px !important;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
+  max-height: min(280px, 45vh) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  pointer-events: auto;
 
   .mdc-menu-surface,
   .mdc-list {
     background-color: var(--exec-surface) !important;
+    max-height: min(280px, 45vh) !important;
+    overflow-y: auto !important;
   }
 
   .mat-mdc-option,
@@ -1363,7 +1400,8 @@ app-root {
 }
 
 /* Pagamento de fatura — conteúdo rolável; ações fixas no rodapé (evita sobreposição) */
-.cdk-overlay-pane.pagamento-fatura-dialog {
+.cdk-overlay-pane.pagamento-fatura-dialog,
+.cdk-overlay-pane.transferencia-dialog {
   .mat-mdc-dialog-surface {
     display: flex;
     flex-direction: column;
@@ -1374,11 +1412,14 @@ app-root {
 
   .mat-mdc-dialog-content.modal-body {
     flex: 1 1 auto;
+    min-height: 0;
     overflow-x: hidden !important;
     overflow-y: auto !important;
     max-height: min(58vh, 480px) !important;
     margin: 0 -4px;
     padding: 4px 4px 12px !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .mat-mdc-dialog-actions.modal-actions {

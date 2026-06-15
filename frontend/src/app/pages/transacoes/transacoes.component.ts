@@ -346,6 +346,9 @@ export class TransacoesComponent implements OnInit {
       this.dialog
         .open(ParcelamentoDeleteChoiceDialogComponent, {
           width: '440px',
+          maxWidth: '96vw',
+          maxHeight: '90vh',
+          panelClass: 'parcelamento-delete-dialog',
           data: {
             descricao: base,
             parcelaAtual: transacao.parcelaAtual!,

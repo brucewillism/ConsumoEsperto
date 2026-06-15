@@ -212,10 +212,7 @@ export class RendaComponent implements OnInit {
     this.carregandoFiscal = true;
     this.fiscalService.obter().subscribe({
       next: (cfg) => {
-        this.fiscal = {
-          ...cfg,
-          mesSegundaParcela: cfg.mesSegundaParcela ?? 12
-        };
+        this.fiscal = this.normalizarFiscal(cfg);
         this.atualizarSimulacao();
         this.carregandoFiscal = false;
       },
@@ -238,6 +235,8 @@ export class RendaComponent implements OnInit {
   }
 
   salvarCalendario(): void {
+    this.fiscal = this.normalizarFiscal(this.fiscal);
+
     if (!this.fiscal.tipoRecebimento13) {
       this.toast.warning('Escolha como você recebe o 13º salário.');
       return;
@@ -279,9 +278,22 @@ export class RendaComponent implements OnInit {
   }
 
   onTipoRecebimentoChange(): void {
-    if (this.fiscal.tipoRecebimento13 === 'DUAS_PARCELAS' && !this.fiscal.mesSegundaParcela) {
-      this.fiscal.mesSegundaParcela = 12;
-    }
+    this.fiscal = this.normalizarFiscal(this.fiscal);
+  }
+
+  /** Preenche padrões CLT quando a config ainda está vazia (primeiro uso). */
+  private normalizarFiscal(cfg: ConfiguracaoFiscalDto): ConfiguracaoFiscalDto {
+    const tipo = cfg.tipoRecebimento13 ?? 'DUAS_PARCELAS';
+    return {
+      ...cfg,
+      tipoRecebimento13: tipo,
+      mesSegundaParcela: cfg.mesSegundaParcela ?? 12,
+      mesPrimeiraParcela:
+        tipo === 'DUAS_PARCELAS' ? (cfg.mesPrimeiraParcela ?? 11) : cfg.mesPrimeiraParcela,
+      mesParcelaUnica:
+        tipo === 'PARCELA_UNICA' ? (cfg.mesParcelaUnica ?? 12) : cfg.mesParcelaUnica,
+      provisionamentoAtivo: cfg.provisionamentoAtivo ?? true,
+    };
   }
 
   parcelasDecimo(): Array<{ mes: number; dia: number; rotulo: string; valor: number }> {

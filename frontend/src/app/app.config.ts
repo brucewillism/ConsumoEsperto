@@ -1,9 +1,11 @@
 import { ApplicationConfig, ErrorHandler } from '@angular/core';
+import { Overlay } from '@angular/cdk/overlay';
 import { provideRouter, withNavigationErrorHandler } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { DateAdapter, MAT_DATE_FORMATS, MAT_DATE_LOCALE } from '@angular/material/core';
+import { MAT_DIALOG_DEFAULT_OPTIONS } from '@angular/material/dialog';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { BR_DATE_FORMATS, BrDateAdapter } from './shared/locale/br-date.adapter';
 
@@ -77,6 +79,16 @@ export const appConfig: ApplicationConfig = {
         floatLabel: 'always',
         subscriptSizing: 'fixed'
       }
+    },
+
+    // Evita cdk-global-scrollblock impedir rolagem dentro de modais e mat-select
+    {
+      provide: MAT_DIALOG_DEFAULT_OPTIONS,
+      deps: [Overlay],
+      useFactory: (overlay: Overlay) => ({
+        maxHeight: '90vh',
+        scrollStrategy: overlay.scrollStrategies.noop(),
+      }),
     },
 
     // Chart.js (ng2-charts v8) — registra controllers/plugins (line, doughnut, filler…)
