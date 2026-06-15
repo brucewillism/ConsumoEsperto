@@ -88,9 +88,13 @@ public class WhatsAppAppParityService {
             "Deteção de eventos no calendário; confirmação no WhatsApp ou no dashboard."
         ),
         item("despesas-fixas", "Despesas fixas (recorrentes)", "/perfil", "Perfil", "BOTH",
-            List.of("salve essa despesa fixa de 250 para internet dia 10", "tenho recorrência?"),
-            List.of("Secção Despesas fixas no Perfil", "Dia de vencimento e valor"),
-            "Pergunta «tenho recorrência?» lista assinaturas repetidas."
+            List.of(
+                "salve essa despesa fixa de 250 para internet dia 10",
+                "conta de luz vence dia 15 de 180",
+                "tenho recorrência?"
+            ),
+            List.of("Secção Despesas fixas no Perfil", "Dia de vencimento e valor", "Lembrete WhatsApp 3 dias antes"),
+            "Contas como luz, água e aluguel; lembrete automático 3 dias antes do vencimento."
         ),
         item("relatorios", "Relatórios e PDF", "/relatorios", "Relatórios", "BOTH",
             List.of("gera PDF de maio", "relatório do mês passado"),

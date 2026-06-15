@@ -7,12 +7,15 @@ import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.DespesaFixaRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.Normalizer;
+import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -24,10 +27,16 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DespesaFixaService {
+
+    private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+    private static final int DIAS_ANTECEDENCIA_LEMBRETE = 3;
 
     private final DespesaFixaRepository despesaFixaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final WhatsAppNotificationService whatsAppNotificationService;
+    private final JarvisProtocolService jarvisProtocolService;
 
     @Transactional(readOnly = true)
     public List<DespesaFixaDTO> listar(Long usuarioId) {
@@ -143,6 +152,60 @@ public class DespesaFixaService {
         despesaFixaRepository.delete(e);
     }
 
+    @Transactional(readOnly = true)
+    public List<DespesaFixaDTO> listarVencendoEmDias(Long usuarioId, int dias) {
+        LocalDate hoje = LocalDate.now();
+        List<DespesaFixaDTO> out = new ArrayList<>();
+        for (DespesaFixa d : despesaFixaRepository.findByUsuarioIdOrderByDiaVencimentoAscIdAsc(usuarioId)) {
+            if (venceEmDias(d, hoje, dias)) {
+                out.add(toDto(d));
+            }
+        }
+        return out;
+    }
+
+    /** Job diário: lembrete WhatsApp 3 dias antes do vencimento de despesas fixas. */
+    @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
+    @Transactional(readOnly = true)
+    public void alertarVencimentosProximos() {
+        LocalDate hoje = LocalDate.now();
+        List<DespesaFixa> todas = despesaFixaRepository.findAll();
+        if (todas.isEmpty()) {
+            return;
+        }
+        log.info("[DESPESA_FIXA] Verificando {} despesa(s) fixa(s) — lembrete {} dias antes", todas.size(), DIAS_ANTECEDENCIA_LEMBRETE);
+        for (DespesaFixa d : todas) {
+            if (!venceEmDias(d, hoje, DIAS_ANTECEDENCIA_LEMBRETE)) {
+                continue;
+            }
+            Usuario u = d.getUsuario();
+            if (u == null || u.getWhatsappNumero() == null || u.getWhatsappNumero().isBlank()) {
+                continue;
+            }
+            try {
+                int diaEfetivo = diaEfetivoNoMes(d.getDiaVencimento(), YearMonth.from(hoje.plusDays(DIAS_ANTECEDENCIA_LEMBRETE)).lengthOfMonth());
+                String voc = jarvisProtocolService.resolveVocative(u.getId(), usuarioRepository);
+                String msg = jarvisProtocolService.lembreteDespesaFixaVencimento(
+                    voc,
+                    d.getDescricao(),
+                    BRL.format(nz(d.getValor())),
+                    DIAS_ANTECEDENCIA_LEMBRETE,
+                    diaEfetivo
+                );
+                whatsAppNotificationService.enviarParaUsuario(u.getId(), msg);
+            } catch (Exception e) {
+                log.warn("[DESPESA_FIXA] Falha lembrete id={} userId={}: {}", d.getId(), u.getId(), e.getMessage());
+            }
+        }
+    }
+
+    public static boolean venceEmDias(DespesaFixa d, LocalDate hoje, int diasAntecedencia) {
+        if (d == null) {
+            return false;
+        }
+        return VencimentoMensalUtil.venceEmDias(d.getDiaVencimento(), hoje, diasAntecedencia);
+    }
+
     private static void aplicar(DespesaFixa e, DespesaFixaRequest req) {
         e.setDescricao(req.getDescricao().trim());
         e.setValor(req.getValor().setScale(2, RoundingMode.HALF_UP));
@@ -165,7 +228,7 @@ public class DespesaFixaService {
         if (diaVencimento == null) {
             return 1;
         }
-        return Math.min(Math.max(1, diaVencimento), ultimoDiaMes);
+        return VencimentoMensalUtil.diaEfetivoNoMes(diaVencimento, ultimoDiaMes);
     }
 
     private static BigDecimal nz(BigDecimal v) {

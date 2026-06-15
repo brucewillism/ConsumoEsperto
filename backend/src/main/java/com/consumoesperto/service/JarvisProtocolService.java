@@ -607,6 +607,55 @@ public class JarvisProtocolService {
             + "Convém validar o saldo e os *protocolos de débito*.";
     }
 
+    /** Lembrete WhatsApp de assinatura com vencimento em N dias (5 ou 3). */
+    public String lembreteAssinaturaVencimento(
+        int diasAntecedencia,
+        String nomeAssinatura,
+        String valorFmt,
+        String nomeConta,
+        String saldoFmt,
+        String usoChequeFmt,
+        TipoSaldoLembreteAssinatura situacao
+    ) {
+        String nome = nomeAssinatura == null || nomeAssinatura.isBlank() ? "assinatura" : nomeAssinatura.trim();
+        String diasTxt = diasAntecedencia == 1 ? "1 dia" : diasAntecedencia + " dias";
+        if (situacao == TipoSaldoLembreteAssinatura.INSUFICIENTE) {
+            return "⚠️ *URGENTE*, chefe: a assinatura da *" + nome + "* (*" + valorFmt
+                + "*) vence em *" + diasTxt + "*. Saldo disponível na conta *" + nomeConta + "*: *"
+                + saldoFmt + "*. Não cobre o débito nem com cheque especial. "
+                + "Faça um Pix para lá ou pause a assinatura no app.";
+        }
+        if (situacao == TipoSaldoLembreteAssinatura.SUFICIENTE) {
+            return "Chefe, lembrete: a assinatura da *" + nome + "* (*" + valorFmt
+                + "*) vence em *" + diasTxt + "*. A conta *" + nomeConta + "* tem saldo suficiente (*"
+                + saldoFmt + "*).";
+        }
+        return "Atenção, chefe: a assinatura da sua *" + nome + "* (*" + valorFmt
+            + "*) vence em *" + diasTxt + "*. O seu saldo real é de *" + saldoFmt
+            + "*. Esse débito vai ativar o seu *cheque especial* em *" + usoChequeFmt
+            + "* na conta *" + nomeConta + "*. Quer que eu te lembre de fazer um Pix para lá?";
+    }
+
+    /** Lembrete WhatsApp de despesa fixa com vencimento em N dias. */
+    public String lembreteDespesaFixaVencimento(
+        String vocativo,
+        String descricao,
+        String valorFmt,
+        int diasAntecedencia,
+        int diaVencimento
+    ) {
+        String v = blankToSenhor(vocativo);
+        String rotulo = descricao == null || descricao.isBlank() ? "obrigação fixa" : descricao.trim();
+        String diasTxt = diasAntecedencia == 1 ? "1 dia" : diasAntecedencia + " dias";
+        return "Chefe, lembrete: *" + rotulo + "* (*" + valorFmt + "*) vence em *" + diasTxt
+            + "* (dia *" + diaVencimento + "* do mês). "
+            + "Já está no seu *Futuro provável* — confirme o pagamento no app quando quiser.";
+    }
+
+    public enum TipoSaldoLembreteAssinatura {
+        SUFICIENTE, INSUFICIENTE, CHEQUE_ESPECIAL
+    }
+
     /**
      * Liquidez ociosa vs próxima fatura (simulação educativa; mesmo teor que {@link com.consumoesperto.service.SaldoService.AuditoriaLiquidez}).
      */
@@ -947,6 +996,13 @@ public class JarvisProtocolService {
         return "Entendido, " + v + ". Qual o dia de vencimento padrão para *" + rotulo + "*?";
     }
 
+    /** Pergunta de follow-up quando o utilizador regista despesa fixa sem valor. */
+    public String perguntarValorDespesaFixa(String vocativo, String descricao, int diaVencimento) {
+        String v = blankToSenhor(vocativo);
+        String rotulo = descricao == null || descricao.isBlank() ? "esta obrigação" : descricao.trim();
+        return "Entendido, " + v + ". Qual o valor mensal de *" + rotulo + "* (vencimento dia *" + diaVencimento + "*)?";
+    }
+
     /**
      * Confirmação canónica após gravar despesa fixa (Sentinela / gráfico Futuro provável).
      */
@@ -955,7 +1011,8 @@ public class JarvisProtocolService {
         return "🚀 *Protocolo Sentinela Atualizado*, Senhor.\n"
             + "Registrei *" + rotulo + "* de *" + valorFmt + "* como despesa fixa mensal (Vencimento: dia *"
             + diaVencimento + "*).\n"
-            + "A partir de agora, seu gráfico de \"Futuro Provável\" considerará esta retenção automaticamente.\n\n"
+            + "A partir de agora, seu gráfico de \"Futuro Provável\" considerará esta retenção automaticamente.\n"
+            + "Vou avisar no WhatsApp *3 dias antes* do vencimento.\n\n"
             + SIGNATURE_LINE;
     }
 }

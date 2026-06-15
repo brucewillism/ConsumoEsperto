@@ -3539,7 +3539,7 @@ public class WhatsAppCommandService {
             return msgOk("Assinatura",
                 "Pronto! " + acao + " a assinatura *" + atualizada.getNome() + "* ("
                     + BRL.format(atualizada.getValor()) + "/mês). "
-                    + (ativar ? "Volto a alertar 3 dias antes do vencimento." : "O job diário vai ignorar até você reativar."));
+                    + (ativar ? "Volto a alertar *5 e 3 dias* antes do vencimento." : "O job diário vai ignorar até você reativar."));
         } catch (RuntimeException e) {
             return msgErro(userId, "Assinatura", humanizarErroComando(e.getMessage()));
         }
@@ -3714,16 +3714,49 @@ public class WhatsAppCommandService {
             awaitingDespesaFixaDia.remove(userId);
             return Optional.of(msgInfo("Despesa fixa", "Registo cancelado. Pode enviar o comando outra vez quando quiser."));
         }
-        Integer dia = extrairPrimeiroDiaMesValido(text);
-        if (dia == null) {
-            return Optional.of(msgErro(userId, "Vencimento",
-                "Indique só o *dia* do mês (1 a 31), por exemplo *10*."));
+        PendingDespesaFixaDraft d = awaitingDespesaFixaDia.get(userId);
+        if (d.diaVencimento == null) {
+            Integer dia = extrairPrimeiroDiaMesValido(text);
+            if (dia == null) {
+                return Optional.of(msgErro(userId, "Vencimento",
+                    "Indique só o *dia* do mês (1 a 31), por exemplo *10*."));
+            }
+            d.diaVencimento = dia;
         }
-        PendingDespesaFixaDraft d = awaitingDespesaFixaDia.remove(userId);
+        if (d.valor == null) {
+            BigDecimal valor = extrairValorMonetario(text);
+            if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+                String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+                return Optional.of(jarvisProtocolService.perguntarValorDespesaFixa(voc, d.descricao, d.diaVencimento));
+            }
+            d.valor = valor;
+        }
+        awaitingDespesaFixaDia.remove(userId);
         try {
-            return Optional.of(persistDespesaFixaWhatsapp(userId, d.descricao, d.valor, dia));
+            return Optional.of(persistDespesaFixaWhatsapp(userId, d.descricao, d.valor, d.diaVencimento));
         } catch (IllegalArgumentException ex) {
             return Optional.of(msgErro(userId, "Despesa fixa", ex.getMessage()));
+        }
+    }
+
+    private static BigDecimal extrairValorMonetario(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        Matcher m = Pattern.compile("R?\\$?\\s*([0-9]+(?:[\\.,][0-9]+)?)").matcher(text.trim());
+        if (!m.find()) {
+            return null;
+        }
+        String raw = m.group(1);
+        if (raw.contains(",") && raw.lastIndexOf(',') > raw.indexOf('.')) {
+            raw = raw.replace(".", "").replace(",", ".");
+        } else {
+            raw = raw.replace(",", ".");
+        }
+        try {
+            return new BigDecimal(raw).setScale(2, RoundingMode.HALF_UP);
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -3753,16 +3786,20 @@ public class WhatsAppCommandService {
             return Optional.empty();
         }
         DespesaFixaIntent intent = toDespesaFixaIntent(DespesaFixaWhatsappTextParser.parse(raw.trim()));
-        if (intent == null) {
+        if (intent == null || intent.descricao == null || intent.descricao.isBlank()) {
             return Optional.empty();
         }
-        if (intent.diaVencimento == null) {
+        if (intent.diaVencimento == null || intent.valor == null) {
             PendingDespesaFixaDraft d = new PendingDespesaFixaDraft();
             d.valor = intent.valor;
             d.descricao = intent.descricao;
+            d.diaVencimento = intent.diaVencimento;
             awaitingDespesaFixaDia.put(userId, d);
             String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
-            return Optional.of(jarvisProtocolService.perguntarDiaVencimentoDespesaFixa(voc, intent.descricao));
+            if (intent.diaVencimento == null) {
+                return Optional.of(jarvisProtocolService.perguntarDiaVencimentoDespesaFixa(voc, intent.descricao));
+            }
+            return Optional.of(jarvisProtocolService.perguntarValorDespesaFixa(voc, intent.descricao, intent.diaVencimento));
         }
         try {
             return Optional.of(persistDespesaFixaWhatsapp(userId, intent.descricao, intent.valor, intent.diaVencimento));
@@ -3842,6 +3879,7 @@ public class WhatsAppCommandService {
     private static class PendingDespesaFixaDraft {
         BigDecimal valor;
         String descricao;
+        Integer diaVencimento;
     }
 
     private static class PendingFaturaPdfDraft {

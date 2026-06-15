@@ -42,6 +42,7 @@ public class JarvisContextoFinanceiroService {
     private final DebitoInternoRepository debitoInternoRepository;
     private final AgendamentoPagamentoService agendamentoPagamentoService;
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
+    private final DespesaFixaService despesaFixaService;
 
     /** Bloco textual pronto para anexar ao system prompt. Nunca lança exceção. */
     public String montarBlocoContexto(Long userId) {
@@ -87,6 +88,10 @@ public class JarvisContextoFinanceiroService {
         String assinaturas = montarBlocoAssinaturas(userId);
         if (!assinaturas.isBlank()) {
             sb.append(assinaturas);
+        }
+        String despesasFixas = montarBlocoDespesasFixas(userId);
+        if (!despesasFixas.isBlank()) {
+            sb.append(despesasFixas);
         }
         sb.append("- Mês de referência: ").append(mesRef).append("\n");
         return sb.toString();
@@ -177,15 +182,37 @@ public class JarvisContextoFinanceiroService {
             StringBuilder sb = new StringBuilder();
             sb.append("- Assinaturas ativas (mensal): ").append(BRL.format(totalAtivas));
             if (!proximas.isEmpty()) {
-                sb.append(" — vencendo em 3 dias: ");
+                sb.append(" — vencendo em até 3 dias: ");
                 sb.append(proximas.stream()
                     .map(a -> a.getNome() + " (" + BRL.format(a.getValor()) + ")")
                     .collect(java.util.stream.Collectors.joining(", ")));
             }
-            sb.append("\n");
+            sb.append(" (lembretes WhatsApp: 5 e 3 dias antes)\n");
             return sb.toString();
         } catch (Exception e) {
             log.debug("Contexto J.A.R.V.I.S.: assinaturas indisponíveis userId={}: {}", userId, e.getMessage());
+            return "";
+        }
+    }
+
+    private String montarBlocoDespesasFixas(Long userId) {
+        if (userId == null) {
+            return "";
+        }
+        try {
+            var proximas = despesaFixaService.listarVencendoEmDias(userId, 3);
+            if (proximas.isEmpty()) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder();
+            sb.append("- Despesas fixas vencendo em 3 dias: ");
+            sb.append(proximas.stream()
+                .map(d -> d.getDescricao() + " (" + BRL.format(d.getValor()) + ", dia " + d.getDiaVencimento() + ")")
+                .collect(java.util.stream.Collectors.joining(", ")));
+            sb.append("\n");
+            return sb.toString();
+        } catch (Exception e) {
+            log.debug("Contexto J.A.R.V.I.S.: despesas fixas indisponíveis userId={}: {}", userId, e.getMessage());
             return "";
         }
     }

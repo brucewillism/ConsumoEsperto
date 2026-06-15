@@ -33,7 +33,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Gestor proativo de assinaturas e recorrências — detecção, cadastro, alertas 3 dias antes.
+ * Gestor proativo de assinaturas e recorrências — detecção, cadastro, alertas 5 e 3 dias antes.
  */
 @Service
 @RequiredArgsConstructor
@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 public class AssinaturaRecorrenteService {
 
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
-    private static final int DIAS_ANTECEDENCIA_ALERTA = 3;
+    private static final List<Integer> DIAS_ANTECEDENCIA_ALERTAS = List.of(5, 3);
     private static final int SESSAO_TTL_MIN = 30;
     private static final int MESES_ANALISE = 6;
 
@@ -53,6 +53,7 @@ public class AssinaturaRecorrenteService {
     private final ContaBancariaService contaBancariaService;
     private final UsuarioSessaoContextoService sessaoContextoService;
     private final WhatsAppNotificationService whatsAppNotificationService;
+    private final JarvisProtocolService jarvisProtocolService;
 
     public record DeteccaoRecorrencia(
         String nomeExibicao,
@@ -194,7 +195,7 @@ public class AssinaturaRecorrenteService {
 
         return "Assinatura *" + salva.getNome() + "* salva! Vou monitorar os *"
             + BRL.format(salva.getValor()) + "* todo dia *" + salva.getDiaVencimento()
-            + "* e avisar 3 dias antes do vencimento. Gerencie em *Assinaturas* no app.";
+            + "* e avisar *5 e 3 dias* antes do vencimento. Gerencie em *Assinaturas* no app.";
     }
 
     @Transactional
@@ -226,7 +227,7 @@ public class AssinaturaRecorrenteService {
             .setScale(2, RoundingMode.HALF_UP);
     }
 
-    /** Job diário: alerta assinaturas com vencimento efetivo em hoje + 3 dias. */
+    /** Job diário: alerta assinaturas com vencimento efetivo em hoje + 5 ou + 3 dias. */
     @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)
     public void alertarVencimentosProximos() {
@@ -235,20 +236,22 @@ public class AssinaturaRecorrenteService {
         if (ativas.isEmpty()) {
             return;
         }
-        log.info("[ASSINATURA] Verificando {} assinatura(s) ativa(s) — alvo vencimento {}", ativas.size(), hoje.plusDays(DIAS_ANTECEDENCIA_ALERTA));
-        for (AssinaturaRecorrente a : ativas) {
-            if (!venceEmDias(a, hoje, DIAS_ANTECEDENCIA_ALERTA)) {
-                continue;
-            }
-            Usuario u = a.getUsuario();
-            if (u == null || u.getWhatsappNumero() == null || u.getWhatsappNumero().isBlank()) {
-                continue;
-            }
-            try {
-                String msg = montarAlertaVencimento(u.getId(), a);
-                whatsAppNotificationService.enviarParaUsuario(u.getId(), msg);
-            } catch (Exception e) {
-                log.warn("[ASSINATURA] Falha alerta id={} userId={}: {}", a.getId(), u.getId(), e.getMessage());
+        log.info("[ASSINATURA] Verificando {} assinatura(s) ativa(s) — lembretes em {}", ativas.size(), DIAS_ANTECEDENCIA_ALERTAS);
+        for (int dias : DIAS_ANTECEDENCIA_ALERTAS) {
+            for (AssinaturaRecorrente a : ativas) {
+                if (!venceEmDias(a, hoje, dias)) {
+                    continue;
+                }
+                Usuario u = a.getUsuario();
+                if (u == null || u.getWhatsappNumero() == null || u.getWhatsappNumero().isBlank()) {
+                    continue;
+                }
+                try {
+                    String msg = montarAlertaVencimento(u.getId(), a, dias);
+                    whatsAppNotificationService.enviarParaUsuario(u.getId(), msg);
+                } catch (Exception e) {
+                    log.warn("[ASSINATURA] Falha alerta id={} userId={} dias={}: {}", a.getId(), u.getId(), dias, e.getMessage());
+                }
             }
         }
     }
@@ -307,46 +310,40 @@ public class AssinaturaRecorrenteService {
         return Optional.of(new DeteccaoRecorrencia(nome, media, diaMedio, contaId));
     }
 
-    /**
-     * Verifica se o vencimento efetivo da assinatura coincide com {@code hoje + diasAntecedencia},
-     * respeitando meses curtos (ex.: dia 31 → 30 em abril, 28 em fevereiro).
-     */
     public static boolean venceEmDias(AssinaturaRecorrente a, LocalDate hoje, int diasAntecedencia) {
-        if (a == null || a.getDiaVencimento() == null) {
+        if (a == null) {
             return false;
         }
-        LocalDate alvo = hoje.plusDays(diasAntecedencia);
-        YearMonth ym = YearMonth.from(alvo);
-        int efetivo = diaEfetivoNoMes(a.getDiaVencimento(), ym.lengthOfMonth());
-        return efetivo == alvo.getDayOfMonth();
+        return VencimentoMensalUtil.venceEmDias(a.getDiaVencimento(), hoje, diasAntecedencia);
     }
 
     public static int diaEfetivoNoMes(int diaVencimento, int ultimoDiaMes) {
-        return Math.min(Math.max(1, diaVencimento), ultimoDiaMes);
+        return VencimentoMensalUtil.diaEfetivoNoMes(diaVencimento, ultimoDiaMes);
     }
 
-    private String montarAlertaVencimento(Long usuarioId, AssinaturaRecorrente a) {
+    private String montarAlertaVencimento(Long usuarioId, AssinaturaRecorrente a, int diasAntecedencia) {
         ContaBancaria conta = resolverContaDebito(usuarioId, a);
         String nome = a.getNome();
         BigDecimal valor = a.getValor() != null ? a.getValor() : BigDecimal.ZERO;
+        String valorFmt = BRL.format(valor);
         BigDecimal saldo = conta.getSaldoAtual() != null ? conta.getSaldoAtual() : BigDecimal.ZERO;
+        String nomeConta = conta.getNome();
+        String saldoFmt = BRL.format(conta.getSaldoDisponivel());
 
         if (!conta.temSaldoSuficiente(valor)) {
-            return "⚠️ *URGENTE*, chefe: a assinatura da *" + nome + "* (*" + BRL.format(valor)
-                + "*) vence em *3 dias*. Saldo disponível na conta *" + conta.getNome() + "*: *"
-                + BRL.format(conta.getSaldoDisponivel()) + "*. Não cobre o débito nem com cheque especial. "
-                + "Faça um Pix para lá ou pause a assinatura no app.";
+            return jarvisProtocolService.lembreteAssinaturaVencimento(
+                diasAntecedencia, nome, valorFmt, nomeConta, saldoFmt, null,
+                JarvisProtocolService.TipoSaldoLembreteAssinatura.INSUFICIENTE);
         }
         if (saldo.compareTo(valor) >= 0) {
-            return "Chefe, lembrete: a assinatura da *" + nome + "* (*" + BRL.format(valor)
-                + "*) vence em *3 dias*. A conta *" + conta.getNome() + "* tem saldo suficiente (*"
-                + BRL.format(saldo) + "*).";
+            return jarvisProtocolService.lembreteAssinaturaVencimento(
+                diasAntecedencia, nome, valorFmt, nomeConta, BRL.format(saldo), null,
+                JarvisProtocolService.TipoSaldoLembreteAssinatura.SUFICIENTE);
         }
         BigDecimal usoCheque = valor.subtract(saldo.max(BigDecimal.ZERO)).setScale(2, RoundingMode.HALF_UP);
-        return "Atenção, chefe: a assinatura da sua *" + nome + "* (*" + BRL.format(valor)
-            + "*) vence em *3 dias*. O seu saldo real é de *" + BRL.format(saldo)
-            + "*. Esse débito vai ativar o seu *cheque especial* em *" + BRL.format(usoCheque)
-            + "* na conta *" + conta.getNome() + "*. Quer que eu te lembre de fazer um Pix para lá?";
+        return jarvisProtocolService.lembreteAssinaturaVencimento(
+            diasAntecedencia, nome, valorFmt, nomeConta, BRL.format(saldo), BRL.format(usoCheque),
+            JarvisProtocolService.TipoSaldoLembreteAssinatura.CHEQUE_ESPECIAL);
     }
 
     private ContaBancaria resolverContaDebito(Long usuarioId, AssinaturaRecorrente a) {

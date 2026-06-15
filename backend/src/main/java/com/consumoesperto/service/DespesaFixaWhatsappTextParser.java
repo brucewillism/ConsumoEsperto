@@ -20,6 +20,10 @@ public final class DespesaFixaWhatsappTextParser {
             return null;
         }
         String t = raw.trim();
+        ParsedDespesaFixa lembrete = parseLembreteVencimento(t);
+        if (lembrete != null) {
+            return lembrete;
+        }
         Matcher m1 = Pattern.compile(
             "(?i)(?:salve\\s+)?(?:essa\\s+)?despesa\\s+fixa\\s+de\\s*R?\\$?\\s*([0-9]+(?:[\\.,][0-9]+)?)\\s*(?:reais?)?\\s*(?:para|pro|pra)\\s+(.+)"
         ).matcher(t);
@@ -51,6 +55,46 @@ public final class DespesaFixaWhatsappTextParser {
             return parseFraseLivre(m3.group(1).trim());
         }
         return null;
+    }
+
+    /** Ex.: "conta de luz vence dia 10", "lembrete internet de 250 vence dia 5". */
+    static ParsedDespesaFixa parseLembreteVencimento(String t) {
+        Matcher valorAntes = Pattern.compile(
+            "(?i)(?:cadastr(?:e|ar|a)|cri(?:e|ar|a)|registr(?:e|ar|a)|salve)?\\s*(?:um\\s+)?(?:lembrete\\s+(?:de\\s+)?)?(.+?)\\s+(?:de\\s+|no\\s+valor\\s+(?:de\\s+)?)R?\\$?\\s*([0-9]+(?:[\\.,][0-9]+)?)\\s*(?:reais?)?\\s+vence\\s+dia\\s*(\\d{1,2})\\s*$"
+        ).matcher(t);
+        if (valorAntes.find()) {
+            return montarOpcional(valorAntes.group(2), valorAntes.group(1), parseDia(valorAntes.group(3)));
+        }
+        Matcher venceDia = Pattern.compile(
+            "(?i)(?:cadastr(?:e|ar|a)|cri(?:e|ar|a)|registr(?:e|ar|a)|salve)?\\s*(?:um\\s+)?(?:lembrete\\s+(?:de\\s+)?)?(.+?)\\s+vence\\s+dia\\s*(\\d{1,2})(?:\\s+(?:de\\s+|no\\s+valor\\s+(?:de\\s+)?|valor\\s+)?R?\\$?\\s*([0-9]+(?:[\\.,][0-9]+)?)\\s*(?:reais?)?)?\\s*$"
+        ).matcher(t);
+        if (venceDia.find()) {
+            return montarOpcional(venceDia.group(3), venceDia.group(1), parseDia(venceDia.group(2)));
+        }
+        return null;
+    }
+
+    private static Integer parseDia(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        int d = Integer.parseInt(text.trim());
+        return d >= 1 && d <= 31 ? d : null;
+    }
+
+    private static ParsedDespesaFixa montarOpcional(String valorStr, String descRaw, Integer dia) {
+        String desc = sanitize(descRaw);
+        if (desc.isBlank() || dia == null) {
+            return null;
+        }
+        BigDecimal v = valorStr != null && !valorStr.isBlank() ? parseMoney(valorStr) : null;
+        if (v != null && v.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        if (v != null) {
+            v = v.setScale(2, RoundingMode.HALF_UP);
+        }
+        return new ParsedDespesaFixa(v, desc, dia);
     }
 
     static ParsedDespesaFixa parseFraseLivre(String chunk) {

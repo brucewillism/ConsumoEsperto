@@ -45,4 +45,31 @@ class DespesaFixaWhatsappTextParserTest {
         assertEquals(new BigDecimal("220.00"), p.valor());
         assertEquals("condominio", p.descricao());
     }
+
+    @Test
+    void contaDeLuzVenceDiaSemValor() {
+        var p = DespesaFixaWhatsappTextParser.parse("conta de luz vence dia 15");
+        assertNotNull(p);
+        assertEquals("conta de luz", p.descricao());
+        assertEquals(15, p.diaVencimento());
+        assertNull(p.valor());
+    }
+
+    @Test
+    void lembreteComValorEVencimento() {
+        var p = DespesaFixaWhatsappTextParser.parse("lembrete internet de 250 vence dia 10");
+        assertNotNull(p);
+        assertEquals(new BigDecimal("250.00"), p.valor());
+        assertEquals("internet", p.descricao());
+        assertEquals(10, p.diaVencimento());
+    }
+
+    @Test
+    void venceDiaComValorNoFinal() {
+        var p = DespesaFixaWhatsappTextParser.parse("conta de agua vence dia 8 de 95");
+        assertNotNull(p);
+        assertEquals(new BigDecimal("95.00"), p.valor());
+        assertEquals("conta de agua", p.descricao());
+        assertEquals(8, p.diaVencimento());
+    }
 }
