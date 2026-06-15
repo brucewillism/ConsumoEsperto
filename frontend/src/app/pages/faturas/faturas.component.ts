@@ -308,7 +308,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
           }
         });
     }
-    this.dialog.open(template, {
+    openCeFormDialog(this.dialog, template, {
       width: 'min(920px, 94vw)',
       maxWidth: '94vw',
       maxHeight: '90vh',

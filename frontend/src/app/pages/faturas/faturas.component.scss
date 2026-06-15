@@ -632,10 +632,11 @@
 .transacoes-modal {
   display: flex;
   flex-direction: column;
+  width: 100%;
   max-height: 90vh;
   min-height: 0;
-  background: #0d0e12;
-  color: #e2e8f0;
+  background: var(--exec-surface);
+  color: var(--text-primary);
   overflow: hidden;
 
   .transacoes-modal-header {
@@ -645,21 +646,21 @@
     gap: 16px;
     flex-shrink: 0;
     padding: 20px 24px 16px;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-    background: #0d0e12;
+    border-bottom: 1px solid var(--exec-border);
+    background: var(--exec-surface);
 
     h2 {
       margin: 0;
       font-size: 1.25rem;
       font-weight: 700;
       line-height: 1.3;
-      color: #f8fafc;
+      color: var(--text-primary);
     }
   }
 
   .transacoes-modal-subtitulo {
     margin: 6px 0 0;
-    color: #94a3b8;
+    color: var(--text-secondary);
     font-size: 0.9rem;
     line-height: 1.4;
   }
@@ -672,6 +673,7 @@
     padding: 12px 20px 20px;
     direction: ltr;
     scrollbar-gutter: stable;
+    background: var(--exec-surface);
   }
 
   .transacoes-tabela {
@@ -694,9 +696,9 @@
     z-index: 2;
     margin-bottom: 4px;
     border-radius: 8px;
-    background: rgba(22, 24, 32, 0.98);
-    border: 1px solid rgba(0, 229, 255, 0.15);
-    color: #64748b;
+    background: #1a2332;
+    border: 1px solid var(--exec-border);
+    color: var(--text-secondary);
     font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -704,13 +706,14 @@
   }
 
   .transacoes-tabela-row {
-    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    border-bottom: 1px solid var(--exec-border);
     font-size: 0.875rem;
     line-height: 1.4;
+    background: var(--exec-surface);
     transition: background 0.15s ease;
 
     &:hover {
-      background: rgba(0, 229, 255, 0.04);
+      background: #243044;
     }
 
     &.row-alerta {

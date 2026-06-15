@@ -1287,22 +1287,32 @@ app-root {
   }
 }
 
-/* Modal de transações da fatura */
-.fatura-transacoes-dialog .mat-mdc-dialog-container,
-.fatura-transacoes-dialog .mdc-dialog__surface {
-  overflow: hidden;
-  background: #0d0e12;
-  display: flex;
-  flex-direction: column;
-}
+/* Modal de transações da fatura — superfície opaca como os demais diálogos */
+.cdk-overlay-pane.fatura-transacoes-dialog {
+  .mat-mdc-dialog-container {
+    --mdc-dialog-container-color: var(--exec-surface);
+    padding: 0;
+    max-height: 90vh;
+    overflow: hidden;
+    background: var(--exec-surface) !important;
+  }
 
-.fatura-transacoes-dialog .mat-mdc-dialog-container {
-  padding: 0;
-  max-height: 90vh;
-}
-
-.fatura-transacoes-dialog .mat-mdc-dialog-surface {
-  max-height: 90vh;
+  .mat-mdc-dialog-surface,
+  .mdc-dialog__surface {
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    overflow: hidden;
+    padding: 0 !important;
+    background: var(--exec-surface) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--hud-cyan-border) !important;
+    border-radius: 16px !important;
+    box-shadow:
+      0 0 0 1px rgba(0, 229, 255, 0.12),
+      0 18px 48px rgba(0, 0, 0, 0.65) !important;
+    opacity: 1 !important;
+  }
 }
 
 /* Pagamento de fatura — conteúdo rolável; ações fixas no rodapé (evita sobreposição) */

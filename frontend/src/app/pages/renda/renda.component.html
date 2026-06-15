@@ -6,7 +6,7 @@
       <h1>Renda &amp; Contracheques</h1>
       <span class="hero-sub">Perfil de renda híbrido e conferência de holerites importados.</span>
     </div>
-    <button mat-raised-button color="primary" type="button" (click)="carregarConfig(); carregar()">
+    <button mat-raised-button color="primary" type="button" (click)="carregarConfig()">
       <mat-icon>refresh</mat-icon>
       Atualizar
     </button>
@@ -93,7 +93,7 @@
     </div>
   </mat-card>
 
-  <mat-card class="fiscal-card hud-animate" style="--stagger: 2">
+  <mat-card class="fiscal-card hud-animate" style="--stagger: 2" *ngIf="isPerfilClt()">
     <h2>Calendário do 13º salário</h2>
     <p class="fiscal-hint">
       Um contracheque confirmado basta como base. Aqui você define <strong>quando</strong> o 13º entra no fluxo de caixa
@@ -220,6 +220,7 @@
     <app-chart-metodologia id="RENDA_CONTRACHEQUES"></app-chart-metodologia>
   </mat-card>
 
+  <ng-container *ngIf="isPerfilClt()">
   <mat-card
     class="paycheck-card hud-animate"
     *ngFor="let c of contracheques; let idx = index"
@@ -295,4 +296,5 @@
       </div>
     </div>
   </mat-card>
+  </ng-container>
 </div>

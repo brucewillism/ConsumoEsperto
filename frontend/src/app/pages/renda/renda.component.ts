@@ -118,8 +118,23 @@ export class RendaComponent implements OnInit {
 
   ngOnInit(): void {
     this.carregarConfig();
-    this.carregar();
-    this.carregarFiscal();
+  }
+
+  isPerfilClt(): boolean {
+    return this.tipoConfiguracaoRenda === 'CONTRACHEQUE';
+  }
+
+  private sincronizarSecaoClt(): void {
+    if (this.isPerfilClt()) {
+      this.carregarFiscal();
+      this.carregar();
+      return;
+    }
+    this.carregandoFiscal = false;
+    this.simulacao = null;
+    this.contracheques = [];
+    this.carregando = false;
+    this.syncChart();
   }
 
   carregarConfig(): void {
@@ -133,6 +148,7 @@ export class RendaComponent implements OnInit {
         this.diaPagamento = cfg.diaPagamento;
         this.receitaAutomaticaAtiva = cfg.receitaAutomaticaAtiva ?? false;
         this.carregandoConfig = false;
+        this.sincronizarSecaoClt();
       },
       error: () => {
         this.toast.error('Erro ao carregar perfil de renda.');
@@ -161,8 +177,10 @@ export class RendaComponent implements OnInit {
     }).subscribe({
       next: (cfg) => {
         this.config = cfg;
+        this.tipoConfiguracaoRenda = cfg.tipoConfiguracaoRenda ?? this.tipoConfiguracaoRenda;
         this.toast.success('Perfil de renda salvo.');
         this.salvandoConfig = false;
+        this.sincronizarSecaoClt();
       },
       error: (e) => {
         this.toast.error(e?.error?.message || 'Erro ao salvar perfil de renda.');
