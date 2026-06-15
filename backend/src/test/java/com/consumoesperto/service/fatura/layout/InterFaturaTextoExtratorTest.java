@@ -136,6 +136,38 @@ class InterFaturaTextoExtratorTest {
         );
     }
 
+    @Test
+    void ignoraLinhaResumoVencimentoComTotal() {
+        String texto = """
+            Banco Inter
+            Valor da fatura R$ 1.015,74
+            Data de vencimento 18/06/2026
+            Data de corte: 10/06/2026
+            Detalhamento da fatura
+            18/06 R$ 1.015,74
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertTrue(itens.isEmpty());
+    }
+
+    @Test
+    void extraiFormatoMultilinha() {
+        String texto = """
+            Banco Inter
+            Valor da fatura R$ 50,00
+            Data de vencimento 18/06/2026
+            Detalhamento da fatura
+            12/05
+            MERCADO LIVRE
+            R$ 50,00
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(1, itens.size());
+        assertEquals("MERCADO LIVRE", itens.get(0).getDescricao());
+    }
+
     private static ImportacaoFaturaItemDTO item(
         String desc,
         BigDecimal valor,

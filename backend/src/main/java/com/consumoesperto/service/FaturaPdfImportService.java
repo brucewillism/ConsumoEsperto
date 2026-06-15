@@ -198,6 +198,12 @@ public class FaturaPdfImportService {
         }
         layoutEfetivo.finalizarLancamentosDoTexto(textoPdf, itens, valorTotal, anoReferencia);
         enriquecerParcelasNosItens(itens);
+        itens = layoutEfetivo.sanitizarLancamentos(itens);
+        for (ImportacaoFaturaItemDTO item : itens) {
+            boolean novo = buscarExistentes(usuarioId, item).isEmpty();
+            item.setNovo(novo);
+            item.setSelecionado(novo);
+        }
         imp.setValorTotal(valorTotal);
         BigDecimal pagamentoMinimo = readMoney(extracted.path("pagamentoMinimo"));
         if (pagamentoMinimo.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {
@@ -566,6 +572,17 @@ public class FaturaPdfImportService {
             throw new IllegalArgumentException(
                 "Não extraí lançamentos nem total desta fatura. Verifique se o PDF está legível. "
                     + "Senha só é necessária em PDFs protegidos (ex.: Itaú, Inter).");
+        }
+        if (dto.getItens() != null && dto.getItens().stream().allMatch(i -> !i.isNovo())) {
+            long comDescricaoValida = dto.getItens().stream()
+                .filter(i -> i.getDescricao() != null && i.getDescricao().trim().length() >= 3)
+                .filter(i -> !"R$".equalsIgnoreCase(i.getDescricao().trim()))
+                .count();
+            if (comDescricaoValida == 0) {
+                throw new IllegalArgumentException(
+                    "Não consegui ler os lançamentos desta fatura — só identifiquei o total. "
+                        + "Se for Inter ou Itaú, reimporte informando os primeiros dígitos do CPF como senha do PDF.");
+            }
         }
     }
 

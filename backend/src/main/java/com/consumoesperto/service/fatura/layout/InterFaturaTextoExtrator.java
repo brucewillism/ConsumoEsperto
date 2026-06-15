@@ -30,6 +30,16 @@ public final class InterFaturaTextoExtrator {
         "(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s+(.+?)\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
         Pattern.CASE_INSENSITIVE
     );
+    /** Valor sem prefixo R$ (layout recente do PDF Inter). */
+    private static final Pattern LINHA_LANCAMENTO_SEM_RS = Pattern.compile(
+        "(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s+(.{3,}?)\\s+(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*(?:$|\\r?\\n)",
+        Pattern.CASE_INSENSITIVE | Pattern.MULTILINE
+    );
+    /** Data, estabelecimento e valor em linhas separadas. */
+    private static final Pattern BLOCO_MULTILINHA = Pattern.compile(
+        "(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s*\\r?\\n\\s*([^\\n\\d][^\\n]{2,}?)\\s*\\r?\\n\\s*(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
+        Pattern.CASE_INSENSITIVE
+    );
     private static final Pattern PARCELA_TEXTO = Pattern.compile(
         "(?i)parcela\\s+(\\d{1,2})\\s+de\\s+(\\d{1,2})"
     );
@@ -213,6 +223,10 @@ public final class InterFaturaTextoExtrator {
             podarEspurios(itens, textoPdf);
             ajustarSomaAoTotal(itens, total);
         }
+
+        podarEspurios(itens, textoPdf);
+        Optional<LocalDate> vencimento = extrairDataVencimento(textoPdf);
+        removerLinhasResumoFatura(itens, total, vencimento);
     }
 
     /**
@@ -296,17 +310,45 @@ public final class InterFaturaTextoExtrator {
         String trecho = recortarTrechoTransacoes(norm);
         Optional<LocalDate> dataCorte = extrairDataCorte(textoPdf);
         Optional<LocalDate> vencimento = extrairDataVencimento(textoPdf);
+        Optional<BigDecimal> totalPdf = extrairTotalFatura(textoPdf);
         int ano = vencimento.map(LocalDate::getYear).orElse(anoReferencia > 0 ? anoReferencia : YearMonth.now().getYear());
 
-        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out);
+        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO, true, totalPdf);
+        if (out.isEmpty() || somenteLinhasResumo(out, totalPdf.orElse(null), vencimento)) {
+            List<ImportacaoFaturaItemDTO> alt = new ArrayList<>();
+            extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, alt, LINHA_LANCAMENTO_SEM_RS, false, totalPdf);
+            extrairBlocosMultilinha(trecho, ano, vencimento, dataCorte, alt);
+            if (!alt.isEmpty() && (out.isEmpty() || somaValores(alt).compareTo(somaValores(out)) > 0)) {
+                out.clear();
+                out.addAll(alt);
+            }
+        }
         if (out.isEmpty()) {
             int fim = localizarIndiceProximas(norm);
             if (fim < 0) {
                 fim = norm.length();
             }
-            extrairLinhasDoTrecho(substringSeguro(norm, 0, fim), ano, vencimento, dataCorte, out);
+            String fallback = substringSeguro(norm, 0, fim);
+            extrairLinhasDoTrecho(fallback, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO, true, totalPdf);
+            extrairLinhasDoTrecho(fallback, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO_SEM_RS, false, totalPdf);
+            extrairBlocosMultilinha(fallback, ano, vencimento, dataCorte, out);
         }
+        removerLinhasResumoFatura(out, totalPdf.orElse(null), vencimento);
+        podarEspurios(out, textoPdf);
         return out;
+    }
+
+    private static void extrairBlocosMultilinha(
+        String trecho,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out
+    ) {
+        Matcher m = BLOCO_MULTILINHA.matcher(trecho);
+        while (m.find()) {
+            adicionarLancamentoExtraido(out, m.group(1), m.group(2), m.group(3), m.group(4), m.group(5), ano, vencimento, dataCorte);
+        }
     }
 
     private static void extrairLinhasDoTrecho(
@@ -314,12 +356,15 @@ public final class InterFaturaTextoExtrator {
         int ano,
         Optional<LocalDate> vencimento,
         Optional<LocalDate> dataCorte,
-        List<ImportacaoFaturaItemDTO> out
+        List<ImportacaoFaturaItemDTO> out,
+        Pattern pattern,
+        boolean parcelaLinhaSeguinte,
+        Optional<BigDecimal> totalFatura
     ) {
-        Matcher m = LINHA_LANCAMENTO.matcher(trecho);
+        Matcher m = pattern.matcher(trecho);
         while (m.find()) {
             String descricao = limparDescricao(m.group(4));
-            if (descricao.isBlank() || deveIgnorarDescricao(descricao)) {
+            if (descricao.isBlank() || deveIgnorarDescricao(descricao) || descricaoInvalida(descricao)) {
                 continue;
             }
             BigDecimal valor = parseMoney(m.group(5));
@@ -330,16 +375,124 @@ public final class InterFaturaTextoExtrator {
             if (dataCorte.isPresent() && data != null && data.isAfter(dataCorte.get())) {
                 continue;
             }
+            if (pareceDataVencimentoComTotal(data, valor, vencimento, totalFatura)) {
+                continue;
+            }
             ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
             item.setData(data);
             item.setDescricao(descricao);
             item.setValor(valor);
             aplicarParcelaDaDescricao(item, descricao);
-            aplicarParcelaLinhaSeguinte(trecho, m.end(), item);
+            if (parcelaLinhaSeguinte) {
+                aplicarParcelaLinhaSeguinte(trecho, m.end(), item);
+            }
             if (!jaExiste(out, item)) {
                 out.add(item);
             }
         }
+    }
+
+    private static void adicionarLancamentoExtraido(
+        List<ImportacaoFaturaItemDTO> out,
+        String dia,
+        String mes,
+        String anoTxt,
+        String descricaoBruta,
+        String valorBruto,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte
+    ) {
+        String descricao = limparDescricao(descricaoBruta);
+        if (descricao.isBlank() || deveIgnorarDescricao(descricao) || descricaoInvalida(descricao)) {
+            return;
+        }
+        BigDecimal valor = parseMoney(valorBruto);
+        if (valor.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        LocalDate data = parseDataInter(dia, mes, anoTxt, ano, vencimento);
+        if (dataCorte.isPresent() && data != null && data.isAfter(dataCorte.get())) {
+            return;
+        }
+        ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
+        item.setData(data);
+        item.setDescricao(descricao);
+        item.setValor(valor);
+        aplicarParcelaDaDescricao(item, descricao);
+        if (!jaExiste(out, item)) {
+            out.add(item);
+        }
+    }
+
+    private static boolean descricaoInvalida(String descricao) {
+        String n = FaturaPdfLayoutSupport.norm(descricao);
+        return n.isBlank() || n.equals("r$") || n.length() < 3;
+    }
+
+    static boolean descricaoInvalidaPublica(String descricao) {
+        return descricaoInvalida(descricao);
+    }
+
+    private static boolean pareceDataVencimentoComTotal(
+        LocalDate data,
+        BigDecimal valor,
+        Optional<LocalDate> vencimento,
+        Optional<BigDecimal> totalFatura
+    ) {
+        if (data == null || valor == null || vencimento.isEmpty() || totalFatura.isEmpty()) {
+            return false;
+        }
+        LocalDate ven = vencimento.get();
+        boolean mesmaDataVenc = data.getDayOfMonth() == ven.getDayOfMonth()
+            && data.getMonthValue() == ven.getMonthValue();
+        return mesmaDataVenc && valor.subtract(totalFatura.get()).abs().compareTo(new BigDecimal("0.02")) <= 0;
+    }
+
+    private static boolean somenteLinhasResumo(
+        List<ImportacaoFaturaItemDTO> itens,
+        BigDecimal totalFatura,
+        Optional<LocalDate> vencimento
+    ) {
+        if (itens == null || itens.isEmpty()) {
+            return true;
+        }
+        for (ImportacaoFaturaItemDTO item : itens) {
+            if (!pareceLinhaResumoTotal(item, totalFatura, vencimento)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static boolean pareceLinhaResumoTotal(
+        ImportacaoFaturaItemDTO item,
+        BigDecimal totalFatura,
+        Optional<LocalDate> vencimento
+    ) {
+        if (item == null || item.getValor() == null) {
+            return true;
+        }
+        if (descricaoInvalida(item.getDescricao()) || deveIgnorarDescricao(item.getDescricao())) {
+            return true;
+        }
+        if (totalFatura != null
+            && item.getValor().subtract(totalFatura).abs().compareTo(new BigDecimal("0.02")) <= 0
+            && pareceDataVencimentoComTotal(item.getData(), item.getValor(), vencimento, Optional.of(totalFatura))) {
+            return true;
+        }
+        return false;
+    }
+
+    static void removerLinhasResumoFatura(
+        List<ImportacaoFaturaItemDTO> itens,
+        BigDecimal totalFatura,
+        Optional<LocalDate> vencimento
+    ) {
+        if (itens == null || itens.isEmpty()) {
+            return;
+        }
+        itens.removeIf(i -> pareceLinhaResumoTotal(i, totalFatura, vencimento));
     }
 
     private static String recortarTrechoTransacoes(String norm) {
@@ -660,9 +813,17 @@ public final class InterFaturaTextoExtrator {
         }
         int fimLinha = trecho.indexOf('\n', posAposMatch);
         if (fimLinha < 0) {
-            fimLinha = Math.min(trecho.length(), posAposMatch + 80);
+            fimLinha = trecho.length();
         }
         String proxima = trecho.substring(posAposMatch, fimLinha).trim();
+        if (proxima.isBlank() && fimLinha < trecho.length()) {
+            int iniProx = fimLinha + 1;
+            int fimProx = trecho.indexOf('\n', iniProx);
+            if (fimProx < 0) {
+                fimProx = Math.min(trecho.length(), iniProx + 80);
+            }
+            proxima = trecho.substring(iniProx, fimProx).trim();
+        }
         aplicarParcelaDaDescricao(item, proxima);
     }
 
@@ -761,6 +922,7 @@ public final class InterFaturaTextoExtrator {
             || n.contains("taxa efetiva")
             || n.contains("simulacao")
             || n.matches(".*\\d\\s*\\+\\s*\\d+x.*")
+            || n.matches(".*\\d\\s+\\d+x.*")
             || n.matches(".*ate\\s+\\d+\\s*x.*");
     }
 
