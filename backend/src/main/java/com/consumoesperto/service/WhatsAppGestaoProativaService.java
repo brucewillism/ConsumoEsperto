@@ -6,7 +6,9 @@ import com.consumoesperto.dto.OrcamentoRequest;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
+import com.consumoesperto.model.AssinaturaRecorrente;
 import com.consumoesperto.model.ContaBancaria;
+import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.MetaFinanceira;
 import com.consumoesperto.model.Orcamento;
 import com.consumoesperto.model.Transacao;
@@ -61,6 +63,8 @@ public class WhatsAppGestaoProativaService {
     private final CategoriaService categoriaService;
     private final OrcamentoService orcamentoService;
     private final SaldoService saldoService;
+    private final DespesaFixaService despesaFixaService;
+    private final AssinaturaRecorrenteService assinaturaRecorrenteService;
 
     private final Map<Long, SessaoGestao> sessoes = new ConcurrentHashMap<>();
 
@@ -138,12 +142,23 @@ public class WhatsAppGestaoProativaService {
             || targetLc.contains("carteira") || (targetLc.contains("conta") && !targetLc.contains("cart"));
         boolean explicitCategoria = targetLc.contains("categoria");
         boolean explicitOrcamento = targetLc.contains("orcamento") || targetLc.contains("orçamento");
+        boolean explicitDespesaFixa = targetLc.contains("despesa_fixa") || targetLc.contains("despesa fixa")
+            || targetLc.contains("obrigacao") || targetLc.contains("obrigação")
+            || (targetLc.contains("fixa") && !targetLc.contains("categoria"));
+        boolean explicitAssinatura = targetLc.contains("assinatura") || targetLc.contains("subscription");
         boolean explicitTransacao = targetLc.contains("transacao") || targetLc.contains("transação")
             || targetLc.contains("lancamento") || targetLc.contains("lançamento")
-            || targetLc.contains("despesa") || targetLc.contains("receita") || targetLc.contains("gasto");
+            || (targetLc.contains("despesa") && !explicitDespesaFixa)
+            || targetLc.contains("receita") || targetLc.contains("gasto");
 
         if (explicitMeta) {
             return iniciarMetas(userId, phrase, edit, del);
+        }
+        if (explicitAssinatura) {
+            return iniciarAssinaturas(userId, phrase, edit, del);
+        }
+        if (explicitDespesaFixa) {
+            return iniciarDespesasFixas(userId, phrase, edit, del);
         }
         if (explicitCartao) {
             return iniciarCartoes(userId, phrase, edit, del);
@@ -170,6 +185,12 @@ public class WhatsAppGestaoProativaService {
         }
         if (pl.contains("orçamento") || pl.contains("orcamento")) {
             return iniciarOrcamentos(userId, phrase, edit, del, cmd, sourceText);
+        }
+        if (pl.contains("assinatura")) {
+            return iniciarAssinaturas(userId, phrase, edit, del);
+        }
+        if (pl.contains("despesa fixa") || pl.contains("obrigacao fixa") || pl.contains("obrigação fixa")) {
+            return iniciarDespesasFixas(userId, phrase, edit, del);
         }
         if (pl.contains("categoria")) {
             return iniciarCategorias(userId, phrase, edit, del);
@@ -410,6 +431,85 @@ public class WhatsAppGestaoProativaService {
         return sb.toString();
     }
 
+    private String iniciarDespesasFixas(Long userId, String phrase, boolean edit, boolean del) {
+        if (edit) {
+            return msgInfo("Despesa fixa",
+                "Para alterar valor ou vencimento, envie por exemplo: *edita despesa fixa aluguel valor 1200 dia 10*.");
+        }
+        String frag = phrase.replaceAll("(?i)^(a|o|minha|meu)\\s+", "")
+            .replaceAll("(?i)\\s+despesa\\s+fixa\\s*", " ")
+            .replaceAll("(?i)^despesa\\s+fixa\\s*", "")
+            .trim();
+        if (frag.isBlank()) {
+            frag = phrase;
+        }
+        List<DespesaFixa> found = despesaFixaService.encontrarPorIdentificador(userId, frag);
+        if (found.isEmpty()) {
+            return msgErro("Despesas fixas", "Não encontrei despesa fixa com *" + frag + "*.");
+        }
+        List<ItemRef> itens = found.stream()
+            .map(d -> new ItemRef(d.getId(),
+                d.getDescricao() + " — " + BRL.format(d.getValor()) + ", vence dia " + d.getDiaVencimento()))
+            .collect(Collectors.toList());
+        return montarSessaoDeleteConfirmado(userId, TipoAlvo.DESPESA_FIXA, itens, "despesa fixa");
+    }
+
+    private String iniciarAssinaturas(Long userId, String phrase, boolean edit, boolean del) {
+        if (edit) {
+            return msgInfo("Assinatura",
+                "Para pausar ou reativar, envie *desative a assinatura da Netflix* ou *reative o Spotify*.");
+        }
+        String frag = phrase.replaceAll("(?i)^(a|o|minha|meu)\\s+", "")
+            .replaceAll("(?i)\\s+assinatura(?:\\s+(?:da|de|do))?\\s*", " ")
+            .replaceAll("(?i)^assinatura\\s*", "")
+            .trim();
+        if (frag.isBlank()) {
+            frag = phrase;
+        }
+        List<AssinaturaRecorrente> found = assinaturaRecorrenteService.encontrarPorIdentificador(userId, frag);
+        if (found.isEmpty()) {
+            return msgErro("Assinaturas", "Não encontrei assinatura com *" + frag + "*.");
+        }
+        List<ItemRef> itens = found.stream()
+            .map(a -> new ItemRef(a.getId(),
+                a.getNome() + " — " + BRL.format(a.getValor()) + "/mês, dia " + a.getDiaVencimento()
+                    + (a.isAtivo() ? " (ativa)" : " (pausada)")))
+            .collect(Collectors.toList());
+        return montarSessaoDeleteConfirmado(userId, TipoAlvo.ASSINATURA, itens, "assinatura");
+    }
+
+    private String montarSessaoDeleteConfirmado(Long userId, TipoAlvo tipo, List<ItemRef> itens, String rotulo) {
+        SessaoGestao s = new SessaoGestao();
+        s.tipoAlvo = tipo;
+        s.operacao = Operacao.DELETE;
+        s.itens = itens;
+        if (itens.size() == 1) {
+            s.selecionadoId = itens.get(0).id;
+            s.passo = Passo.CONFIRMAR_DELETE_UNICO;
+            sessoes.put(userId, s);
+            return "Encontrei *1* " + rotulo + ":\n\n1. " + itens.get(0).linha
+                + "\n\nTem certeza que deseja remover " + (rotulo.startsWith("a") ? "a " : "a ")
+                + rotulo + " *" + extrairNomeLinha(itens.get(0).linha) + "*?\nResponde *sim* ou *não*.";
+        }
+        s.passo = Passo.ESCOLHER_INDICE;
+        sessoes.put(userId, s);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Encontrei estas ").append(rotulo).append("s:\n\n");
+        for (int i = 0; i < itens.size(); i++) {
+            sb.append(i + 1).append(". ").append(itens.get(i).linha).append("\n");
+        }
+        sb.append("\nQual delas? Responde só com o *número* para remover.");
+        return sb.toString();
+    }
+
+    private static String extrairNomeLinha(String linha) {
+        if (linha == null) {
+            return "";
+        }
+        int idx = linha.indexOf(" — ");
+        return idx > 0 ? linha.substring(0, idx).trim() : linha.trim();
+    }
+
     private String montarSessaoSimples(
         Long userId,
         TipoAlvo tipo,
@@ -544,6 +644,18 @@ public class WhatsAppGestaoProativaService {
             sessoes.put(userId, s);
             return Optional.of("Orçamento *" + idx + "* selecionado.\n\nEnvia o *novo limite* (número).");
         }
+        if (s.tipoAlvo == TipoAlvo.DESPESA_FIXA && s.operacao == Operacao.DELETE) {
+            s.passo = Passo.CONFIRMAR_DELETE_UNICO;
+            sessoes.put(userId, s);
+            return Optional.of("Tem certeza que deseja remover a despesa fixa *"
+                + extrairNomeLinha(escolhido.linha) + "*?\nResponde *sim* ou *não*.");
+        }
+        if (s.tipoAlvo == TipoAlvo.ASSINATURA && s.operacao == Operacao.DELETE) {
+            s.passo = Passo.CONFIRMAR_DELETE_UNICO;
+            sessoes.put(userId, s);
+            return Optional.of("Tem certeza que deseja remover a assinatura *"
+                + extrairNomeLinha(escolhido.linha) + "*?\nResponde *sim* ou *não*.");
+        }
         sessoes.remove(userId);
         return Optional.empty();
     }
@@ -604,6 +716,16 @@ public class WhatsAppGestaoProativaService {
                     orcamentoService.excluir(userId, s.selecionadoId);
                     sessoes.remove(userId);
                     yield Optional.of(msgOk("Orçamento", "Orçamento removido."));
+                }
+                case DESPESA_FIXA -> {
+                    despesaFixaService.excluir(userId, s.selecionadoId);
+                    sessoes.remove(userId);
+                    yield Optional.of(msgOk("Despesa fixa", "Despesa fixa removida."));
+                }
+                case ASSINATURA -> {
+                    assinaturaRecorrenteService.excluir(userId, s.selecionadoId);
+                    sessoes.remove(userId);
+                    yield Optional.of(msgOk("Assinatura", "Assinatura removida do cadastro."));
                 }
                 default -> {
                     sessoes.remove(userId);
@@ -869,7 +991,7 @@ public class WhatsAppGestaoProativaService {
         return "ℹ️ *" + titulo + "*\n" + corpo;
     }
 
-    private enum TipoAlvo { TRANSACAO, META, CARTAO, CONTA_BANCARIA, CATEGORIA, ORCAMENTO }
+    private enum TipoAlvo { TRANSACAO, META, CARTAO, CONTA_BANCARIA, CATEGORIA, ORCAMENTO, DESPESA_FIXA, ASSINATURA }
     private enum Operacao { DELETE, EDIT }
     private enum Passo {
         ESCOLHER_INDICE,

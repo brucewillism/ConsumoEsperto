@@ -88,31 +88,55 @@ public class DespesaFixaService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<DespesaFixa> encontrarSimilar(Long usuarioId, String descricao, Long excludeId) {
-        String n = normalizeDesc(descricao);
+    public List<DespesaFixa> encontrarPorIdentificador(Long usuarioId, String identificador) {
+        String n = normalizeDesc(identificador);
         if (n.length() < 2) {
-            return Optional.empty();
+            return List.of();
         }
+        List<DespesaFixa> out = new ArrayList<>();
         for (DespesaFixa d : despesaFixaRepository.findByUsuarioIdOrderByDiaVencimentoAscIdAsc(usuarioId)) {
-            if (excludeId != null && excludeId.equals(d.getId())) {
-                continue;
-            }
-            String o = normalizeDesc(d.getDescricao());
-            if (o.length() < 2) {
-                continue;
-            }
-            if (o.equals(n)) {
-                return Optional.of(d);
-            }
-            if (o.contains(n) || n.contains(o)) {
-                return Optional.of(d);
-            }
-            int minLen = Math.min(o.length(), n.length());
-            if (minLen >= 4 && levenshtein(o, n) <= 2) {
-                return Optional.of(d);
+            if (correspondeIdentificador(n, normalizeDesc(d.getDescricao()))) {
+                out.add(d);
             }
         }
-        return Optional.empty();
+        return out;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<DespesaFixa> encontrarSimilar(Long usuarioId, String descricao, Long excludeId) {
+        return encontrarPorIdentificador(usuarioId, descricao).stream()
+            .filter(d -> excludeId == null || !excludeId.equals(d.getId()))
+            .findFirst();
+    }
+
+    @Transactional(readOnly = true)
+    public DespesaFixaDTO buscar(Long usuarioId, Long id) {
+        DespesaFixa e = despesaFixaRepository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Despesa fixa não encontrada."));
+        if (e.getUsuario() == null || !usuarioId.equals(e.getUsuario().getId())) {
+            throw new IllegalArgumentException("Despesa fixa não encontrada.");
+        }
+        return toDto(e);
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal somarValorMensal(Long usuarioId) {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (DespesaFixa d : despesaFixaRepository.findByUsuarioIdOrderByDiaVencimentoAscIdAsc(usuarioId)) {
+            sum = sum.add(nz(d.getValor()));
+        }
+        return sum.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static boolean correspondeIdentificador(String token, String nome) {
+        if (nome.length() < 2) {
+            return false;
+        }
+        if (nome.equals(token) || nome.contains(token) || token.contains(nome)) {
+            return true;
+        }
+        int minLen = Math.min(nome.length(), token.length());
+        return minLen >= 4 && levenshtein(nome, token) <= 2;
     }
 
     @Transactional

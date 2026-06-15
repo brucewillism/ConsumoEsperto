@@ -28,6 +28,8 @@ public class RendaConfigDTO {
     private String contaBancariaNome;
     private TipoConfiguracaoRenda tipoConfiguracaoRenda;
     private BigDecimal valorRecebimentoUnico;
+    /** Meta de faturamento mensal (FLUXO_DIARIO). */
+    private BigDecimal metaFaturamentoMensal;
     /** Renda mensal usada em projeções e dashboard (respeita o tipo configurado). */
     private BigDecimal rendaMensalEstimada;
     /** Rótulo para exibição: Salário líquido, Recebimento mensal ou Média 30 dias. */

@@ -26,6 +26,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -107,14 +108,30 @@ public class RendaConfigService {
     }
 
     private BigDecimal calcularMediaMovel30Dias(Long usuarioId) {
+        return calcularMediaMovelReal(usuarioId, 30);
+    }
+
+    /**
+     * Média móvel real de receitas confirmadas — janela em dias civis (ex.: 90 para feedback WhatsApp).
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal calcularMediaMovelReal(Long usuarioId, int dias) {
+        if (usuarioId == null || dias <= 0) {
+            return BigDecimal.ZERO;
+        }
         LocalDate hoje = LocalDate.now();
-        LocalDateTime inicio = hoje.minusDays(30).atStartOfDay();
+        LocalDateTime inicio = hoje.minusDays(dias).atStartOfDay();
         LocalDateTime fim = hoje.atTime(23, 59, 59);
         BigDecimal totalReceitas = transacaoRepository.sumReceitasConfirmadasPeriodo(usuarioId, inicio, fim);
         if (totalReceitas == null || totalReceitas.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO;
         }
         return totalReceitas.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal calcularMediaMovel90Dias(Long usuarioId) {
+        return calcularMediaMovelReal(usuarioId, 90);
     }
 
     static String rotuloPorTipo(TipoConfiguracaoRenda tipo) {
@@ -327,6 +344,175 @@ public class RendaConfigService {
         return salvar(usuarioId, bruto, descontos, dia);
     }
 
+    /**
+     * Aplica perfil híbrido de renda (SET_INCOME_PROFILE) a partir do JSON da IA.
+     */
+    @Transactional
+    public RendaConfigDTO aplicarPerfilIncomeDeComandoJson(Long usuarioId, JsonNode cmd, String sourceText) {
+        TipoConfiguracaoRenda tipo = resolverTipoPerfil(cmd);
+        if (tipo == null) {
+            throw new IllegalArgumentException(
+                "Indica o perfil de renda: *contracheque*, *recebimento único* ou *fluxo diário*.");
+        }
+        return switch (tipo) {
+            case CONTRACHEQUE -> aplicarContrachequeDeComando(cmd, sourceText, usuarioId);
+            case RECEBIMENTO_UNICO -> aplicarRecebimentoUnicoDeComando(cmd, sourceText, usuarioId);
+            case FLUXO_DIARIO -> aplicarFluxoDiarioDeComando(cmd, usuarioId);
+        };
+    }
+
+    private TipoConfiguracaoRenda resolverTipoPerfil(JsonNode cmd) {
+        String raw = firstNonBlank(
+            cmd.path("tipoPerfil").asText(null),
+            cmd.path("tipoConfiguracao").asText(null),
+            cmd.path("tipoConfiguracaoRenda").asText(null),
+            cmd.path("updates").path("tipoPerfil").asText(null),
+            cmd.path("updates").path("tipoConfiguracao").asText(null)
+        );
+        if (raw == null) {
+            return null;
+        }
+        String norm = raw.trim().toUpperCase(Locale.ROOT)
+            .replace(' ', '_')
+            .replace('-', '_');
+        if (norm.contains("FLUXO") || norm.contains("DIARIO") || norm.contains("DIÁRIO")
+            || norm.contains("VARIAVEL") || norm.contains("PIX")) {
+            return TipoConfiguracaoRenda.FLUXO_DIARIO;
+        }
+        if (norm.contains("UNICO") || norm.contains("ÚNICO") || norm.contains("FIXO")) {
+            return TipoConfiguracaoRenda.RECEBIMENTO_UNICO;
+        }
+        if (norm.contains("CONTRACHEQUE") || norm.contains("HOLERITE") || norm.contains("CLT") || norm.contains("SALARIO")) {
+            return TipoConfiguracaoRenda.CONTRACHEQUE;
+        }
+        try {
+            return TipoConfiguracaoRenda.valueOf(norm);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private RendaConfigDTO aplicarContrachequeDeComando(JsonNode cmd, String sourceText, Long usuarioId) {
+        JsonNode updates = cmd.path("updates");
+        BigDecimal bruto = readMoney(cmd, "salarioBruto");
+        if (bruto == null) {
+            bruto = readMoney(updates, "salarioBruto");
+        }
+        if (bruto == null || bruto.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Indica o salário bruto (valor numérico).");
+        }
+        Integer dia = readInt(cmd, "diaRecebimento");
+        if (dia == null) {
+            dia = readInt(updates, "diaRecebimento");
+        }
+        if (dia == null) {
+            dia = readInt(updates, "diaPagamento");
+        }
+        if (dia == null && sourceText != null && !sourceText.isBlank()) {
+            Matcher m = DIA_PAGAMENTO_NO_TEXTO.matcher(sourceText);
+            if (m.find()) {
+                for (int g = 1; g <= m.groupCount(); g++) {
+                    String cap = m.group(g);
+                    if (cap != null) {
+                        try {
+                            int v = Integer.parseInt(cap.trim());
+                            if (v >= 1 && v <= 31) {
+                                dia = v;
+                                break;
+                            }
+                        } catch (NumberFormatException ignored) {
+                            // próximo grupo
+                        }
+                    }
+                }
+            }
+        }
+        if (dia == null) {
+            throw new IllegalArgumentException("Indica o dia de recebimento (1-31), por exemplo: *dia 5*.");
+        }
+        List<DescontoFixoDTO> descontos = parseDescontosArray(updates.path("descontosFixos"));
+        if (descontos.isEmpty()) {
+            descontos = parseDescontosArray(updates.path("descontos"));
+        }
+        BigDecimal totalDesc = readMoney(cmd, "descontosHolerite");
+        if (totalDesc == null) {
+            totalDesc = readMoney(updates, "descontosHolerite");
+        }
+        if (totalDesc != null && totalDesc.compareTo(BigDecimal.ZERO) > 0 && descontos.isEmpty()) {
+            descontos.add(new DescontoFixoDTO("Descontos holerite", totalDesc));
+        }
+        return salvar(usuarioId, bruto, descontos, dia);
+    }
+
+    private RendaConfigDTO aplicarRecebimentoUnicoDeComando(JsonNode cmd, String sourceText, Long usuarioId) {
+        JsonNode updates = cmd.path("updates");
+        BigDecimal valor = readMoney(cmd, "valorLiquidoFixo");
+        if (valor == null) {
+            valor = readMoney(updates, "valorLiquidoFixo");
+        }
+        if (valor == null) {
+            valor = readMoney(cmd, "amount");
+        }
+        if (valor == null) {
+            valor = readMoney(updates, "valorRecebimentoUnico");
+        }
+        if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Indica o valor líquido fixo mensal (valor numérico).");
+        }
+        Integer dia = readInt(cmd, "diaRecebimentoFixo");
+        if (dia == null) {
+            dia = readInt(updates, "diaRecebimentoFixo");
+        }
+        if (dia == null) {
+            dia = readInt(updates, "diaPagamento");
+        }
+        if (dia == null && sourceText != null && !sourceText.isBlank()) {
+            Matcher m = DIA_PAGAMENTO_NO_TEXTO.matcher(sourceText);
+            if (m.find()) {
+                for (int g = 1; g <= m.groupCount(); g++) {
+                    String cap = m.group(g);
+                    if (cap != null) {
+                        try {
+                            int v = Integer.parseInt(cap.trim());
+                            if (v >= 1 && v <= 31) {
+                                dia = v;
+                                break;
+                            }
+                        } catch (NumberFormatException ignored) {
+                            // próximo grupo
+                        }
+                    }
+                }
+            }
+        }
+        if (dia == null) {
+            dia = SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO;
+        }
+        RendaConfigRequest req = new RendaConfigRequest();
+        req.setTipoConfiguracaoRenda(TipoConfiguracaoRenda.RECEBIMENTO_UNICO);
+        req.setValorRecebimentoUnico(valor);
+        req.setDiaPagamento(dia);
+        return salvarRecebimentoUnico(usuarioId, req);
+    }
+
+    private RendaConfigDTO aplicarFluxoDiarioDeComando(JsonNode cmd, Long usuarioId) {
+        JsonNode updates = cmd.path("updates");
+        BigDecimal meta = readMoney(cmd, "metaFaturamentoMensal");
+        if (meta == null) {
+            meta = readMoney(updates, "metaFaturamentoMensal");
+        }
+        if (meta == null) {
+            meta = readMoney(cmd, "amount");
+        }
+        if (meta == null) {
+            meta = readMoney(updates, "amount");
+        }
+        RendaConfigRequest req = new RendaConfigRequest();
+        req.setTipoConfiguracaoRenda(TipoConfiguracaoRenda.FLUXO_DIARIO);
+        req.setMetaFaturamentoMensal(meta);
+        return salvarFluxoDiario(usuarioId, req);
+    }
+
     private List<DescontoFixoDTO> parseDescontosArray(JsonNode arr) {
         List<DescontoFixoDTO> out = new ArrayList<>();
         if (arr == null || !arr.isArray()) {
@@ -511,6 +697,9 @@ public class RendaConfigService {
         cfg.setValorRecebimentoUnico(null);
         cfg.setReceitaAutomaticaAtiva(false);
         cfg.setUltimoMesLancamentoAuto(null);
+        if (req.getMetaFaturamentoMensal() != null) {
+            cfg.setMetaFaturamentoMensal(req.getMetaFaturamentoMensal().setScale(2, RoundingMode.HALF_UP));
+        }
         if (req.getDiaPagamento() != null) {
             cfg.setDiaPagamento(Math.max(1, Math.min(31, req.getDiaPagamento())));
         } else if (cfg.getDiaPagamento() == null) {
@@ -553,6 +742,7 @@ public class RendaConfigService {
             .contaBancariaNome(c.getContaBancaria() != null ? c.getContaBancaria().getNome() : null)
             .tipoConfiguracaoRenda(tipo)
             .valorRecebimentoUnico(c.getValorRecebimentoUnico())
+            .metaFaturamentoMensal(c.getMetaFaturamentoMensal())
             .rendaMensalEstimada(estimada)
             .rotuloRenda(rotuloPorTipo(tipo))
             .build();

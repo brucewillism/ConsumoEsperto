@@ -8,12 +8,14 @@ import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.MetaFinanceira;
-import com.consumoesperto.model.Transacao;
+import com.consumoesperto.dto.DespesaFixaDTO;
+import com.consumoesperto.dto.DespesaFixaRequest;
+import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.service.CartaoCreditoService;
 import com.consumoesperto.service.CategoriaService;
 import com.consumoesperto.service.ContaBancariaService;
 import com.consumoesperto.service.MetaFinanceiraService;
-import com.consumoesperto.service.TransacaoService;
+import com.consumoesperto.service.DespesaFixaService;
 import com.consumoesperto.util.ApelidoNormalizador;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +45,7 @@ public class WhatsAppEntityConfigUpdateService {
     private final MetaFinanceiraService metaFinanceiraService;
     private final CartaoCreditoService cartaoCreditoService;
     private final ContaBancariaService contaBancariaService;
-    private final TransacaoService transacaoService;
+    private final DespesaFixaService despesaFixaService;
 
     public String executar(Long usuarioId, JsonNode cmd) {
         String identifier = firstNonBlank(
@@ -153,13 +155,13 @@ public class WhatsAppEntityConfigUpdateService {
     }
 
     private ResolveOutcome resolveDespesaFixa(Long usuarioId, String identifier) {
-        List<Transacao> all = transacaoService.listarDespesasRecorrentes(usuarioId);
-        List<Transacao> found = ApelidoNormalizador.filtrarPorNomeNormalizado(all, Transacao::getDescricao, identifier);
+        List<DespesaFixa> found = despesaFixaService.encontrarPorIdentificador(usuarioId, identifier);
         if (found.isEmpty()) {
             return ResolveOutcome.notFound();
         }
         if (found.size() > 1) {
-            return ResolveOutcome.err("Encontrei várias despesas fixas parecidas com \"" + identifier + "\".");
+            return ResolveOutcome.err("Encontrei várias despesas fixas parecidas com \"" + identifier
+                + "\". Especifique o nome exato ou diga que é despesa fixa.");
         }
         return ResolveOutcome.ok(new EntityMatch(UpdateTargetEntity.DESPESA_FIXA, found.get(0).getId(), found.get(0).getDescricao()));
     }
@@ -299,8 +301,10 @@ public class WhatsAppEntityConfigUpdateService {
     }
 
     private String aplicarDespesaFixa(Long usuarioId, EntityMatch match, JsonNode updates) {
-        String novaDesc = null;
-        BigDecimal novoValor = null;
+        DespesaFixaDTO atual = despesaFixaService.buscar(usuarioId, match.id());
+        String novaDesc = atual.getDescricao();
+        BigDecimal novoValor = atual.getValor();
+        Integer novoDia = atual.getDiaVencimento();
         List<String> ignorados = new ArrayList<>();
         Iterator<Map.Entry<String, JsonNode>> it = updates.fields();
         while (it.hasNext()) {
@@ -319,16 +323,39 @@ public class WhatsAppEntityConfigUpdateService {
                         novoValor = nv;
                     }
                 }
+                case "dia_vencimento", "diavencimento", "vencimento", "due_day", "dueday", "dia" -> {
+                    Integer dia = readDia(v);
+                    if (dia != null) {
+                        novoDia = dia;
+                    }
+                }
                 default -> ignorados.add(e.getKey());
             }
         }
-        Transacao salva = transacaoService.aplicarPatchDespesaRecorrente(usuarioId, match.id(), novaDesc, novoValor);
-        String base = "✅ Feito! Despesa fixa \"" + salva.getDescricao() + "\" atualizada"
-            + (novoValor != null ? " — valor " + BRL.format(novoValor.doubleValue()) : "") + ".";
+        DespesaFixaRequest req = new DespesaFixaRequest();
+        req.setDescricao(novaDesc);
+        req.setValor(novoValor);
+        req.setDiaVencimento(novoDia);
+        req.setCategoria(atual.getCategoria());
+        DespesaFixaDTO salvo = despesaFixaService.atualizar(usuarioId, match.id(), req);
+        String base = "✅ Feito! Despesa fixa \"" + salvo.getDescricao() + "\" atualizada — "
+            + BRL.format(salvo.getValor().doubleValue()) + ", vence dia *" + salvo.getDiaVencimento() + "*.";
         if (!ignorados.isEmpty()) {
             base += " Ignorados: " + String.join(", ", ignorados) + ".";
         }
         return base;
+    }
+
+    private static Integer readDia(JsonNode v) {
+        if (v == null || v.isNull()) {
+            return null;
+        }
+        try {
+            int d = v.isInt() ? v.asInt() : Integer.parseInt(v.asText("").replaceAll("\\D", ""));
+            return d >= 1 && d <= 31 ? d : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String aplicarCartao(Long usuarioId, EntityMatch match, JsonNode updates) {

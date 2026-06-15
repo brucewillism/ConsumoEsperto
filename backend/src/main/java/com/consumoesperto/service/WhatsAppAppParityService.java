@@ -19,20 +19,27 @@ public class WhatsAppAppParityService {
         item("transacoes-despesa", "Despesas", "/transacoes", "Transações", "BOTH",
             List.of(
                 "gastei 45,90 no mercado",
-                "paguei 120 no cartão Nubank",
-                "fiz um pix de 80 da conta Nubank",
-                "mercado 200 no Itaú em 3x sem juros"
+                "quais foram meus últimos gastos?",
+                "o que gastei na categoria mercado esse mês?"
             ),
             List.of("Nova despesa", "Editar / apagar", "Filtrar por mês e categoria", "Vincular cartão ou conta"),
             "PIX e débito em conta não usam fatura do cartão."
         ),
         item("transacoes-receita", "Receitas", "/transacoes", "Transações", "BOTH",
-            List.of("recebi 3500 salário na conta Nubank", "receita 500 freelance"),
+            List.of(
+                "recebi 3500 salário na conta Nubank",
+                "lista os pix que recebi em junho"
+            ),
             List.of("Nova receita", "Editar / apagar", "Filtrar por período"),
             null
         ),
         item("contas", "Contas bancárias", "/contas", "Contas", "BOTH",
-            List.of("cria conta Nubank corrente saldo 1500", "cadastra carteira dinheiro"),
+            List.of(
+                "cria conta Nubank corrente saldo 1500",
+                "transfere 100 do Itaú pro Nubank",
+                "quanto eu tenho nas contas?",
+                "saldos das contas"
+            ),
             List.of("Criar / editar / inativar conta", "Saldo e conta padrão", "Transferências entre contas"),
             "Despesas com PIX devem citar a conta ou o banco."
         ),
@@ -56,30 +63,44 @@ public class WhatsAppAppParityService {
             "PDF de fatura: envie o ficheiro no WhatsApp ou use Importações no app."
         ),
         item("categorias", "Categorias", "/categorias", "Categorias", "BOTH",
-            List.of("cria categoria Pets", "edita categoria Alimentação cor azul"),
+            List.of(
+                "cria categoria Pets",
+                "quais categorias eu tenho cadastradas?",
+                "lista minhas categorias"
+            ),
             List.of("Criar com cor da paleta", "Editar nome, cor e ícone", "Apagar"),
             null
         ),
         item("orcamentos", "Orçamentos mensais", "/orcamentos", "Orçamentos", "BOTH",
-            List.of("orçamento 800 em Alimentação", "limite 500 para Lazer este mês"),
+            List.of(
+                "orçamento 800 em Alimentação",
+                "quanto eu gastei do meu orçamento?",
+                "meus limites de categoria"
+            ),
             List.of("Definir limite por categoria/mês", "Acompanhar consumo vs limite"),
             null
         ),
         item("metas", "Metas financeiras", "/metas", "Metas", "BOTH",
             List.of(
                 "cadastra meta viagem 8000 15%",
-                "quanto tempo para TV 2000 usando 10% da renda",
-                "apague meta geladeira"
+                "como estão minhas metas?",
+                "quais são os meus objetivos de economia?"
             ),
             List.of("Criar meta", "Valor objetivo e prazo", "Simulador de prazo"),
             "Simulação de compra também em Simulações."
         ),
         item("renda", "Renda e salário", "/renda", "Renda", "BOTH",
             List.of(
-                "salário bruto 8000 INSS 600 plano 400 IRRF 500 dia 5",
-                "enviar PDF do contracheque"
+                "meu salário bruto é 6000 com descontos de 800 dia 5",
+                "recebo um pix único de 4000 todo dia 10",
+                "minha renda agora é fluxo diário com meta de 5000"
             ),
-            List.of("Configurar salário e descontos", "Dia de pagamento", "Importar holerite PDF"),
+            List.of(
+                "Perfil Contracheque (CLT/holerite)",
+                "Perfil Recebimento Único (PIX fixo mensal)",
+                "Perfil Fluxo Diário (múltiplos PIX + meta)",
+                "Importar holerite PDF"
+            ),
             null
         ),
         item("modo-viagem", "Modo Viagem (Cronos)", "/dashboard", "Dashboard", "BOTH",
@@ -89,12 +110,23 @@ public class WhatsAppAppParityService {
         ),
         item("despesas-fixas", "Despesas fixas (recorrentes)", "/perfil", "Perfil", "BOTH",
             List.of(
-                "salve essa despesa fixa de 250 para internet dia 10",
-                "conta de luz vence dia 15 de 180",
-                "tenho recorrência?"
+                "cadastra a despesa fixa de aluguel valor 1200 vencimento todo dia 10",
+                "edita despesa fixa internet valor 280 dia 12",
+                "apague despesa fixa aluguel"
             ),
             List.of("Secção Despesas fixas no Perfil", "Dia de vencimento e valor", "Lembrete WhatsApp 3 dias antes"),
             "Contas como luz, água e aluguel; lembrete automático 3 dias antes do vencimento."
+        ),
+        item("assinaturas", "Assinaturas recorrentes", "/assinaturas", "Assinaturas", "BOTH",
+            List.of(
+                "cadastra a assinatura da Netflix de 55,90 todo dia 15",
+                "assinei o plano do Spotify por 24,90 por mês",
+                "quais minhas assinaturas?",
+                "desative a assinatura da Netflix",
+                "apague assinatura Spotify"
+            ),
+            List.of("Cadastrar assinatura", "Ativar / pausar", "Alertas 5 e 3 dias antes do vencimento"),
+            "Distinto de despesas fixas — streaming, academia, serviços digitais."
         ),
         item("relatorios", "Relatórios e PDF", "/relatorios", "Relatórios", "BOTH",
             List.of("gera PDF de maio", "relatório do mês passado"),

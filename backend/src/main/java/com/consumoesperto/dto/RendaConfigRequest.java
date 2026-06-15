@@ -18,4 +18,5 @@ public class RendaConfigRequest {
     @NotNull(message = "Tipo de configuração de renda é obrigatório")
     private TipoConfiguracaoRenda tipoConfiguracaoRenda;
     private BigDecimal valorRecebimentoUnico;
+    private BigDecimal metaFaturamentoMensal;
 }

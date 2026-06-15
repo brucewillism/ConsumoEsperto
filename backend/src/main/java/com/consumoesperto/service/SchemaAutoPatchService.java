@@ -55,6 +55,7 @@ public class SchemaAutoPatchService {
         ensureUsuarioRendaConfigTable();
         ensureRendaConfigContaBancariaColumn();
         ensureRendaConfigTipoRendaColumns();
+        ensureRendaConfigMetaFaturamentoColumn();
         ensureMetasFinanceirasTable();
         ensureGrupoFamiliarTables();
         ensureOrcamentosTable();
@@ -285,6 +286,32 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: colunas tipo_configuracao_renda e valor_recebimento_unico verificadas.");
         } catch (Exception e) {
             log.warn("Falha ao ADD tipo_configuracao_renda em usuario_renda_config: {}", e.getMessage());
+        }
+    }
+
+    private void ensureRendaConfigMetaFaturamentoColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuario_renda_config' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + schema + ".usuario_renda_config "
+                        + "ADD COLUMN IF NOT EXISTS meta_faturamento_mensal NUMERIC(19, 2)"
+                );
+            }
+            log.info("Schema patch: coluna meta_faturamento_mensal verificada em usuario_renda_config.");
+        } catch (Exception e) {
+            log.warn("Falha ao ADD meta_faturamento_mensal em usuario_renda_config: {}", e.getMessage());
         }
     }
 

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
@@ -207,15 +208,20 @@ public class JarvisContextoFinanceiroService {
             return "";
         }
         try {
-            var proximas = despesaFixaService.listarVencendoEmDias(userId, 3);
-            if (proximas.isEmpty()) {
+            var todas = despesaFixaService.listar(userId);
+            if (todas.isEmpty()) {
                 return "";
             }
+            BigDecimal totalMensal = despesaFixaService.somarValorMensal(userId);
             StringBuilder sb = new StringBuilder();
-            sb.append("- Despesas fixas vencendo em 3 dias: ");
-            sb.append(proximas.stream()
-                .map(d -> d.getDescricao() + " (" + BRL.format(d.getValor()) + ", dia " + d.getDiaVencimento() + ")")
-                .collect(java.util.stream.Collectors.joining(", ")));
+            sb.append("- Despesas fixas mensais (total): ").append(BRL.format(totalMensal));
+            var proximas = despesaFixaService.listarVencendoEmDias(userId, 3);
+            if (!proximas.isEmpty()) {
+                sb.append(" — vencendo em 3 dias: ");
+                sb.append(proximas.stream()
+                    .map(d -> d.getDescricao() + " (" + BRL.format(d.getValor()) + ", dia " + d.getDiaVencimento() + ")")
+                    .collect(java.util.stream.Collectors.joining(", ")));
+            }
             sb.append("\n");
             return sb.toString();
         } catch (Exception e) {
@@ -257,6 +263,7 @@ public class JarvisContextoFinanceiroService {
                 ? config.getTipoConfiguracaoRenda()
                 : TipoConfiguracaoRenda.CONTRACHEQUE;
             Integer dia = config.getDiaPagamento();
+            int diasNoMes = YearMonth.now().lengthOfMonth();
             String textoRenda = switch (tipo) {
                 case CONTRACHEQUE -> String.format(
                     "- Renda: %s/mês (salário líquido CLT, dia de pagamento: %d)\n",
@@ -264,9 +271,23 @@ public class JarvisContextoFinanceiroService {
                 case RECEBIMENTO_UNICO -> String.format(
                     "- Renda: %s/mês (recebimento único mensal, dia esperado: %d)\n",
                     BRL.format(rendaMensal), dia != null ? dia : SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO);
-                case FLUXO_DIARIO -> String.format(
-                    "- Renda: %s/mês estimados (média móvel 30 dias — renda variável, sem valor fixo garantido)\n",
-                    BRL.format(rendaMensal));
+                case FLUXO_DIARIO -> {
+                    int diaAtual = LocalDate.now().getDayOfMonth();
+                    int diasRestantes = Math.max(0, diasNoMes - diaAtual);
+                    String metaTxt = config.getMetaFaturamentoMensal() != null
+                        && config.getMetaFaturamentoMensal().compareTo(BigDecimal.ZERO) > 0
+                        ? BRL.format(config.getMetaFaturamentoMensal())
+                        : "não definida";
+                    BigDecimal rendaRestanteLinear = rendaMensal
+                        .multiply(BigDecimal.valueOf(diasRestantes))
+                        .divide(BigDecimal.valueOf(diasNoMes), 2, java.math.RoundingMode.HALF_UP);
+                    yield String.format(
+                        "- Renda: %s/mês estimados (média móvel 30 dias — perfil FLUXO_DIARIO, múltiplos PIX)\n"
+                            + "- Meta de faturamento: %s\n"
+                            + "- Projeção do mês: diluir linearmente a renda restante (%s nos %d dias restantes); "
+                            + "NÃO assumir depósito único em data fixa\n",
+                        BRL.format(rendaMensal), metaTxt, BRL.format(rendaRestanteLinear), diasRestantes);
+                }
             };
             return textoRenda;
         } catch (Exception e) {

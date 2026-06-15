@@ -22,6 +22,7 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -126,6 +127,22 @@ public class AssinaturaRecorrenteService {
     public void excluir(Long usuarioId, Long id) {
         AssinaturaRecorrente e = buscarEntidade(id, usuarioId);
         assinaturaRepository.delete(e);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AssinaturaRecorrente> encontrarPorIdentificador(Long usuarioId, String identificador) {
+        String n = normalizeDesc(identificador);
+        if (n.length() < 2) {
+            return List.of();
+        }
+        List<AssinaturaRecorrente> out = new ArrayList<>();
+        for (AssinaturaRecorrente a : assinaturaRepository.findByUsuarioIdOrderByNomeAscIdAsc(usuarioId)) {
+            String o = normalizeDesc(a.getNome());
+            if (o.length() >= 2 && (o.equals(n) || o.contains(n) || n.contains(o))) {
+                out.add(a);
+            }
+        }
+        return out;
     }
 
     /** Avalia padrão recorrente após despesa confirmada e propõe cadastro (sessão + WhatsApp). */
@@ -413,23 +430,9 @@ public class AssinaturaRecorrenteService {
     }
 
     private Optional<AssinaturaRecorrente> encontrarSimilar(Long usuarioId, String descricao, Long excludeId) {
-        String n = normalizeDesc(descricao);
-        if (n.length() < 2) {
-            return Optional.empty();
-        }
-        for (AssinaturaRecorrente a : assinaturaRepository.findByUsuarioIdOrderByNomeAscIdAsc(usuarioId)) {
-            if (excludeId != null && excludeId.equals(a.getId())) {
-                continue;
-            }
-            String o = normalizeDesc(a.getNome());
-            if (o.length() < 2) {
-                continue;
-            }
-            if (o.equals(n) || o.contains(n) || n.contains(o)) {
-                return Optional.of(a);
-            }
-        }
-        return Optional.empty();
+        return encontrarPorIdentificador(usuarioId, descricao).stream()
+            .filter(a -> excludeId == null || !excludeId.equals(a.getId()))
+            .findFirst();
     }
 
     private AssinaturaRecorrente buscarEntidade(Long id, Long usuarioId) {

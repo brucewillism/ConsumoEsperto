@@ -52,6 +52,10 @@ public class RendaConfig {
     @Column(name = "valor_recebimento_unico", precision = 19, scale = 2)
     private BigDecimal valorRecebimentoUnico;
 
+    /** Meta de faturamento mensal (FLUXO_DIARIO). */
+    @Column(name = "meta_faturamento_mensal", precision = 19, scale = 2)
+    private BigDecimal metaFaturamentoMensal;
+
     @Column(name = "receita_automatica_ativa", nullable = false)
     private boolean receitaAutomaticaAtiva;
 

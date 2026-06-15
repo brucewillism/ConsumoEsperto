@@ -131,7 +131,9 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt, contextoFinanceiro);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|UNKNOWN), " +
+            "contaOrigem (apelido/nome da conta de origem na transferência), contaDestino (apelido/nome da conta de destino na transferência), " +
+            "mes (1-12, opcional — consultas de extrato/orçamento), ano (ex.: 2026, opcional), tipo (DESPESA|RECEITA, opcional — filtro de extrato), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
             "description, amount, bank, cardName, cardNumber, dueDay, creditLimit (limite total do cartão, opcional), " +
             "accountName (nome da conta bancária/carteira), accountType (CORRENTE|POUPANCA|DINHEIRO), initialBalance (saldo inicial da conta), " +
@@ -140,11 +142,14 @@ public class OpenAiService {
             "paymentMethod (CONTA quando PIX/TED/débito/transferência na conta bancária; CARTAO quando compra ou gasto na fatura do cartão), " +
             "interestFree (true se 'sem juros'/'s/juros'), withInterest (true se 'com juros'), purchasePrice (preço à vista do bem quando citado), " +
             "newAvailableLimit (opcional), percentualComprometimento (0-100 quando for meta), " +
-            "manageOperation (delete|edit), manageTarget (transacao|meta|cartao|conta_bancaria|categoria|orcamento), searchPhrase (termo de busca), " +
+            "manageOperation (delete|edit), manageTarget (transacao|meta|cartao|conta_bancaria|categoria|orcamento|despesa_fixa|assinatura), searchPhrase (termo de busca), " +
             "targetEntity (AUTO|CONTA|CARTAO|CONTA_BANCARIA|META|CATEGORIA|DESPESA_FIXA), identifier (apelido/nome do cadastro), " +
             "splitMembers (array de nomes/apelidos dos membros marcados no racha-contas, ex.: [\"Esposa\",\"Filho\"]), " +
             "counterpartyAlias (nome/apelido do membro ao quitar débito, ex.: \"Esposa\"), " +
             "subscriptionActive (true para ativar/reativar assinatura cadastrada; false para desativar/pausar), " +
+            "tipoPerfil (CONTRACHEQUE|RECEBIMENTO_UNICO|FLUXO_DIARIO — perfil híbrido de renda), " +
+            "salarioBruto, descontosHolerite (total ou use descontosFixos em updates), diaRecebimento (1-31, CONTRACHEQUE), " +
+            "valorLiquidoFixo, diaRecebimentoFixo (RECEBIMENTO_UNICO), metaFaturamentoMensal (FLUXO_DIARIO), " +
             "updates (objeto JSON com campos a alterar, ex.: {\"limite\":5000,\"apelido\":\"Nubank Ultra\",\"icone\":\"shopping-cart\"}), " +
             "legado cartão: newLimit, newAvailableLimit, newCardName — use UPDATE_ACCOUNT_CONFIG ou UPDATE_ENTITY_CONFIG com updates.\n" +
             "confianca (0-1), errorMessage. " +
@@ -188,13 +193,25 @@ public class OpenAiService {
             "conta bancária (targetEntity CONTA_BANCARIA): nome, tipo, saldo, padrao; " +
             "categoria: nome, cor, icone (limiteMensal pode ser pedido mas o app pode ignorar); " +
             "meta: nome ou descricao, valorObjetivo ou valorTotal, percentual, prioridade, dataPrazo (yyyy-MM-dd); " +
-            "despesa fixa: descricao, valor.\n" +
+            "despesa fixa: descricao, valor, dia_vencimento (1-31).\n" +
             "- Atalho legado só para cartão: UPDATE_ACCOUNT_CONFIG com cardName, newLimit, newAvailableLimit, newCardName.\n" +
             "- Se o usuário quiser *simular prazo* de compra/meta (ex: 'quero comprar uma TV de 2000 usando 10% da minha renda', " +
             "'quanto tempo para geladeira 3500 comprometendo 15% do salário'): action SIMULATE_PURCHASE_GOAL, description = item, " +
             "amount = valor total do bem, percentualComprometimento = percentual informado (número, ex: 10 para 10%).\n" +
             "- Se perguntar sobre recorrência, assinaturas repetidas, gastos fixos mensais (ex: 'tenho recorrência?', 'o que repete?'): action GET_INSIGHTS.\n" +
             "- Se pedir listar/quantos cartões tem (ex.: 'lista meus cartões', 'quantos cartões eu tenho?'): action LIST_CARDS.\n" +
+            "- Se pedir saldos das contas, patrimônio em contas ou quanto tem nas contas (ex.: 'quanto eu tenho nas contas?', " +
+            "'saldos das contas', 'meu patrimônio', 'lista minhas contas'): action LIST_ACCOUNTS.\n" +
+            "- Se pedir transferir/mover/passar valor entre contas bancárias (ex.: 'transfere 100 do Itaú pro Nubank', " +
+            "'passa 50 reais da conta Inter para a poupança', 'manda 200 da corrente pra carteira'): action TRANSFER_BETWEEN_ACCOUNTS; " +
+            "preencher amount (valor), contaOrigem e contaDestino com os apelidos citados; NÃO use CREATE_EXPENSE para transferências internas.\n" +
+            "- Se pedir extrato, últimos gastos/receitas ou listar transações (ex.: 'quais foram meus últimos gastos?', " +
+            "'lista os pix que recebi em junho', 'o que gastei na categoria mercado esse mês?'): action LIST_TRANSACTIONS; " +
+            "preencher mes/ano ou reportMonth/reportYear quando citar período; tipo=DESPESA ou RECEITA se filtrar; categoryName/categoria se citar categoria.\n" +
+            "- Se pedir listar categorias cadastradas (ex.: 'quais categorias eu tenho?', 'lista minhas categorias'): action LIST_CATEGORIES.\n" +
+            "- Se pedir estado das metas/objetivos (ex.: 'como estão minhas metas?', 'quais são os meus objetivos de economia?'): action LIST_METAS.\n" +
+            "- Se pedir resumo de orçamento, limites por categoria ou gasto vs limite (ex.: 'quanto gastei do meu orçamento?', " +
+            "'resumo de gastos do orçamento', 'meus limites de categoria'): action GET_REPORT_SUMMARY; mes/ano se citar mês.\n" +
             "- Se perguntar quanto gastou no cartão, resumo de fatura, limite disponível (ex: 'quanto gastei no Nubank?', 'resumo da fatura do Inter'): " +
             "action CHECK_CARD_STATUS e preencher cardName e/ou bank com o cartão citado.\n" +
             "- Se perguntar como vai fechar o mês, se vai ficar no vermelho, previsão/projeção do mês ou saldo no fim do mês: action FORECAST_MONTH.\n" +
@@ -207,8 +224,9 @@ public class OpenAiService {
             "action GENERATE_REPORT; preencher reportMonth e reportYear quando a frase citar mês/ano (ex: maio 2026 → 5 e 2026).\n" +
             "- Sinónimo: 'gerar relatorio', 'GERAR_RELATORIO', 'manda o pdf' → action GERAR_RELATORIO (mesmos campos que GENERATE_REPORT).\n" +
             "- Apagar ou editar algo pelo nome (ex: 'apague a gasolina deste mês', 'edite minha meta de Lazer', 'apague meu cartão Inter', " +
-            "'inativa conta Nubank', 'apaga categoria Pets', 'remove orçamento de Alimentação'): " +
-            "action MANAGE_ENTITY; manageOperation = delete ou edit; manageTarget = transacao | meta | cartao | conta_bancaria | categoria | orcamento; " +
+            "'inativa conta Nubank', 'apaga categoria Pets', 'remove orçamento de Alimentação', " +
+            "'apague despesa fixa aluguel', 'remova assinatura Netflix'): " +
+            "action MANAGE_ENTITY; manageOperation = delete ou edit; manageTarget = transacao | meta | cartao | conta_bancaria | categoria | orcamento | despesa_fixa | assinatura; " +
             "searchPhrase = termo principal (ex.: gasolina, Lazer, Inter); para transações no mês corrente use reportMonth/reportYear ou deixe vazio para mês atual; " +
             "tipoTransacao DESPESA ou RECEITA quando for transação (default DESPESA se for gasto).\n" +
             "- Se configurar salário / renda com descontos (ex: 'salário bruto 8000, 600 INSS, 400 plano, 500 IRRF, pagamento dia 5'): " +
@@ -216,6 +234,13 @@ public class OpenAiService {
             "salarioBruto (número), diaPagamento (1-31), descontosFixos como array de objetos " +
             "{ \"rotulo\": \"INSS\", \"valor\": 600 } (use rotulo ou label; valor ou amount numérico). " +
             "Se a frase não disser o dia, inferir com cuidado ou usar UNKNOWN pedindo o dia.\n" +
+            "- Se configurar *perfil de renda híbrido* (contracheque, recebimento único ou fluxo diário), ex.: " +
+            "'minha renda agora é fluxo diário com meta de 5000', 'recebo um pix único de 4000 todo dia 10', " +
+            "'meu salário bruto é 6000 com descontos de 800 dia 5': action SET_INCOME_PROFILE; " +
+            "tipoPerfil = CONTRACHEQUE | RECEBIMENTO_UNICO | FLUXO_DIARIO; " +
+            "CONTRACHEQUE: salarioBruto, descontosHolerite (total) ou descontosFixos em updates, diaRecebimento; " +
+            "RECEBIMENTO_UNICO: valorLiquidoFixo, diaRecebimentoFixo; FLUXO_DIARIO: metaFaturamentoMensal (opcional). " +
+            "Prefira SET_INCOME_PROFILE quando a frase citar explicitamente o *tipo* de trabalhador/perfil.\n" +
             "- Racha-contas / dividir despesa no grupo familiar (ex.: 'racha os 150 do restaurante entre eu, a Esposa e o Filho', " +
             "'divide a conta de 90 comigo e com o João', 'racha 60 com a Maria'): action SPLIT_BILL; amount = valor total; " +
             "description = motivo/local (ex.: restaurante); splitMembers = array com os nomes dos OUTROS membros marcados " +
@@ -225,6 +250,10 @@ public class OpenAiService {
             "- Quitar/acertar débito interno do grupo (ex.: 'acertei os 50 com a Esposa', 'a Maria me pagou', 'quitei com o João'): " +
             "action SETTLE_DEBT; counterpartyAlias = nome do membro com quem acertou.\n" +
             "- Listar assinaturas cadastradas/monitoradas (ex.: 'quais minhas assinaturas?', 'lista assinaturas'): action LIST_SUBSCRIPTIONS.\n" +
+            "- Cadastrar assinatura recorrente manualmente (ex.: 'assinei o plano do Spotify por 24,90 por mês', " +
+            "'cadastra a assinatura da Netflix de 55,90 todo dia 15'): action CREATE_SUBSCRIPTION; description = nome; amount = valor mensal; dueDay = dia de cobrança (1-31).\n" +
+            "- Cadastrar despesa fixa/obrigação mensal (ex.: 'cadastra a despesa fixa de aluguel valor 1200 vencimento todo dia 10', " +
+            "'salve essa despesa fixa de 250 para internet dia 10'): action CREATE_FIXED_EXPENSE; description = nome; amount = valor; dueDay = dia de vencimento.\n" +
             "- Ativar ou desativar assinatura cadastrada (ex.: 'desative a assinatura da Netflix', 'pause a academia', 'reative o Spotify'): " +
             "action TOGGLE_SUBSCRIPTION; description ou searchPhrase = nome da assinatura; subscriptionActive=false para desativar/pausar, true para ativar.\n" +
             "- Se faltar dado essencial, retornar action UNKNOWN com errorMessage explicando o que faltou.\n" +

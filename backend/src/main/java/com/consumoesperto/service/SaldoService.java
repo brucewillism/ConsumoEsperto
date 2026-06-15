@@ -4,6 +4,7 @@ import com.consumoesperto.dto.ProjecaoMesResumoDTO;
 import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.SerieProjecaoSafraDTO;
 import com.consumoesperto.model.Fatura;
+import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
@@ -206,8 +207,8 @@ public class SaldoService {
 
         BigDecimal receitasSalariaisConfirmadas = nz(
             transacaoRepository.sumReceitaSalarialConfirmadaPeriodo(usuarioId, inicio, fimMes));
-        BigDecimal receitasPrevistas = rendaLiquida.subtract(receitasSalariaisConfirmadas).max(BigDecimal.ZERO)
-            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal receitasPrevistas = calcularReceitasPrevistasMes(
+            usuarioId, rendaLiquida, receitasSalariaisConfirmadas, diaAtual, diasNoMes);
 
         BigDecimal despesasPrevistas = gastoProjetado.subtract(gastoAtual).max(BigDecimal.ZERO)
             .setScale(2, RoundingMode.HALF_UP);
@@ -256,8 +257,8 @@ public class SaldoService {
 
         BigDecimal receitasSalariaisConfirmadas = nz(
             transacaoRepository.sumReceitaSalarialConfirmadaPeriodo(usuarioId, inicio, fimMes));
-        BigDecimal receitasPrevistas = rendaLiquida.subtract(receitasSalariaisConfirmadas).max(BigDecimal.ZERO)
-            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal receitasPrevistas = calcularReceitasPrevistasMes(
+            usuarioId, rendaLiquida, receitasSalariaisConfirmadas, 1, diasNoMes);
 
         BigDecimal receitasFiscaisBrutas = nz(
             planejamentoFiscalService.somarReceitasPrevistasNoMes(usuarioId, ym));
@@ -276,6 +277,25 @@ public class SaldoService {
             receitasPrevistas, receitasFiscaisPrevistas, despesasPrevistas,
             saldoProjetado, 1, diasNoMes
         );
+    }
+
+    private BigDecimal calcularReceitasPrevistasMes(
+        Long usuarioId,
+        BigDecimal rendaLiquida,
+        BigDecimal receitasSalariaisConfirmadas,
+        int diaAtual,
+        int diasNoMes
+    ) {
+        TipoConfiguracaoRenda tipo = rendaConfigService.obterDto(usuarioId)
+            .map(RendaConfigDTO::getTipoConfiguracaoRenda)
+            .orElse(TipoConfiguracaoRenda.CONTRACHEQUE);
+        if (tipo == TipoConfiguracaoRenda.FLUXO_DIARIO) {
+            int diasRestantes = Math.max(0, diasNoMes - diaAtual);
+            return rendaLiquida.multiply(BigDecimal.valueOf(diasRestantes))
+                .divide(BigDecimal.valueOf(Math.max(1, diasNoMes)), 2, RoundingMode.HALF_UP);
+        }
+        return rendaLiquida.subtract(receitasSalariaisConfirmadas).max(BigDecimal.ZERO)
+            .setScale(2, RoundingMode.HALF_UP);
     }
 
     private static String formatarRotuloMes(YearMonth ym) {

@@ -9,18 +9,24 @@ import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.dto.ImportacaoFaturaDTO;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.dto.OrcamentoRequest;
+import com.consumoesperto.dto.OrcamentoDTO;
+import com.consumoesperto.dto.MetaFinanceiraListResponse;
 import com.consumoesperto.dto.SugestaoContencaoJarvisDTO;
 import com.consumoesperto.dto.MetaFinanceiraDTO;
 import com.consumoesperto.dto.MetaFinanceiraRequest;
 import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.dto.TransferenciaContaDTO;
+import com.consumoesperto.dto.TransferenciaContaRequest;
 import com.consumoesperto.dto.DespesaFixaRequest;
+import com.consumoesperto.dto.AssinaturaRecorrenteRequest;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.MemoriaCategoriaOrigem;
+import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -40,9 +46,13 @@ import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
+import java.time.temporal.ChronoUnit;
 import java.text.Normalizer;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +69,8 @@ import java.util.stream.Collectors;
 public class WhatsAppCommandService {
 
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+    private static final int LIMITE_EXTRATO_WHATSAPP = 10;
+    private static final DateTimeFormatter FMT_DATA_EXTRATO = DateTimeFormatter.ofPattern("dd/MM");
 
     private final OpenAiService openAiService;
     private final EvolutionApiService evolutionApiService;
@@ -112,6 +124,7 @@ public class WhatsAppCommandService {
     private final AgendamentoPagamentoService agendamentoPagamentoService;
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
     private final ChequeEspecialConfirmacaoService chequeEspecialConfirmacaoService;
+    private final TransferenciaContaService transferenciaContaService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -263,6 +276,26 @@ public class WhatsAppCommandService {
         if (listaCartoes.isPresent()) {
             return listaCartoes;
         }
+        Optional<String> listaContas = tryConsultaListaContas(userId, text);
+        if (listaContas.isPresent()) {
+            return listaContas;
+        }
+        Optional<String> listaTransacoes = tryConsultaListaTransacoes(userId, text);
+        if (listaTransacoes.isPresent()) {
+            return listaTransacoes;
+        }
+        Optional<String> listaCategorias = tryConsultaListaCategorias(userId, text);
+        if (listaCategorias.isPresent()) {
+            return listaCategorias;
+        }
+        Optional<String> listaMetas = tryConsultaListaMetas(userId, text);
+        if (listaMetas.isPresent()) {
+            return listaMetas;
+        }
+        Optional<String> resumoOrcamento = tryConsultaResumoOrcamento(userId, text);
+        if (resumoOrcamento.isPresent()) {
+            return resumoOrcamento;
+        }
         Optional<String> atualizaCartao = tryAtualizarCartaoTextoLivre(userId, text);
         if (atualizaCartao.isPresent()) {
             return atualizaCartao;
@@ -335,11 +368,49 @@ public class WhatsAppCommandService {
                 fallback.put("action", "LIST_CARDS");
                 fallback.put("confianca", 1);
                 fallback.remove("errorMessage");
-            } else if (textoPedeAtualizacaoCartao(text)) {
-                fallback.put("action", "UPDATE_ENTITY_CONFIG");
-                fallback.put("targetEntity", "CARTAO");
+            } else if (textoPedeListaContas(text)) {
+                fallback.put("action", "LIST_ACCOUNTS");
+                fallback.put("confianca", 1);
+                fallback.remove("errorMessage");
+            } else if (textoPedeListaTransacoes(text)) {
+                fallback.put("action", "LIST_TRANSACTIONS");
                 fallback.put("confianca", 0.9);
                 fallback.remove("errorMessage");
+            } else if (textoPedeListaCategorias(text)) {
+                fallback.put("action", "LIST_CATEGORIES");
+                fallback.put("confianca", 1);
+                fallback.remove("errorMessage");
+            } else if (textoPedeListaMetas(text)) {
+                fallback.put("action", "LIST_METAS");
+                fallback.put("confianca", 0.9);
+                fallback.remove("errorMessage");
+            } else if (textoPedeResumoOrcamento(text)) {
+                fallback.put("action", "GET_REPORT_SUMMARY");
+                fallback.put("confianca", 0.9);
+                fallback.remove("errorMessage");
+            } else if (textoPedeTransferenciaEntreContas(text)) {
+                fallback.put("action", "TRANSFER_BETWEEN_ACCOUNTS");
+                fallback.put("confianca", 0.85);
+                fallback.remove("errorMessage");
+            } else if (DespesaFixaWhatsappTextParser.parse(text) != null) {
+                fallback.put("action", "CREATE_FIXED_EXPENSE");
+                fallback.put("confianca", 0.9);
+                fallback.remove("errorMessage");
+            } else if (AssinaturaWhatsappTextParser.parse(text) != null) {
+                fallback.put("action", "CREATE_SUBSCRIPTION");
+                fallback.put("confianca", 0.9);
+                fallback.remove("errorMessage");
+            } else {
+                com.fasterxml.jackson.databind.node.ObjectNode incomeProfile = IncomeProfileWhatsappTextParser.parse(text);
+                if (incomeProfile != null) {
+                    fallback.setAll(incomeProfile);
+                    fallback.remove("errorMessage");
+                } else if (textoPedeAtualizacaoCartao(text)) {
+                    fallback.put("action", "UPDATE_ENTITY_CONFIG");
+                    fallback.put("targetEntity", "CARTAO");
+                    fallback.put("confianca", 0.9);
+                    fallback.remove("errorMessage");
+                }
             }
             return fallback;
         }
@@ -394,6 +465,618 @@ public class WhatsAppCommandService {
                 .append(", final *").append(fin).append("*, venc. dia *").append(c.getDiaVencimento()).append("*\n");
         }
         return Optional.of(msgOk("Os teus cartões", sb.toString().trim()));
+    }
+
+    private boolean textoPedeListaContas(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (textoPedeTransferenciaEntreContas(text)) {
+            return false;
+        }
+        if (n.contains("patrimonio") || n.contains("patrimônio")) {
+            return true;
+        }
+        if ((n.contains("saldo") || n.contains("saldos") || n.contains("quanto"))
+            && (n.contains("conta") || n.contains("contas") || n.contains("banco") || n.contains("bancos"))) {
+            return true;
+        }
+        if ((n.contains("lista") || n.contains("listar") || n.contains("mostre") || n.contains("mostra")
+            || n.contains("quais")) && (n.contains("conta") || n.contains("contas"))) {
+            return true;
+        }
+        return n.contains("minhas contas") || n.contains("meus bancos") || n.contains("minhas carteiras");
+    }
+
+    private boolean textoPedeTransferenciaEntreContas(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (n.contains("transfere") || n.contains("transferir") || n.contains("transferencia")
+            || n.contains("transferência") || n.contains("passa ") || n.contains("passar ")
+            || n.contains("manda ") || n.contains("mandar ") || n.contains("move ") || n.contains("mover ")) {
+            return n.contains("conta") || n.contains("pro ") || n.contains("para ") || n.contains("pra ")
+                || n.contains(" do ") || n.contains(" da ");
+        }
+        return false;
+    }
+
+    private Optional<String> tryConsultaListaContas(Long userId, String text) {
+        if (!textoPedeListaContas(text)) {
+            return Optional.empty();
+        }
+        return Optional.of(handleListAccounts(userId));
+    }
+
+    private String handleListAccounts(Long userId) {
+        List<ContaBancariaDTO> contas = contaBancariaService.listarPorUsuario(userId, true);
+        if (contas.isEmpty()) {
+            return msgInfo("Contas",
+                "Não tens contas *ativas*. Cria em *Contas* no app ou envia: *cria conta Nubank corrente saldo 1500*.");
+        }
+        String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+        StringBuilder sb = new StringBuilder();
+        sb.append(voc).append(", eis o panorama das tuas contas ativas:\n\n");
+        int i = 1;
+        for (ContaBancariaDTO c : contas) {
+            String tipo = rotuloTipoConta(c.getTipo());
+            sb.append(i++).append(". *").append(c.getNome()).append("*");
+            if (tipo != null && !tipo.isBlank()) {
+                sb.append(" (").append(tipo).append(")");
+            }
+            sb.append(" — saldo nominal *").append(BRL.format(c.getSaldoAtual())).append("*");
+            BigDecimal limite = c.getLimiteChequeEspecial() != null ? c.getLimiteChequeEspecial() : BigDecimal.ZERO;
+            if (limite.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal disponivel = c.getSaldoDisponivel() != null ? c.getSaldoDisponivel() : c.getSaldoAtual().add(limite);
+                sb.append("\n   💳 *Cheque especial:* limite ").append(BRL.format(limite))
+                    .append(" → *disponível ").append(BRL.format(disponivel)).append("*");
+            }
+            if (c.isPadrao()) {
+                sb.append("\n   ⭐ Conta padrão");
+            }
+            sb.append("\n");
+        }
+        BigDecimal patrimonio = saldoService.patrimonioLiquido(userId).setScale(2, RoundingMode.HALF_UP);
+        sb.append("\n*Patrimônio Líquido Real Consolidado:* *").append(BRL.format(patrimonio)).append("*");
+        sb.append("\n_(Soma dos saldos nominais; cheque especial não entra no patrimônio.)_");
+        return msgOk("Saldos e patrimônio", sb.toString().trim());
+    }
+
+    private String handleTransferBetweenAccounts(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            BigDecimal valor = readAmount(cmd, sourceText);
+            if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+                return msgErro(userId, "Transferência",
+                    "Indica o valor a transferir (ex.: *transfere 100 do Itaú pro Nubank*).");
+            }
+            String origemToken = readTransferAccountField(cmd, "contaOrigem", "accountOrigin", "conta_origem", "originAccount");
+            String destinoToken = readTransferAccountField(cmd, "contaDestino", "accountDestination", "conta_destino", "destinationAccount");
+            if (origemToken.isBlank() || destinoToken.isBlank()) {
+                TransferenciaTokens extraidos = extrairTokensTransferenciaTexto(sourceText);
+                if (origemToken.isBlank()) {
+                    origemToken = extraidos.origem();
+                }
+                if (destinoToken.isBlank()) {
+                    destinoToken = extraidos.destino();
+                }
+            }
+            if (origemToken.isBlank()) {
+                return msgErro(userId, "Transferência",
+                    "De qual conta sai o valor? Ex.: *transfere 50 da conta Inter para o Nubank*.");
+            }
+            if (destinoToken.isBlank()) {
+                return msgErro(userId, "Transferência",
+                    "Para qual conta vai o valor? Ex.: *transfere 50 do Itaú pro Nubank*.");
+            }
+
+            ContaResolveResult origemRes = resolverContaParaTransferencia(userId, origemToken, "origem");
+            if (!origemRes.ok()) {
+                return msgErro(userId, "Conta de origem", origemRes.mensagem());
+            }
+            ContaResolveResult destinoRes = resolverContaParaTransferencia(userId, destinoToken, "destino");
+            if (!destinoRes.ok()) {
+                return msgErro(userId, "Conta de destino", destinoRes.mensagem());
+            }
+            ContaBancaria origem = origemRes.conta();
+            ContaBancaria destino = destinoRes.conta();
+            if (origem.getId().equals(destino.getId())) {
+                return msgErro(userId, "Transferência", "Origem e destino devem ser contas diferentes.");
+            }
+
+            TransferenciaContaRequest request = new TransferenciaContaRequest();
+            request.setContaOrigemId(origem.getId());
+            request.setContaDestinoId(destino.getId());
+            request.setValor(valor.setScale(2, RoundingMode.HALF_UP));
+            TransferenciaContaDTO resultado = transferenciaContaService.transferir(userId, request);
+
+            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+            StringBuilder detalhe = new StringBuilder();
+            detalhe.append(voc).append(", transferência concluída.\n\n");
+            detalhe.append("*").append(BRL.format(resultado.getValor())).append("* de *")
+                .append(resultado.getContaOrigemNome()).append("* → *")
+                .append(resultado.getContaDestinoNome()).append("*.\n");
+            detalhe.append("Patrimônio líquido consolidado mantém-se em *")
+                .append(BRL.format(resultado.getPatrimonioLiquidoApos())).append("*.");
+            return msgOk("Transferência entre contas", detalhe.toString().trim());
+        } catch (RuntimeException e) {
+            log.info("WhatsApp transferência entre contas: {}", e.getMessage());
+            return msgErro(userId, "Transferência", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private String readTransferAccountField(JsonNode cmd, String... keys) {
+        if (keys == null) {
+            return "";
+        }
+        for (String key : keys) {
+            String v = cmd.path(key).asText("").trim();
+            if (!v.isBlank()) {
+                return v;
+            }
+        }
+        return "";
+    }
+
+    private ContaResolveResult resolverContaParaTransferencia(Long userId, String token, String rotulo) {
+        if (token == null || token.isBlank()) {
+            return ContaResolveResult.erro("Indica a conta de " + rotulo + ".");
+        }
+        List<ContaBancaria> candidatos = contaBancariaService.encontrarAtivasPorApelidoNormalizado(userId, token);
+        if (candidatos.isEmpty()) {
+            return ContaResolveResult.erro("Não encontrei conta ativa parecida com \"" + token + "\".");
+        }
+        if (candidatos.size() > 1) {
+            return ContaResolveResult.erro(formatarAmbiguidadeContas(candidatos, token, rotulo));
+        }
+        return ContaResolveResult.ok(candidatos.get(0));
+    }
+
+    private String formatarAmbiguidadeContas(List<ContaBancaria> candidatos, String token, String rotulo) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Encontrei mais de uma conta parecida com \"").append(token).append("\" para ").append(rotulo).append(":\n\n");
+        int i = 1;
+        for (ContaBancaria c : candidatos) {
+            sb.append(i++).append(". *").append(c.getNome()).append("* — saldo ")
+                .append(BRL.format(c.getSaldoAtual()));
+            BigDecimal limite = c.getLimiteChequeEspecial();
+            if (limite != null && limite.compareTo(BigDecimal.ZERO) > 0) {
+                sb.append(", disponível *").append(BRL.format(c.getSaldoDisponivel()))
+                    .append("* (cheque especial ").append(BRL.format(limite)).append(")");
+            }
+            sb.append("\n");
+        }
+        sb.append("\nReenvia citando o nome *exato* da conta de ").append(rotulo).append(".");
+        return sb.toString();
+    }
+
+    private static String rotuloTipoConta(ContaBancariaDTO.TipoConta tipo) {
+        if (tipo == null) {
+            return "";
+        }
+        return switch (tipo) {
+            case CORRENTE -> "Corrente";
+            case POUPANCA -> "Poupança";
+            case DINHEIRO -> "Dinheiro";
+        };
+    }
+
+    private TransferenciaTokens extrairTokensTransferenciaTexto(String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return new TransferenciaTokens("", "");
+        }
+        String t = sourceText.trim();
+        Pattern p = Pattern.compile(
+            "(?i)(?:do|da|de)\\s+(.+?)\\s+(?:pro|pra|para)\\s+(.+)$");
+        Matcher m = p.matcher(t);
+        if (m.find()) {
+            return new TransferenciaTokens(limparTokenConta(m.group(1)), limparTokenConta(m.group(2)));
+        }
+        Pattern p2 = Pattern.compile(
+            "(?i)(?:conta|carteira)\\s+(.+?)\\s+(?:pro|pra|para)\\s+(?:conta\\s+)?(.+)$");
+        Matcher m2 = p2.matcher(t);
+        if (m2.find()) {
+            return new TransferenciaTokens(limparTokenConta(m2.group(1)), limparTokenConta(m2.group(2)));
+        }
+        return new TransferenciaTokens("", "");
+    }
+
+    private static String limparTokenConta(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String s = raw.trim();
+        s = s.replaceAll("(?i)^(conta|carteira)\\s+", "");
+        s = s.replaceAll("(?i)\\s+(conta|carteira)$", "");
+        s = s.replaceAll("(?i)\\s+(reais|real|rs|r\\$).*$", "");
+        return s.trim();
+    }
+
+    private record TransferenciaTokens(String origem, String destino) {}
+
+    private record ContaResolveResult(boolean ok, ContaBancaria conta, String mensagem) {
+        static ContaResolveResult ok(ContaBancaria conta) {
+            return new ContaResolveResult(true, conta, "");
+        }
+
+        static ContaResolveResult erro(String mensagem) {
+            return new ContaResolveResult(false, null, mensagem);
+        }
+    }
+
+    private boolean textoPedeListaTransacoes(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (n.contains("orcamento") || n.contains("orçamento") || n.contains("previsao") || n.contains("previsão")) {
+            return false;
+        }
+        if (n.contains("cria") || n.contains("cadastr") || n.contains("gastei ") || n.startsWith("gastei ")) {
+            return false;
+        }
+        if (n.contains("extrato") || n.contains("ultimos gastos") || n.contains("últimos gastos")) {
+            return true;
+        }
+        if ((n.contains("lista") || n.contains("listar") || n.contains("quais") || n.contains("mostre") || n.contains("mostra"))
+            && (n.contains("gasto") || n.contains("transac") || n.contains("pix") || n.contains("receita") || n.contains("despesa"))) {
+            return true;
+        }
+        return n.contains("o que gastei") && n.contains("categoria");
+    }
+
+    private boolean textoPedeListaCategorias(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (n.contains("cria") || n.contains("cadastr") || n.contains("nova categoria") || n.contains("edita categoria")) {
+            return false;
+        }
+        return (n.contains("lista") || n.contains("listar") || n.contains("quais") || n.contains("mostre"))
+            && n.contains("categor");
+    }
+
+    private boolean textoPedeListaMetas(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (n.contains("cadastr") || n.contains("cria meta") || n.contains("criar meta") || n.contains("simular")) {
+            return false;
+        }
+        if (n.contains("como estao minhas metas") || n.contains("como estão minhas metas")) {
+            return true;
+        }
+        return (n.contains("lista") || n.contains("listar") || n.contains("quais") || n.contains("como estao"))
+            && n.contains("meta");
+    }
+
+    private boolean textoPedeResumoOrcamento(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (n.contains("pdf") || n.contains("relatorio pdf") || n.contains("relatório pdf")) {
+            return false;
+        }
+        if (n.contains("orcamento") || n.contains("orçamento") || n.contains("limite de categoria")
+            || n.contains("limites de categoria") || n.contains("meus limites")) {
+            return true;
+        }
+        return (n.contains("resumo") || n.contains("quanto gastei"))
+            && (n.contains("orcamento") || n.contains("orçamento") || n.contains("limite"));
+    }
+
+    private Optional<String> tryConsultaListaTransacoes(Long userId, String text) {
+        if (!textoPedeListaTransacoes(text)) {
+            return Optional.empty();
+        }
+        ObjectNode cmd = JsonNodeFactory.instance.objectNode();
+        return Optional.of(handleListTransactions(cmd, userId, text));
+    }
+
+    private Optional<String> tryConsultaListaCategorias(Long userId, String text) {
+        if (!textoPedeListaCategorias(text)) {
+            return Optional.empty();
+        }
+        return Optional.of(handleListCategories(userId));
+    }
+
+    private Optional<String> tryConsultaListaMetas(Long userId, String text) {
+        if (!textoPedeListaMetas(text)) {
+            return Optional.empty();
+        }
+        return Optional.of(handleListMetas(userId));
+    }
+
+    private Optional<String> tryConsultaResumoOrcamento(Long userId, String text) {
+        if (!textoPedeResumoOrcamento(text)) {
+            return Optional.empty();
+        }
+        ObjectNode cmd = JsonNodeFactory.instance.objectNode();
+        return Optional.of(handleGetReportSummary(cmd, userId, text));
+    }
+
+    private String handleListTransactions(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            YearMonth ym = resolverPeriodoConsulta(cmd, sourceText);
+            List<TransacaoDTO> transacoes = new ArrayList<>(transacaoService.buscarPorPeriodo(
+                userId, ym.atDay(1).atStartOfDay(), ym.atEndOfMonth().atTime(23, 59, 59)));
+
+            TransacaoDTO.TipoTransacao tipoFiltro = resolverTipoTransacaoLista(cmd, sourceText);
+            if (tipoFiltro != null) {
+                transacoes = transacoes.stream()
+                    .filter(t -> t.getTipoTransacao() == tipoFiltro)
+                    .collect(Collectors.toList());
+            }
+
+            String catToken = readCategoriaFiltro(cmd);
+            if (!catToken.isBlank()) {
+                List<Categoria> cats = categoriaService.encontrarAtivasPorApelidoNormalizado(userId, catToken);
+                if (cats.isEmpty()) {
+                    return msgErro(userId, "Extrato",
+                        "Não encontrei categoria ativa parecida com \"" + catToken + "\".");
+                }
+                if (cats.size() > 1) {
+                    return msgErro(userId, "Extrato",
+                        "Há mais de uma categoria parecida com \"" + catToken + "\". Cita o nome exato.");
+                }
+                Long catId = cats.get(0).getId();
+                transacoes = transacoes.stream()
+                    .filter(t -> catId.equals(t.getCategoriaId()))
+                    .collect(Collectors.toList());
+            }
+
+            if (transacoes.isEmpty()) {
+                String mesLabel = capitalizePt(ym.getMonth().getDisplayName(TextStyle.FULL, new Locale("pt", "BR")));
+                return msgInfo("Extrato",
+                    "Não há transações no período de *" + mesLabel + "/" + ym.getYear() + "* com os filtros pedidos.");
+            }
+
+            transacoes.sort(Comparator.comparing(
+                TransacaoDTO::getDataTransacao,
+                Comparator.nullsLast(Comparator.reverseOrder())
+            ));
+
+            int total = transacoes.size();
+            List<TransacaoDTO> exibidas = transacoes.stream().limit(LIMITE_EXTRATO_WHATSAPP).collect(Collectors.toList());
+            String mesLabel = capitalizePt(ym.getMonth().getDisplayName(TextStyle.FULL, new Locale("pt", "BR")));
+            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(voc).append(", segue o extrato simplificado:\n\n");
+            sb.append("📅 *Extrato de ").append(mesLabel).append("/").append(ym.getYear()).append("*:\n");
+            for (TransacaoDTO t : exibidas) {
+                String data = t.getDataTransacao() != null
+                    ? t.getDataTransacao().toLocalDate().format(FMT_DATA_EXTRATO)
+                    : "—";
+                String desc = t.getDescricao() != null && !t.getDescricao().isBlank() ? t.getDescricao() : "—";
+                String cat = t.getCategoriaNome() != null && !t.getCategoriaNome().isBlank() ? t.getCategoriaNome() : "Sem categoria";
+                BigDecimal valor = t.getValor() != null ? t.getValor().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+                sb.append("• ").append(data).append(" | ").append(desc)
+                    .append(" - *").append(BRL.format(valor)).append("* (").append(cat).append(")\n");
+            }
+            if (total > LIMITE_EXTRATO_WHATSAPP) {
+                sb.append("\n_Mostrando as últimas ").append(LIMITE_EXTRATO_WHATSAPP)
+                    .append(" de ").append(total).append(" transações do período. Detalhe completo no app → *Transações*._");
+            }
+            return msgOk("Extrato", sb.toString().trim());
+        } catch (RuntimeException e) {
+            log.info("WhatsApp listar transações: {}", e.getMessage());
+            return msgErro(userId, "Extrato", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private String handleListCategories(Long userId) {
+        List<Categoria> categorias = categoriaRepository.findByUsuarioIdOrderByNome(userId).stream()
+            .filter(c -> c.getNome() != null && !c.getNome().isBlank())
+            .filter(c -> c.getAtivo() == null || Boolean.TRUE.equals(c.getAtivo()))
+            .sorted(Comparator.comparing(c -> c.getNome().toLowerCase(Locale.ROOT)))
+            .collect(Collectors.toList());
+        if (categorias.isEmpty()) {
+            return msgInfo("Categorias",
+                "Não tens categorias cadastradas. Cria em *Categorias* no app ou envia: *cria categoria Pets*.");
+        }
+        String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+        StringBuilder sb = new StringBuilder();
+        sb.append(voc).append(", tens *").append(categorias.size()).append("* categoria(s) ativa(s):\n\n");
+        int i = 1;
+        for (Categoria c : categorias) {
+            sb.append(i++).append(". ").append(formatarIconeCategoria(c.getIcone()))
+                .append("*").append(c.getNome()).append("*");
+            if (c.getDescricao() != null && !c.getDescricao().isBlank()) {
+                sb.append(" — _").append(c.getDescricao()).append("_");
+            }
+            sb.append("\n");
+        }
+        return msgOk("Categorias", sb.toString().trim());
+    }
+
+    private String handleListMetas(Long userId) {
+        MetaFinanceiraListResponse resumo = metaFinanceiraService.listarComResumo(userId);
+        List<MetaFinanceiraDTO> metas = resumo.getMetas() != null ? resumo.getMetas() : List.of();
+        LocalDate hoje = LocalDate.now();
+        List<MetaFinanceiraDTO> ativas = metas.stream()
+            .filter(m -> m.getDataExpiracao() == null || !m.getDataExpiracao().isBefore(hoje))
+            .collect(Collectors.toList());
+        if (ativas.isEmpty()) {
+            return msgInfo("Metas",
+                "Não tens metas financeiras ativas. Cria em *Metas* no app ou envia: *cadastra meta viagem 8000 15%*.");
+        }
+        String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+        StringBuilder sb = new StringBuilder();
+        sb.append(voc).append(", estado das tuas metas:\n\n");
+        for (MetaFinanceiraDTO m : ativas) {
+            BigDecimal alvo = nzMeta(m.getValorTotal());
+            BigDecimal poupado = estimarValorPoupadoAcumulado(m);
+            BigDecimal pct = alvo.compareTo(BigDecimal.ZERO) > 0
+                ? poupado.multiply(BigDecimal.valueOf(100)).divide(alvo, 0, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+            String nome = m.getDescricao() != null ? m.getDescricao() : "Meta";
+            sb.append("🎯 *").append(nome).append("*: ")
+                .append(BRL.format(poupado)).append(" / ").append(BRL.format(alvo))
+                .append(" (*").append(pct).append("% concluído*)\n");
+        }
+        if (resumo.getAlertaComprometimento() != null && !resumo.getAlertaComprometimento().isBlank()) {
+            sb.append("\n_").append(resumo.getAlertaComprometimento()).append("_");
+        }
+        return msgOk("Metas financeiras", sb.toString().trim());
+    }
+
+    private String handleGetReportSummary(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            YearMonth ym = resolverPeriodoConsulta(cmd, sourceText);
+            List<OrcamentoDTO> orcamentos = orcamentoService.listar(userId, ym.getMonthValue(), ym.getYear());
+            if (orcamentos.isEmpty()) {
+                String mesLabel = capitalizePt(ym.getMonth().getDisplayName(TextStyle.FULL, new Locale("pt", "BR")));
+                return msgInfo("Orçamentos",
+                    "Não há orçamentos cadastrados para *" + mesLabel + "/" + ym.getYear()
+                        + "*. Define limites no app ou envia: *orçamento 800 em Alimentação*.");
+            }
+            orcamentos.sort(Comparator.comparing(
+                o -> o.getCategoriaNome() != null ? o.getCategoriaNome().toLowerCase(Locale.ROOT) : "",
+                Comparator.naturalOrder()
+            ));
+            String mesLabel = capitalizePt(ym.getMonth().getDisplayName(TextStyle.FULL, new Locale("pt", "BR")));
+            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+            StringBuilder sb = new StringBuilder();
+            sb.append(voc).append(", resumo de orçamentos de *").append(mesLabel).append("/").append(ym.getYear()).append("*:\n\n");
+            for (OrcamentoDTO o : orcamentos) {
+                BigDecimal gasto = nzMeta(o.getValorGasto());
+                BigDecimal limite = nzMeta(o.getValorLimite());
+                BigDecimal pct = o.getPercentualUso() != null
+                    ? o.getPercentualUso().setScale(0, RoundingMode.HALF_UP)
+                    : (limite.compareTo(BigDecimal.ZERO) > 0
+                        ? gasto.multiply(BigDecimal.valueOf(100)).divide(limite, 0, RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO);
+                String nome = o.getCategoriaNome() != null ? o.getCategoriaNome() : "Categoria";
+                String estourado = pct.compareTo(BigDecimal.valueOf(100)) >= 0 ? " (*Estourado!*)" : "";
+                sb.append(sinalizadorOrcamento(pct)).append(" *").append(nome).append("*: ")
+                    .append(BRL.format(gasto)).append("/").append(BRL.format(limite))
+                    .append(" (").append(pct).append("%)").append(estourado).append("\n");
+            }
+            sb.append("\n_Detalhe por categoria no app → *Orçamentos*._");
+            return msgOk("Resumo de orçamentos", sb.toString().trim());
+        } catch (RuntimeException e) {
+            log.info("WhatsApp resumo orçamento: {}", e.getMessage());
+            return msgErro(userId, "Orçamentos", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private static YearMonth resolverPeriodoConsulta(JsonNode cmd, String sourceText) {
+        YearMonth now = YearMonth.now();
+        int month = readOptionalPositiveInt(cmd, "mes");
+        if (month < 1 || month > 12) {
+            month = readOptionalPositiveInt(cmd, "reportMonth");
+        }
+        int year = readOptionalPositiveInt(cmd, "ano");
+        if (year < 2000 || year > 2100) {
+            year = readOptionalPositiveInt(cmd, "reportYear");
+        }
+        if (month < 1 || month > 12) {
+            month = extrairMesDoTexto(sourceText).orElse(now.getMonthValue());
+        }
+        if (year < 2000 || year > 2100) {
+            year = extrairAnoDoTexto(sourceText).orElse(now.getYear());
+        }
+        return YearMonth.of(year, month);
+    }
+
+    private static String readCategoriaFiltro(JsonNode cmd) {
+        String cat = cmd.path("categoryName").asText("").trim();
+        if (!cat.isBlank()) {
+            return cat;
+        }
+        return cmd.path("categoria").asText("").trim();
+    }
+
+    private TransacaoDTO.TipoTransacao resolverTipoTransacaoLista(JsonNode cmd, String sourceText) {
+        String tipo = whatsAppFirstNonBlank(
+            cmd.path("tipo").asText(""),
+            cmd.path("tipoTransacao").asText(""),
+            cmd.path("type").asText("")
+        ).trim().toUpperCase(Locale.ROOT);
+        if ("RECEITA".equals(tipo) || "INCOME".equals(tipo)) {
+            return TransacaoDTO.TipoTransacao.RECEITA;
+        }
+        if ("DESPESA".equals(tipo) || "EXPENSE".equals(tipo)) {
+            return TransacaoDTO.TipoTransacao.DESPESA;
+        }
+        if (sourceText != null) {
+            String n = normalize(sourceText);
+            if (n.contains("recebi") || n.contains("receita") || n.contains("entrada")
+                || n.contains("pix que recebi") || n.contains("receitas")) {
+                return TransacaoDTO.TipoTransacao.RECEITA;
+            }
+            if (n.contains("gastei") || n.contains("gasto") || n.contains("gastos") || n.contains("despesa")) {
+                return TransacaoDTO.TipoTransacao.DESPESA;
+            }
+        }
+        return null;
+    }
+
+    private static BigDecimal estimarValorPoupadoAcumulado(MetaFinanceiraDTO m) {
+        if (m.getValorPoupadoMensal() == null || m.getValorPoupadoMensal().compareTo(BigDecimal.ZERO) <= 0
+            || m.getDataCriacao() == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        long meses = ChronoUnit.MONTHS.between(
+            YearMonth.from(m.getDataCriacao()),
+            YearMonth.now()
+        ) + 1;
+        if (meses < 0) {
+            meses = 0;
+        }
+        BigDecimal acum = m.getValorPoupadoMensal()
+            .multiply(BigDecimal.valueOf(meses))
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal alvo = m.getValorTotal();
+        if (alvo != null && acum.compareTo(alvo) > 0) {
+            acum = alvo.setScale(2, RoundingMode.HALF_UP);
+        }
+        return acum;
+    }
+
+    private static BigDecimal nzMeta(BigDecimal v) {
+        return v != null ? v.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static String sinalizadorOrcamento(BigDecimal pct) {
+        if (pct == null) {
+            return "🟢 ";
+        }
+        if (pct.compareTo(BigDecimal.valueOf(100)) >= 0) {
+            return "🔴 ";
+        }
+        if (pct.compareTo(BigDecimal.valueOf(70)) >= 0) {
+            return "🟡 ";
+        }
+        return "🟢 ";
+    }
+
+    private static String formatarIconeCategoria(String icone) {
+        if (icone == null || icone.isBlank()) {
+            return "";
+        }
+        String t = icone.trim();
+        if (t.length() <= 4 && !t.matches("[a-zA-Z0-9_-]+")) {
+            return t + " ";
+        }
+        return switch (t.toLowerCase(Locale.ROOT)) {
+            case "shopping-cart", "cart" -> "🛒 ";
+            case "utensils", "food", "utensils-alt" -> "🍽️ ";
+            case "car", "car-side" -> "🚗 ";
+            case "home", "house" -> "🏠 ";
+            case "heart" -> "❤️ ";
+            case "plane", "plane-departure" -> "✈️ ";
+            case "gamepad" -> "🎮 ";
+            case "paw", "dog" -> "🐾 ";
+            case "graduation-cap" -> "🎓 ";
+            case "medkit", "hospital" -> "🏥 ";
+            default -> "• ";
+        };
     }
 
     private Optional<String> tryAtualizarCartaoTextoLivre(Long userId, String text) {
@@ -915,14 +1598,20 @@ public class WhatsAppCommandService {
         String action = cmd.path("action").asText("UNKNOWN");
         double confianca = readConfianca(cmd);
         if (!"GET_INSIGHTS".equals(action) && !"CHECK_CARD_STATUS".equals(action) && !"LIST_CARDS".equals(action)
+            && !"LIST_ACCOUNTS".equals(action) && !"TRANSFER_BETWEEN_ACCOUNTS".equals(action)
+            && !"LIST_TRANSACTIONS".equals(action) && !"LIST_CATEGORIES".equals(action)
+            && !"LIST_METAS".equals(action) && !"GET_REPORT_SUMMARY".equals(action)
             && !"FORECAST_MONTH".equals(action) && !"SUGERIR_INVESTIMENTO".equals(action) && !"GENERATE_REPORT".equals(action)
             && !"GERAR_RELATORIO".equals(action)
             && !"SET_SALARY_CONFIG".equals(action)
+            && !"SET_INCOME_PROFILE".equals(action)
             && !"MANAGE_ENTITY".equals(action)
             && !"LIST_DEBTS".equals(action)
             && !"SETTLE_DEBT".equals(action)
             && !"LIST_SUBSCRIPTIONS".equals(action)
             && !"TOGGLE_SUBSCRIPTION".equals(action)
+            && !"CREATE_FIXED_EXPENSE".equals(action)
+            && !"CREATE_SUBSCRIPTION".equals(action)
             && confianca < 0.55d) {
             return msgErro(userId, "Confiança da IA",
                 "Não executei nada. Confiança " + String.format(Locale.US, "%.0f%%", confianca * 100)
@@ -936,6 +1625,8 @@ public class WhatsAppCommandService {
             case "CREATE_CATEGORY" -> handleCreateCategory(cmd, userId, sourceText);
             case "CREATE_BUDGET" -> handleCreateBudget(cmd, userId, sourceText);
             case "CREATE_META" -> handleCreateMeta(cmd, userId, sourceText);
+            case "CREATE_FIXED_EXPENSE" -> handleCreateFixedExpense(cmd, userId, sourceText);
+            case "CREATE_SUBSCRIPTION" -> handleCreateSubscription(cmd, userId, sourceText);
             case "UPDATE_ENTITY_CONFIG" -> formatarRespostaEntidade(whatsAppEntityConfigUpdateService.executar(userId, normalizarUpdateEntityConfig(cmd, sourceText)), userId);
             case "UPDATE_ACCOUNT_CONFIG" -> handleUpdateAccountConfig(cmd, userId, sourceText);
             case "SIMULATE_PURCHASE_GOAL" -> handleSimulatePurchaseGoal(cmd, userId, sourceText);
@@ -950,8 +1641,15 @@ public class WhatsAppCommandService {
             case "SUGERIR_INVESTIMENTO" -> respostaInvestimento(userId);
             case "LIST_CARDS" -> tryConsultaListaCartoes(userId, sourceText)
                 .orElseGet(() -> msgErro(userId, "Cartões", "Não consegui listar os cartões."));
+            case "LIST_ACCOUNTS" -> handleListAccounts(userId);
+            case "TRANSFER_BETWEEN_ACCOUNTS" -> handleTransferBetweenAccounts(cmd, userId, sourceText);
+            case "LIST_TRANSACTIONS" -> handleListTransactions(cmd, userId, sourceText);
+            case "LIST_CATEGORIES" -> handleListCategories(userId);
+            case "LIST_METAS" -> handleListMetas(userId);
+            case "GET_REPORT_SUMMARY" -> handleGetReportSummary(cmd, userId, sourceText);
             case "CHECK_CARD_STATUS" -> handleCheckCardStatus(cmd, userId, sourceText);
             case "SET_SALARY_CONFIG" -> handleSetSalaryConfig(cmd, userId, sourceText);
+            case "SET_INCOME_PROFILE" -> handleSetIncomeProfile(cmd, userId, sourceText);
             case "MANAGE_ENTITY" -> {
                 if (parecePedidoCriarMeta(sourceText) || parecePedidoCriarMeta(cmd)) {
                     yield handleCreateMeta(cmd, userId, sourceText);
@@ -971,6 +1669,9 @@ public class WhatsAppCommandService {
                     yield msgErro(userId, "Comando não reconhecido",
                         "Não percebi o pedido. Envie *ajuda* ou *menu* para ver o que o app e o WhatsApp fazem juntos.\n"
                             + "Exemplos:\n• despesa 45,90 mercado\n• pix 80 da conta Nubank\n• receita 3500 salário\n"
+                            + "• transfere 100 do Itaú pro Nubank\n• saldos das contas\n"
+                            + "• quais foram meus últimos gastos?\n• lista minhas categorias\n"
+                            + "• como estão minhas metas?\n• resumo de gastos do orçamento\n"
                             + "• cartão Nubank final 1234 vence 10\n"
                             + "• importe essa fatura itau codigo 12345 (após enviar o PDF)");
                 }
@@ -2278,6 +2979,82 @@ public class WhatsAppCommandService {
         }
     }
 
+    private String handleSetIncomeProfile(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            RendaConfigDTO dto = rendaConfigService.aplicarPerfilIncomeDeComandoJson(userId, cmd, sourceText);
+            TipoConfiguracaoRenda tipo = dto.getTipoConfiguracaoRenda() != null
+                ? dto.getTipoConfiguracaoRenda()
+                : TipoConfiguracaoRenda.CONTRACHEQUE;
+            return switch (tipo) {
+                case FLUXO_DIARIO -> montarRespostaFluxoDiarioWhatsapp(userId, dto);
+                case RECEBIMENTO_UNICO -> montarRespostaRecebimentoUnicoWhatsapp(userId, dto);
+                case CONTRACHEQUE -> montarRespostaContrachequeWhatsapp(userId, dto);
+            };
+        } catch (IllegalArgumentException e) {
+            return msgErro(userId, "Perfil de renda", e.getMessage());
+        } catch (Exception e) {
+            log.warn("SET_INCOME_PROFILE: {}", e.getMessage());
+            return msgErro(userId, "Perfil de renda",
+                "Não consegui guardar o perfil. Exemplos:\n"
+                    + "• *minha renda agora é fluxo diário com meta de 5000*\n"
+                    + "• *recebo um pix único de 4000 todo dia 10*\n"
+                    + "• *meu salário bruto é 6000 com descontos de 800 dia 5*");
+        }
+    }
+
+    private String montarRespostaFluxoDiarioWhatsapp(Long userId, RendaConfigDTO dto) {
+        BigDecimal mediaReal = rendaConfigService.calcularMediaMovel90Dias(userId);
+        String metaTxt = dto.getMetaFaturamentoMensal() != null
+            && dto.getMetaFaturamentoMensal().compareTo(BigDecimal.ZERO) > 0
+            ? BRL.format(dto.getMetaFaturamentoMensal())
+            : "não informada";
+        return "Entendido, chefe! Mudei seu perfil para *Fluxo Diário (Múltiplos PIX)*. "
+            + "Analisei suas receitas dos últimos 90 dias e sua renda média real está em *"
+            + BRL.format(mediaReal) + "*. Defini sua meta de faturamento em *" + metaTxt + "*.";
+    }
+
+    private String montarRespostaRecebimentoUnicoWhatsapp(Long userId, RendaConfigDTO dto) {
+        BigDecimal liquido = dto.getRendaMensalEstimada() != null ? dto.getRendaMensalEstimada() : dto.getValorRecebimentoUnico();
+        if (liquido == null) {
+            liquido = BigDecimal.ZERO;
+        }
+        Integer dia = dto.getDiaPagamento();
+        String diaTxt = dia != null ? String.valueOf(dia) : "—";
+        String corpo = "✅ *Perfil de renda configurado — Recebimento Único*\n\n"
+            + "Valor líquido mensal: *" + BRL.format(liquido) + "*\n"
+            + "Dia esperado de recebimento: *" + diaTxt + "*\n"
+            + "Projeção mensal: *" + BRL.format(liquido) + "*";
+        if (liquido.compareTo(BigDecimal.ZERO) > 0 && dia != null) {
+            awaitingSalaryAutoConfirm.add(userId);
+            corpo += "\n\nQueres que eu lance essa *receita confirmada* automaticamente *todo dia "
+                + dia + "* no teu saldo? Responde *sim* ou *não*.";
+        }
+        return corpo;
+    }
+
+    private String montarRespostaContrachequeWhatsapp(Long userId, RendaConfigDTO dto) {
+        BigDecimal td = dto.getTotalDescontos() != null ? dto.getTotalDescontos() : BigDecimal.ZERO;
+        BigDecimal liquido = dto.getSalarioLiquido() != null ? dto.getSalarioLiquido() : BigDecimal.ZERO;
+        String corpo = "✅ *Perfil de renda configurado — Contracheque*\n\n"
+            + "Salário bruto: *" + BRL.format(dto.getSalarioBruto()) + "*\n"
+            + "Descontos fixos: *" + BRL.format(td) + "*\n"
+            + "Líquido projetado: *" + BRL.format(liquido) + "*";
+        if (dto.getDiaPagamento() != null) {
+            corpo += "\nDia de recebimento: *" + dto.getDiaPagamento() + "*";
+        }
+        BigDecimal pct = dto.getPercentualDescontosSobreBruto();
+        if (pct != null && pct.compareTo(new BigDecimal("30")) > 0) {
+            corpo += "\n\n⚠️ Os descontos fixos representam *"
+                + pct.stripTrailingZeros().toPlainString() + "%* do salário bruto.";
+        }
+        if (liquido.compareTo(BigDecimal.ZERO) > 0 && dto.getDiaPagamento() != null) {
+            awaitingSalaryAutoConfirm.add(userId);
+            corpo += "\n\nQueres que eu lance essa *receita confirmada* automaticamente *todo dia "
+                + dto.getDiaPagamento() + "* no teu saldo? Responde *sim* ou *não*.";
+        }
+        return corpo;
+    }
+
     private static String montarResumoConfigSalarialWhatsapp(RendaConfigDTO dto) {
         BigDecimal td = dto.getTotalDescontos() != null ? dto.getTotalDescontos() : BigDecimal.ZERO;
         BigDecimal renda = dto.getRendaMensalEstimada() != null ? dto.getRendaMensalEstimada() : dto.getSalarioLiquido();
@@ -3491,16 +4268,136 @@ public class WhatsAppCommandService {
             "Responda *sim* para salvar como assinatura monitorada ou *não* para ignorar."));
     }
 
+    private String handleCreateFixedExpense(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            DespesaFixaIntent intent = montarDespesaFixaIntent(cmd, sourceText);
+            if (intent == null || intent.descricao == null || intent.descricao.isBlank()) {
+                return msgErro(userId, "Despesa fixa",
+                    "Indica nome, valor e dia de vencimento (ex.: *cadastra despesa fixa aluguel 1200 dia 10*).");
+            }
+            if (intent.diaVencimento == null || intent.valor == null) {
+                if (awaitingDespesaFixaDia.containsKey(userId)) {
+                    return msgInfo("Despesa fixa", "Já aguardo o vencimento ou valor. Responde à pergunta anterior.");
+                }
+                PendingDespesaFixaDraft d = new PendingDespesaFixaDraft();
+                d.valor = intent.valor;
+                d.descricao = intent.descricao;
+                d.diaVencimento = intent.diaVencimento;
+                awaitingDespesaFixaDia.put(userId, d);
+                String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+                if (intent.diaVencimento == null) {
+                    return jarvisProtocolService.perguntarDiaVencimentoDespesaFixa(voc, intent.descricao);
+                }
+                return jarvisProtocolService.perguntarValorDespesaFixa(voc, intent.descricao, intent.diaVencimento);
+            }
+            return persistDespesaFixaWhatsapp(userId, intent.descricao, intent.valor, intent.diaVencimento);
+        } catch (IllegalArgumentException e) {
+            return msgErro(userId, "Despesa fixa", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private String handleCreateSubscription(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            AssinaturaIntent intent = montarAssinaturaIntent(cmd, sourceText);
+            if (intent == null || intent.nome == null || intent.nome.isBlank()) {
+                return msgErro(userId, "Assinatura",
+                    "Indica nome, valor e dia de cobrança (ex.: *cadastra assinatura Netflix 55,90 dia 15*).");
+            }
+            if (intent.valor == null || intent.valor.compareTo(BigDecimal.ZERO) <= 0) {
+                return msgErro(userId, "Assinatura", "Informa o valor mensal da assinatura.");
+            }
+            int dia = intent.diaVencimento != null ? intent.diaVencimento : LocalDate.now().getDayOfMonth();
+            AssinaturaRecorrenteRequest req = new AssinaturaRecorrenteRequest();
+            req.setNome(sanitizeDescription(intent.nome));
+            req.setValor(intent.valor.setScale(2, RoundingMode.HALF_UP));
+            req.setDiaVencimento(dia);
+            req.setAtivo(true);
+            var salva = assinaturaRecorrenteService.criar(userId, req);
+            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+            return msgOk("Assinatura cadastrada",
+                voc + ", assinatura *" + salva.getNome() + "* salva — *" + BRL.format(salva.getValor())
+                    + "*/mês, cobrança dia *" + salva.getDiaVencimento()
+                    + "*. Aviso *5 e 3 dias* antes do vencimento.");
+        } catch (RuntimeException e) {
+            return msgErro(userId, "Assinatura", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private DespesaFixaIntent montarDespesaFixaIntent(JsonNode cmd, String sourceText) {
+        DespesaFixaIntent fromParser = toDespesaFixaIntent(DespesaFixaWhatsappTextParser.parse(sourceText));
+        if (fromParser != null && fromParser.descricao != null && !fromParser.descricao.isBlank()) {
+            return fromParser;
+        }
+        DespesaFixaIntent intent = new DespesaFixaIntent();
+        intent.descricao = whatsAppFirstNonBlank(
+            cmd.path("description").asText(""),
+            cmd.path("searchPhrase").asText(""),
+            cmd.path("identifier").asText("")
+        );
+        try {
+            if (cmd.has("amount")) {
+                intent.valor = readAmount(cmd, sourceText);
+            }
+        } catch (RuntimeException ignored) {
+            intent.valor = extrairValorMonetario(sourceText);
+        }
+        if (intent.valor == null) {
+            intent.valor = extrairValorMonetario(sourceText);
+        }
+        int dia = readOptionalPositiveInt(cmd, "dueDay");
+        if (dia >= 1 && dia <= 31) {
+            intent.diaVencimento = dia;
+        } else {
+            intent.diaVencimento = extrairPrimeiroDiaMesValido(sourceText);
+        }
+        return intent;
+    }
+
+    private AssinaturaIntent montarAssinaturaIntent(JsonNode cmd, String sourceText) {
+        AssinaturaWhatsappTextParser.ParsedAssinatura parsed = AssinaturaWhatsappTextParser.parse(sourceText);
+        if (parsed != null && parsed.nome() != null && !parsed.nome().isBlank()) {
+            AssinaturaIntent i = new AssinaturaIntent();
+            i.nome = parsed.nome();
+            i.valor = parsed.valor();
+            i.diaVencimento = parsed.diaVencimento();
+            return i;
+        }
+        AssinaturaIntent intent = new AssinaturaIntent();
+        intent.nome = whatsAppFirstNonBlank(
+            cmd.path("description").asText(""),
+            cmd.path("searchPhrase").asText(""),
+            cmd.path("identifier").asText("")
+        );
+        try {
+            if (cmd.has("amount")) {
+                intent.valor = readAmount(cmd, sourceText);
+            }
+        } catch (RuntimeException ignored) {
+            intent.valor = extrairValorMonetario(sourceText);
+        }
+        if (intent.valor == null) {
+            intent.valor = extrairValorMonetario(sourceText);
+        }
+        int dia = readOptionalPositiveInt(cmd, "dueDay");
+        if (dia >= 1 && dia <= 31) {
+            intent.diaVencimento = dia;
+        } else {
+            intent.diaVencimento = extrairPrimeiroDiaMesValido(sourceText);
+        }
+        return intent;
+    }
+
     private String handleListSubscriptions(Long userId) {
         try {
             var lista = assinaturaRecorrenteService.listar(userId);
             String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
             if (lista.isEmpty()) {
                 return msgInfo("Assinaturas",
-                    voc + ", você ainda não tem assinaturas cadastradas. Quando eu detectar um padrão mensal, pergunto se quer salvar.");
+                    voc + ", você ainda não tem assinaturas cadastradas. Diga por exemplo: "
+                        + "*cadastra assinatura Netflix 55,90 dia 15*.");
             }
             StringBuilder sb = new StringBuilder();
-            sb.append("Assinaturas que monitoro para você, ").append(voc).append(":\n\n");
+            sb.append(voc).append(", assinaturas que monitoro:\n\n");
             for (var a : lista) {
                 sb.append("• *").append(a.getNome()).append("* — ")
                     .append(BRL.format(a.getValor())).append(" (dia ").append(a.getDiaVencimento()).append(") — ")
@@ -3510,7 +4407,7 @@ public class WhatsAppCommandService {
                 }
                 sb.append("\n");
             }
-            sb.append("\nDiga *desative a assinatura da Netflix* para pausar, ou gerencie em *Assinaturas* no app.");
+            sb.append("\n*Pausar:* desative a assinatura da Netflix · *Remover:* apague assinatura Spotify");
             return msgOk("Assinaturas", sb.toString());
         } catch (RuntimeException e) {
             return msgErro(userId, "Assinaturas", humanizarErroComando(e.getMessage()));
@@ -3878,6 +4775,18 @@ public class WhatsAppCommandService {
             || t.contains("cancela");
     }
 
+    private static class DespesaFixaIntent {
+        BigDecimal valor;
+        String descricao;
+        Integer diaVencimento;
+    }
+
+    private static class AssinaturaIntent {
+        String nome;
+        BigDecimal valor;
+        Integer diaVencimento;
+    }
+
     private static class PendingDespesaFixaDraft {
         BigDecimal valor;
         String descricao;
@@ -3901,12 +4810,6 @@ public class WhatsAppCommandService {
         boolean expirou() {
             return System.currentTimeMillis() - criadoEm > FATURA_PDF_PENDENTE_TTL_MS;
         }
-    }
-
-    private static class DespesaFixaIntent {
-        BigDecimal valor;
-        String descricao;
-        Integer diaVencimento;
     }
 
     /** Limpa estados WhatsApp quando o utilizador confirma a importação no app. */
