@@ -628,15 +628,24 @@ a {
   color: var(--text-primary);
 }
 
+/* Overlay Material acima da sidebar fixa (1005) e do header (1100) */
+.cdk-overlay-container {
+  z-index: 1300 !important;
+}
+
+.cdk-overlay-backdrop.cdk-overlay-backdrop-showing {
+  z-index: 1300 !important;
+}
+
+.cdk-overlay-pane.mat-mdc-dialog-panel {
+  z-index: 1301 !important;
+  max-width: 96vw !important;
+}
+
 .mat-mdc-dialog-surface {
   border: 1px solid var(--hud-cyan-border) !important;
   background: var(--exec-surface) !important;
   color: var(--text-primary) !important;
-}
-
-/* Diálogos — evita título/valores cortados (ex.: "Editar conta" → "tal conta", R$ → $) */
-.cdk-overlay-pane.mat-mdc-dialog-panel {
-  max-width: 96vw !important;
 }
 
 /* Confirmação J.A.R.V.I.S. (substitui window.confirm) */
