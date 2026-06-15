@@ -3661,7 +3661,7 @@ public class WhatsAppCommandService {
         if (awaitingDespesaFixaDia.containsKey(userId)) {
             return Optional.empty();
         }
-        DespesaFixaIntent intent = parseDespesaFixaIntent(raw.trim());
+        DespesaFixaIntent intent = toDespesaFixaIntent(DespesaFixaWhatsappTextParser.parse(raw.trim()));
         if (intent == null) {
             return Optional.empty();
         }
@@ -3696,100 +3696,15 @@ public class WhatsAppCommandService {
         return jarvisProtocolService.protocoloSentinelaDespesaFixaRegistrada(req.getDescricao(), BRL.format(valor), dia);
     }
 
-    private DespesaFixaIntent parseDespesaFixaIntent(String t) {
-        Matcher m1 = Pattern.compile("(?i)(?:salve\\s+)?(?:essa\\s+)?despesa\\s+fixa\\s+de\\s*R?\\$?\\s*([0-9]+(?:[\\.,][0-9]+)?)\\s*(?:reais?)?\\s*(?:para|pro|pra)\\s+(.+)").matcher(t);
-        if (m1.find()) {
-            return montarIntentValorDesc(m1.group(1), m1.group(2));
-        }
-        Matcher m4 = Pattern.compile("(?i)despesa\\s+fixa\\s*(?:de\\s*)?R?\\$?\\s*([0-9]+(?:[\\.,][0-9]+)?)\\s*(?:reais?)?\\s*(?:para|pro|pra)\\s+(.+)").matcher(t);
-        if (m4.find()) {
-            return montarIntentValorDesc(m4.group(1), m4.group(2));
-        }
-        Matcher m2 = Pattern.compile("(?i)adicione\\s+despesa\\s+fixa\\s*:?\\s*(.+)").matcher(t);
-        if (m2.find()) {
-            return parseListaSeparadaVirgulaDespesaFixa(m2.group(1).trim());
-        }
-        Matcher m3 = Pattern.compile("(?i)(?:cadastr(?:ar|a)|registr(?:ar|a))\\s+despesa\\s+fixa\\s*:?\\s*(.+)").matcher(t);
-        if (m3.find()) {
-            return parseListaSeparadaVirgulaDespesaFixa(m3.group(1).trim());
-        }
-        return null;
-    }
-
-    private DespesaFixaIntent montarIntentValorDesc(String valorStr, String descTail) {
-        BigDecimal v = parseSingleMoneyValue(valorStr);
-        if (v == null || v.compareTo(BigDecimal.ZERO) <= 0) {
-            return null;
-        }
-        String work = descTail == null ? "" : descTail.trim();
-        Integer dia = extrairDiaDoUltimoTrecho(work);
-        if (dia != null) {
-            work = removerUltimoDiaTrecho(work);
-        }
-        work = sanitizeDescription(work);
-        if (work.isBlank()) {
+    private static DespesaFixaIntent toDespesaFixaIntent(DespesaFixaWhatsappTextParser.ParsedDespesaFixa parsed) {
+        if (parsed == null) {
             return null;
         }
         DespesaFixaIntent i = new DespesaFixaIntent();
-        i.valor = v.setScale(2, RoundingMode.HALF_UP);
-        i.descricao = work;
-        i.diaVencimento = dia;
+        i.valor = parsed.valor();
+        i.descricao = parsed.descricao();
+        i.diaVencimento = parsed.diaVencimento();
         return i;
-    }
-
-    private DespesaFixaIntent parseListaSeparadaVirgulaDespesaFixa(String chunk) {
-        String[] parts = chunk.split("\\s*,\\s*");
-        if (parts.length < 2) {
-            return null;
-        }
-        String descPart = sanitizeDescription(parts[0].trim());
-        if (descPart.isBlank()) {
-            return null;
-        }
-        BigDecimal v = parseSingleMoneyValue(parts[1]);
-        if (v == null || v.compareTo(BigDecimal.ZERO) <= 0) {
-            return null;
-        }
-        Integer dia = null;
-        if (parts.length >= 3) {
-            dia = extrairPrimeiroDiaMesValido(parts[2]);
-        }
-        if (dia == null) {
-            dia = extrairDiaDoUltimoTrecho(chunk);
-        }
-        DespesaFixaIntent i = new DespesaFixaIntent();
-        i.valor = v.setScale(2, RoundingMode.HALF_UP);
-        i.descricao = descPart;
-        i.diaVencimento = dia;
-        return i;
-    }
-
-    private static Integer extrairDiaDoUltimoTrecho(String work) {
-        if (work == null || work.isBlank()) {
-            return null;
-        }
-        String s = work.trim();
-        Matcher m = Pattern.compile("(?i)(?:,\\s*)?(?:todo\\s+)?dia\\s*(\\d{1,2})\\s*$").matcher(s);
-        if (m.find()) {
-            int d = Integer.parseInt(m.group(1));
-            return d >= 1 && d <= 31 ? d : null;
-        }
-        m = Pattern.compile("(?i)(?:,\\s*)?venc(?:imento)?(?:\\s+do\\s+m[eê]s)?\\s*(?:dia\\s*)?(\\d{1,2})\\s*$").matcher(s);
-        if (m.find()) {
-            int d = Integer.parseInt(m.group(1));
-            return d >= 1 && d <= 31 ? d : null;
-        }
-        return null;
-    }
-
-    private static String removerUltimoDiaTrecho(String work) {
-        if (work == null) {
-            return "";
-        }
-        String s = work.trim();
-        s = Pattern.compile("(?i)(?:,\\s*)?(?:todo\\s+)?dia\\s*\\d{1,2}\\s*$").matcher(s).replaceFirst("").trim();
-        s = Pattern.compile("(?i)(?:,\\s*)?venc(?:imento)?(?:\\s+do\\s+m[eê]s)?\\s*(?:dia\\s*)?\\d{1,2}\\s*$").matcher(s).replaceFirst("").trim();
-        return s.replaceAll(",\\s*$", "").trim();
     }
 
     private static Integer extrairPrimeiroDiaMesValido(String text) {

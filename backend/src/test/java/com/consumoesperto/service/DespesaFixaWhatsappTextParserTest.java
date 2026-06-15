@@ -1,0 +1,48 @@
+package com.consumoesperto.service;
+
+import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+class DespesaFixaWhatsappTextParserTest {
+
+    @Test
+    void cadastreNovaDespesaFixaValorENome() {
+        var p = DespesaFixaWhatsappTextParser.parse(
+            "cadastre uma nova despesa fixa com o valor de 220 com o nome de condominio");
+        assertNotNull(p);
+        assertEquals(new BigDecimal("220.00"), p.valor());
+        assertEquals("condominio", p.descricao());
+        assertNull(p.diaVencimento());
+    }
+
+    @Test
+    void salveDespesaFixaDeValorParaDescricao() {
+        var p = DespesaFixaWhatsappTextParser.parse("salve essa despesa fixa de 250 para internet dia 10");
+        assertNotNull(p);
+        assertEquals(new BigDecimal("250.00"), p.valor());
+        assertEquals("internet", p.descricao());
+        assertEquals(10, p.diaVencimento());
+    }
+
+    @Test
+    void listaSeparadaPorVirgula() {
+        var p = DespesaFixaWhatsappTextParser.parse("cadastrar despesa fixa: aluguel, 1500, dia 5");
+        assertNotNull(p);
+        assertEquals(new BigDecimal("1500.00"), p.valor());
+        assertEquals("aluguel", p.descricao());
+        assertEquals(5, p.diaVencimento());
+    }
+
+    @Test
+    void cadastreImperativoCurto() {
+        var p = DespesaFixaWhatsappTextParser.parse("cadastre despesa fixa condominio, 220");
+        assertNotNull(p);
+        assertEquals(new BigDecimal("220.00"), p.valor());
+        assertEquals("condominio", p.descricao());
+    }
+}
