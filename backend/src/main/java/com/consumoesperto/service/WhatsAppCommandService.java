@@ -2280,10 +2280,12 @@ public class WhatsAppCommandService {
 
     private static String montarResumoConfigSalarialWhatsapp(RendaConfigDTO dto) {
         BigDecimal td = dto.getTotalDescontos() != null ? dto.getTotalDescontos() : BigDecimal.ZERO;
+        BigDecimal renda = dto.getRendaMensalEstimada() != null ? dto.getRendaMensalEstimada() : dto.getSalarioLiquido();
+        String rotulo = dto.getRotuloRenda() != null ? dto.getRotuloRenda() : "Líquido";
         return "✅ *Configuração Salarial Salva!*\n\n"
             + "Bruto: *" + BRL.format(dto.getSalarioBruto()) + "*\n"
             + "Total Descontos: *" + BRL.format(td) + "*\n"
-            + "Líquido (Receita Real): *" + BRL.format(dto.getSalarioLiquido()) + "*";
+            + rotulo + " (Receita Real): *" + BRL.format(renda) + "*";
     }
 
     private String handleCard(JsonNode cmd, Long userId, String sourceText) {

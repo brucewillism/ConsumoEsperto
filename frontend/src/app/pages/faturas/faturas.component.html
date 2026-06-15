@@ -292,12 +292,11 @@
   </mat-card>
 
   <ng-template #transacoesModal>
-    <div class="transacoes-modal combat-scanner">
+    <div class="transacoes-modal">
       <header class="transacoes-modal-header">
-        <div>
-          <p class="scanner-eyebrow">RAW_INVOICE_STREAM</p>
+        <div class="transacoes-modal-titulo">
           <h2>Transações da fatura</h2>
-          <p *ngIf="faturaTransacoesSelecionada">
+          <p *ngIf="faturaTransacoesSelecionada" class="transacoes-modal-subtitulo">
             {{ getBancoNome(faturaTransacoesSelecionada.bankName) }} ·
             {{ formatarData(faturaTransacoesSelecionada.closingDate) }} ·
             {{ textoContagemTransacoes(faturaTransacoesSelecionada) }}
@@ -308,31 +307,36 @@
         </button>
       </header>
 
-      <div class="transacoes-modal-lista" *ngIf="transacoesDaFatura(faturaTransacoesSelecionada).length; else semTransacoes">
-        <div class="scanner-log scanner-log-head">
-          <span class="col-ts">TS</span>
-          <span class="col-id">SEQ</span>
-          <span class="col-cat">CATEGORIA</span>
-          <span class="col-desc">EVENTO</span>
-          <span class="col-val">VAL</span>
-        </div>
-        <div
-          class="scanner-log scanner-log-row"
-          *ngFor="let transacao of transacoesDaFatura(faturaTransacoesSelecionada); let ix = index"
-          [class.scanline-warn]="categoriaInstavel(transacao)"
-        >
-          <span class="col-ts mono">[{{ logTimestamp(transacao) }}]</span>
-          <span class="col-id mono">{{ ix + 1 }}</span>
-          <span class="col-cat">
-            <span class="neon-badge">{{ badgeCategoria(transacao) }}</span>
-          </span>
-          <span class="col-desc">
-            {{ transacao.descricao || transacao.description || 'LANÇAMENTO' }}
-            <ng-container *ngIf="transacao.parcelaAtual && transacao.totalParcelas">
-              · PARC_{{ transacao.parcelaAtual }}/{{ transacao.totalParcelas }}
-            </ng-container>
-          </span>
-          <span class="col-val mono strong">{{ formatarMoeda(transacao.valor || transacao.amount || 0) }}</span>
+      <div class="transacoes-modal-body" *ngIf="transacoesDaFatura(faturaTransacoesSelecionada).length; else semTransacoes">
+        <div class="transacoes-tabela" role="table" aria-label="Lançamentos da fatura">
+          <div class="transacoes-tabela-head" role="row">
+            <span role="columnheader">Data</span>
+            <span role="columnheader" class="col-num">#</span>
+            <span role="columnheader">Categoria</span>
+            <span role="columnheader">Descrição</span>
+            <span role="columnheader" class="col-valor">Valor</span>
+          </div>
+          <div
+            class="transacoes-tabela-row"
+            role="row"
+            *ngFor="let transacao of transacoesDaFatura(faturaTransacoesSelecionada); let ix = index"
+            [class.row-alerta]="categoriaInstavel(transacao)"
+          >
+            <span class="col-data mono" role="cell">{{ formatarDataTransacao(transacao) }}</span>
+            <span class="col-num mono" role="cell">{{ ix + 1 }}</span>
+            <span class="col-categoria" role="cell">
+              <span class="categoria-badge" [class.categoria-vazia]="badgeCategoria(transacao) === 'Sem categoria'">
+                {{ badgeCategoria(transacao) }}
+              </span>
+            </span>
+            <span class="col-descricao" role="cell">
+              <span class="descricao-texto">{{ transacao.descricao || transacao.description || 'Lançamento' }}</span>
+              <span class="parcela-tag" *ngIf="transacao.parcelaAtual && transacao.totalParcelas">
+                Parcela {{ transacao.parcelaAtual }}/{{ transacao.totalParcelas }}
+              </span>
+            </span>
+            <span class="col-valor mono" role="cell">{{ formatarMoeda(transacao.valor || transacao.amount || 0) }}</span>
+          </div>
         </div>
       </div>
 

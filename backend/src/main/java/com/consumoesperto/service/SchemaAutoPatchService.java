@@ -54,6 +54,7 @@ public class SchemaAutoPatchService {
         ensureUsuarioAiConfigEvolutionApiKeyColumn();
         ensureUsuarioRendaConfigTable();
         ensureRendaConfigContaBancariaColumn();
+        ensureRendaConfigTipoRendaColumns();
         ensureMetasFinanceirasTable();
         ensureGrupoFamiliarTables();
         ensureOrcamentosTable();
@@ -254,6 +255,36 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: coluna conta_bancaria_id verificada em usuario_renda_config.");
         } catch (Exception e) {
             log.warn("Falha ao ADD conta_bancaria_id em usuario_renda_config: {}", e.getMessage());
+        }
+    }
+
+    private void ensureRendaConfigTipoRendaColumns() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuario_renda_config' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + schema + ".usuario_renda_config "
+                        + "ADD COLUMN IF NOT EXISTS tipo_configuracao_renda VARCHAR(30) NOT NULL DEFAULT 'CONTRACHEQUE'"
+                );
+                executeDdlAutocommit(
+                    "ALTER TABLE " + schema + ".usuario_renda_config "
+                        + "ADD COLUMN IF NOT EXISTS valor_recebimento_unico NUMERIC(19, 2)"
+                );
+            }
+            log.info("Schema patch: colunas tipo_configuracao_renda e valor_recebimento_unico verificadas.");
+        } catch (Exception e) {
+            log.warn("Falha ao ADD tipo_configuracao_renda em usuario_renda_config: {}", e.getMessage());
         }
     }
 

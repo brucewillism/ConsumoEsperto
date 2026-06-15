@@ -80,8 +80,8 @@ public class ReportService {
         BigDecimal fluxoTotal = BigDecimal.valueOf((Double) resumoMes.get("fluxoMes"));
         Optional<RendaConfigDTO> rendaOpt = rendaConfigService.obterDto(userId);
         boolean temRenda = rendaOpt.isPresent()
-            && rendaOpt.get().getSalarioBruto() != null
-            && rendaOpt.get().getSalarioBruto().compareTo(BigDecimal.ZERO) > 0;
+            && rendaOpt.get().getRendaMensalEstimada() != null
+            && rendaOpt.get().getRendaMensalEstimada().compareTo(BigDecimal.ZERO) > 0;
         BigDecimal saldoReal = saldoService.saldoContaCorrente(userId);
         if (totalLinhas == 0 && !temRenda) {
             log.info("[PDF-REPORT] Sem lançamentos no período nem renda configurada userId={} {}-{}", userId, ano, mes);
@@ -166,7 +166,8 @@ public class ReportService {
             RendaConfigDTO rc = rendaOpt.get();
             ctx.setVariable("rendaBruto", BRL.format(rc.getSalarioBruto()));
             ctx.setVariable("rendaDescontos", BRL.format(rc.getTotalDescontos() != null ? rc.getTotalDescontos() : BigDecimal.ZERO));
-            ctx.setVariable("rendaLiquido", BRL.format(rc.getSalarioLiquido() != null ? rc.getSalarioLiquido() : BigDecimal.ZERO));
+            ctx.setVariable("rendaLiquido", BRL.format(rc.getRendaMensalEstimada() != null ? rc.getRendaMensalEstimada() : BigDecimal.ZERO));
+            ctx.setVariable("rendaRotulo", rc.getRotuloRenda() != null ? rc.getRotuloRenda() : "Renda mensal");
         } else {
             ctx.setVariable("rendaBruto", "—");
             ctx.setVariable("rendaDescontos", "—");

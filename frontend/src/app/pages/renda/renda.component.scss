@@ -372,3 +372,38 @@ $jarvis-bg: #0d0e12;
   text-align: center;
   padding: 48px 0;
 }
+
+.perfil-renda-card {
+  padding: 20px 24px;
+  color: #e5e7eb;
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+  }
+
+  .full-width {
+    width: 100%;
+  }
+}
+
+.fluxo-diario-aviso {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #cbd5e1;
+
+  mat-icon {
+    color: #818cf8;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+}

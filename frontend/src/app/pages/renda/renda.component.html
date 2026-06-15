@@ -3,16 +3,97 @@
   <section class="hero hud-glass hud-animate" style="--stagger: 0">
     <div>
       <p class="hud-eyebrow">Módulo · Renda &amp; contracheque</p>
-      <h1>Histórico de Contracheques</h1>
-      <span class="hero-sub">Conferência de bruto, líquido e descontos; decomposição linha a linha no holerite.</span>
+      <h1>Renda &amp; Contracheques</h1>
+      <span class="hero-sub">Perfil de renda híbrido e conferência de holerites importados.</span>
     </div>
-    <button mat-raised-button color="primary" type="button" (click)="carregar()">
+    <button mat-raised-button color="primary" type="button" (click)="carregarConfig(); carregar()">
       <mat-icon>refresh</mat-icon>
       Atualizar
     </button>
   </section>
 
-  <mat-card class="fiscal-card hud-animate" style="--stagger: 1">
+  <mat-card class="perfil-renda-card hud-animate" style="--stagger: 1">
+    <h2>Perfil de renda</h2>
+    <p class="fiscal-hint">Escolha como você recebe sua renda. Os campos abaixo adaptam-se ao perfil selecionado.</p>
+
+    <div class="fiscal-loading" *ngIf="carregandoConfig">Carregando perfil…</div>
+
+    <div class="fiscal-form" *ngIf="!carregandoConfig">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width">
+        <mat-label>Modelo de renda</mat-label>
+        <mat-select name="tipoConfiguracaoRenda" [(ngModel)]="tipoConfiguracaoRenda">
+          <mat-option *ngFor="let t of tiposRenda" [value]="t.valor">
+            {{ t.rotulo }} — {{ t.descricao }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <ng-container *ngIf="tipoConfiguracaoRenda === 'CONTRACHEQUE'">
+        <p class="fiscal-hint">
+          Use o upload de contracheque abaixo ou informe o salário bruto manualmente. Descontos são extraídos do PDF ou configurados no dashboard.
+        </p>
+        <div class="fiscal-row">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Salário bruto (opcional)</mat-label>
+            <input matInput type="number" name="salarioBruto" [(ngModel)]="salarioBruto" min="0" step="0.01">
+          </mat-form-field>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Dia de pagamento</mat-label>
+            <mat-select name="diaPagamento" [(ngModel)]="diaPagamento">
+              <mat-option *ngFor="let d of diasPagamento" [value]="d">Dia {{ d }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+        <div class="fiscal-toggle-row">
+          <mat-slide-toggle name="receitaAutomaticaAtiva" [(ngModel)]="receitaAutomaticaAtiva" color="primary">
+            Lançar receita automática no dia de pagamento
+          </mat-slide-toggle>
+        </div>
+      </ng-container>
+
+      <ng-container *ngIf="tipoConfiguracaoRenda === 'RECEBIMENTO_UNICO'">
+        <div class="fiscal-row">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Valor recebido por mês</mat-label>
+            <input matInput type="number" name="valorRecebimentoUnico" [(ngModel)]="valorRecebimentoUnico" min="0" step="0.01">
+          </mat-form-field>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Dia do recebimento</mat-label>
+            <mat-select name="diaPagamentoUnico" [(ngModel)]="diaPagamento">
+              <mat-option *ngFor="let d of diasPagamento" [value]="d">Dia {{ d }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+        <div class="fiscal-toggle-row">
+          <mat-slide-toggle name="receitaAutomaticaUnico" [(ngModel)]="receitaAutomaticaAtiva" color="primary">
+            Lançar receita automática no dia do recebimento
+          </mat-slide-toggle>
+        </div>
+      </ng-container>
+
+      <div class="fluxo-diario-aviso" *ngIf="tipoConfiguracaoRenda === 'FLUXO_DIARIO'">
+        <mat-icon>insights</mat-icon>
+        <p>
+          Sua renda estimada é calculada automaticamente com base na média das suas
+          <strong>receitas confirmadas dos últimos 30 dias</strong>.
+          Não é necessário informar valor fixo.
+        </p>
+        <p class="fiscal-base" *ngIf="config">
+          Estimativa atual: <strong>{{ brl(rendaEstimadaAtual()) }}</strong>
+          <span *ngIf="config.rotuloRenda"> ({{ config.rotuloRenda }})</span>
+        </p>
+      </div>
+
+      <div class="fiscal-actions">
+        <button mat-raised-button color="primary" type="button" (click)="salvarPerfilRenda()" [disabled]="salvandoConfig">
+          <mat-icon>save</mat-icon>
+          {{ salvandoConfig ? 'Salvando…' : 'Salvar perfil' }}
+        </button>
+      </div>
+    </div>
+  </mat-card>
+
+  <mat-card class="fiscal-card hud-animate" style="--stagger: 2">
     <h2>Calendário do 13º salário</h2>
     <p class="fiscal-hint">
       Um contracheque confirmado basta como base. Aqui você define <strong>quando</strong> o 13º entra no fluxo de caixa
@@ -118,7 +199,7 @@
     </div>
   </mat-card>
 
-  <mat-card class="upload-card hud-animate" style="--stagger: 2">
+  <mat-card class="upload-card hud-animate" style="--stagger: 3" *ngIf="tipoConfiguracaoRenda === 'CONTRACHEQUE'">
     <h2>Upload manual de contracheque</h2>
     <p>Envie um PDF para a IA extrair bruto, líquido, descontos e insights. A renda só muda após confirmação.</p>
     <input #paycheckFile type="file" accept="application/pdf,.pdf" hidden (change)="onFileSelected($event)">
@@ -128,7 +209,7 @@
     </button>
   </mat-card>
 
-  <mat-card class="chart-card hud-animate" style="--stagger: 3">
+  <mat-card class="chart-card hud-animate" style="--stagger: 4" *ngIf="tipoConfiguracaoRenda === 'CONTRACHEQUE'">
     <h2>Bruto vs. Líquido</h2>
     <div class="chart-box" *ngIf="chartData.labels?.length; else emptyChart">
       <canvas baseChart [type]="'bar'" [data]="chartData" [options]="chartOptions"></canvas>

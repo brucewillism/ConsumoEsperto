@@ -1287,15 +1287,22 @@ app-root {
   }
 }
 
-/* Modal de transações da fatura — evita vazamento visual do HUD */
+/* Modal de transações da fatura */
 .fatura-transacoes-dialog .mat-mdc-dialog-container,
 .fatura-transacoes-dialog .mdc-dialog__surface {
   overflow: hidden;
   background: #0d0e12;
+  display: flex;
+  flex-direction: column;
 }
 
 .fatura-transacoes-dialog .mat-mdc-dialog-container {
   padding: 0;
+  max-height: 90vh;
+}
+
+.fatura-transacoes-dialog .mat-mdc-dialog-surface {
+  max-height: 90vh;
 }
 
 /* Pagamento de fatura — conteúdo rolável; ações fixas no rodapé (evita sobreposição) */

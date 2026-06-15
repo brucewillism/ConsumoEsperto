@@ -748,9 +748,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
 
     const rawRenda = data.rendaConfig as RendaConfigDto | null | undefined;
-    const bruto = rawRenda != null ? Number(rawRenda.salarioBruto) : 0;
-    this.rendaConfig = rawRenda != null && bruto > 0 ? rawRenda : null;
-    this.syncRendaDoughnut();
+    this.aplicarRendaConfigFromDto(rawRenda);
     this.usuarioScore = data.usuarioScore || null;
     this.oportunidadeInvestimento = data.oportunidadeInvestimento || null;
     this.dashboardService.sincronizarPrevisaoAposFetch(data.previsaoFuturo ?? null);
@@ -1245,7 +1243,43 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private syncRendaDoughnut(): void {
     const rc = this.rendaConfig;
-    if (!rc || !rc.salarioBruto || Number(rc.salarioBruto) <= 0) {
+    if (!rc) {
+      this.rendaDoughnutChartData = {
+        labels: [],
+        datasets: [{ data: [], backgroundColor: [], borderColor: [], borderWidth: 1 }]
+      };
+      return;
+    }
+    const tipo = rc.tipoConfiguracaoRenda ?? 'CONTRACHEQUE';
+    const estimada = Math.max(0, Number(rc.rendaMensalEstimada ?? rc.salarioLiquido ?? 0));
+
+    if (tipo === 'FLUXO_DIARIO') {
+      this.rendaDoughnutChartData = {
+        labels: ['Média 30 dias'],
+        datasets: [{
+          data: [estimada],
+          backgroundColor: ['#6366f1'],
+          borderColor: ['#4f46e5'],
+          borderWidth: 1
+        }]
+      };
+      return;
+    }
+
+    if (tipo === 'RECEBIMENTO_UNICO') {
+      this.rendaDoughnutChartData = {
+        labels: ['Recebimento mensal'],
+        datasets: [{
+          data: [estimada],
+          backgroundColor: ['#10b981'],
+          borderColor: ['#059669'],
+          borderWidth: 1
+        }]
+      };
+      return;
+    }
+
+    if (!rc.salarioBruto || Number(rc.salarioBruto) <= 0) {
       this.rendaDoughnutChartData = {
         labels: [],
         datasets: [{ data: [], backgroundColor: [], borderColor: [], borderWidth: 1 }]
@@ -1263,6 +1297,31 @@ export class DashboardComponent implements OnInit, OnDestroy {
         borderWidth: 1
       }]
     };
+  }
+
+  private aplicarRendaConfigFromDto(raw: RendaConfigDto | null | undefined): void {
+    if (raw == null) {
+      this.rendaConfig = null;
+      this.syncRendaDoughnut();
+      return;
+    }
+    const bruto = Number(raw.salarioBruto ?? 0);
+    const estimada = Number(raw.rendaMensalEstimada ?? raw.salarioLiquido ?? 0);
+    const tipo = raw.tipoConfiguracaoRenda;
+    const temPerfil = tipo === 'FLUXO_DIARIO' || tipo === 'RECEBIMENTO_UNICO';
+    this.rendaConfig = temPerfil || bruto > 0 || estimada > 0 ? raw : null;
+    this.syncRendaDoughnut();
+  }
+
+  rendaEstimadaExibicao(): number {
+    if (!this.rendaConfig) {
+      return 0;
+    }
+    return Number(this.rendaConfig.rendaMensalEstimada ?? this.rendaConfig.salarioLiquido ?? 0);
+  }
+
+  rendaRotuloExibicao(): string {
+    return this.rendaConfig?.rotuloRenda ?? 'Salário líquido';
   }
   
   /**
@@ -1496,9 +1555,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.usuarioScore = extra.usuarioScore || this.usuarioScore;
           this.oportunidadeInvestimento = extra.oportunidadeInvestimento || this.oportunidadeInvestimento;
           const rawRenda = extra.rendaConfig as RendaConfigDto | null | undefined;
-          const bruto = rawRenda != null ? Number(rawRenda.salarioBruto) : 0;
-          this.rendaConfig = rawRenda != null && bruto > 0 ? rawRenda : this.rendaConfig;
-          this.syncRendaDoughnut();
+          if (rawRenda != null) {
+            this.aplicarRendaConfigFromDto(rawRenda);
+          }
           const mesList = (extra.transacoesRecentes || []) as Transacao[];
           const gruposJuros = buildGrupoParcelamentoTemJuros(mesList);
           this.recentTransactions = mesList

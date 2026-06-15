@@ -198,11 +198,11 @@ public class SaldoService {
         BigDecimal mediaDiaria = gastoAtual.divide(BigDecimal.valueOf(diaAtual), 2, RoundingMode.HALF_UP);
         BigDecimal gastoProjetado = mediaDiaria.multiply(BigDecimal.valueOf(diasNoMes)).setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal rendaLiquida = rendaConfigService.obterDto(usuarioId)
-            .map(RendaConfigDTO::getSalarioLiquido)
-            .filter(v -> v.compareTo(BigDecimal.ZERO) > 0)
-            .orElseGet(() -> nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fimMes)));
+        BigDecimal rendaLiquida = rendaConfigService.getRendaMensalEstimada(usuarioId);
+        if (rendaLiquida.compareTo(BigDecimal.ZERO) <= 0) {
+            rendaLiquida = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+                usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fimMes));
+        }
 
         BigDecimal receitasSalariaisConfirmadas = nz(
             transacaoRepository.sumReceitaSalarialConfirmadaPeriodo(usuarioId, inicio, fimMes));
@@ -249,10 +249,10 @@ public class SaldoService {
             .setScale(2, RoundingMode.HALF_UP);
         BigDecimal despesasPrevistas = gastoProjetado;
 
-        BigDecimal rendaLiquida = rendaConfigService.obterDto(usuarioId)
-            .map(RendaConfigDTO::getSalarioLiquido)
-            .filter(v -> v.compareTo(BigDecimal.ZERO) > 0)
-            .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        BigDecimal rendaLiquida = rendaConfigService.getRendaMensalEstimada(usuarioId);
+        if (rendaLiquida == null || rendaLiquida.compareTo(BigDecimal.ZERO) <= 0) {
+            rendaLiquida = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
 
         BigDecimal receitasSalariaisConfirmadas = nz(
             transacaoRepository.sumReceitaSalarialConfirmadaPeriodo(usuarioId, inicio, fimMes));

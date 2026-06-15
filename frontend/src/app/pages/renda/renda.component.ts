@@ -9,7 +9,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { ContrachequeDto, RendaConfigService } from '../../services/renda-config.service';
+import { MatInputModule } from '@angular/material/input';
+import { ContrachequeDto, RendaConfigDto, RendaConfigService, TipoConfiguracaoRenda } from '../../services/renda-config.service';
 import {
   ConfiguracaoFiscalDto,
   PlanejamentoFiscalResumoDto,
@@ -37,6 +38,7 @@ interface MesOpcao {
     MatIconModule,
     MatSelectModule,
     MatSlideToggleModule,
+    MatInputModule,
     ChartMetodologiaComponent,
     WhatsappParityHintComponent
   ],
@@ -48,6 +50,22 @@ export class RendaComponent implements OnInit {
   expandedId: string | number | null = null;
   carregando = true;
   enviandoPdf = false;
+  carregandoConfig = true;
+  salvandoConfig = false;
+
+  config: RendaConfigDto | null = null;
+  tipoConfiguracaoRenda: TipoConfiguracaoRenda = 'CONTRACHEQUE';
+  valorRecebimentoUnico: number | null = null;
+  salarioBruto: number | null = null;
+  diaPagamento: number | null = null;
+  receitaAutomaticaAtiva = false;
+
+  readonly tiposRenda: { valor: TipoConfiguracaoRenda; rotulo: string; descricao: string }[] = [
+    { valor: 'CONTRACHEQUE', rotulo: 'Contracheque (CLT)', descricao: 'Salário fixo com holerite e descontos' },
+    { valor: 'RECEBIMENTO_UNICO', rotulo: 'Recebimento único', descricao: 'Um valor fixo por mês (PIX, aluguel, honorário)' },
+    { valor: 'FLUXO_DIARIO', rotulo: 'Fluxo diário', descricao: 'Renda variável — estimativa pela média dos últimos 30 dias' }
+  ];
+
   Math = Math;
   chartData: ChartConfiguration<'bar'>['data'] = { labels: [], datasets: [] };
   chartOptions: ChartOptions<'bar'> = {
@@ -99,8 +117,62 @@ export class RendaComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.carregarConfig();
     this.carregar();
     this.carregarFiscal();
+  }
+
+  carregarConfig(): void {
+    this.carregandoConfig = true;
+    this.rendaService.obter().subscribe({
+      next: (cfg) => {
+        this.config = cfg;
+        this.tipoConfiguracaoRenda = cfg.tipoConfiguracaoRenda ?? 'CONTRACHEQUE';
+        this.valorRecebimentoUnico = cfg.valorRecebimentoUnico ?? null;
+        this.salarioBruto = cfg.salarioBruto > 0 ? cfg.salarioBruto : null;
+        this.diaPagamento = cfg.diaPagamento;
+        this.receitaAutomaticaAtiva = cfg.receitaAutomaticaAtiva ?? false;
+        this.carregandoConfig = false;
+      },
+      error: () => {
+        this.toast.error('Erro ao carregar perfil de renda.');
+        this.carregandoConfig = false;
+      }
+    });
+  }
+
+  salvarPerfilRenda(): void {
+    if (this.tipoConfiguracaoRenda === 'RECEBIMENTO_UNICO' && this.valorRecebimentoUnico != null && this.valorRecebimentoUnico < 0) {
+      this.toast.warning('O valor recebido não pode ser negativo.');
+      return;
+    }
+    if (this.tipoConfiguracaoRenda !== 'FLUXO_DIARIO' && !this.diaPagamento) {
+      this.toast.warning('Informe o dia do recebimento/pagamento.');
+      return;
+    }
+
+    this.salvandoConfig = true;
+    this.rendaService.salvar({
+      tipoConfiguracaoRenda: this.tipoConfiguracaoRenda,
+      valorRecebimentoUnico: this.tipoConfiguracaoRenda === 'RECEBIMENTO_UNICO' ? this.valorRecebimentoUnico ?? undefined : undefined,
+      salarioBruto: this.tipoConfiguracaoRenda === 'CONTRACHEQUE' ? (this.salarioBruto ?? 0) : undefined,
+      diaPagamento: this.tipoConfiguracaoRenda === 'FLUXO_DIARIO' ? undefined : this.diaPagamento ?? undefined,
+      receitaAutomaticaAtiva: this.tipoConfiguracaoRenda === 'FLUXO_DIARIO' ? false : this.receitaAutomaticaAtiva
+    }).subscribe({
+      next: (cfg) => {
+        this.config = cfg;
+        this.toast.success('Perfil de renda salvo.');
+        this.salvandoConfig = false;
+      },
+      error: (e) => {
+        this.toast.error(e?.error?.message || 'Erro ao salvar perfil de renda.');
+        this.salvandoConfig = false;
+      }
+    });
+  }
+
+  rendaEstimadaAtual(): number {
+    return Number(this.config?.rendaMensalEstimada ?? this.config?.salarioLiquido ?? 0);
   }
 
   carregar(): void {

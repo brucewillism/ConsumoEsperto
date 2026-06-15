@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
 import { environment } from '../../environments/environment';
 
+export type TipoConfiguracaoRenda = 'CONTRACHEQUE' | 'RECEBIMENTO_UNICO' | 'FLUXO_DIARIO';
+
 export interface DescontoFixoDto {
   rotulo: string;
   valor: number;
@@ -17,6 +19,22 @@ export interface RendaConfigDto {
   totalDescontos: number;
   percentualDescontosSobreBruto: number;
   receitaAutomaticaAtiva: boolean;
+  tipoConfiguracaoRenda: TipoConfiguracaoRenda;
+  valorRecebimentoUnico?: number | null;
+  rendaMensalEstimada?: number;
+  rotuloRenda?: string;
+  contaBancariaId?: number | null;
+  contaBancariaNome?: string | null;
+}
+
+export interface RendaConfigRequest {
+  salarioBruto?: number;
+  descontosFixos?: DescontoFixoDto[];
+  diaPagamento?: number | null;
+  receitaAutomaticaAtiva?: boolean;
+  contaBancariaId?: number | null;
+  tipoConfiguracaoRenda: TipoConfiguracaoRenda;
+  valorRecebimentoUnico?: number | null;
 }
 
 export interface ContrachequeDto {
@@ -56,6 +74,10 @@ export class RendaConfigService {
 
   obter(): Observable<RendaConfigDto> {
     return this.http.get<RendaConfigDto>(this.apiUrl, { headers: this.headers() });
+  }
+
+  salvar(body: RendaConfigRequest): Observable<RendaConfigDto> {
+    return this.http.put<RendaConfigDto>(this.apiUrl, body, { headers: this.headers() });
   }
 
   historicoContracheques(): Observable<ContrachequeDto[]> {

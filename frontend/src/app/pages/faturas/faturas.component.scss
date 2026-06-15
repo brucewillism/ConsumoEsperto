@@ -630,73 +630,168 @@
 }
 
 .transacoes-modal {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  min-height: 0;
+  background: #0d0e12;
+  color: #e2e8f0;
+  overflow: hidden;
 
   .transacoes-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 16px;
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    background: #0d0e12;
 
     h2 {
       margin: 0;
-      font-size: 1.35rem;
+      font-size: 1.25rem;
       font-weight: 700;
-    }
-
-    p {
-      margin: 6px 0 0;
-      color: var(--text-secondary);
-      font-size: 0.95rem;
+      line-height: 1.3;
+      color: #f8fafc;
     }
   }
 
-  .transacoes-modal-lista {
-    padding: 8px 16px 24px;
-    overflow-x: auto;
+  .transacoes-modal-subtitulo {
+    margin: 6px 0 0;
+    color: #94a3b8;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  .transacoes-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
     overflow-y: auto;
-    max-height: 65vh;
+    padding: 12px 20px 20px;
+    direction: ltr;
+    scrollbar-gutter: stable;
+  }
+
+  .transacoes-tabela {
+    width: 100%;
     min-width: 0;
   }
 
-  .transacao-linha {
+  .transacoes-tabela-head,
+  .transacoes-tabela-row {
     display: grid;
-    grid-template-columns: 110px minmax(180px, 1fr) 90px 130px;
-    gap: 12px;
+    grid-template-columns: 104px 36px minmax(108px, 148px) minmax(0, 1fr) 108px;
+    gap: 10px 14px;
     align-items: center;
-    padding: 12px 0;
-    border-bottom: 1px solid rgba(51, 65, 85, 0.7);
-    color: var(--text-primary);
+    padding: 10px 12px;
+  }
 
-    &.transacao-linha-cabecalho {
-      position: sticky;
-      top: 0;
-      z-index: 1;
-      background: var(--bg-secondary);
-      color: var(--text-secondary);
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+  .transacoes-tabela-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-bottom: 4px;
+    border-radius: 8px;
+    background: rgba(22, 24, 32, 0.98);
+    border: 1px solid rgba(0, 229, 255, 0.15);
+    color: #64748b;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .transacoes-tabela-row {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    font-size: 0.875rem;
+    line-height: 1.4;
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: rgba(0, 229, 255, 0.04);
+    }
+
+    &.row-alerta {
+      background: rgba(255, 23, 68, 0.06);
+      border-radius: 6px;
+
+      .categoria-badge {
+        color: #ff8a80;
+        border-color: rgba(255, 23, 68, 0.45);
+        background: rgba(255, 23, 68, 0.1);
+      }
     }
   }
 
-  .transacao-descricao {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .col-data {
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
-  .transacao-valor {
-    text-align: right;
-    font-family: var(--font-mono-amount);
-    font-weight: 800;
+  .col-num {
+    color: #64748b;
+    text-align: center;
     font-variant-numeric: tabular-nums;
+  }
+
+  .col-valor {
+    text-align: right;
+    font-weight: 700;
+    color: #f8fafc;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .transacoes-tabela-head .col-valor {
+    text-align: right;
+  }
+
+  .col-descricao {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .descricao-texto {
+    word-break: break-word;
+    color: #e2e8f0;
+  }
+
+  .parcela-tag {
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+  }
+
+  .categoria-badge {
+    display: inline-flex;
+    max-width: 100%;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #00e5ff;
+    background: rgba(0, 229, 255, 0.1);
+    border: 1px solid rgba(0, 229, 255, 0.35);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &.categoria-vazia {
+      color: #94a3b8;
+      border-color: rgba(148, 163, 184, 0.35);
+      background: rgba(148, 163, 184, 0.08);
+    }
   }
 
   .sem-transacoes-modal {
@@ -704,7 +799,7 @@
     place-items: center;
     gap: 8px;
     padding: 40px 24px;
-    color: var(--text-secondary);
+    color: #94a3b8;
     text-align: center;
 
     mat-icon {
@@ -716,13 +811,54 @@
 }
 
 @media (max-width: 720px) {
-  .transacoes-modal .transacao-linha {
-    grid-template-columns: 92px minmax(120px, 1fr) 64px 104px;
-    font-size: 0.85rem;
+  .transacoes-modal {
+    .transacoes-tabela-head {
+      display: none;
+    }
+
+    .transacoes-tabela-row {
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        'desc valor'
+        'data valor'
+        'cat  cat';
+      gap: 6px 12px;
+      padding: 14px 12px;
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+
+    .col-descricao {
+      grid-area: desc;
+    }
+
+    .col-valor {
+      grid-area: valor;
+      align-self: start;
+    }
+
+    .col-data {
+      grid-area: data;
+      font-size: 0.8rem;
+
+      &::before {
+        content: 'Data: ';
+        color: #64748b;
+      }
+    }
+
+    .col-categoria {
+      grid-area: cat;
+    }
+
+    .col-num {
+      display: none;
+    }
   }
 }
 
-/* —— Stark HUD · Scanner de combate —— */
+/* Legado — scanner HUD na página (fora do modal) */
 .faturas-container.hud-faturas-module {
   position: relative;
   z-index: 1;
@@ -740,149 +876,4 @@
 
 .faturas-container .header .header-left h1 {
   text-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
-}
-
-.combat-scanner {
-  background: rgba(13, 14, 18, 0.94) !important;
-  border: 1px solid rgba(0, 229, 255, 0.2) !important;
-}
-
-.scanner-eyebrow {
-  margin: 0 0 4px;
-  font-size: 0.62rem;
-  letter-spacing: 0.2em;
-  color: rgba(0, 229, 255, 0.75);
-  font-weight: 800;
-}
-
-.scanner-log {
-  display: grid;
-  grid-template-columns: 132px 44px minmax(120px, 0.85fr) minmax(160px, 1.4fr) 108px;
-  gap: 12px;
-  align-items: start;
-  font-size: 0.8rem;
-  font-family: var(--font-mono-amount), ui-monospace, monospace;
-  min-width: 720px;
-}
-
-.scanner-log .col-ts,
-.scanner-log .col-id,
-.scanner-log .col-val {
-  white-space: nowrap;
-}
-
-.scanner-log .col-desc {
-  word-break: break-word;
-  line-height: 1.35;
-}
-
-.scanner-log-head {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  padding: 10px 8px;
-  background: rgba(13, 14, 18, 0.98);
-  border-bottom: 1px solid rgba(0, 229, 255, 0.25);
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 700;
-}
-
-.scanner-log-row {
-  padding: 10px 8px;
-  border-bottom: 1px solid rgba(0, 229, 255, 0.08);
-  color: #cbd5e1;
-
-  &:hover {
-    background: rgba(0, 229, 255, 0.04);
-  }
-
-  .strong {
-    font-weight: 800;
-    color: #f8fafc;
-  }
-}
-
-.neon-badge {
-  display: inline-flex;
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  color: #00e5ff;
-  background: rgba(0, 229, 255, 0.12);
-  border: 1px solid rgba(0, 229, 255, 0.45);
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
-  white-space: nowrap;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-@keyframes gritFlicker {
-  0% {
-    opacity: 1;
-  }
-  15% {
-    opacity: 0.82;
-  }
-  30% {
-    opacity: 1;
-  }
-  45% {
-    opacity: 0.88;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes scanlines {
-  0% {
-    background-position: 0 0;
-  }
-  100% {
-    background-position: 0 8px;
-  }
-}
-
-.scanner-log-row.scanline-warn {
-  background: rgba(255, 23, 68, 0.06);
-  border-radius: 6px;
-
-  .neon-badge {
-    color: #ff8a80;
-    border-color: rgba(255, 23, 68, 0.55);
-    background: rgba(255, 23, 68, 0.12);
-    box-shadow: 0 0 14px rgba(255, 23, 68, 0.35);
-  }
-}
-
-@media (max-width: 840px) {
-  .scanner-log {
-    min-width: 0;
-    grid-template-columns: 1fr;
-    font-size: 0.78rem;
-  }
-
-  .scanner-log-head {
-    display: none;
-  }
-
-  .scanner-log-row {
-    grid-template-columns: 1fr;
-    border: 1px solid rgba(0, 229, 255, 0.12);
-    border-radius: 8px;
-    margin-bottom: 8px;
-    padding: 12px;
-    gap: 6px;
-  }
-
-  .scanner-log-row .col-ts::before { content: 'Data: '; color: #64748b; }
-  .scanner-log-row .col-id::before { content: '#'; color: #64748b; }
-  .scanner-log-row .col-cat::before { content: 'Categoria: '; color: #64748b; display: block; margin-bottom: 4px; }
-  .scanner-log-row .col-desc::before { content: 'Descrição: '; color: #64748b; display: block; margin-bottom: 4px; }
-  .scanner-log-row .col-val::before { content: 'Valor: '; color: #64748b; }
 }

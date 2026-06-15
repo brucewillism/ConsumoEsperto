@@ -75,6 +75,16 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
                                                          @Param("tipoTransacao") TipoTransacao tipoTransacao,
                                                          @Param("dataInicio") LocalDateTime dataInicio,
                                                          @Param("dataFim") LocalDateTime dataFim);
+
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
+    BigDecimal sumReceitasConfirmadasPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("dataInicio") LocalDateTime dataInicio,
+        @Param("dataFim") LocalDateTime dataFim
+    );
     
     @Query("SELECT t.categoria.nome, SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.dataTransacao BETWEEN :dataInicio AND :dataFim GROUP BY t.categoria.nome")
     List<Object[]> findByUsuarioIdAndPeriodoGroupByCategoria(@Param("usuarioId") Long usuarioId,

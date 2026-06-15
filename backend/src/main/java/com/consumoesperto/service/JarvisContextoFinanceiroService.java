@@ -1,7 +1,9 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.OrcamentoDTO;
+import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.model.ContaBancaria;
+import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.DebitoInterno;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
@@ -43,6 +45,7 @@ public class JarvisContextoFinanceiroService {
     private final AgendamentoPagamentoService agendamentoPagamentoService;
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
     private final DespesaFixaService despesaFixaService;
+    private final RendaConfigService rendaConfigService;
 
     /** Bloco textual pronto para anexar ao system prompt. Nunca lança exceção. */
     public String montarBlocoContexto(Long userId) {
@@ -66,6 +69,10 @@ public class JarvisContextoFinanceiroService {
         sb.append("- Usuário: ").append(nome).append("\n");
         sb.append("- Tratamento: ").append(tratamento).append("\n");
         sb.append("- Saldo disponível estimado no mês: ").append(saldoMes).append("\n");
+        String blocoRenda = montarBlocoRenda(userId);
+        if (!blocoRenda.isBlank()) {
+            sb.append(blocoRenda);
+        }
         sb.append("- Categorias com orçamento crítico (>80%): ")
             .append(criticas.isEmpty() ? "(nenhuma)" : String.join(", ", criticas)).append("\n");
         sb.append("- Categorias com orçamento estourado (>100%): ")
@@ -229,6 +236,41 @@ public class JarvisContextoFinanceiroService {
             return "- Pagamentos agendados (saídas previstas): " + BRL.format(total) + " em boletos/Pix futuros\n";
         } catch (Exception e) {
             log.debug("Contexto J.A.R.V.I.S.: agendamentos indisponíveis userId={}: {}", userId, e.getMessage());
+            return "";
+        }
+    }
+
+    private String montarBlocoRenda(Long userId) {
+        if (userId == null) {
+            return "";
+        }
+        try {
+            RendaConfigDTO config = rendaConfigService.obterDto(userId).orElse(null);
+            if (config == null) {
+                return "";
+            }
+            BigDecimal rendaMensal = rendaConfigService.getRendaMensalEstimada(userId);
+            if (rendaMensal == null) {
+                rendaMensal = BigDecimal.ZERO;
+            }
+            TipoConfiguracaoRenda tipo = config.getTipoConfiguracaoRenda() != null
+                ? config.getTipoConfiguracaoRenda()
+                : TipoConfiguracaoRenda.CONTRACHEQUE;
+            Integer dia = config.getDiaPagamento();
+            String textoRenda = switch (tipo) {
+                case CONTRACHEQUE -> String.format(
+                    "- Renda: %s/mês (salário líquido CLT, dia de pagamento: %d)\n",
+                    BRL.format(rendaMensal), dia != null ? dia : SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO);
+                case RECEBIMENTO_UNICO -> String.format(
+                    "- Renda: %s/mês (recebimento único mensal, dia esperado: %d)\n",
+                    BRL.format(rendaMensal), dia != null ? dia : SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO);
+                case FLUXO_DIARIO -> String.format(
+                    "- Renda: %s/mês estimados (média móvel 30 dias — renda variável, sem valor fixo garantido)\n",
+                    BRL.format(rendaMensal));
+            };
+            return textoRenda;
+        } catch (Exception e) {
+            log.debug("Contexto J.A.R.V.I.S.: renda indisponível userId={}: {}", userId, e.getMessage());
             return "";
         }
     }

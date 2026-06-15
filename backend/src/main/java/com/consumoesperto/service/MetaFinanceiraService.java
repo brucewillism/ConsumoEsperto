@@ -309,10 +309,12 @@ public class MetaFinanceiraService {
         Usuario usuario = usuarioRepository.findById(usuarioId)
             .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
         BigDecimal renda = calcularRendaMensalMediaUltimosTresMeses(usuarioId)
-            .orElseGet(() -> rendaConfigService.obterDto(usuarioId)
-                .map(RendaConfigDTO::getSalarioLiquido)
-                .filter(b -> b != null && b.compareTo(BigDecimal.ZERO) > 0)
-                .orElse(new BigDecimal("5000")));
+            .orElseGet(() -> {
+                BigDecimal estimada = rendaConfigService.getRendaMensalEstimada(usuarioId);
+                return estimada != null && estimada.compareTo(BigDecimal.ZERO) > 0
+                    ? estimada
+                    : new BigDecimal("5000");
+            });
         MetaFinanceiraRequest req = new MetaFinanceiraRequest();
         req.setDescricao("[Modo Viagem] " + (tituloEvento == null ? "Evento" : tituloEvento.trim()));
         req.setValorTotal(valorTeto);

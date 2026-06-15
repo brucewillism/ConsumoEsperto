@@ -386,12 +386,22 @@
           <div class="renda-config-card hud-glass" *ngIf="rendaConfig">
             <div class="renda-config-head">
               <h3><i class="fas fa-money-bill-wave"></i> Configuração de Renda</h3>
-              <p class="renda-meta" *ngIf="rendaConfig.diaPagamento">
-                Dia de pagamento: <strong>{{ rendaConfig.diaPagamento }}</strong>
-                <span *ngIf="rendaConfig.receitaAutomaticaAtiva" class="renda-badge">Receita automática</span>
+              <p class="renda-meta">
+                <span class="renda-tipo-label">{{ rendaRotuloExibicao() }}</span>
+                <strong class="renda-valor-estimado">{{ formatCurrency(rendaEstimadaExibicao()) }}</strong>
+                <span *ngIf="rendaConfig.tipoConfiguracaoRenda === 'FLUXO_DIARIO'"
+                  matTooltip="Calculado automaticamente com base na média das receitas confirmadas dos últimos 30 dias."
+                  class="renda-info-icon">
+                  <mat-icon inline>info</mat-icon>
+                </span>
+                <ng-container *ngIf="rendaConfig.diaPagamento && rendaConfig.tipoConfiguracaoRenda !== 'FLUXO_DIARIO'">
+                  · Dia {{ rendaConfig.tipoConfiguracaoRenda === 'RECEBIMENTO_UNICO' ? 'do recebimento' : 'de pagamento' }}:
+                  <strong>{{ rendaConfig.diaPagamento }}</strong>
+                </ng-container>
+                <span *ngIf="rendaConfig.receitaAutomaticaAtiva && rendaConfig.tipoConfiguracaoRenda !== 'FLUXO_DIARIO'" class="renda-badge">Receita automática</span>
               </p>
             </div>
-            <div class="renda-config-body">
+            <div class="renda-config-body" *ngIf="rendaConfig.tipoConfiguracaoRenda === 'CONTRACHEQUE' || !rendaConfig.tipoConfiguracaoRenda">
               <div class="renda-chart-box">
                 <canvas
                   baseChart
@@ -408,6 +418,17 @@
                   Descontos ≈ {{ (rendaConfig.percentualDescontosSobreBruto | number:'1.0-1') }}% do bruto
                 </li>
               </ul>
+            </div>
+            <div class="renda-config-body renda-config-simple" *ngIf="rendaConfig.tipoConfiguracaoRenda === 'RECEBIMENTO_UNICO' || rendaConfig.tipoConfiguracaoRenda === 'FLUXO_DIARIO'">
+              <div class="renda-chart-box" *ngIf="rendaDoughnutChartData.labels?.length">
+                <canvas
+                  baseChart
+                  type="doughnut"
+                  [data]="rendaDoughnutChartData"
+                  [options]="rendaDoughnutChartOptions"
+                  [attr.aria-label]="rendaRotuloExibicao()">
+                </canvas>
+              </div>
             </div>
             <app-chart-metodologia id="RENDA_CONFIG" [compact]="true"></app-chart-metodologia>
           </div>

@@ -5,9 +5,11 @@ import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.RendaConfigRequest;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.RendaConfig;
+import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.RendaConfigRepository;
+import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -19,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +39,7 @@ public class RendaConfigService {
     private final RendaConfigRepository rendaConfigRepository;
     private final ContaBancariaRepository contaBancariaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final TransacaoRepository transacaoRepository;
     private final ObjectMapper objectMapper;
     private final SalarioAutomaticoService salarioAutomaticoService;
 
@@ -42,12 +47,14 @@ public class RendaConfigService {
         RendaConfigRepository rendaConfigRepository,
         ContaBancariaRepository contaBancariaRepository,
         UsuarioRepository usuarioRepository,
+        TransacaoRepository transacaoRepository,
         ObjectMapper objectMapper,
         @Lazy SalarioAutomaticoService salarioAutomaticoService
     ) {
         this.rendaConfigRepository = rendaConfigRepository;
         this.contaBancariaRepository = contaBancariaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.transacaoRepository = transacaoRepository;
         this.objectMapper = objectMapper;
         this.salarioAutomaticoService = salarioAutomaticoService;
     }
@@ -55,6 +62,81 @@ public class RendaConfigService {
     @Transactional(readOnly = true)
     public Optional<RendaConfigDTO> obterDto(Long usuarioId) {
         return rendaConfigRepository.findByUsuarioId(usuarioId).map(this::toDto);
+    }
+
+    /**
+     * Renda mensal usada em projeções, dashboard e J.A.R.V.I.S. — respeita {@link TipoConfiguracaoRenda}.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal getRendaMensalEstimada(Long usuarioId) {
+        if (usuarioId == null) {
+            return BigDecimal.ZERO;
+        }
+        return rendaConfigRepository.findByUsuarioId(usuarioId)
+            .map(cfg -> calcularRendaMensal(cfg, usuarioId))
+            .orElse(BigDecimal.ZERO);
+    }
+
+    private BigDecimal calcularRendaMensal(RendaConfig config, Long usuarioId) {
+        TipoConfiguracaoRenda tipo = config.getTipoConfiguracaoRenda() != null
+            ? config.getTipoConfiguracaoRenda()
+            : TipoConfiguracaoRenda.CONTRACHEQUE;
+        return switch (tipo) {
+            case CONTRACHEQUE -> calcularRendaLiquidaContracheque(config);
+            case RECEBIMENTO_UNICO -> config.getValorRecebimentoUnico() != null
+                ? config.getValorRecebimentoUnico()
+                : BigDecimal.ZERO;
+            case FLUXO_DIARIO -> calcularMediaMovel30Dias(usuarioId);
+        };
+    }
+
+    private BigDecimal calcularRendaLiquidaContracheque(RendaConfig config) {
+        BigDecimal liquido = config.getSalarioLiquido();
+        if (liquido != null && liquido.compareTo(BigDecimal.ZERO) > 0) {
+            return liquido.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal bruto = config.getSalarioBruto() != null ? config.getSalarioBruto() : BigDecimal.ZERO;
+        if (bruto.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        List<DescontoFixoDTO> descontos = parseDescontosJson(config.getDescontosFixosJson());
+        BigDecimal totalDesc = descontos.stream()
+            .map(DescontoFixoDTO::getValor)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return bruto.subtract(totalDesc).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calcularMediaMovel30Dias(Long usuarioId) {
+        LocalDate hoje = LocalDate.now();
+        LocalDateTime inicio = hoje.minusDays(30).atStartOfDay();
+        LocalDateTime fim = hoje.atTime(23, 59, 59);
+        BigDecimal totalReceitas = transacaoRepository.sumReceitasConfirmadasPeriodo(usuarioId, inicio, fim);
+        if (totalReceitas == null || totalReceitas.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        return totalReceitas.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    static String rotuloPorTipo(TipoConfiguracaoRenda tipo) {
+        if (tipo == null) {
+            return "Salário líquido";
+        }
+        return switch (tipo) {
+            case CONTRACHEQUE -> "Salário líquido";
+            case RECEBIMENTO_UNICO -> "Recebimento mensal";
+            case FLUXO_DIARIO -> "Média 30 dias";
+        };
+    }
+
+    private List<DescontoFixoDTO> parseDescontosJson(String json) {
+        if (json == null || json.isBlank()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, LIST_DESCONTO);
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
     }
 
     @Transactional
@@ -112,6 +194,8 @@ public class RendaConfigService {
         }
         cfg.setSalarioBruto(salarioBruto.setScale(2, RoundingMode.HALF_UP));
         cfg.setSalarioLiquido(liquido);
+        cfg.setTipoConfiguracaoRenda(TipoConfiguracaoRenda.CONTRACHEQUE);
+        cfg.setValorRecebimentoUnico(null);
         try {
             cfg.setDescontosFixosJson(limpos.isEmpty() ? null : objectMapper.writeValueAsString(limpos));
         } catch (Exception e) {
@@ -333,6 +417,20 @@ public class RendaConfigService {
         if (req == null) {
             throw new IllegalArgumentException("Corpo da requisição vazio.");
         }
+        TipoConfiguracaoRenda tipo = req.getTipoConfiguracaoRenda();
+        if (tipo == null) {
+            tipo = rendaConfigRepository.findByUsuarioId(usuarioId)
+                .map(RendaConfig::getTipoConfiguracaoRenda)
+                .orElse(TipoConfiguracaoRenda.CONTRACHEQUE);
+        }
+        return switch (tipo) {
+            case RECEBIMENTO_UNICO -> salvarRecebimentoUnico(usuarioId, req);
+            case FLUXO_DIARIO -> salvarFluxoDiario(usuarioId, req);
+            case CONTRACHEQUE -> salvarContrachequeDePedido(usuarioId, req);
+        };
+    }
+
+    private RendaConfigDTO salvarContrachequeDePedido(Long usuarioId, RendaConfigRequest req) {
         Integer dia = req.getDiaPagamento();
         if (dia == null) {
             dia = rendaConfigRepository.findByUsuarioId(usuarioId)
@@ -353,6 +451,75 @@ public class RendaConfigService {
         );
     }
 
+    private RendaConfigDTO salvarRecebimentoUnico(Long usuarioId, RendaConfigRequest req) {
+        BigDecimal valor = req.getValorRecebimentoUnico();
+        if (valor != null && valor.compareTo(BigDecimal.ZERO) < 0) {
+            valor = BigDecimal.ZERO;
+        }
+        if (valor != null) {
+            valor = valor.setScale(2, RoundingMode.HALF_UP);
+        }
+        Integer dia = req.getDiaPagamento();
+        if (dia == null) {
+            dia = rendaConfigRepository.findByUsuarioId(usuarioId)
+                .map(RendaConfig::getDiaPagamento)
+                .orElse(SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO);
+        }
+
+        RendaConfig cfg = rendaConfigRepository.findByUsuarioId(usuarioId).orElseGet(RendaConfig::new);
+        if (cfg.getId() == null) {
+            Usuario u = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new IllegalArgumentException("Utilizador não encontrado"));
+            cfg.setUsuario(u);
+        }
+        cfg.setTipoConfiguracaoRenda(TipoConfiguracaoRenda.RECEBIMENTO_UNICO);
+        cfg.setValorRecebimentoUnico(valor);
+        cfg.setDescontosFixosJson(null);
+        BigDecimal efetivo = valor != null ? valor : BigDecimal.ZERO;
+        cfg.setSalarioBruto(efetivo);
+        cfg.setSalarioLiquido(efetivo);
+        cfg.setDiaPagamento(Math.max(1, Math.min(31, dia)));
+        if (req.getContaBancariaId() != null) {
+            ContaBancaria conta = contaBancariaRepository.findByIdAndUsuarioId(req.getContaBancariaId(), usuarioId)
+                .orElseThrow(() -> new IllegalArgumentException("Conta bancária não encontrada."));
+            cfg.setContaBancaria(conta);
+        }
+        if (req.getReceitaAutomaticaAtiva() != null) {
+            cfg.setReceitaAutomaticaAtiva(req.getReceitaAutomaticaAtiva());
+        } else if (cfg.getId() == null && efetivo.compareTo(BigDecimal.ZERO) > 0) {
+            cfg.setReceitaAutomaticaAtiva(true);
+        }
+        rendaConfigRepository.save(cfg);
+        if (cfg.isReceitaAutomaticaAtiva()) {
+            try {
+                salarioAutomaticoService.tentarLancarSalarioMesAtual(cfg);
+            } catch (Exception e) {
+                log.warn("Catch-up recebimento único userId={}: {}", usuarioId, e.getMessage());
+            }
+        }
+        return toDto(cfg);
+    }
+
+    private RendaConfigDTO salvarFluxoDiario(Long usuarioId, RendaConfigRequest req) {
+        RendaConfig cfg = rendaConfigRepository.findByUsuarioId(usuarioId).orElseGet(RendaConfig::new);
+        if (cfg.getId() == null) {
+            Usuario u = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new IllegalArgumentException("Utilizador não encontrado"));
+            cfg.setUsuario(u);
+        }
+        cfg.setTipoConfiguracaoRenda(TipoConfiguracaoRenda.FLUXO_DIARIO);
+        cfg.setValorRecebimentoUnico(null);
+        cfg.setReceitaAutomaticaAtiva(false);
+        cfg.setUltimoMesLancamentoAuto(null);
+        if (req.getDiaPagamento() != null) {
+            cfg.setDiaPagamento(Math.max(1, Math.min(31, req.getDiaPagamento())));
+        } else if (cfg.getDiaPagamento() == null) {
+            cfg.setDiaPagamento(SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO);
+        }
+        rendaConfigRepository.save(cfg);
+        return toDto(cfg);
+    }
+
     private RendaConfigDTO toDto(RendaConfig c) {
         List<DescontoFixoDTO> lista = new ArrayList<>();
         if (c.getDescontosFixosJson() != null && !c.getDescontosFixosJson().isBlank()) {
@@ -369,6 +536,11 @@ public class RendaConfigService {
             pct = totalDesc.multiply(BigDecimal.valueOf(100))
                 .divide(bruto, 2, RoundingMode.HALF_UP);
         }
+        TipoConfiguracaoRenda tipo = c.getTipoConfiguracaoRenda() != null
+            ? c.getTipoConfiguracaoRenda()
+            : TipoConfiguracaoRenda.CONTRACHEQUE;
+        Long usuarioId = c.getUsuario() != null ? c.getUsuario().getId() : null;
+        BigDecimal estimada = usuarioId != null ? calcularRendaMensal(c, usuarioId) : BigDecimal.ZERO;
         return RendaConfigDTO.builder()
             .salarioBruto(bruto)
             .descontosFixos(lista)
@@ -379,6 +551,10 @@ public class RendaConfigService {
             .receitaAutomaticaAtiva(c.isReceitaAutomaticaAtiva())
             .contaBancariaId(c.getContaBancaria() != null ? c.getContaBancaria().getId() : null)
             .contaBancariaNome(c.getContaBancaria() != null ? c.getContaBancaria().getNome() : null)
+            .tipoConfiguracaoRenda(tipo)
+            .valorRecebimentoUnico(c.getValorRecebimentoUnico())
+            .rendaMensalEstimada(estimada)
+            .rotuloRenda(rotuloPorTipo(tipo))
             .build();
     }
 

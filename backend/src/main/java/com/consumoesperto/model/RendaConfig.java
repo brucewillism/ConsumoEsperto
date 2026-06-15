@@ -44,6 +44,14 @@ public class RendaConfig {
     @Column(name = "salario_liquido", nullable = false, precision = 19, scale = 2)
     private BigDecimal salarioLiquido = BigDecimal.ZERO;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_configuracao_renda", nullable = false, length = 30)
+    private TipoConfiguracaoRenda tipoConfiguracaoRenda = TipoConfiguracaoRenda.CONTRACHEQUE;
+
+    /** Valor mensal informado manualmente (RECEBIMENTO_UNICO). */
+    @Column(name = "valor_recebimento_unico", precision = 19, scale = 2)
+    private BigDecimal valorRecebimentoUnico;
+
     @Column(name = "receita_automatica_ativa", nullable = false)
     private boolean receitaAutomaticaAtiva;
 

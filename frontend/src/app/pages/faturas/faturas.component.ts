@@ -309,9 +309,9 @@ export class FaturasComponent implements OnInit, OnDestroy {
         });
     }
     this.dialog.open(template, {
-      width: 'min(960px, 96vw)',
-      maxWidth: '96vw',
-      maxHeight: '88vh',
+      width: 'min(920px, 94vw)',
+      maxWidth: '94vw',
+      maxHeight: '90vh',
       panelClass: 'fatura-transacoes-dialog',
       autoFocus: false,
     });
@@ -320,7 +320,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
   badgeCategoria(t: any): string {
     const nome = (t?.categoriaNome ?? t?.categoria?.nome) as string | undefined;
     const s = (nome || '').trim();
-    return s ? s.toUpperCase() : 'SEM_CATEGORIA';
+    return s || 'Sem categoria';
   }
 
   categoriaInstavel(t: any): boolean {
@@ -336,6 +336,15 @@ export class FaturasComponent implements OnInit, OnDestroy {
       }
     }
     return false;
+  }
+
+  formatarDataTransacao(t: any): string {
+    const d = new Date(t?.dataTransacao || t?.date || 0);
+    if (Number.isNaN(d.getTime())) {
+      return '—';
+    }
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
   }
 
   logTimestamp(t: any): string {

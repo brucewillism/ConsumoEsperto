@@ -4,6 +4,7 @@ import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.RendaConfig;
+import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.ContaBancariaRepository;
@@ -47,6 +48,9 @@ public class SalarioAutomaticoService {
     @Transactional
     public boolean tentarLancarSalarioMesAtual(RendaConfig cfg) {
         if (cfg == null || !cfg.isReceitaAutomaticaAtiva()) {
+            return false;
+        }
+        if (cfg.getTipoConfiguracaoRenda() == TipoConfiguracaoRenda.FLUXO_DIARIO) {
             return false;
         }
         LocalDate hoje = LocalDate.now(ZONA_BR);

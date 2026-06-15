@@ -1,5 +1,6 @@
 package com.consumoesperto.dto;
 
+import com.consumoesperto.model.TipoConfiguracaoRenda;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,6 +26,12 @@ public class RendaConfigDTO {
     /** Carteira que recebe o salário automático (ex.: conta Itaú). */
     private Long contaBancariaId;
     private String contaBancariaNome;
+    private TipoConfiguracaoRenda tipoConfiguracaoRenda;
+    private BigDecimal valorRecebimentoUnico;
+    /** Renda mensal usada em projeções e dashboard (respeita o tipo configurado). */
+    private BigDecimal rendaMensalEstimada;
+    /** Rótulo para exibição: Salário líquido, Recebimento mensal ou Média 30 dias. */
+    private String rotuloRenda;
 
     public static RendaConfigDTO vazio() {
         return RendaConfigDTO.builder()
@@ -35,6 +42,10 @@ public class RendaConfigDTO {
             .totalDescontos(BigDecimal.ZERO)
             .percentualDescontosSobreBruto(BigDecimal.ZERO)
             .receitaAutomaticaAtiva(false)
+            .tipoConfiguracaoRenda(TipoConfiguracaoRenda.CONTRACHEQUE)
+            .valorRecebimentoUnico(null)
+            .rendaMensalEstimada(BigDecimal.ZERO)
+            .rotuloRenda("Salário líquido")
             .build();
     }
 }
