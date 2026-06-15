@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dto.ConfirmarImportacaoFaturaRequest;
 import com.consumoesperto.dto.CartaoCreditoDTO;
 import com.consumoesperto.dto.CategoriaDTO;
 import com.consumoesperto.dto.ContaBancariaDTO;
@@ -140,6 +141,9 @@ public class WhatsAppCommandService {
     private final Map<Long, Long> awaitingFaturaImportConfirm = new ConcurrentHashMap<>();
     /** Importação BB: sim = somar saldo anterior; não = só saldo atual. */
     private final Map<Long, Long> awaitingFaturaSaldoAnteriorChoice = new ConcurrentHashMap<>();
+    /** PDF de fatura protegido aguardando senha (dígitos CPF) via texto. */
+    private final Map<Long, PendingFaturaPdfDraft> awaitingFaturaPdfSenha = new ConcurrentHashMap<>();
+    private static final long FATURA_PDF_PENDENTE_TTL_MS = 45L * 60L * 1000L;
     private final Map<Long, Long> awaitingContrachequeImportConfirm = new ConcurrentHashMap<>();
     private final Map<Long, PendingDespesaFixaDraft> awaitingDespesaFixaDia = new ConcurrentHashMap<>();
 
@@ -246,6 +250,10 @@ public class WhatsAppCommandService {
         Optional<String> despesaFixaDia = tryResolveDespesaFixaDiaPendente(userId, text);
         if (despesaFixaDia.isPresent()) {
             return despesaFixaDia;
+        }
+        Optional<String> faturaSenha = tryImportarFaturaPdfComSenha(userId, text);
+        if (faturaSenha.isPresent()) {
+            return faturaSenha;
         }
         Optional<String> ajuda = tryRespostaAjudaParidade(userId, text);
         if (ajuda.isPresent()) {
@@ -690,7 +698,9 @@ public class WhatsAppCommandService {
                     if (!incoming.isJarvisInstantAckSent()) {
                         sendOutgoingMessage(from, jarvisProtocolService.statusLeituraPdfExtracaoFiscal(), userId, webhookEvolutionInstanceHint);
                     }
-                    response = handlePdfDocument(userId, mediaBytes);
+                    response = handlePdfDocument(userId, mediaBytes,
+                        FaturaPdfSenhaWhatsappTextParser.extrairSenhaSolta(incoming.getText()),
+                        incoming.getText());
                 } else {
                     response = msgErro(userId, "Documento",
                         "Este ficheiro não é *PDF*. Para *contracheque*, *fatura* ou holerite, envia o documento em PDF.");
@@ -961,7 +971,8 @@ public class WhatsAppCommandService {
                     yield msgErro(userId, "Comando não reconhecido",
                         "Não percebi o pedido. Envie *ajuda* ou *menu* para ver o que o app e o WhatsApp fazem juntos.\n"
                             + "Exemplos:\n• despesa 45,90 mercado\n• pix 80 da conta Nubank\n• receita 3500 salário\n"
-                            + "• cartão Nubank final 1234 vence 10");
+                            + "• cartão Nubank final 1234 vence 10\n"
+                            + "• importe essa fatura itau codigo 12345 (após enviar o PDF)");
                 }
                 yield msgErro(userId, "Dados em falta", errorMessage + "\nReenvia com mais detalhe.");
             }
@@ -969,11 +980,46 @@ public class WhatsAppCommandService {
     }
 
     private String handlePdfDocument(Long userId, byte[] mediaBytes) {
+        return handlePdfDocument(userId, mediaBytes, null, null);
+    }
+
+    private String handlePdfDocument(Long userId, byte[] mediaBytes, String senhaPdf) {
+        return handlePdfDocument(userId, mediaBytes, senhaPdf, null);
+    }
+
+    private String handlePdfDocument(Long userId, byte[] mediaBytes, String senhaPdf, String captionText) {
         try {
-            String textoPdf = pdfTextExtractionService.extrairTexto(mediaBytes);
+            String textoPdf = pdfTextExtractionService.extrairTexto(mediaBytes, senhaPdf);
             com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy layoutFatura =
                 faturaPdfLayoutDetector.detectarTexto(textoPdf);
-            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(userId, mediaBytes, layoutFatura);
+            // Classificação ampla: contracheque, boleto ou fatura (fluxo original do WhatsApp).
+            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(
+                userId, mediaBytes, layoutFatura, true, senhaPdf);
+            awaitingFaturaPdfSenha.remove(userId);
+            return processarPdfFinanceiroExtraido(userId, mediaBytes, senhaPdf, extracted, layoutFatura, textoPdf);
+        } catch (IllegalArgumentException e) {
+            if (FaturaPdfSenhaWhatsappTextParser.pareceErroPdfProtegido(e.getMessage())) {
+                String bancoHint = FaturaPdfSenhaWhatsappTextParser.extrairBanco(captionText);
+                awaitingFaturaPdfSenha.put(userId, new PendingFaturaPdfDraft(mediaBytes, bancoHint));
+                return msgInfo("Fatura PDF", jarvisProtocolService.instrucoesSenhaFaturaPdfPendente(bancoHint));
+            }
+            log.warn("Falha ao processar PDF financeiro: {}", e.getMessage());
+            return msgErro(userId, "PDF financeiro", humanizarErroComando(e.getMessage()));
+        } catch (Exception e) {
+            log.warn("Falha ao processar PDF financeiro: {}", e.getMessage());
+            return msgErro(userId, "PDF financeiro", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private String processarPdfFinanceiroExtraido(
+        Long userId,
+        byte[] mediaBytes,
+        String senhaPdf,
+        JsonNode extracted,
+        com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy layoutFatura,
+        String textoPdf
+    ) {
+        try {
             String tipo = extracted.path("tipoDocumento").asText("");
             if ("CONTRACHEQUE".equalsIgnoreCase(tipo)) {
                 ContrachequeDTO c = contrachequeImportService.processarExtracao(userId, extracted);
@@ -989,7 +1035,11 @@ public class WhatsAppCommandService {
                     "Li o PDF como cobrança, mas não consegui extrair valor e vencimento com segurança.");
             }
             if ("FATURA_CARTAO".equalsIgnoreCase(tipo) || faturaPdfImportService.pareceFaturaCartao(extracted)) {
-                ImportacaoFaturaDTO imp = faturaPdfImportService.processarExtracao(userId, extracted, layoutFatura, textoPdf);
+                // Mesmo pipeline do app (Importações pendentes): extração focada + validação de itens.
+                ImportacaoFaturaDTO imp = faturaPdfImportService.processarPdf(userId, mediaBytes, senhaPdf);
+                log.info("[WhatsApp] Fatura PDF processada userId={} importacaoId={} novos={} itens={}",
+                    userId, imp.getId(), imp.getNovosDetectados(),
+                    imp.getItens() != null ? imp.getItens().size() : 0);
                 if (Boolean.TRUE.equals(imp.getAguardandoEscolhaSaldoAnterior())) {
                     awaitingFaturaSaldoAnteriorChoice.put(userId, imp.getId());
                     String banco = imp.getBancoCartao() != null && !imp.getBancoCartao().isBlank()
@@ -1006,18 +1056,57 @@ public class WhatsAppCommandService {
         }
     }
 
+    private Optional<String> tryImportarFaturaPdfComSenha(Long userId, String raw) {
+        if (userId == null || raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        FaturaPdfSenhaWhatsappTextParser.ParsedFaturaSenha comando =
+            FaturaPdfSenhaWhatsappTextParser.parseComando(raw.trim());
+        String senha = comando != null ? comando.senha() : null;
+        if (senha == null && awaitingFaturaPdfSenha.containsKey(userId)) {
+            senha = FaturaPdfSenhaWhatsappTextParser.extrairSenhaSolta(raw.trim());
+        }
+        if (senha == null) {
+            if (comando != null) {
+                return Optional.of(msgErro(userId, "Fatura PDF",
+                    "Não identifiquei o código numérico. " + jarvisProtocolService.exemploComandoSenhaFaturaPdf()));
+            }
+            return Optional.empty();
+        }
+        PendingFaturaPdfDraft draft = awaitingFaturaPdfSenha.get(userId);
+        if (draft == null || draft.pdfBytes == null || draft.pdfBytes.length == 0) {
+            return Optional.of(msgInfo("Fatura PDF",
+                "Para importar com senha, *envie o PDF da fatura primeiro* e depois o comando.\n\n"
+                    + jarvisProtocolService.instrucoesSenhaFaturaPdfPendente(
+                        comando != null ? comando.banco() : null)));
+        }
+        if (draft.expirou()) {
+            awaitingFaturaPdfSenha.remove(userId);
+            return Optional.of(msgErro(userId, "Fatura PDF",
+                "O PDF guardado expirou. Reenvie o arquivo e depois o código de abertura."));
+        }
+        String banco = comando != null && comando.banco() != null ? comando.banco() : draft.bancoHint;
+        if (banco != null && !banco.isBlank()) {
+            log.debug("Importação fatura PDF com senha userId={} banco={}", userId, banco);
+        }
+        return Optional.of(handlePdfDocument(userId, draft.pdfBytes, senha));
+    }
+
     private String mensagemVarreduraFaturaAposProcessamento(Long userId, ImportacaoFaturaDTO imp) {
-        awaitingFaturaImportConfirm.put(userId, imp.getId());
+        int totalItens = imp.getItens() != null ? imp.getItens().size() : 0;
+        if (totalItens > 0) {
+            awaitingFaturaImportConfirm.put(userId, imp.getId());
+        } else {
+            awaitingFaturaImportConfirm.remove(userId);
+        }
         boolean divergencia = temDivergenciaSomaFatura(imp);
         String bullets = "";
         if (imp.getAuditorias() != null && !imp.getAuditorias().isEmpty()) {
             bullets = imp.getAuditorias().stream().map(a -> "• " + a).collect(Collectors.joining("\n"));
         }
-        if (divergencia) {
-            awaitingFaturaImportConfirm.remove(userId);
-        }
         String banco = imp.getBancoCartao() != null && !imp.getBancoCartao().isBlank() ? imp.getBancoCartao() : "Cartão";
-        return jarvisProtocolService.formatoFaturaVarredura(banco, imp.getNovosDetectados(), bullets, divergencia);
+        return jarvisProtocolService.formatoFaturaVarredura(
+            banco, imp.getNovosDetectados(), totalItens, bullets, divergencia);
     }
 
     private boolean temDivergenciaSomaFatura(ImportacaoFaturaDTO imp) {
@@ -2835,8 +2924,10 @@ public class WhatsAppCommandService {
             if (isAffirmativeSaveReply(text)) {
                 awaitingFaturaImportConfirm.remove(userId);
                 try {
+                    ConfirmarImportacaoFaturaRequest req = new ConfirmarImportacaoFaturaRequest();
+                    req.setIgnorarDivergencia(true);
                     FaturaPdfImportService.ResultadoConfirmacaoFatura resultado =
-                        faturaPdfImportService.confirmarTodosComResumo(userId, importId, false);
+                        faturaPdfImportService.confirmarComResumo(userId, importId, req, false);
                     String resposta = msgOk("Fatura importada",
                         faturaPdfImportService.mensagemResumoImportacao(resultado)
                             + " O cartão e o dashboard foram atualizados.");
@@ -3753,6 +3844,25 @@ public class WhatsAppCommandService {
         String descricao;
     }
 
+    private static class PendingFaturaPdfDraft {
+        final byte[] pdfBytes;
+        final String bancoHint;
+        final long criadoEm = System.currentTimeMillis();
+
+        PendingFaturaPdfDraft(byte[] pdfBytes) {
+            this(pdfBytes, null);
+        }
+
+        PendingFaturaPdfDraft(byte[] pdfBytes, String bancoHint) {
+            this.pdfBytes = pdfBytes;
+            this.bancoHint = bancoHint;
+        }
+
+        boolean expirou() {
+            return System.currentTimeMillis() - criadoEm > FATURA_PDF_PENDENTE_TTL_MS;
+        }
+    }
+
     private static class DespesaFixaIntent {
         BigDecimal valor;
         String descricao;
@@ -3763,6 +3873,7 @@ public class WhatsAppCommandService {
     public void sincronizarFaturaResolvidaNoApp(Long userId) {
         awaitingFaturaImportConfirm.remove(userId);
         awaitingFaturaSaldoAnteriorChoice.remove(userId);
+        awaitingFaturaPdfSenha.remove(userId);
     }
 
     public void sincronizarEscolhaSaldoAnteriorFaturaNoApp(Long userId) {

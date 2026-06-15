@@ -796,11 +796,41 @@ public class JarvisProtocolService {
             + "• Responda *não* para importar *só esta fatura* (" + mes + ") e ignorar a linha de saldo anterior.";
     }
 
+    /** PDF de fatura bloqueado por senha — instruções para WhatsApp. */
+    public String instrucoesSenhaFaturaPdfPendente(String bancoCartao) {
+        String b = bancoCartao != null && !bancoCartao.isBlank() ? bancoCartao : "Itaú ou Inter";
+        return "🔐 Guardei o PDF — está protegido por senha (*" + b + "*).\n\n"
+            + "Envie o código assim:\n"
+            + exemploComandoSenhaFaturaPdf() + "\n\n"
+            + "Ou responda só com os dígitos (ex.: *12345*) logo após o PDF.\n\n"
+            + "• *Itaú:* 5 primeiros dígitos do CPF\n"
+            + "• *Inter:* 6 primeiros dígitos do CPF";
+    }
+
+    public String exemploComandoSenhaFaturaPdf() {
+        return "• *importe essa fatura para o banco itau o codigo para abrir a fatura e 12345*";
+    }
+
     /** Resumo de importação de fatura PDF. */
-    public String formatoFaturaVarredura(String bancoCartao, int nNaoCatalogados, String listaInconsistenciasBullets, boolean bloquearConciliacaoPorDivergenciaTotal) {
+    public String formatoFaturaVarredura(
+        String bancoCartao,
+        int nNovos,
+        int totalItens,
+        String listaInconsistenciasBullets,
+        boolean bloquearConciliacaoPorDivergenciaTotal
+    ) {
         StringBuilder sb = new StringBuilder();
         sb.append("📊 *Varredura concluída* — cartão *").append(bancoCartao).append("*. ");
-        sb.append("Encontrei *").append(nNaoCatalogados).append("* lançamentos que ainda não estão nos seus registros. ");
+        if (totalItens <= 0) {
+            sb.append("Não extraí lançamentos desta fatura. ");
+            sb.append("Se o PDF for do *Itaú* ou *Inter*, envie o código de abertura (dígitos do CPF) após o arquivo.\n");
+        } else if (nNovos <= 0) {
+            sb.append("Li *").append(totalItens).append("* lançamento(s) no PDF; todos já constam nos seus registros. ");
+            sb.append("Responda *sim* para reconciliar na fatura atual.\n");
+        } else {
+            sb.append("Encontrei *").append(nNovos).append("* lançamento(s) novos (de ")
+                .append(totalItens).append(" no PDF). ");
+        }
         sb.append("O que chamou minha atenção:\n");
         if (listaInconsistenciasBullets == null || listaInconsistenciasBullets.isBlank()) {
             sb.append("• Nada fora do comum por aqui.\n");
@@ -811,9 +841,12 @@ public class JarvisProtocolService {
             }
         }
         if (bloquearConciliacaoPorDivergenciaTotal) {
-            sb.append("\nNão vou gravar ainda: o total da fatura diverge da soma dos lançamentos. Me reenvie o PDF ou ajuste em *Importações pendentes*.");
-        } else {
+            sb.append("\nA soma dos lançamentos diverge do total do PDF — revise os bullets acima. ");
+            sb.append("Mesmo assim, responda *sim* para importar o que foi lido ou *não* para cancelar.");
+        } else if (totalItens > 0) {
             sb.append("\n*Autoriza que eu registre tudo nos seus livros agora?* Responda *sim* ou *não*.");
+        } else {
+            sb.append("\nReenvie o PDF com senha correta ou importe pelo app em *Importações pendentes*.");
         }
         return sb.toString();
     }

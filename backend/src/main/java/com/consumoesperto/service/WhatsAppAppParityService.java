@@ -113,7 +113,11 @@ public class WhatsAppAppParityService {
             null
         ),
         item("importacoes", "Importações pendentes", "/importacoes-pendentes", "Importações", "BOTH",
-            List.of("confirmar importação de fatura (sim/não)", "confirmar contracheque"),
+            List.of(
+                "confirmar importação de fatura (sim/não)",
+                "confirmar contracheque",
+                "importe essa fatura para o banco itau o codigo para abrir a fatura e 12345"
+            ),
             List.of("Rever PDFs importados", "Confirmar ou descartar"),
             "Fluxos iniciados por PDF ou cupom no WhatsApp."
         ),
