@@ -22,7 +22,6 @@ export class ConfirmDialogService {
       autoFocus: 'first-toggler',
       data: this.normalizar(data),
     });
-    // Confirmação: só fecha pelos botões (não pelo backdrop)
     return ref.afterClosed().pipe(map((v) => !!v));
   }
 

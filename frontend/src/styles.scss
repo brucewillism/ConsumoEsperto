@@ -708,6 +708,8 @@ a {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   color: var(--text-secondary);
+  scrollbar-gutter: stable;
+  padding-right: 8px !important;
 }
 
 /* Modal QR WhatsApp — evita linha cyan do divisor de scroll do Material a cortar o QR */
@@ -1057,9 +1059,9 @@ a {
   font-size: 0.8125rem;
 }
 
-/* Painéis de mat-select — tema escuro em todos os formulários (Faturas, Relatórios, etc.) */
+/* Painéis de mat-select — acima do dialog (1301) para clique e scroll funcionarem */
 .cdk-overlay-pane:has(.mat-mdc-select-panel) {
-  z-index: 1400 !important;
+  z-index: 2000 !important;
   pointer-events: auto !important;
 }
 
@@ -1102,7 +1104,7 @@ a {
 /* Datepicker / calendário Material — tema escuro + legível */
 .cdk-overlay-pane:has(.mat-datepicker-content),
 .cdk-overlay-pane:has(.mat-calendar) {
-  z-index: 4000 !important;
+  z-index: 2000 !important;
 }
 
 .mat-datepicker-content,
@@ -1336,7 +1338,8 @@ html.ce-modal-open body,
 html.ce-modal-open app-root,
 html.ce-modal-open .app-container,
 html.ce-modal-open .main-content,
-html.ce-modal-open .page-content {
+html.ce-modal-open .page-content,
+html.ce-modal-open .sidebar-nav {
   overflow: hidden !important;
   overscroll-behavior: none;
 }
