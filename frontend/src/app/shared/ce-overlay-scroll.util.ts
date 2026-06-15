@@ -1,44 +1,31 @@
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { EnvironmentProviders, NgZone, inject, provideEnvironmentInitializer } from '@angular/core';
 
-const OVERLAY_SCROLL_SELECTORS =
-  '.mat-mdc-select-panel, .mat-mdc-autocomplete-panel, .mat-mdc-menu-panel, .ce-dialog-scroll';
+const OVERLAY_PANEL_SELECTORS =
+  '.mat-mdc-select-panel, .mat-mdc-autocomplete-panel, .mat-mdc-menu-panel';
 
 /**
- * Painéis de mat-select/menu são criados pelo CDK fora dos nossos templates.
- * Com {@link BlockScrollStrategy} no dialog, a roda do mouse precisa ser tratada aqui.
+ * Evita que interação no painel do mat-select dispare fechamento do modal por baixo.
  */
-function bindOverlayPanelWheel(el: HTMLElement): void {
-  if (el.dataset['ceWheelBound']) return;
-  el.dataset['ceWheelBound'] = '1';
+function bindOverlayPanelPointerShield(el: HTMLElement): void {
+  if (el.dataset['cePointerShield']) return;
+  el.dataset['cePointerShield'] = '1';
 
-  el.addEventListener(
-    'wheel',
-    (event: WheelEvent) => {
-      const { scrollTop, scrollHeight, clientHeight } = el;
-      const dy = event.deltaY;
-      const canScrollUp = scrollTop > 0;
-      const canScrollDown = scrollTop + clientHeight < scrollHeight - 1;
-
-      if ((dy < 0 && canScrollUp) || (dy > 0 && canScrollDown)) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        el.scrollTop += dy;
-      }
-    },
-    { passive: false, capture: true }
-  );
+  const stop = (event: Event) => event.stopPropagation();
+  el.addEventListener('pointerdown', stop, true);
+  el.addEventListener('mousedown', stop, true);
+  el.addEventListener('click', stop, true);
 }
 
-function scanOverlayScrollables(root: ParentNode): void {
+function scanOverlayPanels(root: ParentNode): void {
   if (!(root instanceof HTMLElement || root instanceof DocumentFragment)) return;
 
-  if (root instanceof HTMLElement && root.matches(OVERLAY_SCROLL_SELECTORS)) {
-    bindOverlayPanelWheel(root);
+  if (root instanceof HTMLElement && root.matches(OVERLAY_PANEL_SELECTORS)) {
+    bindOverlayPanelPointerShield(root);
   }
 
-  root.querySelectorAll?.(OVERLAY_SCROLL_SELECTORS).forEach((node) => {
-    if (node instanceof HTMLElement) bindOverlayPanelWheel(node);
+  root.querySelectorAll?.(OVERLAY_PANEL_SELECTORS).forEach((node) => {
+    if (node instanceof HTMLElement) bindOverlayPanelPointerShield(node);
   });
 }
 
@@ -52,13 +39,13 @@ export function provideCeOverlayScrollSupport(): EnvironmentProviders {
       ngZone.run(() => {
         records.forEach((record) => {
           record.addedNodes.forEach((node) => {
-            if (node instanceof HTMLElement) scanOverlayScrollables(node);
+            if (node instanceof HTMLElement) scanOverlayPanels(node);
           });
         });
       });
     });
 
     observer.observe(container, { childList: true, subtree: true });
-    scanOverlayScrollables(container);
+    scanOverlayPanels(container);
   });
 }

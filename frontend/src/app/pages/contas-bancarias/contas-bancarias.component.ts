@@ -18,7 +18,7 @@ import { ContaBancariaService } from '../../services/conta-bancaria.service';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
 import { TransferenciaService } from '../../services/transferencia.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
-import { openCeFormDialog, wireCeDialogBackdropClose } from '../../shared/ce-form-dialog.util';
+import { openCeFormDialog, wireCeDialogBehavior } from '../../shared/ce-form-dialog.util';
 import { TransferenciaModalComponent } from '../../shared/transferencia-modal/transferencia-modal.component';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
@@ -118,7 +118,7 @@ export class ContasBancariasComponent implements OnInit {
       disableClose: true,
       panelClass: 'transferencia-dialog',
     });
-    wireCeDialogBackdropClose(ref, () => false);
+    wireCeDialogBehavior(ref, () => false);
     ref
       .afterClosed()
       .subscribe((ok) => {

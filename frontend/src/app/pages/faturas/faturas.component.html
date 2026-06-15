@@ -312,9 +312,10 @@
       </header>
 
       <div
-        class="transacoes-modal-body ce-dialog-scroll"
+        class="transacoes-modal-body"
         *ngIf="transacoesDaFatura(faturaTransacoesSelecionada).length; else semTransacoes"
       >
+        <div class="transacoes-modal-scroll ce-dialog-scroll">
         <div class="transacoes-tabela" role="table" aria-label="Lançamentos da fatura">
           <div class="transacoes-tabela-head" role="row">
             <span role="columnheader">Data</span>
@@ -344,6 +345,7 @@
             </span>
             <span class="col-valor mono" role="cell">{{ formatarMoeda(transacao.valor || transacao.amount || 0) }}</span>
           </div>
+        </div>
         </div>
       </div>
 

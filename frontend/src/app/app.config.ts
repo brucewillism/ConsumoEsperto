@@ -82,14 +82,14 @@ export const appConfig: ApplicationConfig = {
       }
     },
 
-    // Bloqueia scroll da página; áreas com cdkScrollable (directive global) continuam roláveis
+    // Evita cdk-global-scrollblock conflitar com o scroll lock manual dos modais
     {
       provide: MAT_DIALOG_DEFAULT_OPTIONS,
       deps: [Overlay],
       useFactory: (overlay: Overlay) => ({
         maxHeight: '90vh',
         disableClose: true,
-        scrollStrategy: overlay.scrollStrategies.block(),
+        scrollStrategy: overlay.scrollStrategies.noop(),
       }),
     },
 

@@ -25,7 +25,7 @@ import { FaturaMesGrupo } from './faturas-mes-grupo.model';
 import { PagamentoFaturaModalComponent } from '../../shared/pagamento-fatura-modal/pagamento-fatura-modal.component';
 import { NovaFaturaDialogComponent } from '../../shared/nova-fatura-dialog/nova-fatura-dialog.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
-import { openCeFormDialog, wireCeDialogBackdropClose } from '../../shared/ce-form-dialog.util';
+import { openCeFormDialog, wireCeDialogBehavior } from '../../shared/ce-form-dialog.util';
 import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
@@ -284,7 +284,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
         data: { fatura },
         panelClass: 'pagamento-fatura-dialog',
       });
-    wireCeDialogBackdropClose(ref, () => false);
+    wireCeDialogBehavior(ref, () => false);
     ref
       .afterClosed()
       .subscribe((ok) => {
