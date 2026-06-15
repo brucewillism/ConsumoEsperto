@@ -4,115 +4,17 @@ import { EnvironmentProviders, NgZone, inject, provideEnvironmentInitializer } f
 const OVERLAY_PANEL_SELECTORS =
   '.mat-mdc-select-panel, .mat-mdc-autocomplete-panel, .mat-mdc-menu-panel';
 
-const SCROLLABLE_SELECTORS = [
-  '.ce-dialog-scroll',
-  '.transacoes-modal-scroll',
-  'mat-dialog-content',
-  '.mat-mdc-dialog-content',
-  '.mat-mdc-select-panel',
-  '.mat-mdc-select-panel .mdc-list',
-  '.mat-mdc-autocomplete-panel',
-  '.mat-mdc-menu-panel',
-  '.modal-body',
-].join(', ');
-
-let modalLockCount = 0;
-let wheelTrapHandler: ((event: WheelEvent) => void) | null = null;
 let overlayObserver: MutationObserver | null = null;
 
 function hasOpenDialog(): boolean {
   return !!document.querySelector('.cdk-overlay-container .mat-mdc-dialog-container');
 }
 
-function elementAtPointer(event: WheelEvent): Element | null {
-  return document.elementFromPoint(event.clientX, event.clientY);
+function syncModalOpenClass(): void {
+  document.documentElement.classList.toggle('ce-modal-open', hasOpenDialog());
 }
 
-function isPointerOverOverlayUi(event: WheelEvent): boolean {
-  return !!elementAtPointer(event)?.closest('.cdk-overlay-container');
-}
-
-function findScrollableAtPointer(event: WheelEvent): HTMLElement | null {
-  const el = elementAtPointer(event);
-  if (!el) return null;
-  return el.closest(SCROLLABLE_SELECTORS) as HTMLElement | null;
-}
-
-function canScrollElement(el: HTMLElement, deltaY: number): boolean {
-  const { scrollTop, scrollHeight, clientHeight } = el;
-  if (scrollHeight <= clientHeight + 1) return false;
-  if (deltaY < 0) return scrollTop > 0;
-  return scrollTop + clientHeight < scrollHeight - 1;
-}
-
-function applyWheelScroll(el: HTMLElement, deltaY: number): void {
-  el.scrollTop += deltaY;
-}
-
-/**
- * Bloqueia scroll da página quando há modal aberto.
- * Usa elementFromPoint — touchpad e roda do mouse reportam target incorreto.
- */
-export function lockPageScroll(): void {
-  modalLockCount += 1;
-  if (modalLockCount > 1) return;
-
-  document.documentElement.classList.add('ce-modal-open');
-  document.body.classList.add('ce-modal-open');
-
-  if (wheelTrapHandler) return;
-
-  wheelTrapHandler = (event: WheelEvent) => {
-    if (!hasOpenDialog() && !document.documentElement.classList.contains('ce-modal-open')) {
-      return;
-    }
-
-    const scrollable = findScrollableAtPointer(event);
-    if (scrollable) {
-      if (canScrollElement(scrollable, event.deltaY)) {
-        applyWheelScroll(scrollable, event.deltaY);
-      }
-      event.preventDefault();
-      return;
-    }
-
-    if (isPointerOverOverlayUi(event)) {
-      event.preventDefault();
-      return;
-    }
-
-    event.preventDefault();
-  };
-
-  document.addEventListener('wheel', wheelTrapHandler, { passive: false, capture: true });
-}
-
-export function unlockPageScroll(): void {
-  modalLockCount = Math.max(0, modalLockCount - 1);
-  if (modalLockCount > 0) return;
-
-  if (wheelTrapHandler) {
-    document.removeEventListener('wheel', wheelTrapHandler, { capture: true });
-    wheelTrapHandler = null;
-  }
-
-  document.documentElement.classList.remove('ce-modal-open');
-  document.body.classList.remove('ce-modal-open');
-}
-
-function syncModalScrollLock(): void {
-  if (hasOpenDialog()) {
-    if (modalLockCount === 0) {
-      lockPageScroll();
-    }
-    return;
-  }
-  if (modalLockCount > 0) {
-    modalLockCount = 0;
-    unlockPageScroll();
-  }
-}
-
+/** Evita que clique no mat-select dispare handlers do modal por baixo. */
 function bindOverlayPanelPointerShield(el: HTMLElement): void {
   if (el.dataset['cePointerShield']) return;
   el.dataset['cePointerShield'] = '1';
@@ -122,15 +24,47 @@ function bindOverlayPanelPointerShield(el: HTMLElement): void {
   el.addEventListener('mousedown', stop, true);
 }
 
+/** Roda do mouse nos painéis mat-select (block() do dialog não os cobre). */
+function bindOverlayPanelWheel(el: HTMLElement): void {
+  if (el.dataset['ceWheelBound']) return;
+  el.dataset['ceWheelBound'] = '1';
+
+  const scrollTarget = (): HTMLElement => {
+    const list = el.querySelector('.mdc-list') as HTMLElement | null;
+    if (list && list.scrollHeight > list.clientHeight + 1) return list;
+    return el;
+  };
+
+  el.addEventListener(
+    'wheel',
+    (event: WheelEvent) => {
+      const target = scrollTarget();
+      const { scrollTop, scrollHeight, clientHeight } = target;
+      if (scrollHeight <= clientHeight + 1) return;
+      target.scrollTop = Math.min(
+        scrollHeight - clientHeight,
+        Math.max(0, scrollTop + event.deltaY)
+      );
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    { passive: false }
+  );
+}
+
 function scanOverlayPanels(root: ParentNode): void {
   if (!(root instanceof HTMLElement || root instanceof DocumentFragment)) return;
 
   if (root instanceof HTMLElement && root.matches(OVERLAY_PANEL_SELECTORS)) {
     bindOverlayPanelPointerShield(root);
+    bindOverlayPanelWheel(root);
   }
 
   root.querySelectorAll?.(OVERLAY_PANEL_SELECTORS).forEach((node) => {
-    if (node instanceof HTMLElement) bindOverlayPanelPointerShield(node);
+    if (node instanceof HTMLElement) {
+      bindOverlayPanelPointerShield(node);
+      bindOverlayPanelWheel(node);
+    }
   });
 }
 
@@ -142,24 +76,13 @@ export function provideCeOverlayScrollSupport(): EnvironmentProviders {
 
     overlayObserver = new MutationObserver(() => {
       ngZone.run(() => {
-        syncModalScrollLock();
+        syncModalOpenClass();
+        scanOverlayPanels(container);
       });
     });
 
     overlayObserver.observe(container, { childList: true, subtree: true });
-
-    const panelObserver = new MutationObserver((records) => {
-      ngZone.run(() => {
-        records.forEach((record) => {
-          record.addedNodes.forEach((node) => {
-            if (node instanceof HTMLElement) scanOverlayPanels(node);
-          });
-        });
-      });
-    });
-
-    panelObserver.observe(container, { childList: true, subtree: true });
+    syncModalOpenClass();
     scanOverlayPanels(container);
-    syncModalScrollLock();
   });
 }

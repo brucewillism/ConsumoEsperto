@@ -16,66 +16,11 @@ function stabilizeFormFields(): void {
   });
 }
 
-function getDialogContainerForRef<T>(ref: MatDialogRef<T, unknown>): HTMLElement | null {
-  const containers = document.querySelectorAll<HTMLElement>(
-    '.cdk-overlay-container .mat-mdc-dialog-container'
-  );
-  return containers.length ? containers[containers.length - 1] : null;
-}
-
-function isBackdropClick(event: MouseEvent, backdrop: HTMLElement, dialog: HTMLElement | null): boolean {
-  if (event.target !== backdrop) return false;
-  if (!dialog) return true;
-
-  const rect = dialog.getBoundingClientRect();
-  const gutter = 24;
-  const { clientX: x, clientY: y } = event;
-  return !(
-    x >= rect.left - gutter &&
-    x <= rect.right + gutter &&
-    y >= rect.top - gutter &&
-    y <= rect.bottom + gutter
-  );
-}
-
-/**
- * Fecha ao clicar no backdrop — usa click (não pointerdown) e ignora a zona do dialog + scrollbar.
- */
-export function wireCeDialogBackdropClose<T, R = unknown>(
-  ref: MatDialogRef<T, R>,
-  onBackdrop?: () => R | void
-): void {
-  ref.afterOpened().subscribe(() => {
-    const backdrops = document.querySelectorAll<HTMLElement>(
-      '.cdk-overlay-backdrop.cdk-overlay-backdrop-showing'
-    );
-    const backdrop = backdrops.length ? backdrops[backdrops.length - 1] : null;
-    if (!backdrop) return;
-
-    const dialog = getDialogContainerForRef(ref);
-
-    const onClick = (event: MouseEvent): void => {
-      if (!isBackdropClick(event, backdrop, dialog)) return;
-
-      if (onBackdrop) {
-        const result = onBackdrop();
-        ref.close(result as R);
-      } else {
-        ref.close();
-      }
-    };
-
-    backdrop.addEventListener('click', onClick);
-    ref.afterClosed().subscribe(() => backdrop.removeEventListener('click', onClick));
-  });
-}
-
-/** Fechamento seguro no backdrop + estabilização de form fields. Scroll lock é global (overlay observer). */
+/** Estabilização de form fields. Fecho só pelos botões (disableClose: true). */
 export function wireCeDialogBehavior<T, R = unknown>(
   ref: MatDialogRef<T, R>,
-  onBackdrop?: () => R | void
+  _onBackdrop?: () => R | void
 ): void {
-  wireCeDialogBackdropClose(ref, onBackdrop);
   ref.afterOpened().subscribe(() => stabilizeFormFields());
 }
 

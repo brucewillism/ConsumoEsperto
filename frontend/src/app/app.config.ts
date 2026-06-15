@@ -82,14 +82,14 @@ export const appConfig: ApplicationConfig = {
       }
     },
 
-    // noop: o bloqueio de scroll da página fica em provideCeOverlayScrollSupport (sem position:fixed)
+    // block: CDK bloqueia scroll da página mas permite rolar dentro de cdkScrollable
     {
       provide: MAT_DIALOG_DEFAULT_OPTIONS,
       deps: [Overlay],
       useFactory: (overlay: Overlay) => ({
         maxHeight: '90vh',
         disableClose: true,
-        scrollStrategy: overlay.scrollStrategies.noop(),
+        scrollStrategy: overlay.scrollStrategies.block(),
       }),
     },
 

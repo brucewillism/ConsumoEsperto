@@ -631,14 +631,27 @@ a {
 /* Overlay Material acima da sidebar fixa (1005) e do header (1100) */
 .cdk-overlay-container {
   z-index: 1300 !important;
+  pointer-events: none;
+}
+
+.cdk-global-overlay-wrapper {
+  pointer-events: none;
 }
 
 .cdk-overlay-backdrop.cdk-overlay-backdrop-showing {
   z-index: 1300 !important;
+  pointer-events: auto;
 }
 
-.cdk-overlay-pane.mat-mdc-dialog-panel {
+.cdk-overlay-pane.mat-mdc-dialog-panel,
+.cdk-overlay-pane:has(.mat-mdc-dialog-container),
+.cdk-overlay-pane.fatura-transacoes-dialog,
+.cdk-overlay-pane.pagamento-fatura-dialog,
+.cdk-overlay-pane.transferencia-dialog,
+.cdk-overlay-pane.jarvis-confirm-dialog,
+.cdk-overlay-pane.ce-form-dialog {
   z-index: 1301 !important;
+  pointer-events: auto !important;
   max-width: 96vw !important;
 }
 
@@ -1335,13 +1348,7 @@ app-root {
   min-height: 100dvh;
 }
 
-html.ce-modal-open,
-html.ce-modal-open body,
-html.ce-modal-open app-root,
-html.ce-modal-open .app-container,
-html.ce-modal-open .main-content,
-html.ce-modal-open .page-content,
-html.ce-modal-open .sidebar-nav {
+html.ce-modal-open body {
   overflow: hidden !important;
   overscroll-behavior: none;
 }
