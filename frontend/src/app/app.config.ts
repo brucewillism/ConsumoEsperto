@@ -82,14 +82,14 @@ export const appConfig: ApplicationConfig = {
       }
     },
 
-    // block: CDK bloqueia scroll da página mas permite rolar dentro de cdkScrollable
+    // noop: scroll da página bloqueado via classe ce-modal-open; cliques ficam com o Material
     {
       provide: MAT_DIALOG_DEFAULT_OPTIONS,
       deps: [Overlay],
       useFactory: (overlay: Overlay) => ({
         maxHeight: '90vh',
         disableClose: true,
-        scrollStrategy: overlay.scrollStrategies.block(),
+        scrollStrategy: overlay.scrollStrategies.noop(),
       }),
     },
 
