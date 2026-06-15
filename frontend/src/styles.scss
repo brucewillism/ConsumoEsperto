@@ -707,6 +707,7 @@ a {
   max-height: min(62vh, calc(90vh - 140px)) !important;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   color: var(--text-secondary);
   scrollbar-gutter: stable;
   padding-right: 8px !important;
@@ -1077,6 +1078,7 @@ a {
   overflow-y: auto !important;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   pointer-events: auto;
 
   .mdc-menu-surface,
@@ -1461,6 +1463,7 @@ html.ce-modal-open .sidebar-nav {
     padding-right: 12px;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
     scrollbar-gutter: stable;
     pointer-events: auto;
   }

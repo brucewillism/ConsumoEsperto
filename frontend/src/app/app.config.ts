@@ -82,7 +82,7 @@ export const appConfig: ApplicationConfig = {
       }
     },
 
-    // Evita cdk-global-scrollblock conflitar com o scroll lock manual dos modais
+    // noop: o bloqueio de scroll da página fica em provideCeOverlayScrollSupport (sem position:fixed)
     {
       provide: MAT_DIALOG_DEFAULT_OPTIONS,
       deps: [Overlay],
