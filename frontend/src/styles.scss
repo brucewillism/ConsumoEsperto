@@ -628,18 +628,14 @@ a {
   color: var(--text-primary);
 }
 
-/* Overlay Material acima da sidebar fixa (1005) e do header (1100) */
+/* Overlay CDK — acima do shell-loading (10050), header (1100) e sidebar (1005).
+   pointer-events: container/wrapper none + pane/backdrop auto vêm do overlay-prebuilt.css */
 .cdk-overlay-container {
-  z-index: 1300 !important;
+  z-index: 10150 !important;
 }
 
-.cdk-overlay-backdrop.cdk-overlay-backdrop-showing {
-  z-index: 1300 !important;
-}
-
-/* Todos os painéis (dialog, select, datepicker) acima do backdrop */
-.cdk-overlay-pane {
-  z-index: 1301 !important;
+.cdk-overlay-pane.mat-mdc-dialog-panel,
+.cdk-overlay-pane:has(.mat-mdc-dialog-container) {
   max-width: 96vw !important;
 }
 
@@ -1061,10 +1057,9 @@ a {
   font-size: 0.8125rem;
 }
 
-/* Painéis de mat-select — acima do dialog (1301) para clique e scroll funcionarem */
+/* Painéis flutuantes acima dos dialogs */
 .cdk-overlay-pane:has(.mat-mdc-select-panel) {
-  z-index: 2000 !important;
-  pointer-events: auto !important;
+  z-index: 10160 !important;
 }
 
 .mat-mdc-select-panel,
@@ -1107,7 +1102,7 @@ a {
 /* Datepicker / calendário Material — tema escuro + legível */
 .cdk-overlay-pane:has(.mat-datepicker-content),
 .cdk-overlay-pane:has(.mat-calendar) {
-  z-index: 2000 !important;
+  z-index: 10160 !important;
 }
 
 .mat-datepicker-content,
@@ -1148,7 +1143,7 @@ a {
 
 /* Menus de contexto Material */
 .cdk-overlay-pane:has(.mat-mdc-menu-panel) {
-  z-index: 4000 !important;
+  z-index: 10170 !important;
 }
 
 .mat-mdc-menu-panel,
@@ -1341,6 +1336,12 @@ html.ce-modal-open body {
   overscroll-behavior: none;
 }
 
+/* Loading global não pode ficar por cima do dialog (z-index 10050 vs overlay 10150) */
+html.ce-modal-open .shell-loading-layer {
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
 /* ——— Mobile-first (< 768px) ——— */
 @media (max-width: 767px) {
   body.jarvis-chat-open-mobile {
@@ -1395,11 +1396,10 @@ html.ce-modal-open body {
   }
 }
 
-/* Modal de transações da fatura — superfície opaca, scroll no corpo, cliques não vazam */
+/* Modal de transações da fatura — superfície opaca, scroll no corpo */
 .cdk-overlay-pane.fatura-transacoes-dialog {
   width: min(920px, 94vw) !important;
   max-width: 94vw !important;
-  pointer-events: auto !important;
 
   .mat-mdc-dialog-container {
     --mdc-dialog-container-color: var(--exec-surface);
@@ -1408,7 +1408,6 @@ html.ce-modal-open body {
     max-height: 90vh;
     overflow: hidden;
     background: var(--exec-surface) !important;
-    pointer-events: auto !important;
   }
 
   .mat-mdc-dialog-surface,
@@ -1428,7 +1427,6 @@ html.ce-modal-open body {
       0 0 0 1px rgba(0, 229, 255, 0.12),
       0 18px 48px rgba(0, 0, 0, 0.65) !important;
     opacity: 1 !important;
-    pointer-events: auto !important;
   }
 
   .transacoes-modal {
@@ -1439,7 +1437,6 @@ html.ce-modal-open body {
     min-height: 0;
     max-height: 90vh;
     overflow: hidden;
-    pointer-events: auto;
   }
 
   .transacoes-modal-body {
@@ -1449,7 +1446,6 @@ html.ce-modal-open body {
     min-height: 0;
     overflow: hidden;
     padding: 12px 8px 20px 20px;
-    pointer-events: auto;
   }
 
   .transacoes-modal-scroll.ce-dialog-scroll {
@@ -1463,7 +1459,6 @@ html.ce-modal-open body {
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
     scrollbar-gutter: stable;
-    pointer-events: auto;
   }
 
   .sem-transacoes-modal {

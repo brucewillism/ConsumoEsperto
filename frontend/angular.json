@@ -107,7 +107,8 @@
             
             // Arquivos de estilo globais
             "styles": [
-              "src/styles.scss"        // Estilos principais da aplicação
+              "node_modules/@angular/cdk/overlay-prebuilt.css",
+              "src/styles.scss"
             ],
             
             // Scripts JavaScript externos (vazio por padrão)

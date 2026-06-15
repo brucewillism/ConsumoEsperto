@@ -7,7 +7,7 @@ function hasOpenDialog(): boolean {
   return !!document.querySelector('.cdk-overlay-container .mat-mdc-dialog-container');
 }
 
-/** Só bloqueia scroll da página — sem interferir em cliques ou eventos do overlay. */
+/** Marca modal aberto: bloqueia scroll do body e esconde shell-loading por cima do dialog. */
 function syncModalOpenClass(): void {
   document.documentElement.classList.toggle('ce-modal-open', hasOpenDialog());
 }
