@@ -111,6 +111,8 @@ public class WhatsAppCommandService {
 
     private final ConciergeNfceUrlService conciergeNfceUrlService;
 
+    private final JarvisTutorialService jarvisTutorialService;
+
     private final TextToSpeechService textToSpeechService;
 
     private final TransacaoSemanticaIndexService transacaoSemanticaIndexService;
@@ -229,6 +231,19 @@ public class WhatsAppCommandService {
         if (text.isBlank()) {
             return msgErro(userId, "J.A.R.V.I.S.", "Digite uma pergunta ou comando financeiro.");
         }
+
+        Optional<String> tutorial = jarvisTutorialService.tryHandle(userId, text, () ->
+            processJarvisCommandSemTutorial(userId, text, whatsappFrom, evolutionInstanceHint)
+        );
+        if (tutorial.isPresent()) {
+            return tutorial.get();
+        }
+
+        return processJarvisCommandSemTutorial(userId, text, whatsappFrom, evolutionInstanceHint);
+    }
+
+    private String processJarvisCommandSemTutorial(Long userId, String sourceText, String whatsappFrom, String evolutionInstanceHint) {
+        String text = sourceText == null ? "" : sourceText.trim();
 
         Optional<String> pre = executarPreProcessadoresJarvis(userId, text);
         if (pre.isPresent()) {
@@ -1612,6 +1627,9 @@ public class WhatsAppCommandService {
             && !"TOGGLE_SUBSCRIPTION".equals(action)
             && !"CREATE_FIXED_EXPENSE".equals(action)
             && !"CREATE_SUBSCRIPTION".equals(action)
+            && !"START_TUTORIAL".equals(action)
+            && !"STOP_TUTORIAL".equals(action)
+            && !"TUTORIAL_STEP".equals(action)
             && confianca < 0.55d) {
             return msgErro(userId, "Confiança da IA",
                 "Não executei nada. Confiança " + String.format(Locale.US, "%.0f%%", confianca * 100)
@@ -1661,6 +1679,8 @@ public class WhatsAppCommandService {
             case "SETTLE_DEBT" -> handleSettleDebt(cmd, userId, sourceText);
             case "LIST_SUBSCRIPTIONS" -> handleListSubscriptions(userId);
             case "TOGGLE_SUBSCRIPTION" -> handleToggleSubscription(cmd, userId, sourceText);
+            case "START_TUTORIAL", "STOP_TUTORIAL", "TUTORIAL_STEP" ->
+                jarvisTutorialService.responderAcaoTutorial(action, userId, sourceText, () -> "");
             case "GENERATE_REPORT" -> msgInfo("Relatório PDF",
                 "Para receber o PDF aqui no WhatsApp, usa a Evolution ligada a este número. No app: *Relatórios → PDF*.");
             default -> {

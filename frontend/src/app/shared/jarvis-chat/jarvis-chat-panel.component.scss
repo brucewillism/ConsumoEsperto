@@ -106,6 +106,48 @@
   cursor: not-allowed;
 }
 
+.chip-sugestao--tutorial {
+  border: 1px solid #7c3aed;
+  color: #a78bfa;
+  background: rgba(124, 58, 237, 0.1);
+  transition: background 0.2s;
+}
+
+.chip-sugestao--tutorial:hover:not(:disabled),
+.chip-sugestao--tutorial.ativo {
+  background: rgba(124, 58, 237, 0.25);
+  color: #c4b5fd;
+}
+
+.tutorial-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  margin: 0 0.85rem;
+  background: rgba(124, 58, 237, 0.15);
+  border-left: 3px solid #7c3aed;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #c4b5fd;
+  flex-shrink: 0;
+}
+
+.tutorial-fechar {
+  background: none;
+  border: none;
+  color: #a78bfa;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+
+.tutorial-fechar:hover {
+  background: rgba(124, 58, 237, 0.3);
+}
+
 .chat-body {
   display: grid;
   gap: 0.6rem;

@@ -131,7 +131,7 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt, contextoFinanceiro);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|START_TUTORIAL|STOP_TUTORIAL|TUTORIAL_STEP|UNKNOWN), " +
             "contaOrigem (apelido/nome da conta de origem na transferência), contaDestino (apelido/nome da conta de destino na transferência), " +
             "mes (1-12, opcional — consultas de extrato/orçamento), ano (ex.: 2026, opcional), tipo (DESPESA|RECEITA, opcional — filtro de extrato), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
@@ -256,6 +256,10 @@ public class OpenAiService {
             "'salve essa despesa fixa de 250 para internet dia 10'): action CREATE_FIXED_EXPENSE; description = nome; amount = valor; dueDay = dia de vencimento.\n" +
             "- Ativar ou desativar assinatura cadastrada (ex.: 'desative a assinatura da Netflix', 'pause a academia', 'reative o Spotify'): " +
             "action TOGGLE_SUBSCRIPTION; description ou searchPhrase = nome da assinatura; subscriptionActive=false para desativar/pausar, true para ativar.\n" +
+            "- Tutorial interativo opt-in (guia de uso do sistema): action START_TUTORIAL para frases como " +
+            "'tutorial', 'como usar', 'me ensina', 'como funciona', 'guia de uso', 'me explica o sistema', 'ajuda tutorial'.\n" +
+            "- Encerrar tutorial ativo: action STOP_TUTORIAL para 'sair', 'parar', 'desligar', 'cancelar', 'encerrar tutorial', 'chega', 'voltar ao normal'.\n" +
+            "- Navegar capítulo do tutorial (1 a 5) quando o utilizador está no guia: action TUTORIAL_STEP; preencher reportMonth com o número do capítulo (1-5) se útil.\n" +
             "- Se faltar dado essencial, retornar action UNKNOWN com errorMessage explicando o que faltou.\n" +
             "- amount deve ser número decimal sem símbolo de moeda.\n" +
             "- Sempre retornar o campo confianca com valor entre 0 e 1.";

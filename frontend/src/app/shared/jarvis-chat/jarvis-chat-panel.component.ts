@@ -48,6 +48,7 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
   aberto = false;
   mensagem = '';
   carregando = false;
+  tutorialAtivo = false;
   historico: JarvisChatMensagem[] = [];
   readonly sugestoes: JarvisChatSugestao[] = JARVIS_CHAT_SUGESTOES;
 
@@ -91,6 +92,18 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
     this.enviar();
   }
 
+  enviarComandoTutorial(): void {
+    if (this.carregando) return;
+    this.tutorialAtivo = true;
+    this.enviarMensagemDireta('tutorial');
+  }
+
+  encerrarTutorial(): void {
+    if (this.carregando) return;
+    this.enviarMensagemDireta('sair');
+    this.tutorialAtivo = false;
+  }
+
   onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -101,19 +114,23 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
   enviar(): void {
     const texto = normalizarMensagemChat(this.mensagem);
     if (!texto || this.carregando) return;
+    this.mensagem = '';
+    this.enviarMensagemDireta(texto);
+  }
+
+  private enviarMensagemDireta(texto: string): void {
+    if (!texto || this.carregando) return;
 
     this.historico.push({ autor: 'user', texto });
-    this.mensagem = '';
     this.carregando = true;
     this.rolarParaFim();
 
     this.iaChatService.perguntar(texto).subscribe({
       next: (res) => {
         const voc = vocativoJarvis(this.usuario);
-        this.historico.push({
-          autor: 'ia',
-          texto: res.resposta?.trim() || mensagemRespostaVaziaJarvis(voc),
-        });
+        const resposta = res.resposta?.trim() || mensagemRespostaVaziaJarvis(voc);
+        this.processarRespostaJarvis(resposta);
+        this.historico.push({ autor: 'ia', texto: resposta });
         this.carregando = false;
         this.consultaConcluida.emit();
         this.rolarParaFim();
@@ -124,6 +141,18 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
         this.rolarParaFim();
       },
     });
+  }
+
+  private processarRespostaJarvis(resposta: string): void {
+    if (
+      resposta.includes('Voltei para o modo de operação padrão') ||
+      resposta.includes('Tutorial encerrado')
+    ) {
+      this.tutorialAtivo = false;
+    }
+    if (resposta.includes('GUIA DE OPERAÇÕES — J.A.R.V.I.S.')) {
+      this.tutorialAtivo = true;
+    }
   }
 
   get mensagemDigitando(): string {
