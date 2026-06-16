@@ -1679,7 +1679,9 @@ public class WhatsAppCommandService {
             case "SETTLE_DEBT" -> handleSettleDebt(cmd, userId, sourceText);
             case "LIST_SUBSCRIPTIONS" -> handleListSubscriptions(userId);
             case "TOGGLE_SUBSCRIPTION" -> handleToggleSubscription(cmd, userId, sourceText);
-            case "START_TUTORIAL", "STOP_TUTORIAL", "TUTORIAL_STEP" ->
+            case "START_TUTORIAL" -> jarvisTutorialService.iniciarTutorial(
+                userId, sourceText, cmd.path("reportMonth").asInt(0));
+            case "STOP_TUTORIAL", "TUTORIAL_STEP" ->
                 jarvisTutorialService.responderAcaoTutorial(action, userId, sourceText, () -> "");
             case "GENERATE_REPORT" -> msgInfo("Relatório PDF",
                 "Para receber o PDF aqui no WhatsApp, usa a Evolution ligada a este número. No app: *Relatórios → PDF*.");

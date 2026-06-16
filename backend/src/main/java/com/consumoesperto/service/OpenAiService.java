@@ -257,7 +257,11 @@ public class OpenAiService {
             "- Ativar ou desativar assinatura cadastrada (ex.: 'desative a assinatura da Netflix', 'pause a academia', 'reative o Spotify'): " +
             "action TOGGLE_SUBSCRIPTION; description ou searchPhrase = nome da assinatura; subscriptionActive=false para desativar/pausar, true para ativar.\n" +
             "- Tutorial interativo opt-in (guia de uso do sistema): action START_TUTORIAL para frases como " +
-            "'tutorial', 'como usar', 'me ensina', 'como funciona', 'guia de uso', 'me explica o sistema', 'ajuda tutorial'.\n" +
+            "'tutorial', 'como usar', 'me ensina a usar o sistema', 'como funciona isso aqui', 'ajuda', 'help', 'nao sei usar'.\n" +
+            "- START_TUTORIAL também quando o utilizador perguntar sobre uma aba/tela específica — preencha reportMonth com o capítulo (1-5) e entregue o capítulo direto, sem menu:\n" +
+            "  'como uso a aba de contas?' → reportMonth=1 · 'me explica a tela de renda' → reportMonth=4 · " +
+            "'o que e a aba de metas?' → reportMonth=5 · 'nao entendo a aba de cartoes' → reportMonth=3 · " +
+            "'como funciona a aba de transacoes?' → reportMonth=2.\n" +
             "- Encerrar tutorial ativo: action STOP_TUTORIAL para 'sair', 'parar', 'desligar', 'cancelar', 'encerrar tutorial', 'chega', 'voltar ao normal'.\n" +
             "- Navegar capítulo do tutorial (1 a 5) quando o utilizador está no guia: action TUTORIAL_STEP; preencher reportMonth com o número do capítulo (1-5) se útil.\n" +
             "- Se faltar dado essencial, retornar action UNKNOWN com errorMessage explicando o que faltou.\n" +
