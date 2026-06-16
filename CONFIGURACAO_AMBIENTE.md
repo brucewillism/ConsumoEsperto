@@ -8,6 +8,8 @@ Guia curto para subir o projeto localmente. O fluxo padrao e:
 
 (Valores em `scripts/stack-ports.ps1`; escolhidos para reduzir choque com Apache/PHP noutras portas comuns.)
 
+Documentacao relacionada: [`README.md`](README.md) · [`docs/WHATSAPP_EVOLUTION.md`](docs/WHATSAPP_EVOLUTION.md) · [`docs/FRONTEND_OVERLAY_MODAIS.md`](docs/FRONTEND_OVERLAY_MODAIS.md)
+
 ## Requisitos
 
 - JDK 17 em `tools\java\ms-17.0.15` ou outra pasta dentro de `tools\java`
@@ -16,7 +18,7 @@ Guia curto para subir o projeto localmente. O fluxo padrao e:
 - PostgreSQL local acessivel pelo backend e pela Evolution
 - Evolution API clonada em `tools\evolution-api` ou caminho definido em `EVOLUTION_DIR`
 
-Os scripts `.bat` configuram `JAVA_HOME` e `PATH` apenas na sessao aberta, sem alterar variaveis globais do Windows.
+Os scripts PowerShell configuram `JAVA_HOME` e `PATH` apenas na sessao aberta, sem alterar variaveis globais do Windows.
 
 ## Primeira Configuracao
 
@@ -52,6 +54,13 @@ O script `scripts\sincronizar-evolution-env.ps1` alinha o `.env` da Evolution co
 - `DATABASE_CONNECTION_URI` para o banco da Evolution
 - `AUTHENTICATION_API_KEY` compartilhada com o backend
 
+Arranque da Evolution:
+
+```powershell
+cd tools\evolution-api
+npm run start:prod
+```
+
 ### Backend: URL e API key da Evolution (pareamento pelo app)
 
 Quem faz pedidos `GET /instance/connect/...` e `GET /instance/connectionState/...` ao abrir **WhatsApp → Vincular número** e no modal do QR é o **backend Spring**. O browser do utilizador nunca recebe a chave mestra da Evolution.
@@ -79,6 +88,15 @@ Fluxo no frontend **WhatsApp**:
 
 **Nota:** Se varios utilizadores partilharem **a mesma** instancia Evolution, estado de pareamento (`connected`) e um unico numero WhatsApp Evolution sao globais dessa instancia; o numero **vinculado no perfil** do app continua a servir para identificar o tenant nas mensagens.
 
+### Privacidade WhatsApp (notificacoes no telemovel)
+
+Recomendado no `.env` (ver comentarios em `.env.example` e [`docs/WHATSAPP_EVOLUTION.md`](docs/WHATSAPP_EVOLUTION.md)):
+
+- `EVOLUTION_ALWAYS_ONLINE=false`
+- `EVOLUTION_READ_MESSAGES=false`
+- `EVOLUTION_PRIVACY_SET_UNAVAILABLE=true`
+- `EVOLUTION_SESSION_STICKY=true`
+
 ### Postgres: memória semântica Jarvis (`memoria_semantica_jarvis`)
 
 O dashboard e o sentinela leem esta tabela; **sem ela**, podem aparecer erros ao processar WhatsApp/projecções (`relation "memoria_semantica_jarvis" does not exist`). No arranque, `SchemaAutoPatchService` tenta `CREATE EXTENSION vector` e recria DDL idempotente: **se pgvector não estiver instalado** (Postgres Alpine “pelo menos”), criamos a mesma tabela com coluna **`embedding BYTEA`** — memória textual e listagens funcionam; **busca por similaridade com operador `<=>`** fica sem efeito até activar pgvector.
@@ -91,24 +109,33 @@ Enquanto a tabela não existir, alguns métodos (`CerebroSemanticoService`) devo
 
 ## Como Subir
 
-Para subir a stack completa:
+### Opcao A — tres terminais (recomendado)
 
-```cmd
-subir-servicos.bat
+```powershell
+# Terminal 1 — Evolution
+cd tools\evolution-api
+npm run start:prod
+
+# Terminal 2 — Backend
+.\scripts\run-backend-dev-evolution.ps1
+
+# Terminal 3 — Frontend
+cd frontend
+npm start
 ```
 
-Para subir cada parte separadamente:
+### Opcao B — script unico
 
-```cmd
-rodar-evolution.bat
-rodar-backend-evolution.bat
-rodar-frontend.bat
+```powershell
+.\scripts\subir-stack.ps1
 ```
 
-Para parar:
+Abre tres janelas CMD. Se na raiz do projeto existirem wrappers `rodar-evolution.bat`, `rodar-backend-evolution.bat` e `rodar-frontend.bat`, o script usa-os; caso contrario, use a **Opcao A**.
 
-```cmd
-parar-servicos.bat
+### Parar tudo
+
+```powershell
+.\scripts\parar-servicos.ps1
 ```
 
 ## Compilacao do Backend
@@ -119,23 +146,19 @@ Use sempre o Java da pasta `tools`:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mvn-backend.ps1 -DskipTests compile
 ```
 
-Para executar o backend com a Evolution:
-
-```cmd
-rodar-backend-evolution.bat
-```
-
 ## Verificacoes Rapidas
 
 - Evolution: `http://localhost:18080/health`
 - Backend: `http://localhost:18081/actuator/health`
 - Frontend: `http://localhost:14200`
 - Webhook da Evolution para o Spring: `http://localhost:18081/api/public/evolution/webhook`
+- Teste HTTP: [`test-webhook-local.http`](test-webhook-local.http) (`@baseUrl` = **18081**)
 
 ## Problemas Comuns
 
 - `Nenhum JDK em tools\java`: instale/descompacte um JDK 17 dentro de `tools\java`.
 - `Node.js nao encontrado`: instale Node.js ou coloque `node.exe` em `tools\node`.
 - `Build nao encontrado (dist\main.js)`: rode `npm install` e `npm run build` em `tools\evolution-api`.
-- `Porta 18081 ja esta em uso`: execute `parar-servicos.bat` ou encerre o processo que esta usando a porta.
+- `Porta 18081 ja esta em uso`: execute `.\scripts\parar-servicos.ps1` ou encerre o processo que esta usando a porta.
 - Erro de banco: confirme PostgreSQL, credenciais e se os bancos `consumoesperto` e `evolution_api` existem.
+- Modais sem clique/scroll: ver [`docs/FRONTEND_OVERLAY_MODAIS.md`](docs/FRONTEND_OVERLAY_MODAIS.md) — confirmar `overlay-prebuilt.css` em `angular.json`.

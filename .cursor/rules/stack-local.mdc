@@ -6,22 +6,29 @@ description: Como subir o ConsumoEsperto em desenvolvimento local
 
 Portas padrão da stack (evitar choque com Apache/PHP ou outros serviços em 8080/8081/4200): ver **`scripts/stack-ports.ps1`** — **Evolution 18080**, **Spring 18081**, **Angular 14200**, **Ngrok API local 14040**.
 
+Documentação: [`CONFIGURACAO_AMBIENTE.md`](../../CONFIGURACAO_AMBIENTE.md) · [`docs/WHATSAPP_EVOLUTION.md`](../../docs/WHATSAPP_EVOLUTION.md)
+
 Ao subir para desenvolvimento/testes, usar **toda** a stack:
 
-1. **Evolution API** — **Node.js**: clone em `tools/evolution-api` (ou `EVOLUTION_DIR`), configurar `.env`, `npm run build` / `start:prod` conforme repo oficial; **`rodar-evolution.bat`** na raiz. Porta típica **18080**.
+1. **Evolution API** — **Node.js**: clone em `tools/evolution-api` (ou `EVOLUTION_DIR`), configurar `.env`, `npm run build` / `npm run start:prod` conforme repo oficial. Porta **18080**.
    - Webhook → Spring (backend **18081**): `http://localhost:18081/api/public/evolution/webhook`.
+   - Sincronizar `.env`: `scripts/sincronizar-evolution-env.ps1`
 
-2. **Backend** — Java **sempre** de `tools/java/*` e Maven de `tools/maven`; perfil **`dev-evolution`**, porta **18081** (`rodar-backend-evolution.bat` ou `subir-servicos.bat`).
+2. **Backend** — Java **sempre** de `tools/java/*` e Maven de `tools/maven`; perfil **`dev-evolution`**, porta **18081**:
+   - `scripts/run-backend-dev-evolution.ps1`
+   - Compilar: `scripts/mvn-backend.ps1 -DskipTests compile`
 
-3. **Frontend** — `rodar-frontend.bat` ou `npm start` em `frontend` (porta **14200**; `apiUrl` → **18081**).
+3. **Frontend** — `npm start` em `frontend` (porta **14200**; verificar `apiUrl` em `environment.ts`).
 
-**`scripts/subir-stack.ps1`** **sempre** inicia a Evolution em Node (clone Git em `tools/evolution-api` se preciso, `npm install`/`build`, `rodar-evolution.bat`). Sem Git+Node, o script **aborta** — back e front não sobem sozinhos.
+**`scripts/subir-stack.ps1`** tenta iniciar Evolution + backend + frontend em janelas CMD. Sem Git+Node para Evolution, o script **aborta**.
 
-Encerrar: **`scripts/parar-servicos.ps1`** na raiz do repositório (portas da stack + processos Node da Evolution + Spring/ng ligados ao repo).
+Encerrar: **`scripts/parar-servicos.ps1`** (portas da stack + processos Node da Evolution + Spring/ng ligados ao repo).
 
-Subir de novo: **`scripts/subir-stack.ps1`** (Evolution em Node + backend + frontend). Sem Git/Node para Evolution, o script aborta.
+Não alterar variáveis de ambiente globais do Windows para JDK; os scripts PowerShell fixam `JAVA_HOME` só na sessão.
 
-Não alterar variáveis de ambiente globais do Windows para JDK; usar os `.bat` que fixam `JAVA_HOME` só na sessão (quando existirem na sua cópia do projeto).
+## Frontend — modais
+
+Modais Material exigem `@angular/cdk/overlay-prebuilt.css` em `angular.json` e z-index do overlay acima de `.shell-loading-layer`. Ver [`docs/FRONTEND_OVERLAY_MODAIS.md`](../../docs/FRONTEND_OVERLAY_MODAIS.md).
 
 ## Persona J.A.R.V.I.S. no WhatsApp
 

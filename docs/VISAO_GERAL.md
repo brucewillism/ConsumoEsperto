@@ -2,7 +2,7 @@
 
 Documento de referência do que o produto faz hoje: arquitetura, telas, APIs, WhatsApp (J.A.R.V.I.S.) e deploy.
 
-**Última revisão:** maio/2026 · **Fonte viva do catálogo de funcionalidades:** `WhatsAppAppParityService.java` e `GET /api/whatsapp/paridade`.
+**Última revisão:** junho/2026 · **Fonte viva do catálogo de funcionalidades:** `WhatsAppAppParityService.java` e `GET /api/whatsapp/paridade`.
 
 ---
 
@@ -80,7 +80,9 @@ Produção típica: `https://consumoesperto.brucew07.com.br` (proxy reverso → 
 | Backend | **18081** | idem |
 | Frontend | **14200** | idem |
 
-Scripts: `subir-servicos.bat`, `rodar-evolution.bat`, `rodar-backend-evolution.bat`, `rodar-frontend.bat`.
+Scripts PowerShell: `scripts/subir-stack.ps1` (stack completa), `scripts/run-backend-dev-evolution.ps1`, `scripts/parar-servicos.ps1`.  
+Evolution Node: `npm run start:prod` em `tools/evolution-api` · Frontend: `npm start` em `frontend` (porta **14200**).  
+Detalhes: [`CONFIGURACAO_AMBIENTE.md`](../CONFIGURACAO_AMBIENTE.md).
 
 ---
 
@@ -105,7 +107,8 @@ Definidas em `frontend/src/app/app.routes.ts`.
 | `/investimentos` | Sugestões de investimento (Selic, IPCA, etc.) |
 | `/perfil` | Dados pessoais, despesas fixas, Google Calendar, tratamento J.A.R.V.I.S. |
 | `/whatsapp-config` | Vincular número, QR Evolution, **catálogo app ↔ WhatsApp** |
-| `/familia` | Grupo familiar |
+| `/familia` | Grupo familiar, convites, orçamentos partilhados, balanço racha-contas — ver [`MODULO_FAMILIA.md`](MODULO_FAMILIA.md) |
+| `/assinaturas` | Assinaturas e despesas recorrentes (Netflix, Spotify, etc.) |
 | `/score` | Pontuação e nível |
 | `/login`, `/register` | Autenticação |
 
@@ -193,7 +196,8 @@ Legenda de canais no catálogo:
 
 - Vincular WhatsApp / QR Evolution
 - Score e nível
-- Família (grupo)
+- Família (grupo, convites, orçamentos partilhados) — [`MODULO_FAMILIA.md`](MODULO_FAMILIA.md)
+- Assinaturas recorrentes (`/assinaturas`)
 
 **Ver catálogo completo:** app → **WhatsApp** → «O que fazer em cada tela», ou API `GET /api/whatsapp/paridade`.
 
@@ -283,6 +287,7 @@ Base: `/api` (autenticado com JWT, exceto rotas `/api/public/*` e `/api/auth/*`)
 | `/api/compras-parceladas` | Parcelamentos |
 | `/api/score` | Pontuação |
 | `/api/familia` | Grupo familiar |
+| `/api/assinaturas` | Assinaturas e despesas recorrentes |
 | `/api/notificacoes` | Inbox / push |
 | `/api/ia-chat` | Chat IA (motor JARVIS) |
 | `/api/config` | Chaves de IA por utilizador |
@@ -325,14 +330,24 @@ Configuração: `.env` / variáveis no `docker-compose.yml` · por utilizador: `
 
 ---
 
-## 10. Score e gamificação
+## 10. Frontend — modais e overlay
+
+Diálogos Angular Material (`MatDialog`) dependem do CSS **`@angular/cdk/overlay-prebuilt.css`** (incluído em `angular.json`), z-index do overlay acima da camada de loading global (`.shell-loading-layer`) e da classe `ce-modal-open` no `<html>` para bloquear scroll da página.
+
+**Não** adicionar hacks manuais de `pointer-events` ou wheel trap sem este CSS — causa regressões de clique em todas as telas.
+
+Guia completo: [`FRONTEND_OVERLAY_MODAIS.md`](FRONTEND_OVERLAY_MODAIS.md).
+
+---
+
+## 11. Score e gamificação
 
 Eventos (importação consistente, orçamento no verde, etc.) alimentam **`ScoreService`**.  
 Visível em `/score` e no dashboard. **Não** exposto no WhatsApp.
 
 ---
 
-## 11. Deploy na VPS
+## 12. Deploy na VPS
 
 ```bash
 cd /opt/consumoesperto
@@ -355,19 +370,24 @@ Mais detalhes e troubleshooting: [`docker/README.md`](../docker/README.md), [`do
 
 ---
 
-## 12. Outros documentos do repositório
+## 13. Outros documentos do repositório
 
 | Ficheiro | Conteúdo |
 |----------|----------|
+| [`README.md`](../README.md) | Entrada do repositório |
+| [`docs/INDICE.md`](INDICE.md) | Índice de toda a documentação |
 | [`CONFIGURACAO_AMBIENTE.md`](../CONFIGURACAO_AMBIENTE.md) | Setup local Windows, Evolution, Postgres, webhook |
 | [`docker/README.md`](../docker/README.md) | Docker Compose produção, portas, Flyway, Ollama |
+| [`docs/MODULO_FAMILIA.md`](MODULO_FAMILIA.md) | Grupo familiar e partilha |
+| [`docs/FRONTEND_OVERLAY_MODAIS.md`](FRONTEND_OVERLAY_MODAIS.md) | Modais e overlay CDK |
+| [`docs/WHATSAPP_EVOLUTION.md`](WHATSAPP_EVOLUTION.md) | Evolution: QR, privacidade, sessão |
 | [`.env.example`](../.env.example) | Variáveis de ambiente comentadas |
 | [`.cursor/rules/stack-local.mdc`](../.cursor/rules/stack-local.mdc) | Regra para agentes: stack local |
 | **`docs/VISAO_GERAL.md`** (este ficheiro) | Visão de produto e arquitetura |
 
 ---
 
-## 13. Como manter este documento
+## 14. Como manter este documento
 
 1. **Novas funcionalidades visíveis ao utilizador** → atualizar `WhatsAppAppParityService.CATALOGO` (fonte da verdade) e, se relevante, esta secção 6 ou 7.
 2. **Novas rotas Angular** → secção 4 (`app.routes.ts`).
