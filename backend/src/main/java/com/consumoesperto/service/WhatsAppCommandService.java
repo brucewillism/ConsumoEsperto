@@ -161,6 +161,7 @@ public class WhatsAppCommandService {
     private static final long FATURA_PDF_PENDENTE_TTL_MS = 45L * 60L * 1000L;
     private final Map<Long, Long> awaitingContrachequeImportConfirm = new ConcurrentHashMap<>();
     private final Map<Long, PendingDespesaFixaDraft> awaitingDespesaFixaDia = new ConcurrentHashMap<>();
+    private final Map<Long, PendingAmbiguidadeTransferencia> awaitingAmbiguidadeTransferencia = new ConcurrentHashMap<>();
 
     /** “Jarvis, anote isso: …” — grava memória semântica financeira. */
     private static final Pattern JARVIS_ANOTE_ISSO = Pattern.compile(
@@ -259,6 +260,10 @@ public class WhatsAppCommandService {
     }
 
     private Optional<String> executarPreProcessadoresJarvis(Long userId, String text) {
+        Optional<String> ambiguidade = tryResolveAmbiguidadeTransferencia(userId, text);
+        if (ambiguidade.isPresent()) {
+            return ambiguidade;
+        }
         Optional<String> agendamento = tryResolveAgendamentoConfirmacao(userId, text);
         if (agendamento.isPresent()) {
             return agendamento;
@@ -497,6 +502,9 @@ public class WhatsAppCommandService {
             && (n.contains("conta") || n.contains("contas") || n.contains("banco") || n.contains("bancos"))) {
             return true;
         }
+        if (n.matches(".*saldo\\s+(do|da|de)\\s+.+")) {
+            return true;
+        }
         if ((n.contains("lista") || n.contains("listar") || n.contains("mostre") || n.contains("mostra")
             || n.contains("quais")) && (n.contains("conta") || n.contains("contas"))) {
             return true;
@@ -522,10 +530,69 @@ public class WhatsAppCommandService {
         if (!textoPedeListaContas(text)) {
             return Optional.empty();
         }
+        String tokenConta = extrairTokenContaDeConsultaSaldo(text);
+        if (!tokenConta.isBlank()) {
+            return Optional.of(handleSaldoContaEspecifica(userId, tokenConta));
+        }
         return Optional.of(handleListAccounts(userId));
     }
 
+    private String extrairTokenContaDeConsultaSaldo(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        Matcher m = Pattern.compile("(?i)saldo\\s+(?:do|da|de)\\s+(.+)$").matcher(text.trim());
+        if (m.find()) {
+            return limparTokenConta(m.group(1));
+        }
+        return "";
+    }
+
+    private String handleSaldoContaEspecifica(Long userId, String token) {
+        List<ContaBancaria> candidatos = contaBancariaService.encontrarAtivasPorApelidoNormalizado(userId, token);
+        if (candidatos.isEmpty()) {
+            return msgErro(userId, "Saldo da conta",
+                "Chefe, não encontrei nenhuma conta com esse nome. Pode verificar como ela está cadastrada?");
+        }
+        if (candidatos.size() > 1) {
+            awaitingAmbiguidadeTransferencia.put(userId, PendingAmbiguidadeTransferencia.pendenteConsultaSaldo(token, candidatos));
+            return msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(token, candidatos));
+        }
+        ContaBancaria conta = candidatos.get(0);
+        return formatarSaldoContaUnica(userId, conta);
+    }
+
+    private String formatarSaldoContaUnica(Long userId, ContaBancaria conta) {
+        String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+        StringBuilder sb = new StringBuilder();
+        sb.append(voc).append(", saldo da conta *").append(conta.getNome()).append("*:\n\n");
+        sb.append("Saldo nominal *").append(BRL.format(conta.getSaldoAtual())).append("*");
+        BigDecimal limite = conta.getLimiteChequeEspecial();
+        if (limite != null && limite.compareTo(BigDecimal.ZERO) > 0) {
+            sb.append("\nDisponível (com cheque especial): *").append(BRL.format(conta.getSaldoDisponivel())).append("*");
+        }
+        return msgOk("Saldo da conta", sb.toString().trim());
+    }
+
     private String handleListAccounts(Long userId) {
+        return handleListAccounts(userId, null, null);
+    }
+
+    private String handleListAccounts(Long userId, JsonNode cmd, String sourceText) {
+        String token = "";
+        if (cmd != null) {
+            token = whatsAppFirstNonBlank(
+                cmd.path("nome_normalizado").asText(""),
+                cmd.path("accountName").asText(""),
+                cmd.path("bank").asText("")
+            );
+        }
+        if (token.isBlank() && sourceText != null) {
+            token = extrairTokenContaDeConsultaSaldo(sourceText);
+        }
+        if (!token.isBlank()) {
+            return handleSaldoContaEspecifica(userId, token);
+        }
         List<ContaBancariaDTO> contas = contaBancariaService.listarPorUsuario(userId, true);
         if (contas.isEmpty()) {
             return msgInfo("Contas",
@@ -587,34 +654,26 @@ public class WhatsAppCommandService {
             }
 
             ContaResolveResult origemRes = resolverContaParaTransferencia(userId, origemToken, "origem");
+            if (origemRes.isAmbiguo()) {
+                awaitingAmbiguidadeTransferencia.put(userId, PendingAmbiguidadeTransferencia.pendenteOrigem(
+                    valor, origemToken, destinoToken, origemRes.ambiguas()));
+                return msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(origemToken, origemRes.ambiguas()));
+            }
             if (!origemRes.ok()) {
                 return msgErro(userId, "Conta de origem", origemRes.mensagem());
             }
             ContaResolveResult destinoRes = resolverContaParaTransferencia(userId, destinoToken, "destino");
+            if (destinoRes.isAmbiguo()) {
+                awaitingAmbiguidadeTransferencia.put(userId, PendingAmbiguidadeTransferencia.pendenteDestino(
+                    valor, origemRes.conta().getId(), destinoToken, destinoRes.ambiguas()));
+                return msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(destinoToken, destinoRes.ambiguas()));
+            }
             if (!destinoRes.ok()) {
                 return msgErro(userId, "Conta de destino", destinoRes.mensagem());
             }
             ContaBancaria origem = origemRes.conta();
             ContaBancaria destino = destinoRes.conta();
-            if (origem.getId().equals(destino.getId())) {
-                return msgErro(userId, "Transferência", "Origem e destino devem ser contas diferentes.");
-            }
-
-            TransferenciaContaRequest request = new TransferenciaContaRequest();
-            request.setContaOrigemId(origem.getId());
-            request.setContaDestinoId(destino.getId());
-            request.setValor(valor.setScale(2, RoundingMode.HALF_UP));
-            TransferenciaContaDTO resultado = transferenciaContaService.transferir(userId, request);
-
-            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
-            StringBuilder detalhe = new StringBuilder();
-            detalhe.append(voc).append(", transferência concluída.\n\n");
-            detalhe.append("*").append(BRL.format(resultado.getValor())).append("* de *")
-                .append(resultado.getContaOrigemNome()).append("* → *")
-                .append(resultado.getContaDestinoNome()).append("*.\n");
-            detalhe.append("Patrimônio líquido consolidado mantém-se em *")
-                .append(BRL.format(resultado.getPatrimonioLiquidoApos())).append("*.");
-            return msgOk("Transferência entre contas", detalhe.toString().trim());
+            return executarTransferenciaEntreContas(userId, origem, destino, valor);
         } catch (RuntimeException e) {
             log.info("WhatsApp transferência entre contas: {}", e.getMessage());
             return msgErro(userId, "Transferência", humanizarErroComando(e.getMessage()));
@@ -640,14 +699,95 @@ public class WhatsAppCommandService {
         }
         List<ContaBancaria> candidatos = contaBancariaService.encontrarAtivasPorApelidoNormalizado(userId, token);
         if (candidatos.isEmpty()) {
-            return ContaResolveResult.erro("Não encontrei conta ativa parecida com \"" + token + "\".");
+            return ContaResolveResult.erro(
+                "Chefe, não encontrei nenhuma conta com esse nome. Pode verificar como ela está cadastrada?");
         }
         if (candidatos.size() > 1) {
-            return ContaResolveResult.erro(formatarAmbiguidadeContas(candidatos, token, rotulo));
+            return ContaResolveResult.ambiguo(candidatos);
         }
         return ContaResolveResult.ok(candidatos.get(0));
     }
 
+    private String formatarPerguntaAmbiguidadeContas(String token, List<ContaBancaria> candidatos) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Chefe, \"").append(token).append("\" pode ser mais de uma coisa aqui. Qual você quis dizer?\n\n");
+        int i = 1;
+        for (ContaBancaria c : candidatos) {
+            sb.append("*").append(i++).append("* — ").append(c.getNome());
+            sb.append(" (saldo ").append(BRL.format(c.getSaldoAtual())).append(")\n");
+        }
+        sb.append("\nResponda com o número da opção.");
+        return sb.toString();
+    }
+
+    private Optional<String> tryResolveAmbiguidadeTransferencia(Long userId, String sourceText) {
+        if (userId == null || !awaitingAmbiguidadeTransferencia.containsKey(userId)) {
+            return Optional.empty();
+        }
+        String t = sourceText != null ? sourceText.trim() : "";
+        if (!t.matches("^[1-9]$")) {
+            return Optional.empty();
+        }
+        int idx = Integer.parseInt(t) - 1;
+        PendingAmbiguidadeTransferencia pending = awaitingAmbiguidadeTransferencia.get(userId);
+        if (pending == null || idx < 0 || idx >= pending.opcoesIds.size()) {
+            awaitingAmbiguidadeTransferencia.remove(userId);
+            return Optional.of(msgErro(userId, "Opção inválida",
+                "Número fora da lista. Reenvie a transferência ou escolha uma opção válida."));
+        }
+        Long escolhida = pending.opcoesIds.get(idx);
+        awaitingAmbiguidadeTransferencia.remove(userId);
+        try {
+            if ("origem".equals(pending.campoPendente)) {
+                ContaBancaria origem = contaBancariaService.buscarEntidade(escolhida, userId);
+                ContaResolveResult destinoRes = resolverContaParaTransferencia(userId, pending.destinoToken, "destino");
+                if (destinoRes.isAmbiguo()) {
+                    awaitingAmbiguidadeTransferencia.put(userId, PendingAmbiguidadeTransferencia.pendenteDestino(
+                        pending.valor, origem.getId(), pending.destinoToken, destinoRes.ambiguas()));
+                    return Optional.of(msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(pending.destinoToken, destinoRes.ambiguas())));
+                }
+                if (!destinoRes.ok()) {
+                    return Optional.of(msgErro(userId, "Conta de destino", destinoRes.mensagem()));
+                }
+                return Optional.of(executarTransferenciaEntreContas(userId, origem, destinoRes.conta(), pending.valor));
+            }
+            if ("destino".equals(pending.campoPendente)) {
+                ContaBancaria origem = contaBancariaService.buscarEntidade(pending.origemId, userId);
+                ContaBancaria destino = contaBancariaService.buscarEntidade(escolhida, userId);
+                return Optional.of(executarTransferenciaEntreContas(userId, origem, destino, pending.valor));
+            }
+            if ("saldo".equals(pending.campoPendente)) {
+                ContaBancaria conta = contaBancariaService.buscarEntidade(escolhida, userId);
+                return Optional.of(formatarSaldoContaUnica(userId, conta));
+            }
+        } catch (RuntimeException e) {
+            return Optional.of(msgErro(userId, "Transferência", humanizarErroComando(e.getMessage())));
+        }
+        return Optional.empty();
+    }
+
+    private String executarTransferenciaEntreContas(Long userId, ContaBancaria origem, ContaBancaria destino, BigDecimal valor) {
+        if (origem.getId().equals(destino.getId())) {
+            return msgErro(userId, "Transferência", "Origem e destino devem ser contas diferentes.");
+        }
+        TransferenciaContaRequest request = new TransferenciaContaRequest();
+        request.setContaOrigemId(origem.getId());
+        request.setContaDestinoId(destino.getId());
+        request.setValor(valor.setScale(2, RoundingMode.HALF_UP));
+        TransferenciaContaDTO resultado = transferenciaContaService.transferir(userId, request);
+        String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+        StringBuilder detalhe = new StringBuilder();
+        detalhe.append(voc).append(", transferência concluída.\n\n");
+        detalhe.append("*").append(BRL.format(resultado.getValor())).append("* de *")
+            .append(resultado.getContaOrigemNome()).append("* → *")
+            .append(resultado.getContaDestinoNome()).append("*.\n");
+        detalhe.append("Patrimônio líquido consolidado mantém-se em *")
+            .append(BRL.format(resultado.getPatrimonioLiquidoApos())).append("*.");
+        return msgOk("Transferência entre contas", detalhe.toString().trim());
+    }
+
+    @Deprecated
+    @SuppressWarnings("unused")
     private String formatarAmbiguidadeContas(List<ContaBancaria> candidatos, String token, String rotulo) {
         StringBuilder sb = new StringBuilder();
         sb.append("Encontrei mais de uma conta parecida com \"").append(token).append("\" para ").append(rotulo).append(":\n\n");
@@ -710,13 +850,27 @@ public class WhatsAppCommandService {
 
     private record TransferenciaTokens(String origem, String destino) {}
 
-    private record ContaResolveResult(boolean ok, ContaBancaria conta, String mensagem) {
+    private record ContaResolveResult(boolean ok, ContaBancaria conta, String mensagem, List<ContaBancaria> ambiguas) {
+        ContaResolveResult {
+            if (ambiguas == null) {
+                ambiguas = List.of();
+            }
+        }
+
         static ContaResolveResult ok(ContaBancaria conta) {
-            return new ContaResolveResult(true, conta, "");
+            return new ContaResolveResult(true, conta, "", List.of());
         }
 
         static ContaResolveResult erro(String mensagem) {
-            return new ContaResolveResult(false, null, mensagem);
+            return new ContaResolveResult(false, null, mensagem, List.of());
+        }
+
+        static ContaResolveResult ambiguo(List<ContaBancaria> contas) {
+            return new ContaResolveResult(false, null, "", List.copyOf(contas));
+        }
+
+        boolean isAmbiguo() {
+            return !ok && conta == null && !ambiguas.isEmpty();
         }
     }
 
@@ -1659,7 +1813,7 @@ public class WhatsAppCommandService {
             case "SUGERIR_INVESTIMENTO" -> respostaInvestimento(userId);
             case "LIST_CARDS" -> tryConsultaListaCartoes(userId, sourceText)
                 .orElseGet(() -> msgErro(userId, "Cartões", "Não consegui listar os cartões."));
-            case "LIST_ACCOUNTS" -> handleListAccounts(userId);
+            case "LIST_ACCOUNTS" -> handleListAccounts(userId, cmd, sourceText);
             case "TRANSFER_BETWEEN_ACCOUNTS" -> handleTransferBetweenAccounts(cmd, userId, sourceText);
             case "LIST_TRANSACTIONS" -> handleListTransactions(cmd, userId, sourceText);
             case "LIST_CATEGORIES" -> handleListCategories(userId);
@@ -2519,6 +2673,10 @@ public class WhatsAppCommandService {
             dto.setTipoTransacao(TransacaoDTO.TipoTransacao.DESPESA);
             dto.setDataTransacao(LocalDateTime.now());
             dto.setStatusConferencia(status);
+            Long categoriaId = resolveCategoriaId(userId, readCategoriaFiltro(cmd));
+            if (categoriaId != null) {
+                dto.setCategoriaId(categoriaId);
+            }
             if (matchResult.card != null && !pagamentoEmConta) {
                 Fatura faturaAlvo = faturaService.resolverFaturaAbertaParaCartao(userId, matchResult.card);
                 dto.setFaturaId(faturaAlvo.getId());
@@ -2550,21 +2708,31 @@ public class WhatsAppCommandService {
                 ? ""
                 : vincularNaFatura(matchResult, amount, userId);
             String vocExpense = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+            String categoriaNome = nomeCategoriaParaExibicao(userId, created.getCategoriaId(), readCategoriaFiltro(cmd));
             String jarvisLinha = jarvisProtocolService.formatExpenseCatalogued(vocExpense, BRL.format(created.getValor()));
             String orcamentoLinha = blocoStatusOrcamentoPosDespesa(userId, created);
             if (matchResult.card != null && !pagamentoEmConta) {
-                String detalhe = jarvisLinha + "\n\n*" + created.getDescricao() + "* no cartão *"
-                    + matchResult.card.getNome() + "*.\n" + invoiceMessage.trim();
+                String detalhe = jarvisLinha;
+                if (categoriaNome != null && !categoriaNome.isBlank() && !"Sem categoria".equals(categoriaNome)) {
+                    detalhe += "\n\n*" + BRL.format(created.getValor()) + "* em *" + categoriaNome + "* no cartão *"
+                        + matchResult.card.getNome() + "*.";
+                } else {
+                    detalhe += "\n\n*" + created.getDescricao() + "* no cartão *" + matchResult.card.getNome() + "*.";
+                }
+                detalhe += "\n" + invoiceMessage.trim();
                 if (matchResult.pendingReview) {
                     detalhe += "\n⚠️ Ficou *pendente de conferência* (há mais do que um cartão parecido com o nome que disseste).";
                 }
                 return msgOk("Despesa registada", detalhe + orcamentoLinha + sugestaoAssinatura);
             }
             String contaInfo = created.getContaBancariaNome() != null && !created.getContaBancariaNome().isBlank()
-                ? " na conta *" + created.getContaBancariaNome() + "*"
+                ? " debitado do *" + created.getContaBancariaNome() + "*"
+                : "";
+            String categoriaInfo = categoriaNome != null && !categoriaNome.isBlank() && !"Sem categoria".equals(categoriaNome)
+                ? " em *" + categoriaNome + "*"
                 : "";
             return msgOk("Despesa registada",
-                jarvisLinha + "\n\n*" + created.getDescricao() + "*" + contaInfo + " (sem cartão associado).\n"
+                jarvisLinha + categoriaInfo + contaInfo + ".\n"
                     + invoiceMessage.trim() + orcamentoLinha + sugestaoAssinatura);
         } catch (RuntimeException e) {
             log.info("WhatsApp despesa: {}", e.getMessage());
@@ -2913,6 +3081,10 @@ public class WhatsAppCommandService {
     }
 
     private String resolveAccountToken(JsonNode cmd, String sourceText, boolean forcarPorPagamentoEmConta) {
+        String nomeNormalizado = cmd.path("nome_normalizado").asText("").trim();
+        if (!nomeNormalizado.isBlank()) {
+            return nomeNormalizado;
+        }
         String accountName = cmd.path("accountName").asText("");
         if (!accountName.isBlank()) {
             return accountName;
@@ -3304,6 +3476,10 @@ public class WhatsAppCommandService {
         if (pagamentoIndicaContaBancaria(cmd, sourceText)) {
             return "";
         }
+        String nomeNormalizado = cmd.path("nome_normalizado").asText("").trim();
+        if (!nomeNormalizado.isBlank()) {
+            return nomeNormalizado;
+        }
         String cardName = cmd.path("cardName").asText("");
         String bank = cmd.path("bank").asText("");
         if (!cardName.isBlank()) {
@@ -3334,24 +3510,14 @@ public class WhatsAppCommandService {
         if (cardToken == null || cardToken.isBlank()) {
             return new CardMatchResult(null, false);
         }
-        List<CartaoCredito> candidatos = cartaoCreditoService.buscarAtivosPorNomeOuBancoAproximado(userId, cardToken);
+        List<CartaoCredito> candidatos = cartaoCreditoService.encontrarAtivosPorApelidoNormalizado(userId, cardToken);
         if (candidatos.isEmpty()) {
             return new CardMatchResult(null, false);
         }
         if (candidatos.size() == 1) {
             return new CardMatchResult(candidatos.get(0), false);
         }
-
-        CartaoCredito principal = candidatos.get(0);
-        BigDecimal limitePrincipal = principal.getLimiteDisponivel() != null ? principal.getLimiteDisponivel() : BigDecimal.ZERO;
-        long empatados = candidatos.stream()
-            .filter(c -> {
-                BigDecimal limite = c.getLimiteDisponivel() != null ? c.getLimiteDisponivel() : BigDecimal.ZERO;
-                return limite.compareTo(limitePrincipal) == 0;
-            })
-            .count();
-        boolean pendente = empatados > 1;
-        return new CardMatchResult(principal, pendente);
+        return new CardMatchResult(candidatos.get(0), true);
     }
 
     private String sanitizeDescription(String value) {
@@ -3599,12 +3765,11 @@ public class WhatsAppCommandService {
         if (categoriaSugerida == null || categoriaSugerida.isBlank()) {
             return null;
         }
-        String suggested = normalize(categoriaSugerida);
-        return categoriaRepository.findByUsuarioIdOrderByNome(userId).stream()
-            .filter(cat -> normalize(cat.getNome()).contains(suggested) || suggested.contains(normalize(cat.getNome())))
-            .map(cat -> cat.getId())
-            .findFirst()
-            .orElse(null);
+        List<Categoria> candidatos = categoriaService.encontrarAtivasPorApelidoNormalizado(userId, categoriaSugerida);
+        if (candidatos.isEmpty()) {
+            return null;
+        }
+        return candidatos.get(0).getId();
     }
 
     private String nomeCategoriaParaExibicao(Long userId, Long categoriaId, String categoriaSugeridaPeloOcr) {
@@ -4813,6 +4978,47 @@ public class WhatsAppCommandService {
         BigDecimal valor;
         String descricao;
         Integer diaVencimento;
+    }
+
+    private static class PendingAmbiguidadeTransferencia {
+        BigDecimal valor;
+        Long origemId;
+        String destinoToken;
+        String origemToken;
+        String campoPendente;
+        List<Long> opcoesIds;
+
+        static PendingAmbiguidadeTransferencia pendenteOrigem(
+            BigDecimal valor, String origemToken, String destinoToken, List<ContaBancaria> contas
+        ) {
+            PendingAmbiguidadeTransferencia p = new PendingAmbiguidadeTransferencia();
+            p.valor = valor;
+            p.origemToken = origemToken;
+            p.destinoToken = destinoToken;
+            p.campoPendente = "origem";
+            p.opcoesIds = contas.stream().map(ContaBancaria::getId).toList();
+            return p;
+        }
+
+        static PendingAmbiguidadeTransferencia pendenteDestino(
+            BigDecimal valor, Long origemId, String destinoToken, List<ContaBancaria> contas
+        ) {
+            PendingAmbiguidadeTransferencia p = new PendingAmbiguidadeTransferencia();
+            p.valor = valor;
+            p.origemId = origemId;
+            p.destinoToken = destinoToken;
+            p.campoPendente = "destino";
+            p.opcoesIds = contas.stream().map(ContaBancaria::getId).toList();
+            return p;
+        }
+
+        static PendingAmbiguidadeTransferencia pendenteConsultaSaldo(String token, List<ContaBancaria> contas) {
+            PendingAmbiguidadeTransferencia p = new PendingAmbiguidadeTransferencia();
+            p.origemToken = token;
+            p.campoPendente = "saldo";
+            p.opcoesIds = contas.stream().map(ContaBancaria::getId).toList();
+            return p;
+        }
     }
 
     private static class PendingFaturaPdfDraft {

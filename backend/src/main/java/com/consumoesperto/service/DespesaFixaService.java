@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.DespesaFixaDTO;
 import com.consumoesperto.dto.DespesaFixaRequest;
+import com.consumoesperto.dto.MatchResult;
 import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.DespesaFixaRepository;
@@ -37,6 +38,18 @@ public class DespesaFixaService {
     private final UsuarioRepository usuarioRepository;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final JarvisProtocolService jarvisProtocolService;
+    private final TextMatcherService textMatcherService;
+
+    @Transactional(readOnly = true)
+    public Map<Long, String> mapearNomesPorId(Long usuarioId) {
+        Map<Long, String> map = new LinkedHashMap<>();
+        for (DespesaFixa d : despesaFixaRepository.findByUsuarioIdOrderByDiaVencimentoAscIdAsc(usuarioId)) {
+            if (d.getId() != null && d.getDescricao() != null) {
+                map.put(d.getId(), d.getDescricao());
+            }
+        }
+        return map;
+    }
 
     @Transactional(readOnly = true)
     public List<DespesaFixaDTO> listar(Long usuarioId) {
@@ -89,17 +102,28 @@ public class DespesaFixaService {
 
     @Transactional(readOnly = true)
     public List<DespesaFixa> encontrarPorIdentificador(Long usuarioId, String identificador) {
-        String n = normalizeDesc(identificador);
-        if (n.length() < 2) {
+        if (identificador == null || identificador.isBlank()) {
             return List.of();
         }
-        List<DespesaFixa> out = new ArrayList<>();
-        for (DespesaFixa d : despesaFixaRepository.findByUsuarioIdOrderByDiaVencimentoAscIdAsc(usuarioId)) {
-            if (correspondeIdentificador(n, normalizeDesc(d.getDescricao()))) {
-                out.add(d);
-            }
+        MatchResult match = textMatcherService.resolverEntidade(identificador, mapearNomesPorId(usuarioId));
+        return despesasDeMatch(usuarioId, match);
+    }
+
+    private List<DespesaFixa> despesasDeMatch(Long usuarioId, MatchResult match) {
+        if (match == null) {
+            return List.of();
         }
-        return out;
+        return switch (match.getConfianca()) {
+            case EXATO, PARCIAL, FUZZY -> despesaFixaRepository.findById(match.getIdResolvido())
+                .filter(d -> d.getUsuario() != null && usuarioId.equals(d.getUsuario().getId()))
+                .map(List::of)
+                .orElse(List.of());
+            case AMBIGUO -> match.getOpcoes().stream()
+                .map(e -> despesaFixaRepository.findById(e.getKey()).orElse(null))
+                .filter(d -> d != null && d.getUsuario() != null && usuarioId.equals(d.getUsuario().getId()))
+                .toList();
+            default -> List.of();
+        };
     }
 
     @Transactional(readOnly = true)
@@ -126,17 +150,6 @@ public class DespesaFixaService {
             sum = sum.add(nz(d.getValor()));
         }
         return sum.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private static boolean correspondeIdentificador(String token, String nome) {
-        if (nome.length() < 2) {
-            return false;
-        }
-        if (nome.equals(token) || nome.contains(token) || token.contains(nome)) {
-            return true;
-        }
-        int minLen = Math.min(nome.length(), token.length());
-        return minLen >= 4 && levenshtein(nome, token) <= 2;
     }
 
     @Transactional
@@ -270,27 +283,5 @@ public class DespesaFixaService {
             .replaceAll("\\s+", " ")
             .trim();
         return n;
-    }
-
-    private static int levenshtein(String a, String b) {
-        int n = a.length();
-        int m = b.length();
-        int[] prev = new int[m + 1];
-        int[] cur = new int[m + 1];
-        for (int j = 0; j <= m; j++) {
-            prev[j] = j;
-        }
-        for (int i = 1; i <= n; i++) {
-            cur[0] = i;
-            char ca = a.charAt(i - 1);
-            for (int j = 1; j <= m; j++) {
-                int cost = ca == b.charAt(j - 1) ? 0 : 1;
-                cur[j] = Math.min(Math.min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
-            }
-            int[] tmp = prev;
-            prev = cur;
-            cur = tmp;
-        }
-        return prev[m];
     }
 }

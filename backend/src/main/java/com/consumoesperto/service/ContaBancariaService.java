@@ -2,12 +2,12 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ContaBancariaDTO;
 import com.consumoesperto.dto.ContaBancariaUpdateDTO;
+import com.consumoesperto.dto.MatchResult;
 import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.UsuarioRepository;
-import com.consumoesperto.util.ApelidoNormalizador;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,7 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,6 +28,7 @@ public class ContaBancariaService {
 
     private final ContaBancariaRepository contaBancariaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final TextMatcherService textMatcherService;
 
     public ContaBancariaDTO criar(ContaBancariaDTO dto) {
         Usuario usuario = usuarioRepository.findById(dto.getUsuarioId())
@@ -120,29 +124,44 @@ public class ContaBancariaService {
     }
 
     /**
-     * Resolve contas ativas por apelido (nome), com normalização insensível a maiúsculas e acentos.
+     * Resolve contas ativas por apelido (nome), com normalização, parcial e Levenshtein (≤ 2).
      */
+    @Transactional(readOnly = true)
+    public Map<Long, String> mapearNomesPorId(Long usuarioId) {
+        Map<Long, String> map = new LinkedHashMap<>();
+        for (ContaBancaria c : contaBancariaRepository.findByUsuarioIdAndAtivaTrueOrderByPadraoDescNomeAsc(usuarioId)) {
+            if (c.getId() != null && c.getNome() != null) {
+                map.put(c.getId(), c.getNome());
+            }
+        }
+        return map;
+    }
+
     @Transactional(readOnly = true)
     public List<ContaBancaria> encontrarAtivasPorApelidoNormalizado(Long usuarioId, String apelido) {
         if (apelido == null || apelido.isBlank()) {
             return List.of();
         }
-        String token = ApelidoNormalizador.normalizar(apelido);
-        if (token.length() < 2) {
+        MatchResult match = textMatcherService.resolverEntidade(apelido, mapearNomesPorId(usuarioId));
+        return contasDeMatch(usuarioId, match);
+    }
+
+    private List<ContaBancaria> contasDeMatch(Long usuarioId, MatchResult match) {
+        if (match == null) {
             return List.of();
         }
-        List<ContaBancaria> todos = contaBancariaRepository.findByUsuarioIdAndAtivaTrueOrderByPadraoDescNomeAsc(usuarioId);
-        List<ContaBancaria> exatos = todos.stream()
-            .filter(c -> ApelidoNormalizador.normalizar(c.getNome()).equals(token))
-            .collect(Collectors.toList());
-        if (!exatos.isEmpty()) {
-            return exatos;
-        }
-        return todos.stream()
-            .filter(c -> ApelidoNormalizador.normalizar(c.getNome()).contains(token))
-            .sorted(Comparator.comparing(ContaBancaria::isPadrao).reversed()
-                .thenComparing(c -> c.getNome() != null ? c.getNome() : ""))
-            .collect(Collectors.toList());
+        return switch (match.getConfianca()) {
+            case EXATO, PARCIAL, FUZZY -> contaBancariaRepository.findByIdAndUsuarioId(match.getIdResolvido(), usuarioId)
+                .map(List::of)
+                .orElse(List.of());
+            case AMBIGUO -> match.getOpcoes().stream()
+                .map(e -> contaBancariaRepository.findByIdAndUsuarioId(e.getKey(), usuarioId).orElse(null))
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(ContaBancaria::isPadrao).reversed()
+                    .thenComparing(c -> c.getNome() != null ? c.getNome() : ""))
+                .collect(Collectors.toList());
+            default -> List.of();
+        };
     }
 
     /** Ajuste manual de saldo via WhatsApp (reconciliação). */

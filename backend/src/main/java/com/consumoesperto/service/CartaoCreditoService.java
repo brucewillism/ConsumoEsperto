@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.CartaoCreditoDTO;
+import com.consumoesperto.dto.MatchResult;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.util.ApelidoNormalizador;
@@ -19,7 +20,9 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -59,6 +62,30 @@ public class CartaoCreditoService {
     
     // Repositório para validação e busca de usuários
     private final UsuarioRepository usuarioRepository;
+
+    private final TextMatcherService textMatcherService;
+
+    @Transactional(readOnly = true)
+    public Map<Long, String> mapearNomesPorId(Long usuarioId) {
+        Map<Long, String> map = new java.util.LinkedHashMap<>();
+        for (CartaoCredito c : cartaoCreditoRepository.findByUsuarioIdAndAtivoTrue(usuarioId)) {
+            if (c.getId() != null && c.getNome() != null) {
+                map.put(c.getId(), c.getNome());
+            }
+        }
+        return map;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, String> mapearBancosPorId(Long usuarioId) {
+        Map<Long, String> map = new java.util.LinkedHashMap<>();
+        for (CartaoCredito c : cartaoCreditoRepository.findByUsuarioIdAndAtivoTrue(usuarioId)) {
+            if (c.getId() != null && c.getBanco() != null) {
+                map.putIfAbsent(c.getId(), c.getBanco());
+            }
+        }
+        return map;
+    }
 
     /**
      * Cria um novo cartão de crédito no sistema
@@ -223,53 +250,52 @@ public class CartaoCreditoService {
     }
 
     /**
-     * Resolve cartões ativos por apelido (nome) ou banco, com normalização insensível a maiúsculas e acentos.
+     * Resolve cartões ativos por apelido (nome) ou banco, com normalização, parcial e Levenshtein (≤ 2).
      * Lista vazia: nenhum; um elemento: match único; vários: ambíguo (usuário deve refinar).
      */
     public List<CartaoCredito> encontrarAtivosPorApelidoNormalizado(Long usuarioId, String apelidoOuBanco) {
         if (apelidoOuBanco == null || apelidoOuBanco.isBlank()) {
             return List.of();
         }
-        String token = ApelidoNormalizador.normalizar(apelidoOuBanco);
-        if (token.length() < 2) {
+        List<CartaoCredito> porCatalogo = cartaoCreditoRepository.findByUsuarioIdAndAtivoTrue(usuarioId).stream()
+            .filter(c -> BancoBrasilCatalog.bancosCorrespondem(c.getBanco(), apelidoOuBanco)
+                || BancoBrasilCatalog.bancosCorrespondem(c.getNome(), apelidoOuBanco))
+            .collect(Collectors.toList());
+        if (porCatalogo.size() == 1) {
+            return porCatalogo;
+        }
+        if (porCatalogo.size() > 1) {
+            return porCatalogo;
+        }
+
+        MatchResult porNome = textMatcherService.resolverEntidade(apelidoOuBanco, mapearNomesPorId(usuarioId));
+        List<CartaoCredito> fromNome = cartoesDeMatch(usuarioId, porNome);
+        if (porNome.getConfianca() == MatchResult.NivelConfianca.AMBIGUO) {
+            return fromNome;
+        }
+        if (!fromNome.isEmpty()) {
+            return fromNome;
+        }
+
+        MatchResult porBanco = textMatcherService.resolverEntidade(apelidoOuBanco, mapearBancosPorId(usuarioId));
+        return cartoesDeMatch(usuarioId, porBanco);
+    }
+
+    private List<CartaoCredito> cartoesDeMatch(Long usuarioId, MatchResult match) {
+        if (match == null) {
             return List.of();
         }
-        List<CartaoCredito> todos = cartaoCreditoRepository.findByUsuarioIdAndAtivoTrue(usuarioId);
-        List<CartaoCredito> exatosNome = todos.stream()
-            .filter(c -> ApelidoNormalizador.normalizar(c.getNome()).equals(token))
-            .collect(Collectors.toList());
-        if (exatosNome.size() == 1) {
-            return exatosNome;
-        }
-        if (exatosNome.size() > 1) {
-            return exatosNome;
-        }
-        List<CartaoCredito> exatosBanco = todos.stream()
-            .filter(c -> ApelidoNormalizador.normalizar(c.getBanco()).equals(token)
-                || BancoBrasilCatalog.bancosCorrespondem(c.getBanco(), apelidoOuBanco))
-            .collect(Collectors.toList());
-        if (exatosBanco.size() == 1) {
-            return exatosBanco;
-        }
-        if (exatosBanco.size() > 1) {
-            return exatosBanco;
-        }
-        List<CartaoCredito> parcial = todos.stream()
-            .filter(c -> {
-                String nn = ApelidoNormalizador.normalizar(c.getNome());
-                String bb = ApelidoNormalizador.normalizar(c.getBanco());
-                return nn.contains(token) || bb.contains(token)
-                    || BancoBrasilCatalog.bancosCorrespondem(c.getBanco(), apelidoOuBanco)
-                    || BancoBrasilCatalog.bancosCorrespondem(c.getNome(), apelidoOuBanco);
-            })
-            .collect(Collectors.toList());
-        if (parcial.size() == 1) {
-            return parcial;
-        }
-        if (parcial.size() > 1) {
-            return parcial;
-        }
-        return List.of();
+        return switch (match.getConfianca()) {
+            case EXATO, PARCIAL, FUZZY -> cartaoCreditoRepository.findByIdAndUsuarioId(match.getIdResolvido(), usuarioId)
+                .filter(c -> Boolean.TRUE.equals(c.getAtivo()))
+                .map(List::of)
+                .orElse(List.of());
+            case AMBIGUO -> match.getOpcoes().stream()
+                .map(e -> cartaoCreditoRepository.findByIdAndUsuarioId(e.getKey(), usuarioId).orElse(null))
+                .filter(c -> c != null && Boolean.TRUE.equals(c.getAtivo()))
+                .collect(Collectors.toList());
+            default -> List.of();
+        };
     }
 
     /**

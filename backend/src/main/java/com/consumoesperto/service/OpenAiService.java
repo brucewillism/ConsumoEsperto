@@ -152,12 +152,15 @@ public class OpenAiService {
             "valorLiquidoFixo, diaRecebimentoFixo (RECEBIMENTO_UNICO), metaFaturamentoMensal (FLUXO_DIARIO), " +
             "updates (objeto JSON com campos a alterar, ex.: {\"limite\":5000,\"apelido\":\"Nubank Ultra\",\"icone\":\"shopping-cart\"}), " +
             "legado cartão: newLimit, newAvailableLimit, newCardName — use UPDATE_ACCOUNT_CONFIG ou UPDATE_ENTITY_CONFIG com updates.\n" +
+            "nome_normalizado (nome corrigido da entidade identificada), entidade_ambigua (true se abreviação dupla), " +
+            "entidade_desconhecida (true se não reconhecer), opcoes_entidade (array de nomes quando ambíguo), " +
             "confianca (0-1), errorMessage. " +
             "Se a frase citar cartão/banco (ex: 'paguei 20 no Nubank'), preencha cardName e/ou bank.";
 
         String userPrompt = "Texto do usuário: " + inputText + "\n" +
             "Regras:\n" +
-            "- Se for despesa: action CREATE_EXPENSE e preencher description + amount.\n" +
+            "- Se for despesa: action CREATE_EXPENSE e preencher description + amount; categoryName quando o estabelecimento " +
+            "implicar categoria (ex.: ubr/uber→Transporte, mrcdo/mercado→Alimentação); nome_normalizado nas entidades.\n" +
             "- Parcelamento no cartão (CREATE_EXPENSE): obrigatório cartão (cardName/bank). " +
             "Sem juros (ex.: '100 reais no Nubank em 2 vezes sem juros'): installmentCount=2, interestFree=true, amount=valor total (100), purchasePrice vazio.\n" +
             "Com juros explícito (ex.: 'TV 2000 no Inter em 10 vezes de 250 com juros'): installmentCount=10, installmentAmount=250, withInterest=true, " +
@@ -201,7 +204,8 @@ public class OpenAiService {
             "- Se perguntar sobre recorrência, assinaturas repetidas, gastos fixos mensais (ex: 'tenho recorrência?', 'o que repete?'): action GET_INSIGHTS.\n" +
             "- Se pedir listar/quantos cartões tem (ex.: 'lista meus cartões', 'quantos cartões eu tenho?'): action LIST_CARDS.\n" +
             "- Se pedir saldos das contas, patrimônio em contas ou quanto tem nas contas (ex.: 'quanto eu tenho nas contas?', " +
-            "'saldos das contas', 'meu patrimônio', 'lista minhas contas'): action LIST_ACCOUNTS.\n" +
+            "'saldos das contas', 'meu patrimônio', 'lista minhas contas', 'saldo do nu', 'saldo da conta Nubank'): " +
+            "action LIST_ACCOUNTS; preencher accountName ou bank com o apelido citado; nome_normalizado com o nome corrigido.\n" +
             "- Se pedir transferir/mover/passar valor entre contas bancárias (ex.: 'transfere 100 do Itaú pro Nubank', " +
             "'passa 50 reais da conta Inter para a poupança', 'manda 200 da corrente pra carteira'): action TRANSFER_BETWEEN_ACCOUNTS; " +
             "preencher amount (valor), contaOrigem e contaDestino com os apelidos citados; NÃO use CREATE_EXPENSE para transferências internas.\n" +
@@ -264,6 +268,17 @@ public class OpenAiService {
             "'como funciona a aba de transacoes?' → reportMonth=2.\n" +
             "- Encerrar tutorial ativo: action STOP_TUTORIAL para 'sair', 'parar', 'desligar', 'cancelar', 'encerrar tutorial', 'chega', 'voltar ao normal'.\n" +
             "- Navegar capítulo do tutorial (1 a 5) quando o utilizador está no guia: action TUTORIAL_STEP; preencher reportMonth com o número do capítulo (1-5) se útil.\n" +
+            "REGRAS DE TOLERÂNCIA A LINGUAGEM:\n" +
+            "Ao interpretar a mensagem do usuário, aplique normalizações ANTES de classificar a intenção.\n" +
+            "ABREVIAÇÕES FINANCEIRAS: nu/nub/nuba/nubank→Nubank; ita/itau/itá→Itaú; bb/bradesco→Bradesco; inter→Banco Inter; " +
+            "xp/xpi→XP; cef/caixa/cx→Caixa; sntdr/santander→Santander.\n" +
+            "ESTABELECIMENTOS: mrcdo/mercd/mkt/feira/sacolão→Mercado/Alimentação; ubr/uber/99→Transporte; " +
+            "ifood/ifd/rappi→Alimentação/Delivery; farm/farmci/drog→Farmácia; posto/gasolina/combust→Combustível; " +
+            "academia/acad/gym→Academia; netf/netflix/spotify/prime→Assinaturas/Lazer.\n" +
+            "INFORMAIS: tô no vermelho/zerado/liso→saldo crítico; sobrou/sobra→consulta saldo; fechei/como tá o mês→relatório; " +
+            "queimei/estourei→orçamento excedido; guardei/separei→poupança/meta; parcelei/em x vezes→parcelado.\n" +
+            "REGRAS: (1) corrija erros óbvios pelo contexto; (2) abreviação dupla→entidade_ambigua+opcoes_entidade; " +
+            "(3) não invente entidade→entidade_desconhecida; (4) preencha nome_normalizado com o nome corrigido.\n" +
             "- Se faltar dado essencial, retornar action UNKNOWN com errorMessage explicando o que faltou.\n" +
             "- amount deve ser número decimal sem símbolo de moeda.\n" +
             "- Sempre retornar o campo confianca com valor entre 0 e 1.";

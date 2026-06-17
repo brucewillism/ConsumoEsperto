@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.AssinaturaRecorrenteDTO;
 import com.consumoesperto.dto.AssinaturaRecorrenteRequest;
+import com.consumoesperto.dto.MatchResult;
 import com.consumoesperto.model.AssinaturaRecorrente;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Transacao;
@@ -25,6 +26,7 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -55,6 +57,18 @@ public class AssinaturaRecorrenteService {
     private final UsuarioSessaoContextoService sessaoContextoService;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final JarvisProtocolService jarvisProtocolService;
+    private final TextMatcherService textMatcherService;
+
+    @Transactional(readOnly = true)
+    public Map<Long, String> mapearNomesPorId(Long usuarioId) {
+        Map<Long, String> map = new LinkedHashMap<>();
+        for (AssinaturaRecorrente a : assinaturaRepository.findByUsuarioIdOrderByNomeAscIdAsc(usuarioId)) {
+            if (a.getId() != null && a.getNome() != null) {
+                map.put(a.getId(), a.getNome());
+            }
+        }
+        return map;
+    }
 
     public record DeteccaoRecorrencia(
         String nomeExibicao,
@@ -131,18 +145,28 @@ public class AssinaturaRecorrenteService {
 
     @Transactional(readOnly = true)
     public List<AssinaturaRecorrente> encontrarPorIdentificador(Long usuarioId, String identificador) {
-        String n = normalizeDesc(identificador);
-        if (n.length() < 2) {
+        if (identificador == null || identificador.isBlank()) {
             return List.of();
         }
-        List<AssinaturaRecorrente> out = new ArrayList<>();
-        for (AssinaturaRecorrente a : assinaturaRepository.findByUsuarioIdOrderByNomeAscIdAsc(usuarioId)) {
-            String o = normalizeDesc(a.getNome());
-            if (o.length() >= 2 && (o.equals(n) || o.contains(n) || n.contains(o))) {
-                out.add(a);
-            }
+        MatchResult match = textMatcherService.resolverEntidade(identificador, mapearNomesPorId(usuarioId));
+        return assinaturasDeMatch(usuarioId, match);
+    }
+
+    private List<AssinaturaRecorrente> assinaturasDeMatch(Long usuarioId, MatchResult match) {
+        if (match == null) {
+            return List.of();
         }
-        return out;
+        return switch (match.getConfianca()) {
+            case EXATO, PARCIAL, FUZZY -> assinaturaRepository.findById(match.getIdResolvido())
+                .filter(a -> a.getUsuario() != null && usuarioId.equals(a.getUsuario().getId()))
+                .map(List::of)
+                .orElse(List.of());
+            case AMBIGUO -> match.getOpcoes().stream()
+                .map(e -> assinaturaRepository.findById(e.getKey()).orElse(null))
+                .filter(a -> a != null && a.getUsuario() != null && usuarioId.equals(a.getUsuario().getId()))
+                .toList();
+            default -> List.of();
+        };
     }
 
     /** Avalia padrão recorrente após despesa confirmada e propõe cadastro (sessão + WhatsApp). */

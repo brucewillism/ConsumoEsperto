@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.CategoriaDTO;
+import com.consumoesperto.dto.MatchResult;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -8,9 +9,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.consumoesperto.util.ApelidoNormalizador;
-
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -19,6 +21,7 @@ public class CategoriaService {
 
     private final CategoriaRepository categoriaRepository;
     private final UsuarioService usuarioService;
+    private final TextMatcherService textMatcherService;
 
     public List<CategoriaDTO> listarPorUsuario(Long usuarioId) {
         return categoriaRepository.findByUsuarioIdOrderByNome(usuarioId).stream()
@@ -42,13 +45,48 @@ public class CategoriaService {
     }
 
     /**
-     * Categorias ativas do usuário cujo nome coincide com o identificador (normalizado).
+     * Categorias ativas do usuário cujo nome coincide com o identificador (normalizado + fuzzy).
      */
+    @Transactional(readOnly = true)
+    public Map<Long, String> mapearNomesPorId(Long usuarioId) {
+        Map<Long, String> map = new LinkedHashMap<>();
+        for (Categoria c : listarAtivas(usuarioId)) {
+            if (c.getId() != null && c.getNome() != null) {
+                map.put(c.getId(), c.getNome());
+            }
+        }
+        return map;
+    }
+
     public List<Categoria> encontrarAtivasPorApelidoNormalizado(Long usuarioId, String apelido) {
-        List<Categoria> ativas = categoriaRepository.findByUsuarioIdOrderByNome(usuarioId).stream()
+        if (apelido == null || apelido.isBlank()) {
+            return List.of();
+        }
+        MatchResult match = textMatcherService.resolverEntidade(apelido, mapearNomesPorId(usuarioId));
+        return categoriasDeMatch(usuarioId, match);
+    }
+
+    private List<Categoria> listarAtivas(Long usuarioId) {
+        return categoriaRepository.findByUsuarioIdOrderByNome(usuarioId).stream()
             .filter(c -> c.getAtivo() == null || Boolean.TRUE.equals(c.getAtivo()))
             .collect(Collectors.toList());
-        return ApelidoNormalizador.filtrarPorNomeNormalizado(ativas, Categoria::getNome, apelido);
+    }
+
+    private List<Categoria> categoriasDeMatch(Long usuarioId, MatchResult match) {
+        if (match == null) {
+            return List.of();
+        }
+        return switch (match.getConfianca()) {
+            case EXATO, PARCIAL, FUZZY -> categoriaRepository.findById(match.getIdResolvido())
+                .filter(c -> c.getUsuario() != null && usuarioId.equals(c.getUsuario().getId()))
+                .map(List::of)
+                .orElse(List.of());
+            case AMBIGUO -> match.getOpcoes().stream()
+                .map(e -> categoriaRepository.findById(e.getKey()).orElse(null))
+                .filter(c -> c != null && c.getUsuario() != null && usuarioId.equals(c.getUsuario().getId()))
+                .collect(Collectors.toList());
+            default -> List.of();
+        };
     }
 
     @Transactional
