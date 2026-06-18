@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   ElementRef,
   EventEmitter,
   Input,
@@ -9,7 +10,11 @@ import {
   Output,
   SimpleChanges,
   ViewChild,
+  inject,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { fromEvent } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IaChatService } from '../../services/ia-chat.service';
@@ -38,6 +43,8 @@ export interface JarvisChatMensagem {
   styleUrl: './jarvis-chat-panel.component.scss',
 })
 export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   @Input() usuario: Usuario | null = null;
   @Input() dashboardCarregando = false;
 
@@ -46,6 +53,7 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
   @ViewChild('chatBody') private chatBody?: ElementRef<HTMLElement>;
 
   aberto = false;
+  isFullscreen = false;
   mensagem = '';
   carregando = false;
   tutorialAtivo = false;
@@ -56,6 +64,19 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnInit(): void {
     this.reiniciarBoasVindas();
+    this.checkFullscreen();
+    if (typeof window !== 'undefined') {
+      fromEvent(window, 'resize')
+        .pipe(debounceTime(150), takeUntilDestroyed(this.destroyRef))
+        .subscribe(() => this.checkFullscreen());
+    }
+  }
+
+  private checkFullscreen(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    this.isFullscreen = window.innerWidth < 768;
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -84,6 +105,10 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
   fechar(): void {
     this.aberto = false;
     this.definirBloqueioScrollMobile(false);
+  }
+
+  fecharChat(): void {
+    this.fechar();
   }
 
   usarSugestao(s: JarvisChatSugestao): void {

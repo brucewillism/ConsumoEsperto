@@ -1,7 +1,20 @@
 <!-- Layout Principal - Black Dashboard Theme -->
 <div class="app-container">
+  <div
+    class="sidebar-overlay"
+    *ngIf="!isLoginPage"
+    [class.ativo]="isSidebarOpen && (isMobile || isTablet)"
+    (click)="toggleSidebar()"
+    aria-hidden="true"
+  ></div>
+
   <!-- Sidebar - Só aparece quando não estiver na tela de login -->
-  <aside class="sidebar" [class.collapsed]="sidebarCollapsed" *ngIf="!isLoginPage">
+  <aside
+    class="sidebar"
+    [class.collapsed]="sidebarCollapsed && !isMobile && !isTablet"
+    [class.sidebar--aberta]="isSidebarOpen"
+    *ngIf="!isLoginPage"
+  >
     <div class="sidebar-header">
       <div class="logo">
         <i class="fas fa-chart-line"></i>
@@ -150,7 +163,8 @@
   <!-- Main Content -->
   <main class="main-content" 
         [class.full-width]="isLoginPage"
-        [class.sidebar-collapsed]="sidebarCollapsed">
+        [class.shell-mobile]="isMobile"
+        [class.sidebar-collapsed]="sidebarCollapsed && !isMobile && !isTablet">
     <!-- Header - Só aparece quando não estiver na tela de login -->
     <header class="header" 
             *ngIf="!isLoginPage"
@@ -249,6 +263,25 @@
       <router-outlet></router-outlet>
     </div>
   </main>
+
+  <nav class="bottom-nav" *ngIf="isMobile && !isLoginPage" aria-label="Navegação principal">
+    <a class="bottom-nav__item" routerLink="/dashboard" routerLinkActive="ativo" [routerLinkActiveOptions]="{ exact: true }">
+      <span class="bottom-nav__icon" aria-hidden="true">📊</span>
+      <span class="bottom-nav__label">Dashboard</span>
+    </a>
+    <a class="bottom-nav__item" routerLink="/transacoes" routerLinkActive="ativo">
+      <span class="bottom-nav__icon" aria-hidden="true">↕️</span>
+      <span class="bottom-nav__label">Transações</span>
+    </a>
+    <a class="bottom-nav__item" routerLink="/cartoes" routerLinkActive="ativo">
+      <span class="bottom-nav__icon" aria-hidden="true">💳</span>
+      <span class="bottom-nav__label">Cartões</span>
+    </a>
+    <button type="button" class="bottom-nav__item" (click)="toggleSidebar()" aria-label="Abrir menu">
+      <span class="bottom-nav__icon" aria-hidden="true">☰</span>
+      <span class="bottom-nav__label">Menu</span>
+    </button>
+  </nav>
 </div>
 
 <div

@@ -1,0 +1,37 @@
+// Breakpoints centralizados — mobile-first (ConsumoEsperto v5.1)
+$bp-xs: 360px;
+$bp-sm: 480px;
+$bp-md: 768px;
+$bp-lg: 1024px;
+$bp-xl: 1280px;
+$bp-2xl: 1536px;
+
+@mixin sm-up {
+  @media (min-width: #{$bp-sm}) {
+    @content;
+  }
+}
+
+@mixin md-up {
+  @media (min-width: #{$bp-md}) {
+    @content;
+  }
+}
+
+@mixin lg-up {
+  @media (min-width: #{$bp-lg}) {
+    @content;
+  }
+}
+
+@mixin xl-up {
+  @media (min-width: #{$bp-xl}) {
+    @content;
+  }
+}
+
+@mixin md-down {
+  @media (max-width: #{$bp-md - 1px}) {
+    @content;
+  }
+}

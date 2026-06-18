@@ -1,10 +1,12 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router, NavigationEnd, Event as RouterEvent } from '@angular/router';
 import { hudRouteAnimations } from './app.animations';
 import { AuthService } from './services/auth.service';
 import { Usuario } from './models/usuario.model';
-import { filter } from 'rxjs/operators';
+import { filter, debounceTime } from 'rxjs/operators';
+import { fromEvent } from 'rxjs';
 import { LoadingService, ShellOverlayState } from './services/loading.service';
 import { InboxNotification, NotificacaoInboxService } from './services/notificacao-inbox.service';
 import { ScoreService, UsuarioScore } from './services/score.service';
@@ -19,6 +21,9 @@ import { LoadingIndicatorComponent } from './components/loading-indicator/loadin
   animations: [hudRouteAnimations],
 })
 export class AppComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+  private viewportAnterior = 0;
+
   title = 'ConsumoEsperto';
 
   /** Estado para re-disparar hudRouteAnimations a cada navegação. */
@@ -27,6 +32,9 @@ export class AppComponent implements OnInit {
   isAuthenticated = false;
   currentUser: Usuario | null = null;
   sidebarCollapsed = false;
+  isMobile = false;
+  isTablet = false;
+  isSidebarOpen = false;
   isLoginPage = false;
 
   userName = '';
@@ -97,13 +105,35 @@ export class AppComponent implements OnInit {
           this.loadingService.endAuthFlow();
         }
         this.closeDropdowns();
-        if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
-          this.sidebarCollapsed = false;
-        }
       });
+
+    this.checkScreenSize();
+    if (typeof window !== 'undefined') {
+      fromEvent(window, 'resize')
+        .pipe(debounceTime(150), takeUntilDestroyed(this.destroyRef))
+        .subscribe(() => this.checkScreenSize());
+    }
+  }
+
+  checkScreenSize(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const w = window.innerWidth;
+    const antes = this.viewportAnterior;
+    this.isMobile = w < 768;
+    this.isTablet = w >= 768 && w < 1024;
+    if (this.isMobile && antes >= 768) {
+      this.isSidebarOpen = false;
+    }
+    this.viewportAnterior = w;
   }
 
   toggleSidebar() {
+    if (this.isMobile || this.isTablet) {
+      this.isSidebarOpen = !this.isSidebarOpen;
+      return;
+    }
     this.sidebarCollapsed = !this.sidebarCollapsed;
   }
 
@@ -191,8 +221,8 @@ export class AppComponent implements OnInit {
     this.closeDropdowns();
     const destino = path.split('?')[0] || '/';
     void this.router.navigateByUrl(destino);
-    if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
-      this.sidebarCollapsed = false;
+    if (this.isMobile || this.isTablet) {
+      this.isSidebarOpen = false;
     }
   }
 

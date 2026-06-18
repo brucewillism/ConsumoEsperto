@@ -15,11 +15,18 @@
     aria-hidden="true"
   ></div>
 
-  <section class="ai-chat-panel" *ngIf="aberto" role="dialog" aria-modal="true" aria-label="J.A.R.V.I.S.">
-    <header>
+  <section
+    class="ai-chat-panel"
+    [class.ai-chat-panel--fullscreen]="isFullscreen"
+    *ngIf="aberto"
+    role="dialog"
+    aria-modal="true"
+    aria-label="J.A.R.V.I.S."
+  >
+    <header class="ai-chat-panel-header">
       <strong>J.A.R.V.I.S.</strong>
-      <button type="button" class="btn-fechar-chat" (click)="fechar()" aria-label="Fechar chat">
-        <i class="fas fa-times" aria-hidden="true"></i>
+      <button type="button" class="btn-fechar-chat jarvis-chat-fechar" (click)="fecharChat()" aria-label="Fechar chat">
+        <span aria-hidden="true">✕</span>
       </button>
     </header>
 
@@ -55,7 +62,7 @@
       </button>
     </div>
 
-    <div class="chat-body" #chatBody>
+    <div class="chat-body jarvis-chat-body" #chatBody>
       <div class="chat-msg" *ngFor="let msg of historico" [class.user]="msg.autor === 'user'">
         {{ msg.texto }}
       </div>
@@ -67,7 +74,7 @@
       </div>
     </div>
 
-    <form class="chat-form" (ngSubmit)="enviar()">
+    <form class="chat-form jarvis-chat-input" (ngSubmit)="enviar()">
       <textarea
         name="chatMensagem"
         [(ngModel)]="mensagem"

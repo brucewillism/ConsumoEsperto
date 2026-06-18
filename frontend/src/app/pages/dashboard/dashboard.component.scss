@@ -1,4 +1,6 @@
 // —— Central de Comando J.A.R.V.I.S. · HUD Stark / Industrial ——
+@use 'breakpoints' as *;
+
 $jarvis-bg: #0d0e12;
 $neon-cyan: #00e5ff;
 $neon-purple: #7b1fa2;
@@ -204,6 +206,18 @@ $neon-amber: #ffc107;
   grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
   margin-bottom: 1.25rem;
+
+  &.dashboard-cards-grid {
+    grid-template-columns: 1fr;
+
+    @include sm-up {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @include lg-up {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
 
   @media (max-width: 960px) {
     grid-template-columns: 1fr;
@@ -414,6 +428,14 @@ $neon-amber: #ffc107;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1.1rem;
   align-items: stretch;
+
+  &.dashboard-sections-grid {
+    grid-template-columns: 1fr;
+
+    @include lg-up {
+      grid-template-columns: 2fr 1fr;
+    }
+  }
 
   @media (max-width: 960px) {
     grid-template-columns: 1fr;
@@ -1221,9 +1243,15 @@ $neon-amber: #ffc107;
 }
 
 .renda-chart-box {
-  width: 140px;
-  height: 140px;
+  width: 100%;
+  height: 200px;
+  max-width: 100%;
   flex-shrink: 0;
+
+  @include md-up {
+    width: 140px;
+    height: 140px;
+  }
 }
 
 .renda-legend-list {
@@ -1502,10 +1530,18 @@ $neon-amber: #ffc107;
 // Seção de gráficos
 .dashboard-charts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  grid-template-columns: 1fr;
   gap: 2rem;
   margin-bottom: 2rem;
   margin-left: 0;
+
+  @include sm-up {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @include lg-up {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  }
 }
 
 .chart-card {
@@ -1583,6 +1619,19 @@ $neon-amber: #ffc107;
   .chart-content {
     height: 300px;
     max-width: 100%;
+  }
+
+  .grafico-container {
+    width: 100%;
+    height: 200px;
+
+    @include md-up {
+      height: 280px;
+    }
+
+    @include lg-up {
+      height: 320px;
+    }
   }
   
   h3 {

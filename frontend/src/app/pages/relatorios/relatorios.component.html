@@ -198,7 +198,7 @@
     </mat-card-header>
     <mat-card-content>
       <div class="table-container">
-        <table class="transacoes-table">
+        <table class="transacoes-table tabela-responsiva">
           <thead>
             <tr>
               <th>📅 Data</th>
@@ -211,20 +211,20 @@
           </thead>
           <tbody>
             <tr *ngFor="let transacao of transacoes.slice(0, 20)">
-              <td>{{ (transacao.dataTransacao ?? transacao.data) | date:'dd/MM/yyyy' }}</td>
-              <td class="td-ellipsis" [title]="descricaoRelatorio(transacao)">{{ descricaoRelatorio(transacao) }}</td>
-              <td class="td-categoria" [title]="categoriaRotulo(transacao)">
+              <td data-label="Data">{{ (transacao.dataTransacao ?? transacao.data) | date:'dd/MM/yyyy' }}</td>
+              <td class="td-ellipsis" data-label="Descrição" [title]="descricaoRelatorio(transacao)">{{ descricaoRelatorio(transacao) }}</td>
+              <td class="td-categoria" data-label="Categoria" [title]="categoriaRotulo(transacao)">
                 <mat-chip [color]="transacao.tipoTransacao === 'RECEITA' ? 'primary' : 'accent'" selected class="categoria-chip">
                   {{ categoriaRotulo(transacao) }}
                 </mat-chip>
               </td>
-              <td class="td-cartao" [title]="getNomeCartao(transacao.cartaoCreditoId)">{{ getNomeCartao(transacao.cartaoCreditoId) }}</td>
-              <td>
+              <td class="td-cartao" data-label="Cartão" [title]="getNomeCartao(transacao.cartaoCreditoId)">{{ getNomeCartao(transacao.cartaoCreditoId) }}</td>
+              <td data-label="Tipo">
                 <mat-chip [color]="transacao.tipoTransacao === 'RECEITA' ? 'primary' : 'warn'" selected>
                   {{ transacao.tipoTransacao === 'RECEITA' ? 'Receita' : 'Despesa' }}
                 </mat-chip>
               </td>
-              <td class="td-moeda" [class.positivo]="transacao.tipoTransacao === 'RECEITA'" [class.negativo]="transacao.tipoTransacao === 'DESPESA'">
+              <td class="td-moeda" data-label="Valor" [class.positivo]="transacao.tipoTransacao === 'RECEITA'" [class.negativo]="transacao.tipoTransacao === 'DESPESA'">
                 <span class="valor-com-icone-juros">
                   R$ {{ transacao.valor | number:'1.2-2' }}
                   <mat-icon

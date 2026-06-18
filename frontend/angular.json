@@ -91,6 +91,9 @@
             
             // Linguagem de estilo inline (SCSS)
             "inlineStyleLanguage": "scss",
+            "stylePreprocessorOptions": {
+              "includePaths": ["src/styles"]
+            },
             
             // Arquivos estáticos (imagens, fontes, etc.)
             "assets": [

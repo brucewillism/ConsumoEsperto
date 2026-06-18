@@ -1,4 +1,6 @@
 // Shell: fundos escuros. Ações “primary” vêm de src/styles.scss (--exec-emerald / --primary-color).
+@use 'breakpoints' as *;
+
 :root {
   --shell-bg-from: #0d0e12;
   --shell-bg-to: #12141c;
@@ -46,38 +48,70 @@ body {
   background-color: var(--shell-bg-from);
 }
 
-// Sidebar - SOLUÇÃO DEFINITIVA PARA SOBREPOSIÇÃO
+// Sidebar — mobile-first (gaveta) + fixa no desktop
 .sidebar {
   width: var(--sidebar-width);
   background: linear-gradient(135deg, var(--shell-bg-from) 0%, var(--shell-bg-to) 100%);
   border-right: 1px solid var(--border-color);
-  transition: width 0.3s ease;
-  position: fixed !important;
+  transition: transform 0.25s ease, width 0.3s ease;
+  position: fixed;
   height: 100vh;
   height: 100dvh;
   max-height: 100dvh;
-  z-index: 1005;
+  z-index: 200;
   overflow: hidden;
-  left: 0 !important;
-  top: 0 !important;
+  left: 0;
+  top: 0;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   min-height: 0;
   isolation: isolate;
+  transform: translateX(-100%);
+
+  &.sidebar--aberta {
+    transform: translateX(0);
+  }
+
+  @include lg-up {
+    transform: none;
+    z-index: 1005;
+
+    &.sidebar--aberta {
+      transform: none;
+    }
+  }
 
   &.collapsed {
-    width: var(--sidebar-collapsed-width) !important;
+    @include lg-up {
+      width: var(--sidebar-collapsed-width);
 
-    .logo span,
-    .nav-link .nav-label,
-    .sidebar-footer {
-      opacity: 0;
-      visibility: hidden;
-      width: 0;
-      overflow: hidden;
-      white-space: nowrap;
+      .logo span,
+      .nav-link .nav-label,
+      .sidebar-footer {
+        opacity: 0;
+        visibility: hidden;
+        width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+      }
     }
+  }
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 199;
+
+  &.ativo {
+    display: block;
+  }
+
+  @include lg-up {
+    display: none !important;
   }
 }
 
@@ -296,27 +330,35 @@ body {
   }
 }
 
-// Main Content - SOLUÇÃO DEFINITIVA PARA SOBREPOSIÇÃO
+// Main Content
 .main-content {
   flex: 1;
-  margin-left: var(--sidebar-width) !important;
-  transition: margin-left 0.3s ease;
   min-height: 100vh;
   background-color: var(--shell-bg-from);
-  width: calc(100vw - var(--sidebar-width)) !important;
+  width: 100%;
   overflow-x: hidden;
   position: relative;
   z-index: 1;
-  
+  margin-left: 0;
+  transition: margin-left 0.3s ease;
+
   &.full-width {
-    margin-left: 0 !important;
-    width: 100vw !important;
+    margin-left: 0;
+    width: 100%;
   }
-  
-  // Quando o sidebar está colapsado
-  &.sidebar-collapsed {
-    margin-left: var(--sidebar-collapsed-width) !important;
-    width: calc(100vw - var(--sidebar-collapsed-width)) !important;
+
+  @include lg-up {
+    margin-left: var(--sidebar-width);
+    width: calc(100vw - var(--sidebar-width));
+
+    &.sidebar-collapsed {
+      margin-left: var(--sidebar-collapsed-width);
+      width: calc(100vw - var(--sidebar-collapsed-width));
+    }
+  }
+
+  &.shell-mobile .page-content {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -360,6 +402,12 @@ body {
   padding: 0.5rem;
   border-radius: 0.375rem;
   transition: all 0.3s ease;
+  min-width: 44px;
+  min-height: 44px;
+
+  @include md-down {
+    display: none;
+  }
   
   &:hover {
     background-color: var(--shell-bg-hover);
@@ -733,41 +781,56 @@ body {
   left: 0 !important;
 }
 
-// Responsividade
-@media (max-width: 1024px) {
-  .dropdown-backdrop,
-  .shell-loading-layer,
-  .shell-loading-layer.sidebar-collapsed {
-    left: 0;
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  display: flex;
+  align-items: stretch;
+  z-index: 100;
+  background: linear-gradient(135deg, var(--shell-bg-from) 0%, var(--shell-bg-to) 100%);
+  border-top: 1px solid var(--border-color);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+
+  @include lg-up {
+    display: none;
   }
 
-  .sidebar {
-    transform: translateX(-100%);
-    
-    &.collapsed {
-      transform: translateX(0);
+  &__item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-decoration: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 10px;
+    background: none;
+    border: none;
+    min-height: 44px;
+    touch-action: manipulation;
+
+    &.ativo {
+      color: var(--accent-color);
     }
   }
-  
-  .main-content {
-    margin-left: 0 !important;
-    width: 100vw !important;
+
+  &__icon {
+    font-size: 20px;
+    line-height: 1;
   }
-  
-  .header {
-    margin-left: 0 !important;
-    padding: 0 1rem;
-    width: 100vw !important;
-  }
-  
-  .page-content {
-    margin-left: 0 !important;
-    padding: 1rem;
-    width: 100% !important;
+
+  &__label {
+    line-height: 1.1;
   }
 }
 
-@media (max-width: 768px) {
+// Responsividade — ajustes finos (dropdowns, padding)
+@include md-down {
   .notifications-dropdown {
     width: 300px;
     right: -50px;
@@ -779,6 +842,28 @@ body {
   
   .breadcrumb {
     display: none;
+  }
+}
+
+@include md-down {
+  .dropdown-backdrop,
+  .shell-loading-layer,
+  .shell-loading-layer.sidebar-collapsed {
+    left: 0;
+  }
+
+  .header {
+    padding: 0 1rem;
+    width: 100%;
+  }
+
+  .page-content {
+    padding: 1rem;
+    width: 100%;
+
+    &::before {
+      left: 0;
+    }
   }
 }
 

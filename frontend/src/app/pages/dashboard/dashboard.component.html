@@ -136,7 +136,7 @@
       </div>
     </div>
 
-    <section class="hud-command-strip" *ngIf="!errorMessage">
+    <section class="hud-command-strip dashboard-cards-grid" *ngIf="!errorMessage">
       <article class="hud-card hud-glass hud-animate" [style.--stagger]="1">
         <header class="hud-card-head">
           <span class="hud-chip">Sentinela</span>
@@ -260,7 +260,7 @@
       class="hud-bottom-deck hud-animate"
       *ngIf="!errorMessage && (insightsFeed.length || sugestoesContencaoJarvis.length || sugestoesModoViagemJarvis.length || categoriaRanking.length || rendaConfig)"
       [style.--stagger]="6">
-      <div class="hud-bottom-grid">
+      <div class="hud-bottom-grid dashboard-sections-grid">
         <div class="hud-bottom-col">
           <div class="hud-card hud-glass hud-feed" *ngIf="insightsFeed.length">
             <div class="hud-feed-head">
@@ -402,7 +402,7 @@
               </p>
             </div>
             <div class="renda-config-body" *ngIf="rendaConfig.tipoConfiguracaoRenda === 'CONTRACHEQUE' || !rendaConfig.tipoConfiguracaoRenda">
-              <div class="renda-chart-box">
+              <div class="renda-chart-box grafico-container">
                 <canvas
                   baseChart
                   type="doughnut"
@@ -420,7 +420,7 @@
               </ul>
             </div>
             <div class="renda-config-body renda-config-simple" *ngIf="rendaConfig.tipoConfiguracaoRenda === 'RECEBIMENTO_UNICO' || rendaConfig.tipoConfiguracaoRenda === 'FLUXO_DIARIO'">
-              <div class="renda-chart-box" *ngIf="rendaDoughnutChartData.labels?.length">
+              <div class="renda-chart-box grafico-container" *ngIf="rendaDoughnutChartData.labels?.length">
                 <canvas
                   baseChart
                   type="doughnut"
@@ -529,7 +529,7 @@
             <p>Nenhuma projeção disponível</p>
             <small>Adicione transações para ver patrimônio real e safra cascata</small>
           </div>
-          <div class="chart-content chart-content--safra" *ngIf="spendingLineChartData.labels?.length">
+          <div class="chart-content chart-content--safra grafico-container" *ngIf="spendingLineChartData.labels?.length">
             <canvas
               baseChart
               [type]="'line'"
@@ -558,7 +558,7 @@
             <p>Nenhum gasto por categoria</p>
             <small>Registre despesas no mês atual para ver o gráfico (inclui lançamentos sem categoria)</small>
           </div>
-          <div class="chart-content" *ngIf="doughnutChartData.labels?.length">
+          <div class="chart-content grafico-container" *ngIf="doughnutChartData.labels?.length">
             <canvas
               baseChart
               [type]="'doughnut'"
