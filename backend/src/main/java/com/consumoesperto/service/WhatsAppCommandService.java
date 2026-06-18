@@ -127,6 +127,7 @@ public class WhatsAppCommandService {
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
     private final ChequeEspecialConfirmacaoService chequeEspecialConfirmacaoService;
     private final TransferenciaContaService transferenciaContaService;
+    private final SaudacaoService saudacaoService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -264,6 +265,10 @@ public class WhatsAppCommandService {
         if (ambiguidade.isPresent()) {
             return ambiguidade;
         }
+        Optional<String> saudacao = tryRespostaSaudacaoIsolada(userId, text);
+        if (saudacao.isPresent()) {
+            return saudacao;
+        }
         Optional<String> agendamento = tryResolveAgendamentoConfirmacao(userId, text);
         if (agendamento.isPresent()) {
             return agendamento;
@@ -371,6 +376,22 @@ public class WhatsAppCommandService {
             return jarvisNota;
         }
         return Optional.empty();
+    }
+
+    private Optional<String> tryRespostaSaudacaoIsolada(Long userId, String text) {
+        if (!saudacaoService.isSaudacaoIsolada(text)) {
+            return Optional.empty();
+        }
+        return Optional.of(responderSaudacaoJarvis(userId, text));
+    }
+
+    private String responderSaudacaoJarvis(Long userId, String text) {
+        String norm = saudacaoService.normalizarParaDetecao(text);
+        String resposta = saudacaoService.gerarResposta(saudacaoService.extrairSaudacaoUsada(norm), userId);
+        if (jarvisTutorialService.isEmTutorial(userId)) {
+            resposta += saudacaoService.lembreteTutorialAtivo();
+        }
+        return msgOk("J.A.R.V.I.S.", resposta);
     }
 
     private JsonNode parseCommandComFallback(Long userId, String text) {
@@ -1784,6 +1805,7 @@ public class WhatsAppCommandService {
             && !"START_TUTORIAL".equals(action)
             && !"STOP_TUTORIAL".equals(action)
             && !"TUTORIAL_STEP".equals(action)
+            && !"GREETING".equals(action)
             && confianca < 0.55d) {
             return msgErro(userId, "Confiança da IA",
                 "Não executei nada. Confiança " + String.format(Locale.US, "%.0f%%", confianca * 100)
@@ -1837,6 +1859,7 @@ public class WhatsAppCommandService {
                 userId, sourceText, cmd.path("reportMonth").asInt(0));
             case "STOP_TUTORIAL", "TUTORIAL_STEP" ->
                 jarvisTutorialService.responderAcaoTutorial(action, userId, sourceText, () -> "");
+            case "GREETING" -> responderSaudacaoJarvis(userId, sourceText);
             case "GENERATE_REPORT" -> msgInfo("Relatório PDF",
                 "Para receber o PDF aqui no WhatsApp, usa a Evolution ligada a este número. No app: *Relatórios → PDF*.");
             default -> {

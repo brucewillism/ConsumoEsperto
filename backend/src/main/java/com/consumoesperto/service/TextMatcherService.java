@@ -87,7 +87,7 @@ public class TextMatcherService {
             .toList();
     }
 
-    private static String normalizarTexto(String texto) {
+    public String normalizarTexto(String texto) {
         return ApelidoNormalizador.normalizar(texto);
     }
 }

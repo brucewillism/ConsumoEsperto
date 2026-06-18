@@ -22,6 +22,11 @@ public class JarvisTutorialService {
     private static final Pattern CAPITULO_NUMERO = Pattern.compile("^[1-5]$");
 
     private final Map<Long, TutorialSessao> sessoes = new ConcurrentHashMap<>();
+    private final SaudacaoService saudacaoService;
+
+    public JarvisTutorialService(SaudacaoService saudacaoService) {
+        this.saudacaoService = saudacaoService;
+    }
 
     public boolean isEmTutorial(Long userId) {
         return userId != null && sessoes.getOrDefault(userId, new TutorialSessao()).isEmTutorial();
@@ -59,6 +64,12 @@ public class JarvisTutorialService {
             int capitulo = Integer.parseInt(norm);
             sessao.setCapituloAtual(capitulo);
             return Optional.of(getCapitulo(capitulo));
+        }
+
+        if (sessao.isEmTutorial() && saudacaoService.isSaudacaoIsolada(text)) {
+            String resposta = saudacaoService.gerarResposta(
+                saudacaoService.extrairSaudacaoUsada(saudacaoService.normalizarParaDetecao(text)), userId);
+            return Optional.of(resposta + saudacaoService.lembreteTutorialAtivo());
         }
 
         if (isIniciarTutorial(norm) || extrairCapituloDaMensagem(norm) > 0) {

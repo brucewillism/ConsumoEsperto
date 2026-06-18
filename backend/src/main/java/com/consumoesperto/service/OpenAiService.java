@@ -131,7 +131,7 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt, contextoFinanceiro);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|START_TUTORIAL|STOP_TUTORIAL|TUTORIAL_STEP|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|START_TUTORIAL|STOP_TUTORIAL|TUTORIAL_STEP|GREETING|UNKNOWN), " +
             "contaOrigem (apelido/nome da conta de origem na transferência), contaDestino (apelido/nome da conta de destino na transferência), " +
             "mes (1-12, opcional — consultas de extrato/orçamento), ano (ex.: 2026, opcional), tipo (DESPESA|RECEITA, opcional — filtro de extrato), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
@@ -279,6 +279,11 @@ public class OpenAiService {
             "queimei/estourei→orçamento excedido; guardei/separei→poupança/meta; parcelei/em x vezes→parcelado.\n" +
             "REGRAS: (1) corrija erros óbvios pelo contexto; (2) abreviação dupla→entidade_ambigua+opcoes_entidade; " +
             "(3) não invente entidade→entidade_desconhecida; (4) preencha nome_normalizado com o nome corrigido.\n" +
+            "Intenção GREETING: ative quando a mensagem for APENAS uma saudação informal brasileira " +
+            "(oi, olá, iae, iai, e aí, salve, opa, fala, beleza, tudo bem, bom dia, boa tarde, boa noite), sem pedido financeiro.\n" +
+            "REGRA IMPORTANTE: se além da saudação houver um comando financeiro na mesma frase " +
+            "(ex.: 'oi jarvis, quanto tenho na conta?'), classifique pela INTENÇÃO FINANCEIRA principal " +
+            "(LIST_ACCOUNTS, CREATE_EXPENSE, etc.), NÃO como GREETING.\n" +
             "- Se faltar dado essencial, retornar action UNKNOWN com errorMessage explicando o que faltou.\n" +
             "- amount deve ser número decimal sem símbolo de moeda.\n" +
             "- Sempre retornar o campo confianca com valor entre 0 e 1.";
