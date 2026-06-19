@@ -27,6 +27,7 @@ import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.MemoriaCategoriaOrigem;
 import com.consumoesperto.model.TipoConfiguracaoRenda;
+import com.consumoesperto.model.PropostaFinanceira;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -128,6 +129,8 @@ public class WhatsAppCommandService {
     private final ChequeEspecialConfirmacaoService chequeEspecialConfirmacaoService;
     private final TransferenciaContaService transferenciaContaService;
     private final SaudacaoService saudacaoService;
+    private final JarvisContextoFinanceiroService jarvisContextoFinanceiroService;
+    private final FinancialAdviceCalculator financialAdviceCalculator;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -1795,6 +1798,7 @@ public class WhatsAppCommandService {
             && !"GERAR_RELATORIO".equals(action)
             && !"SET_SALARY_CONFIG".equals(action)
             && !"SET_INCOME_PROFILE".equals(action)
+            && !"GET_FINANCIAL_ADVICE".equals(action)
             && !"MANAGE_ENTITY".equals(action)
             && !"LIST_DEBTS".equals(action)
             && !"SETTLE_DEBT".equals(action)
@@ -1824,6 +1828,7 @@ public class WhatsAppCommandService {
             case "UPDATE_ENTITY_CONFIG" -> formatarRespostaEntidade(whatsAppEntityConfigUpdateService.executar(userId, normalizarUpdateEntityConfig(cmd, sourceText)), userId);
             case "UPDATE_ACCOUNT_CONFIG" -> handleUpdateAccountConfig(cmd, userId, sourceText);
             case "SIMULATE_PURCHASE_GOAL" -> handleSimulatePurchaseGoal(cmd, userId, sourceText);
+            case "GET_FINANCIAL_ADVICE" -> handleFinancialAdvice(cmd, userId, sourceText);
             case "GET_INSIGHTS" -> {
                 String body = insightService.montarRecorrenciasWhatsapp(userId);
                 if (body != null && body.startsWith("Não há despesas")) {
@@ -2257,8 +2262,48 @@ public class WhatsAppCommandService {
     }
 
     /**
-     * Oráculo “grande compra” — só quando há intenção explícita de análise de compra.
-     * Não intercepta cadastro de cartão (limite/vencimento) nem gestão de conta.
+     * Conselho financeiro determinístico (J.A.R.V.I.S. Advisor) — Java calcula, IA narra.
+     */
+    private String handleFinancialAdvice(JsonNode cmd, Long userId, String sourceText) {
+        PropostaFinanceira proposta = PropostaFinanceira.fromComando(cmd, sourceText);
+        return handleFinancialAdvice(proposta, userId, sourceText);
+    }
+
+    private String handleFinancialAdvice(PropostaFinanceira proposta, Long userId, String sourceText) {
+        if (proposta == null) {
+            return msgErro(userId, "Conselho financeiro",
+                "Não consegui entender a proposta. Informa valor, parcelas (se houver) e o que pretende comprar ou financiar.");
+        }
+        boolean parcelado = PropostaFinanceira.ehParcelado(proposta);
+        if (!parcelado
+            && (proposta.getValorTotal() == null || proposta.getValorTotal().compareTo(BigDecimal.ZERO) <= 0)) {
+            return msgErro(userId, "Conselho financeiro",
+                "Me passa o valor da compra ou do empréstimo para eu analisar, chefe.");
+        }
+        if (parcelado
+            && (proposta.getValorParcela() == null || proposta.getQuantidadeParcelas() == null)) {
+            return msgErro(userId, "Conselho financeiro",
+                "Para analisar parcelas, preciso do valor da parcela e da quantidade (ex.: *10x de 650*).");
+        }
+
+        var ctx = jarvisContextoFinanceiroService.montarSnapshot(userId);
+
+        // Fallback 1: renda não configurada em operação parcelada
+        if (parcelado && ctx.getRendaLiquidaMensal() == null) {
+            return msgInfo("Conselho financeiro",
+                "Chefe, pra te dar um veredito preciso sobre essa parcela eu preciso saber quanto "
+                    + "você recebe por mês. Quer configurar sua renda rapidinho? É só me dizer algo como "
+                    + "_'minha renda é 4 mil por mês'_ ou acessar a aba Renda no app.");
+        }
+
+        var resultado = financialAdviceCalculator.calcular(proposta, ctx);
+        String narrativa = openAiService.narrarConselho(userId, resultado);
+        return msgOk("Conselho — J.A.R.V.I.S.", narrativa);
+    }
+
+    /**
+     * Atalho local para análise de compra/empréstimo — redireciona ao Advisor determinístico.
+     * Substitui o antigo oráculo de grande compra (sem cálculo de juros).
      */
     private Optional<String> tryAnaliseGrandeCompra(Long userId, String sourceText) {
         if (sourceText == null || sourceText.isBlank()) {
@@ -2270,10 +2315,6 @@ public class WhatsAppCommandService {
         if (contextoCartaoOuCadastroForaOracle(t)) {
             return Optional.empty();
         }
-        BigDecimal valor = extrairMaiorValorMonetario(sourceText);
-        if (valor == null || valor.compareTo(new BigDecimal("500")) < 0) {
-            return Optional.empty();
-        }
         boolean intencaoAnalise = t.contains("vale a pena")
             || t.contains("vale pena")
             || t.contains("compensa")
@@ -2281,33 +2322,45 @@ public class WhatsAppCommandService {
             || t.contains("deve comprar")
             || t.contains("sera que compro")
             || t.contains("será que compro")
+            || t.contains("posso comprar")
+            || t.contains("o que acha")
             || t.contains("grande compra")
             || t.contains("oraculo") || t.contains("oráculo")
             || t.contains("analise se") || t.contains("análise se")
             || t.contains("analise:") || t.contains("análise:")
+            || t.contains("consignado")
+            || t.contains("emprestimo") || t.contains("empréstimo")
+            || t.contains("financiamento") || t.contains("financiar")
             || t.contains("iphone")
             || t.contains("notebook")
             || t.contains("geladeira")
             || t.contains("televisao") || t.contains("televisão")
             || t.contains("carro zero")
+            || t.contains("moto")
             || t.contains("parcelado em")
+            || t.contains("parcela")
             || (t.contains("comprar") && (t.contains("agora") || t.contains("essa") || t.contains("este") || t.contains("isto")));
         if (!intencaoAnalise) {
             return Optional.empty();
         }
-        BigDecimal saldo = saldoService.saldoContaCorrente(userId);
-        if (saldo == null) {
-            saldo = BigDecimal.ZERO;
+        PropostaFinanceira proposta = PropostaFinanceira.fromTextoLivre(sourceText);
+        boolean parcelado = PropostaFinanceira.ehParcelado(proposta);
+        if (!parcelado) {
+            BigDecimal valor = proposta.getValorTotal();
+            if (valor == null) {
+                valor = extrairMaiorValorMonetario(sourceText);
+                proposta.setValorTotal(valor);
+            }
+            if (valor == null || valor.compareTo(new BigDecimal("200")) < 0) {
+                return Optional.empty();
+            }
         }
-        BigDecimal rendimentoMes = valor.multiply(new BigDecimal("0.01")).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal pct = saldo.compareTo(BigDecimal.ZERO) <= 0
-            ? new BigDecimal("100")
-            : valor.divide(saldo, 4, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100))
-                .setScale(1, RoundingMode.HALF_UP);
-        String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
-        String msg = jarvisProtocolService.proativoAnaliseGrandeCompra(voc, BRL.format(rendimentoMes), pct, 3);
-        return Optional.of(msgOk("Consultoria — J.A.R.V.I.S.", msg));
+        try {
+            return Optional.of(handleFinancialAdvice(proposta, userId, sourceText));
+        } catch (Exception e) {
+            log.warn("[ADVISOR] falha atalho grande compra userId={}: {}", userId, e.getMessage());
+            return Optional.empty();
+        }
     }
 
     /** Cadastro de cartão / limite / vencimento — não confundir com cenário de “grande compra”. */

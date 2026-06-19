@@ -22,6 +22,12 @@ import java.util.List;
 @Slf4j
 public class MarketDataService {
 
+    /** Série BCB SGS — taxa média de juros crédito PF consignado público (% a.a.). */
+    private static final String SERIE_CONSIGNADO_BCB = "25497";
+    private static final String SERIE_SELIC_BCB = "432";
+    /** Spread estimado sobre Selic quando a série 25497 estiver indisponível. */
+    private static final BigDecimal SPREAD_CONSIGNADO_FALLBACK_AA = new BigDecimal("8");
+
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -36,13 +42,15 @@ public class MarketDataService {
     public MarketIndicatorsDTO buscarIndicadoresResiliente() {
         MarketIndicatorsDTO.MarketIndicatorsDTOBuilder b = MarketIndicatorsDTO.builder().dadosParciais(false);
         boolean parcial = false;
+        BigDecimal selic = null;
         try {
-            BigDecimal selic = bcbUltimoValorNumerico("432");
+            selic = bcbUltimoValorNumerico(SERIE_SELIC_BCB);
             b.selicAa(selic);
         } catch (Exception e) {
             log.debug("BCB Selic indisponível: {}", e.getMessage());
             parcial = true;
         }
+        b.taxaMediaConsignadoAa(resolverTaxaConsignado(selic));
         BigDecimal ipca = null;
         for (String codigo : List.of("433", "13522", "4449")) {
             try {
@@ -87,6 +95,51 @@ public class MarketDataService {
         BigDecimal delta = m.multiply(new BigDecimal("0.40"));
         delta = delta.min(new BigDecimal("0.012"));
         return BigDecimal.ONE.add(delta).setScale(6, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Taxa média consignado público (% a.a.) — série 25497; fallback Selic + 8% a.a.
+     * Nunca lança exceção — retorna referência conservadora se tudo falhar.
+     */
+    public BigDecimal getTaxaMediaConsignadoResiliente() {
+        BigDecimal selic = null;
+        try {
+            BigDecimal consignado = bcbUltimoValorNumerico(SERIE_CONSIGNADO_BCB);
+            if (consignado != null && consignado.compareTo(BigDecimal.ZERO) > 0) {
+                return consignado.setScale(2, RoundingMode.HALF_UP);
+            }
+        } catch (Exception e) {
+            log.debug("BCB consignado série {} indisponível: {}", SERIE_CONSIGNADO_BCB, e.getMessage());
+        }
+        try {
+            selic = bcbUltimoValorNumerico(SERIE_SELIC_BCB);
+        } catch (Exception e) {
+            log.debug("BCB Selic fallback consignado: {}", e.getMessage());
+        }
+        return resolverTaxaConsignado(selic);
+    }
+
+    private BigDecimal resolverTaxaConsignado(BigDecimal selicCache) {
+        try {
+            BigDecimal consignado = bcbUltimoValorNumerico(SERIE_CONSIGNADO_BCB);
+            if (consignado != null && consignado.compareTo(BigDecimal.ZERO) > 0) {
+                return consignado.setScale(2, RoundingMode.HALF_UP);
+            }
+        } catch (Exception e) {
+            log.debug("BCB consignado: {}", e.getMessage());
+        }
+        BigDecimal selic = selicCache;
+        if (selic == null) {
+            try {
+                selic = bcbUltimoValorNumerico(SERIE_SELIC_BCB);
+            } catch (Exception ignored) {
+                // fallback final abaixo
+            }
+        }
+        if (selic != null && selic.compareTo(BigDecimal.ZERO) > 0) {
+            return selic.add(SPREAD_CONSIGNADO_FALLBACK_AA).setScale(2, RoundingMode.HALF_UP);
+        }
+        return new BigDecimal("25.00");
     }
 
     private BigDecimal bcbUltimoValorNumerico(String codigoSerie) throws Exception {

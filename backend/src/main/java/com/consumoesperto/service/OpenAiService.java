@@ -1,6 +1,8 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.model.ResultadoConselho;
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.model.Veredito;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.service.ai.AiGatewayPromptContext;
 import com.consumoesperto.service.ai.AiGatewayService;
@@ -26,7 +28,9 @@ import javax.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -131,7 +135,7 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt, contextoFinanceiro);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|START_TUTORIAL|STOP_TUTORIAL|TUTORIAL_STEP|GREETING|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_FINANCIAL_ADVICE|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|START_TUTORIAL|STOP_TUTORIAL|TUTORIAL_STEP|GREETING|UNKNOWN), " +
             "contaOrigem (apelido/nome da conta de origem na transferência), contaDestino (apelido/nome da conta de destino na transferência), " +
             "mes (1-12, opcional — consultas de extrato/orçamento), ano (ex.: 2026, opcional), tipo (DESPESA|RECEITA, opcional — filtro de extrato), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
@@ -150,6 +154,9 @@ public class OpenAiService {
             "tipoPerfil (CONTRACHEQUE|RECEBIMENTO_UNICO|FLUXO_DIARIO — perfil híbrido de renda), " +
             "salarioBruto, descontosHolerite (total ou use descontosFixos em updates), diaRecebimento (1-31, CONTRACHEQUE), " +
             "valorLiquidoFixo, diaRecebimentoFixo (RECEBIMENTO_UNICO), metaFaturamentoMensal (FLUXO_DIARIO), " +
+            "tipoOperacao (COMPRA_AVISTA|COMPRA_PARCELADA|EMPRESTIMO|CONSIGNADO|FINANCIAMENTO — conselho de compra/empréstimo), " +
+            "valorTotal (valor do bem ou valor tomado no empréstimo), valorParcela (valor de cada parcela), " +
+            "quantidadeParcelas (número de parcelas), descricaoItem (ex.: moto, tênis, consignado), " +
             "updates (objeto JSON com campos a alterar, ex.: {\"limite\":5000,\"apelido\":\"Nubank Ultra\",\"icone\":\"shopping-cart\"}), " +
             "legado cartão: newLimit, newAvailableLimit, newCardName — use UPDATE_ACCOUNT_CONFIG ou UPDATE_ENTITY_CONFIG com updates.\n" +
             "nome_normalizado (nome corrigido da entidade identificada), entidade_ambigua (true se abreviação dupla), " +
@@ -201,6 +208,13 @@ public class OpenAiService {
             "- Se o usuário quiser *simular prazo* de compra/meta (ex: 'quero comprar uma TV de 2000 usando 10% da minha renda', " +
             "'quanto tempo para geladeira 3500 comprometendo 15% do salário'): action SIMULATE_PURCHASE_GOAL, description = item, " +
             "amount = valor total do bem, percentualComprometimento = percentual informado (número, ex: 10 para 10%).\n" +
+            "- Se pedir conselho sobre compra, empréstimo, consignado ou financiamento (ex.: 'vale a pena comprar moto de 15k parcelada?', " +
+            "'consignado de 10 mil em 24x de 550 o que acha?', 'posso comprar um tênis de 800 hoje?', 'devo pegar esse empréstimo?'): " +
+            "action GET_FINANCIAL_ADVICE; preencha tipoOperacao, valorTotal, valorParcela, quantidadeParcelas, descricaoItem. " +
+            "Normalização numérica: '15k'/'15 mil'→15000; '10.000'→10000; '24x de 550'→quantidadeParcelas=24, valorParcela=550; " +
+            "'550 por mês durante 2 anos'→valorParcela=550, quantidadeParcelas=24. " +
+            "Se citar parcelas/consignado/financiamento→operação parcelada; 'à vista'/'hoje'/'agora' sem parcelas→COMPRA_AVISTA. " +
+            "NÃO calcule juros nem veredito — apenas extraia parâmetros.\n" +
             "- Se perguntar sobre recorrência, assinaturas repetidas, gastos fixos mensais (ex: 'tenho recorrência?', 'o que repete?'): action GET_INSIGHTS.\n" +
             "- Se pedir listar/quantos cartões tem (ex.: 'lista meus cartões', 'quantos cartões eu tenho?'): action LIST_CARDS.\n" +
             "- Se pedir saldos das contas, patrimônio em contas ou quanto tem nas contas (ex.: 'quanto eu tenho nas contas?', " +
@@ -563,6 +577,100 @@ public class OpenAiService {
             log.warn("Geração de texto IA indisponível: {}", e.getMessage());
             return fallback;
         }
+    }
+
+    /**
+     * Narra o conselho financeiro — a IA só redige; todos os números já foram calculados em Java.
+     */
+    public String narrarConselho(Long userId, ResultadoConselho resultado) {
+        if (resultado == null) {
+            return "Chefe, não consegui montar o cenário agora. Tenta de novo com valor e parcelas, se houver.";
+        }
+        NumberFormat brl = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+        String vereditoTxt = switch (resultado.getVeredito() != null ? resultado.getVeredito() : Veredito.ATENCAO) {
+            case RISCO_ALTO -> "RISCO_ALTO";
+            case SEGURO -> "SEGURO";
+            case ATENCAO -> "ATENCAO";
+        };
+        StringBuilder dados = new StringBuilder();
+        dados.append("- Veredito: ").append(vereditoTxt).append("\n");
+        dados.append("- Item: ").append(resultado.getDescricaoItem() != null ? resultado.getDescricaoItem() : "item").append("\n");
+        if (resultado.getCustoTotal() != null) {
+            dados.append("- Custo total: ").append(brl.format(resultado.getCustoTotal())).append("\n");
+        }
+        if (resultado.getJurosTotais() != null) {
+            dados.append("- Juros totais: ").append(brl.format(resultado.getJurosTotais())).append("\n");
+        }
+        if (resultado.getTaxaJurosMensal() != null && resultado.getTaxaJurosAnual() != null) {
+            dados.append("- Taxa de juros: ").append(resultado.getTaxaJurosMensal()).append("% ao mês / ")
+                .append(resultado.getTaxaJurosAnual()).append("% ao ano\n");
+        }
+        if (resultado.getPercentualRendaComprometida() != null) {
+            dados.append("- Comprometimento da renda: ").append(resultado.getPercentualRendaComprometida()).append("%\n");
+        }
+        if (resultado.getSaldoAposCompra() != null) {
+            dados.append("- Saldo após a compra: ").append(brl.format(resultado.getSaldoAposCompra())).append("\n");
+        }
+        if (resultado.getReservaMesesApos() != null) {
+            dados.append("- Reserva após a compra: ").append(resultado.getReservaMesesApos()).append(" meses\n");
+        }
+        if (resultado.getMesesReservaAtual() != null) {
+            dados.append("- Reserva atual (Escudo): ").append(resultado.getMesesReservaAtual()).append(" meses\n");
+        }
+        if (resultado.getComparacaoMercado() != null) {
+            dados.append("- Comparação com o mercado: ").append(resultado.getComparacaoMercado());
+            if (resultado.getTaxaMercadoReferencia() != null) {
+                dados.append(" (referência ").append(resultado.getTaxaMercadoReferencia()).append("% a.a.)");
+            }
+            dados.append("\n");
+        }
+        if (resultado.isAvisoSemValorTomado()) {
+            dados.append("- Aviso: valor tomado/à vista não informado — juros não calculados\n");
+        }
+
+        Usuario u = userId == null ? null : usuarioRepository.findById(userId).orElse(null);
+        String contextoFinanceiro = montarContextoFinanceiroSeguro(userId);
+        String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(u, contextoFinanceiro);
+        String system = persona
+            + "Você é o J.A.R.V.I.S., estrategista financeiro pessoal do chefe. Os cálculos JÁ FORAM FEITOS.\n"
+            + "Sua tarefa é APENAS transformar os dados abaixo em uma resposta clara, direta e humana.\n"
+            + "NÃO recalcule nada. NÃO invente números. Use exatamente os valores fornecidos.\n\n"
+            + "REGRAS DE REDAÇÃO:\n"
+            + "1. Comece com o selo do veredito: 🔴 *[RISCO ALTO]* | 🟡 *[ATENÇÃO]* | 🟢 *[PODE IR]*\n"
+            + "2. Explique o PORQUÊ em linguagem simples, sem jargão técnico.\n"
+            + "3. Se houver juros, mostre o impacto concreto no bolso.\n"
+            + "4. Para parcelas, diga quantos % da renda ficam comprometidos.\n"
+            + "5. Em decisões grandes, feche lembrando que a decisão é do chefe.\n"
+            + "6. Tom: direto, honesto, protetor do bolso. Chame de chefe.\n"
+            + "7. Máximo 2 emojis além do selo.\n"
+            + "8. Orientação baseada nos dados cadastrados — não é garantia nem consultoria profissional.\n";
+        String userPrompt = "DADOS CALCULADOS:\n" + dados;
+        String fallback = montarFallbackDeterministico(resultado, brl);
+        return gerarTexto(userId, system, userPrompt, fallback);
+    }
+
+    private static String montarFallbackDeterministico(ResultadoConselho r, NumberFormat brl) {
+        String selo = switch (r.getVeredito() != null ? r.getVeredito() : Veredito.ATENCAO) {
+            case RISCO_ALTO -> "🔴 *[RISCO ALTO]*";
+            case SEGURO -> "🟢 *[PODE IR]*";
+            case ATENCAO -> "🟡 *[ATENÇÃO]*";
+        };
+        StringBuilder sb = new StringBuilder(selo).append(" ");
+        sb.append("Sobre ").append(r.getDescricaoItem() != null ? r.getDescricaoItem() : "essa operação").append(": ");
+        if (r.getCustoTotal() != null) {
+            sb.append("custo total ").append(brl.format(r.getCustoTotal())).append(". ");
+        }
+        if (r.getJurosTotais() != null && r.getJurosTotais().compareTo(BigDecimal.ZERO) > 0) {
+            sb.append("Juros: ").append(brl.format(r.getJurosTotais())).append(". ");
+        }
+        if (r.getPercentualRendaComprometida() != null) {
+            sb.append("Compromete ").append(r.getPercentualRendaComprometida()).append("% da sua renda. ");
+        }
+        if (r.getSaldoAposCompra() != null) {
+            sb.append("Saldo após compra: ").append(brl.format(r.getSaldoAposCompra())).append(". ");
+        }
+        sb.append("A palavra final é sua, chefe.");
+        return sb.toString();
     }
 
     /**

@@ -2,20 +2,25 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.OrcamentoDTO;
 import com.consumoesperto.dto.RendaConfigDTO;
+import com.consumoesperto.model.ContextoFinanceiro;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.DebitoInterno;
+import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.DebitoInternoRepository;
+import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
@@ -47,6 +52,77 @@ public class JarvisContextoFinanceiroService {
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
     private final DespesaFixaService despesaFixaService;
     private final RendaConfigService rendaConfigService;
+    private final TransacaoRepository transacaoRepository;
+
+    /**
+     * Snapshot estruturado para o J.A.R.V.I.S. Advisor — números reais antes da narração IA.
+     * Renda {@code ZERO} é normalizada para {@code null} (dispara fallback de configuração).
+     */
+    public ContextoFinanceiro montarSnapshot(Long userId) {
+        if (userId == null) {
+            return ContextoFinanceiro.builder().build();
+        }
+        try {
+            BigDecimal patrimonio = nz(saldoService.patrimonioLiquido(userId));
+            BigDecimal renda = rendaConfigService.getRendaMensalEstimada(userId);
+            if (renda == null || renda.compareTo(BigDecimal.ZERO) <= 0) {
+                renda = null;
+            } else {
+                renda = renda.setScale(2, RoundingMode.HALF_UP);
+            }
+            BigDecimal fixas = nz(despesaFixaService.somarValorMensal(userId));
+            BigDecimal assinaturas = nz(assinaturaRecorrenteService.totalAssinaturasAtivas(userId));
+            BigDecimal gastoMensal = resolverGastoMensalMedio(userId);
+            BigDecimal mesesReserva = null;
+            if (gastoMensal != null && gastoMensal.compareTo(BigDecimal.ZERO) > 0) {
+                mesesReserva = patrimonio.divide(gastoMensal, 1, RoundingMode.HALF_UP);
+            }
+            return ContextoFinanceiro.builder()
+                .patrimonioLiquido(patrimonio)
+                .rendaLiquidaMensal(renda)
+                .despesasFixas(fixas)
+                .assinaturas(assinaturas)
+                .reservaEmergencia(patrimonio)
+                .gastoMensalMedio(gastoMensal)
+                .mesesReservaAtual(mesesReserva)
+                .build();
+        } catch (Exception e) {
+            log.debug("Snapshot financeiro indisponível userId={}: {}", userId, e.getMessage());
+            return ContextoFinanceiro.builder().build();
+        }
+    }
+
+    private BigDecimal resolverGastoMensalMedio(Long userId) {
+        YearMonth ym = YearMonth.now();
+        LocalDateTime inicio = ym.atDay(1).atStartOfDay();
+        LocalDateTime fim = ym.atEndOfMonth().atTime(23, 59, 59);
+        BigDecimal despesasMes = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+            userId, Transacao.TipoTransacao.DESPESA, inicio, fim);
+        if (despesasMes != null && despesasMes.compareTo(BigDecimal.ZERO) > 0) {
+            return despesasMes.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal soma = BigDecimal.ZERO;
+        int mesesComDado = 0;
+        for (int i = 1; i <= 3; i++) {
+            YearMonth ref = ym.minusMonths(i);
+            LocalDateTime ini = ref.atDay(1).atStartOfDay();
+            LocalDateTime fimRef = ref.atEndOfMonth().atTime(23, 59, 59);
+            BigDecimal d = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+                userId, Transacao.TipoTransacao.DESPESA, ini, fimRef);
+            if (d != null && d.compareTo(BigDecimal.ZERO) > 0) {
+                soma = soma.add(d);
+                mesesComDado++;
+            }
+        }
+        if (mesesComDado > 0) {
+            return soma.divide(BigDecimal.valueOf(mesesComDado), 2, RoundingMode.HALF_UP);
+        }
+        return null;
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+    }
 
     /** Bloco textual pronto para anexar ao system prompt. Nunca lança exceção. */
     public String montarBlocoContexto(Long userId) {

@@ -16,6 +16,8 @@ import java.math.BigDecimal;
 public class MarketIndicatorsDTO {
     /** Selic referência (% a.a.), quando disponível. */
     private BigDecimal selicAa;
+    /** Taxa média consignado público PF (% a.a.) — BCB série 25497 ou Selic+spread. */
+    private BigDecimal taxaMediaConsignadoAa;
     /** IPCA ou inflação mensal de referência (%), quando disponível. */
     private BigDecimal ipcaMes;
     /** USD/BRL (venda ou compra conforme fonte). */
