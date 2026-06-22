@@ -1127,11 +1127,22 @@ public class WhatsAppCommandService {
             alvo = Optional.of(provisoes.get(0));
         }
         if (alvo.isEmpty()) {
-            return Optional.of(msgInfo("Provisão fiscal",
-                "Qual provisão confirmar? Ex.: *confirma a 1ª parcela do 13* ou *restituição IR caiu na conta*."));
+            return Optional.of(msgInfo("Provisão fiscal", montarMensagemEscolhaProvisao(provisoes)));
         }
         ObjectNode cmd = JsonNodeFactory.instance.objectNode();
         return Optional.of(handleConfirmFiscalProvision(cmd, userId, text, alvo.get()));
+    }
+
+    private String montarMensagemEscolhaProvisao(List<TransacaoDTO> provisoes) {
+        StringBuilder sb = new StringBuilder("Qual provisão confirmar? Tens estas pendentes:\n");
+        int i = 1;
+        for (TransacaoDTO t : provisoes) {
+            String desc = t.getDescricao() != null ? t.getDescricao() : "Provisão";
+            BigDecimal valor = t.getValor() != null ? t.getValor().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+            sb.append(i++).append(") *").append(desc).append("* — ").append(BRL.format(valor)).append("\n");
+        }
+        sb.append("\nEx.: *confirma a 1ª parcela do 13* ou *confirma a 2ª parcela do 13*.");
+        return sb.toString().trim();
     }
 
     private String handleConfirmFiscalProvision(JsonNode cmd, Long userId, String sourceText) {
@@ -1141,8 +1152,7 @@ public class WhatsAppCommandService {
             alvo = Optional.of(provisoes.get(0));
         }
         if (alvo.isEmpty()) {
-            return msgInfo("Provisão fiscal",
-                "Não identifiquei qual provisão confirmar. Cita *13º*, *restituição IR* ou o nome exato.");
+            return msgInfo("Provisão fiscal", montarMensagemEscolhaProvisao(provisoes));
         }
         return handleConfirmFiscalProvision(cmd, userId, sourceText, alvo.get());
     }
@@ -1208,38 +1218,92 @@ public class WhatsAppCommandService {
         if (provisoes == null || provisoes.isEmpty() || text == null) {
             return Optional.empty();
         }
-        String n = normalize(text);
+        String n = normalizeTextoProvisaoFiscal(text);
+        IntencaoProvisaoFiscal intencao = detectarIntencaoProvisaoFiscal(n);
         List<TransacaoDTO> candidatas = new ArrayList<>();
         for (TransacaoDTO t : provisoes) {
-            String desc = normalize(t.getDescricao() != null ? t.getDescricao() : "");
-            if (n.contains("13") && (desc.contains("13") || desc.contains("decimo"))) {
-                candidatas.add(t);
-                continue;
-            }
-            if ((n.contains("restituicao") || n.contains("ir")) && desc.contains("ir")) {
-                candidatas.add(t);
-                continue;
-            }
-            if (n.contains("1 parcela") && desc.contains("1")) {
-                candidatas.add(t);
-                continue;
-            }
-            if (n.contains("2 parcela") && desc.contains("2")) {
+            String desc = normalizeTextoProvisaoFiscal(t.getDescricao() != null ? t.getDescricao() : "");
+            if (provisaoCorrespondeIntencao(desc, intencao)) {
                 candidatas.add(t);
             }
         }
         if (candidatas.size() == 1) {
             return Optional.of(candidatas.get(0));
         }
-        if (candidatas.isEmpty()) {
-            for (TransacaoDTO t : provisoes) {
-                String desc = normalize(t.getDescricao() != null ? t.getDescricao() : "");
-                if (!desc.isBlank() && n.contains(desc.substring(0, Math.min(desc.length(), 12)))) {
-                    candidatas.add(t);
-                }
-            }
+        if (candidatas.size() > 1) {
+            return escolherProvisaoVencidaUnica(candidatas);
         }
-        return candidatas.size() == 1 ? Optional.of(candidatas.get(0)) : Optional.empty();
+        return Optional.empty();
+    }
+
+    /** Normaliza ordinais comuns em textos fiscais (1ª → 1 parcela, 13º → 13). */
+    private static String normalizeTextoProvisaoFiscal(String text) {
+        String n = normalize(text);
+        n = n.replace("1ª parcela", "1 parcela");
+        n = n.replace("2ª parcela", "2 parcela");
+        n = n.replace("1ª", "1 parcela");
+        n = n.replace("2ª", "2 parcela");
+        n = n.replace("13º", "13");
+        n = n.replace("13o", "13");
+        return n;
+    }
+
+    private enum IntencaoProvisaoFiscal {
+        PRIMEIRA_13, SEGUNDA_13, DECIMO_13_GENERICO, RESTITUICAO_IR, DESCONHECIDA
+    }
+
+    private IntencaoProvisaoFiscal detectarIntencaoProvisaoFiscal(String n) {
+        if (n.contains("restituicao") || n.contains("restituicao ir")) {
+            return IntencaoProvisaoFiscal.RESTITUICAO_IR;
+        }
+        if (n.contains("2 parcela") || n.contains("2a parcela") || n.contains("segunda parcela")) {
+            return IntencaoProvisaoFiscal.SEGUNDA_13;
+        }
+        if (n.contains("1 parcela") || n.contains("1a parcela") || n.contains("primeira parcela")) {
+            return IntencaoProvisaoFiscal.PRIMEIRA_13;
+        }
+        if (n.contains("13") || n.contains("decimo terceiro") || n.contains("decimo")) {
+            return IntencaoProvisaoFiscal.DECIMO_13_GENERICO;
+        }
+        return IntencaoProvisaoFiscal.DESCONHECIDA;
+    }
+
+    private boolean provisaoCorrespondeIntencao(String descNorm, IntencaoProvisaoFiscal intencao) {
+        return switch (intencao) {
+            case PRIMEIRA_13 -> descricaoPrimeiraParcela13(descNorm);
+            case SEGUNDA_13 -> descricaoSegundaParcela13(descNorm);
+            case RESTITUICAO_IR -> descricaoRestituicaoIr(descNorm);
+            case DECIMO_13_GENERICO -> descricaoDecimo13(descNorm);
+            default -> false;
+        };
+    }
+
+    private static boolean descricaoPrimeiraParcela13(String descNorm) {
+        return descNorm.contains("1 parcela") || descNorm.contains("primeira parcela");
+    }
+
+    private static boolean descricaoSegundaParcela13(String descNorm) {
+        return descNorm.contains("2 parcela") || descNorm.contains("segunda parcela");
+    }
+
+    private static boolean descricaoDecimo13(String descNorm) {
+        return descNorm.contains("13") && descNorm.contains("salario");
+    }
+
+    private static boolean descricaoRestituicaoIr(String descNorm) {
+        return descNorm.contains("restituicao") && descNorm.contains("ir");
+    }
+
+    /** Quando há várias provisões 13º, prefere a única já vencida (data ≤ hoje). */
+    private Optional<TransacaoDTO> escolherProvisaoVencidaUnica(List<TransacaoDTO> candidatas) {
+        LocalDate hoje = LocalDate.now();
+        List<TransacaoDTO> vencidas = candidatas.stream()
+            .filter(t -> t.getDataTransacao() != null && !t.getDataTransacao().toLocalDate().isAfter(hoje))
+            .toList();
+        if (vencidas.size() == 1) {
+            return Optional.of(vencidas.get(0));
+        }
+        return Optional.empty();
     }
 
     private boolean textoPerguntaProvisaoFiscal(String text) {
@@ -1264,11 +1328,16 @@ public class WhatsAppCommandService {
         if (text == null || text.isBlank()) {
             return false;
         }
-        String n = normalize(text);
-        boolean fiscal = n.contains("13") || n.contains("decimo") || n.contains("restituicao") || n.contains("ir");
+        String n = normalizeTextoProvisaoFiscal(text);
         boolean confirma = n.contains("confirma") || n.contains("efetiva") || n.contains("caiu")
             || n.contains("entrou") || n.contains("recebi") || n.contains("deposit");
-        return fiscal && confirma;
+        if (!confirma) {
+            return false;
+        }
+        return n.contains("13") || n.contains("decimo")
+            || n.contains("1 parcela") || n.contains("primeira parcela")
+            || n.contains("2 parcela") || n.contains("segunda parcela")
+            || n.contains("restituicao");
     }
 
     private String handleRecordConsignmentLoan(JsonNode cmd, Long userId, String sourceText) {
