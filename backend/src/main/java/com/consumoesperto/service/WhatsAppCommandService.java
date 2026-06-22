@@ -1380,17 +1380,20 @@ public class WhatsAppCommandService {
             PropostaEmprestimoConsignado proposta = PropostaEmprestimoConsignado.fromComando(cmd, sourceText);
             if (!proposta.temMinimoParaCalcular()) {
                 return msgErro(userId, "Empréstimo consignado",
-                    "Preciso do valor tomado e das parcelas (ex.: *fiz consignado de 10 mil em 24x de 550, caiu no Itaú*).");
+                    "Entendi parcialmente:\n" + proposta.formatarResumoMonetario()
+                        + "\n\nPreciso do *valor tomado* e das *parcelas* "
+                        + "(ex.: *fiz consignado no valor de 13.937,77 com 78 parcelas de 464, caiu no Itaú*).");
             }
             ResultadoRegistroEmprestimo preview = emprestimoService.calcularRegistro(userId, proposta);
+            String resumo = proposta.formatarResumoMonetario();
             if (preview.isPrecisaConfirmacao()) {
                 awaitingEmprestimoConfirm.put(userId, new PendingEmprestimoConsignadoDraft(proposta, preview));
                 if (preview.getContasAmbiguas() != null && !preview.getContasAmbiguas().isEmpty()) {
                     return msgInfo("Empréstimo consignado",
-                        preview.getMensagemConfirmacao() + "\n\nContas candidatas: *"
+                        resumo + "\n\n" + preview.getMensagemConfirmacao() + "\n\nContas candidatas: *"
                             + String.join("*, *", preview.getContasAmbiguas()) + "*.");
                 }
-                return msgInfo("Empréstimo consignado", preview.getMensagemConfirmacao());
+                return msgInfo("Empréstimo consignado", resumo + "\n\n" + preview.getMensagemConfirmacao());
             }
             ResultadoRegistroEmprestimo registrado = emprestimoService.registrar(userId, proposta);
             String narrativa = openAiService.narrarRegistroEmprestimo(userId, registrado);
