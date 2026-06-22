@@ -50,6 +50,23 @@ public class ProactiveFinancialJobs {
     private final UsuarioSessaoContextoService sessaoContextoService;
     private final AlertaTempestadeService alertaTempestadeService;
     private final AlertaDispatchService alertaDispatchService;
+    private final EmprestimoService emprestimoService;
+
+    /** Confirma parcelas de consignado vencidas (PREVISTO → CONFIRMADA) e debita saldo. */
+    @Scheduled(cron = "0 30 7 * * *", zone = "America/Sao_Paulo")
+    @Transactional
+    public void confirmarParcelasEmprestimoVencidasDiario() {
+        for (Usuario usuario : usuarioRepository.findAll()) {
+            try {
+                int n = emprestimoService.confirmarParcelasEmprestimoVencidas(usuario.getId());
+                if (n > 0) {
+                    log.info("[EMPRESTIMO-JOB] {} parcela(s) confirmada(s) userId={}", n, usuario.getId());
+                }
+            } catch (Exception e) {
+                log.warn("[EMPRESTIMO-JOB] Falha userId={}: {}", usuario.getId(), e.getMessage());
+            }
+        }
+    }
 
     /** Sentinela v8 — alerta proativo de fluxo (90 dias), 9h. */
     @Scheduled(cron = "0 0 9 * * *", zone = "America/Sao_Paulo")

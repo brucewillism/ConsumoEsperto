@@ -1,5 +1,7 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dto.EmprestimoAgregadoRow;
+import com.consumoesperto.dto.EmprestimoDTO;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.ContextoFinanceiro;
@@ -99,6 +101,75 @@ public class EmprestimoService {
     public String resolverUltimoEmprestimoId(Long usuarioId) {
         List<String> ids = transacaoRepository.findEmprestimoIdsByUsuario(usuarioId);
         return ids.isEmpty() ? null : ids.get(0);
+    }
+
+    /** Lista empréstimos do usuário (query agregada única). */
+    @Transactional(readOnly = true)
+    public List<EmprestimoDTO> listarPorUsuario(Long usuarioId) {
+        if (usuarioId == null) {
+            return List.of();
+        }
+        return transacaoRepository.aggregateEmprestimosByUsuario(usuarioId).stream()
+            .map(this::toEmprestimoDto)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Confirma parcelas PREVISTO vencidas (emprestimo_id) e debita saldo via {@link TransacaoService}.
+     */
+    @Transactional
+    public int confirmarParcelasEmprestimoVencidas(Long usuarioId) {
+        if (usuarioId == null) {
+            return 0;
+        }
+        LocalDateTime limite = LocalDate.now().atTime(23, 59, 59);
+        List<Transacao> parcelas = transacaoRepository.findParcelasEmprestimoPrevistasVencidas(usuarioId, limite);
+        int confirmadas = 0;
+        for (Transacao parcela : parcelas) {
+            Long contaId = parcela.getContaBancaria() != null ? parcela.getContaBancaria().getId() : null;
+            transacaoService.atualizarStatusConferencia(
+                parcela.getId(),
+                TransacaoDTO.StatusConferencia.CONFIRMADA,
+                contaId,
+                usuarioId
+            );
+            confirmadas++;
+        }
+        if (confirmadas > 0) {
+            log.info("[EMPRESTIMO] Confirmadas {} parcelas vencidas userId={}", confirmadas, usuarioId);
+        }
+        return confirmadas;
+    }
+
+    private EmprestimoDTO toEmprestimoDto(EmprestimoAgregadoRow row) {
+        BigDecimal valorTomado = nz(row.getValorTomado());
+        BigDecimal valorParcela = nz(row.getValorParcela());
+        int total = row.getParcelasTotais() != null ? row.getParcelasTotais().intValue() : 0;
+        int pagas = row.getParcelasPagas() != null ? row.getParcelasPagas().intValue() : 0;
+        int restantes = Math.max(total - pagas, 0);
+        BigDecimal valorRestante = valorParcela.multiply(BigDecimal.valueOf(restantes))
+            .setScale(SCALE, RoundingMode.HALF_UP);
+        double taxaMensal = 0.0;
+        if (total > 0 && valorTomado.signum() > 0 && valorParcela.signum() > 0
+            && valorParcela.doubleValue() * total > valorTomado.doubleValue()) {
+            taxaMensal = financialAdviceCalculator.resolverTaxaMensal(
+                valorTomado.doubleValue(), valorParcela.doubleValue(), total);
+        }
+        BigDecimal totalPagar = valorParcela.multiply(BigDecimal.valueOf(total));
+        BigDecimal jurosTotais = totalPagar.subtract(valorTomado).max(BigDecimal.ZERO)
+            .setScale(SCALE, RoundingMode.HALF_UP);
+        int progresso = (pagas * 100) / Math.max(total, 1);
+        return EmprestimoDTO.builder()
+            .id(row.getEmprestimoId())
+            .valorTotalTomado(valorTomado.setScale(SCALE, RoundingMode.HALF_UP))
+            .valorParcela(valorParcela.setScale(SCALE, RoundingMode.HALF_UP))
+            .parcelasPagas(pagas)
+            .parcelasTotais(total)
+            .valorRestante(valorRestante)
+            .jurosTotais(jurosTotais)
+            .taxaEfetivaMensal(BigDecimal.valueOf(taxaMensal * 100).setScale(2, RoundingMode.HALF_UP))
+            .progressoPercentual(progresso)
+            .build();
     }
 
     private ResultadoRegistroEmprestimo persistir(

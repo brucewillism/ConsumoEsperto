@@ -460,6 +460,37 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("fim") LocalDateTime fim
     );
 
+    /** Parcelas de empréstimo PREVISTO já vencidas — job de conciliação diária. */
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.dataTransacao <= :limite "
+        + "ORDER BY t.dataTransacao ASC")
+    List<Transacao> findParcelasEmprestimoPrevistasVencidas(
+        @Param("usuarioId") Long usuarioId,
+        @Param("limite") LocalDateTime limite
+    );
+
+    /** Agregação por empréstimo — uma query, sem N+1. */
+    @Query("SELECT t.emprestimoId AS emprestimoId, "
+        + "MAX(CASE WHEN t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
+        + "THEN t.valor ELSE 0 END) AS valorTomado, "
+        + "MAX(CASE WHEN t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "THEN t.valor END) AS valorParcela, "
+        + "SUM(CASE WHEN t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "THEN 1 ELSE 0 END) AS parcelasTotais, "
+        + "SUM(CASE WHEN t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "THEN 1 ELSE 0 END) AS parcelasPagas "
+        + "FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.excluido = false "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "GROUP BY t.emprestimoId ORDER BY MAX(t.dataTransacao) DESC")
+    List<com.consumoesperto.dto.EmprestimoAgregadoRow> aggregateEmprestimosByUsuario(
+        @Param("usuarioId") Long usuarioId
+    );
+
     /** Provisões PREVISTO vencidas (fantasmas) — fiscal ou despesa estimada. */
     @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
