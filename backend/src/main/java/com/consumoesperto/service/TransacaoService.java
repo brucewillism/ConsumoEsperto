@@ -140,7 +140,8 @@ public class TransacaoService {
         }
 
         Long categoriaId = transacaoDTO.getCategoriaId();
-        if (categoriaId == null && transacao.getTipoTransacao() == Transacao.TipoTransacao.DESPESA) {
+        boolean parcelaEmprestimo = transacaoDTO.getEmprestimoId() != null && !transacaoDTO.getEmprestimoId().isBlank();
+        if (categoriaId == null && transacao.getTipoTransacao() == Transacao.TipoTransacao.DESPESA && !parcelaEmprestimo) {
             categoriaId = financialProactiveService.sugerirCategoria(usuarioId, transacao.getDescricao())
                 .map(Categoria::getId)
                 .orElse(null);

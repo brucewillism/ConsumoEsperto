@@ -6,6 +6,7 @@ import com.consumoesperto.model.ContextoFinanceiro;
 import com.consumoesperto.model.PropostaEmprestimoConsignado;
 import com.consumoesperto.model.ResultadoRegistroEmprestimo;
 import com.consumoesperto.model.Transacao;
+import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import lombok.RequiredArgsConstructor;
@@ -124,21 +125,28 @@ public class EmprestimoService {
         credito.setEmprestimoId(emprestimoId);
         transacaoService.criarTransacao(credito, usuarioId, false);
 
-        int criadas = 1;
-        for (int i = 1; i <= proposta.getQuantidadeParcelas(); i++) {
-            TransacaoDTO parc = new TransacaoDTO();
-            parc.setDescricao("Parcela consignado (" + i + "/" + proposta.getQuantidadeParcelas() + ")");
+        int nParcelas = proposta.getQuantidadeParcelas();
+        List<Transacao> parcelas = new ArrayList<>(nParcelas);
+        Usuario usuarioRef = new Usuario();
+        usuarioRef.setId(usuarioId);
+        for (int i = 1; i <= nParcelas; i++) {
+            Transacao parc = new Transacao();
+            parc.setDescricao("Parcela consignado (" + i + "/" + nParcelas + ")");
             parc.setValor(calc.parcela());
-            parc.setTipoTransacao(TransacaoDTO.TipoTransacao.DESPESA);
-            parc.setStatusConferencia(TransacaoDTO.StatusConferencia.PREVISTO);
+            parc.setTipoTransacao(Transacao.TipoTransacao.DESPESA);
+            parc.setStatusConferencia(Transacao.StatusConferencia.PREVISTO);
             parc.setDataTransacao(hoje.plusMonths(i).atTime(12, 0));
-            parc.setContaBancariaId(conta.getId());
+            parc.setContaBancaria(conta);
+            parc.setUsuario(usuarioRef);
             parc.setEmprestimoId(emprestimoId);
             parc.setParcelaAtual(i);
-            parc.setTotalParcelas(proposta.getQuantidadeParcelas());
-            transacaoService.criarTransacao(parc, usuarioId, false);
-            criadas++;
+            parc.setTotalParcelas(nParcelas);
+            parc.setExcluido(false);
+            parc.setRecorrente(false);
+            parcelas.add(parc);
         }
+        transacaoRepository.saveAll(parcelas);
+        int criadas = 1 + parcelas.size();
 
         ContaBancaria contaAtualizada = contaBancariaRepository.findById(conta.getId()).orElse(conta);
         ContextoFinanceiro ctxDepois = jarvisContextoFinanceiroService.montarSnapshot(usuarioId);
