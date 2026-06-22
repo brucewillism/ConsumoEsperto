@@ -38,6 +38,7 @@ public class ContaBancariaService {
         conta.setNome(dto.getNome().trim());
         conta.setTipo(ContaBancaria.TipoConta.valueOf(dto.getTipo().name()));
         conta.setSaldoAtual(escala(dto.getSaldoAtual()));
+        conta.setSaldoInicial(escala(dto.getSaldoAtual()));
         conta.setLimiteChequeEspecial(escalaNaoNegativa(dto.getLimiteChequeEspecial()));
         conta.setUsuario(usuario);
         conta.setAtiva(dto.isAtiva());

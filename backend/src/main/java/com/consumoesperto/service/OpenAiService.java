@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.model.ResultadoConselho;
+import com.consumoesperto.model.ResultadoRegistroEmprestimo;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.Veredito;
 import com.consumoesperto.repository.UsuarioRepository;
@@ -135,7 +136,8 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt, contextoFinanceiro);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_FINANCIAL_ADVICE|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|START_TUTORIAL|STOP_TUTORIAL|TUTORIAL_STEP|GREETING|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_FINANCIAL_ADVICE|RECORD_CONSIGNMENT_LOAN|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|CONFIRM_FISCAL_PROVISION|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|START_TUTORIAL|STOP_TUTORIAL|TUTORIAL_STEP|GREETING|UNKNOWN), " +
+            "valorTomado (valor recebido do empréstimo consignado), nomeConta (apelido da conta que recebeu), " +
             "contaOrigem (apelido/nome da conta de origem na transferência), contaDestino (apelido/nome da conta de destino na transferência), " +
             "mes (1-12, opcional — consultas de extrato/orçamento), ano (ex.: 2026, opcional), tipo (DESPESA|RECEITA, opcional — filtro de extrato), " +
             "reportMonth (1-12, opcional), reportYear (ex.: 2026, opcional — default mês/ano correntes), " +
@@ -215,6 +217,10 @@ public class OpenAiService {
             "'550 por mês durante 2 anos'→valorParcela=550, quantidadeParcelas=24. " +
             "Se citar parcelas/consignado/financiamento→operação parcelada; 'à vista'/'hoje'/'agora' sem parcelas→COMPRA_AVISTA. " +
             "NÃO calcule juros nem veredito — apenas extraia parâmetros.\n" +
+            "- Se REGISTRAR empréstimo/consignado JÁ CONTRATADO (passado: 'fiz', 'contratei', 'peguei', 'caiu na conta'), " +
+            "NÃO use GET_FINANCIAL_ADVICE — use action RECORD_CONSIGNMENT_LOAN; preencha valorTomado (ou valorTotal), " +
+            "quantidadeParcelas, valorParcela se citado, nomeConta/accountName/bank se citar conta.\n" +
+            "- Se perguntar SE VALE A PENA / opinião sobre empréstimo futuro: GET_FINANCIAL_ADVICE.\n" +
             "- Se perguntar sobre recorrência, assinaturas repetidas, gastos fixos mensais (ex: 'tenho recorrência?', 'o que repete?'): action GET_INSIGHTS.\n" +
             "- Se pedir listar/quantos cartões tem (ex.: 'lista meus cartões', 'quantos cartões eu tenho?'): action LIST_CARDS.\n" +
             "- Se pedir saldos das contas, patrimônio em contas ou quanto tem nas contas (ex.: 'quanto eu tenho nas contas?', " +
@@ -259,6 +265,9 @@ public class OpenAiService {
             "CONTRACHEQUE: salarioBruto, descontosHolerite (total) ou descontosFixos em updates, diaRecebimento; " +
             "RECEBIMENTO_UNICO: valorLiquidoFixo, diaRecebimentoFixo; FLUXO_DIARIO: metaFaturamentoMensal (opcional). " +
             "Prefira SET_INCOME_PROFILE quando a frase citar explicitamente o *tipo* de trabalhador/perfil.\n" +
+            "- Se confirmar que provisão fiscal caiu na conta (ex.: 'confirma o 13', 'primeira parcela do 13 caiu', " +
+            "'restituição do IR entrou na conta', 'efetiva o décimo terceiro'): action CONFIRM_FISCAL_PROVISION; " +
+            "description = termo citado (13, restituição IR, etc.); accountName/bank se citar conta específica.\n" +
             "- Racha-contas / dividir despesa no grupo familiar (ex.: 'racha os 150 do restaurante entre eu, a Esposa e o Filho', " +
             "'divide a conta de 90 comigo e com o João', 'racha 60 com a Maria'): action SPLIT_BILL; amount = valor total; " +
             "description = motivo/local (ex.: restaurante); splitMembers = array com os nomes dos OUTROS membros marcados " +
@@ -647,6 +656,96 @@ public class OpenAiService {
         String userPrompt = "DADOS CALCULADOS:\n" + dados;
         String fallback = montarFallbackDeterministico(resultado, brl);
         return gerarTexto(userId, system, userPrompt, fallback);
+    }
+
+    /**
+     * Narra o registro de empréstimo consignado — números já calculados em Java.
+     */
+    public String narrarRegistroEmprestimo(Long userId, ResultadoRegistroEmprestimo resultado) {
+        if (resultado == null) {
+            return "Chefe, não consegui concluir o registro do empréstimo agora.";
+        }
+        NumberFormat brl = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+        StringBuilder dados = new StringBuilder();
+        dados.append("- Valor creditado: ").append(brl.format(resultado.getValorTomado())).append("\n");
+        if (resultado.getContaNome() != null) {
+            dados.append("- Conta: ").append(resultado.getContaNome()).append("\n");
+        }
+        if (resultado.getNovoSaldoConta() != null) {
+            dados.append("- Novo saldo da conta: ").append(brl.format(resultado.getNovoSaldoConta())).append("\n");
+        }
+        dados.append("- Parcela: ").append(brl.format(resultado.getValorParcela()));
+        if (resultado.isParcelaEstimada()) {
+            dados.append(" (estimada pela taxa média de mercado)");
+        }
+        dados.append("\n");
+        dados.append("- Nº de parcelas: ").append(resultado.getQuantidadeParcelas());
+        if (resultado.getDataPrimeiraParcela() != null && resultado.getDataUltimaParcela() != null) {
+            dados.append(" (").append(resultado.getDataPrimeiraParcela())
+                .append(" até ").append(resultado.getDataUltimaParcela()).append(")\n");
+        } else {
+            dados.append("\n");
+        }
+        if (resultado.getTotalAPagar() != null) {
+            dados.append("- Total a pagar: ").append(brl.format(resultado.getTotalAPagar())).append("\n");
+        }
+        if (resultado.getJurosTotais() != null) {
+            dados.append("- Juros totais: ").append(brl.format(resultado.getJurosTotais())).append("\n");
+        }
+        if (resultado.getTaxaJurosMensalPct() != null && resultado.getTaxaJurosAnualPct() != null) {
+            dados.append("- Taxa efetiva: ").append(resultado.getTaxaJurosMensalPct())
+                .append("% a.m. / ").append(resultado.getTaxaJurosAnualPct()).append("% a.a.\n");
+        }
+        if (resultado.getPctRendaComprometidaDepois() != null) {
+            dados.append("- Comprometimento da renda: ").append(resultado.getPctRendaComprometidaDepois()).append("%\n");
+        }
+        if (resultado.getRendaLivreAntes() != null && resultado.getRendaLivreDepois() != null) {
+            dados.append("- Renda livre: era ").append(brl.format(resultado.getRendaLivreAntes()))
+                .append(", ficou ").append(brl.format(resultado.getRendaLivreDepois())).append("\n");
+        }
+
+        Usuario u = userId == null ? null : usuarioRepository.findById(userId).orElse(null);
+        String contextoFinanceiro = montarContextoFinanceiroSeguro(userId);
+        String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(u, contextoFinanceiro);
+        String system = persona
+            + "Você é o J.A.R.V.I.S. Os cálculos JÁ FORAM FEITOS — NÃO recalcule.\n"
+            + "REGRAS DE REDAÇÃO:\n"
+            + "1. Confirme o crédito e o novo saldo primeiro.\n"
+            + "2. Mostre o custo real: quanto recebe vs quanto devolve e juros.\n"
+            + "3. Diga quanto da renda fica comprometido e por quantos meses.\n"
+            + "4. Se parcela estimada, avise para informar valor exato do contrato.\n"
+            + "5. Linguagem simples. Chame de chefe. Máximo 2 emojis.\n"
+            + "6. Feche lembrando que dá pra acompanhar na aba Transações.\n";
+        String fallback = montarFallbackRegistroEmprestimo(resultado, brl);
+        return gerarTexto(userId, system, "DADOS CALCULADOS (não recalcule, apenas redija):\n" + dados, fallback);
+    }
+
+    private static String montarFallbackRegistroEmprestimo(ResultadoRegistroEmprestimo r, NumberFormat brl) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Feito, chefe! Creditei *").append(brl.format(r.getValorTomado())).append("*");
+        if (r.getContaNome() != null) {
+            sb.append(" na *").append(r.getContaNome()).append("*");
+        }
+        if (r.getNovoSaldoConta() != null) {
+            sb.append(" — saldo agora *").append(brl.format(r.getNovoSaldoConta())).append("*");
+        }
+        sb.append(".\n");
+        sb.append("São *").append(r.getQuantidadeParcelas()).append("x de ")
+            .append(brl.format(r.getValorParcela()));
+        if (r.isParcelaEstimada()) {
+            sb.append(" _(estimada — me passe o valor exato do contrato pra ajustar)_");
+        }
+        sb.append(".\n");
+        if (r.getJurosTotais() != null && r.getTotalAPagar() != null) {
+            sb.append("Você recebe ").append(brl.format(r.getValorTomado()))
+                .append(", mas devolve ").append(brl.format(r.getTotalAPagar()))
+                .append(" — ").append(brl.format(r.getJurosTotais())).append(" de juros.\n");
+        }
+        if (r.getPctRendaComprometidaDepois() != null) {
+            sb.append("Comprometimento da renda: *").append(r.getPctRendaComprometidaDepois()).append("%*.\n");
+        }
+        sb.append("Acompanhe as parcelas em *Transações*.");
+        return sb.toString();
     }
 
     private static String montarFallbackDeterministico(ResultadoConselho r, NumberFormat brl) {

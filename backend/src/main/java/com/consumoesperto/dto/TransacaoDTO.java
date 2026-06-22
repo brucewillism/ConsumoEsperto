@@ -56,6 +56,8 @@ public class TransacaoDTO {
 
     /** UUID do grupo de parcelas (opcional). */
     private String grupoParcelaId;
+    /** UUID do empréstimo consignado (crédito + parcelas). */
+    private String emprestimoId;
     private Integer parcelaAtual;
     private Integer totalParcelas;
     private BigDecimal valorReal;

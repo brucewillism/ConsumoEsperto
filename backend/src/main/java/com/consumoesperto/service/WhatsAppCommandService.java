@@ -28,6 +28,8 @@ import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.MemoriaCategoriaOrigem;
 import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.PropostaFinanceira;
+import com.consumoesperto.model.PropostaEmprestimoConsignado;
+import com.consumoesperto.model.ResultadoRegistroEmprestimo;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -131,6 +133,7 @@ public class WhatsAppCommandService {
     private final SaudacaoService saudacaoService;
     private final JarvisContextoFinanceiroService jarvisContextoFinanceiroService;
     private final FinancialAdviceCalculator financialAdviceCalculator;
+    private final EmprestimoService emprestimoService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -166,6 +169,7 @@ public class WhatsAppCommandService {
     private final Map<Long, Long> awaitingContrachequeImportConfirm = new ConcurrentHashMap<>();
     private final Map<Long, PendingDespesaFixaDraft> awaitingDespesaFixaDia = new ConcurrentHashMap<>();
     private final Map<Long, PendingAmbiguidadeTransferencia> awaitingAmbiguidadeTransferencia = new ConcurrentHashMap<>();
+    private final Map<Long, PendingEmprestimoConsignadoDraft> awaitingEmprestimoConfirm = new ConcurrentHashMap<>();
 
     /** “Jarvis, anote isso: …” — grava memória semântica financeira. */
     private static final Pattern JARVIS_ANOTE_ISSO = Pattern.compile(
@@ -295,6 +299,22 @@ public class WhatsAppCommandService {
         Optional<String> faturaSenha = tryImportarFaturaPdfComSenha(userId, text);
         if (faturaSenha.isPresent()) {
             return faturaSenha;
+        }
+        Optional<String> confirmProvisao = tryConfirmarProvisaoFiscal(userId, text);
+        if (confirmProvisao.isPresent()) {
+            return confirmProvisao;
+        }
+        Optional<String> emprestimoConfirm = tryResolveEmprestimoConfirmacao(userId, text);
+        if (emprestimoConfirm.isPresent()) {
+            return emprestimoConfirm;
+        }
+        Optional<String> cancelarEmprestimo = tryCancelarEmprestimoConsignado(userId, text);
+        if (cancelarEmprestimo.isPresent()) {
+            return cancelarEmprestimo;
+        }
+        Optional<String> explicarProvisao = tryExplicarProvisaoFiscal(userId, text);
+        if (explicarProvisao.isPresent()) {
+            return explicarProvisao;
         }
         Optional<String> ajuda = tryRespostaAjudaParidade(userId, text);
         if (ajuda.isPresent()) {
@@ -1041,6 +1061,7 @@ public class WhatsAppCommandService {
             StringBuilder sb = new StringBuilder();
             sb.append(voc).append(", segue o extrato simplificado:\n\n");
             sb.append("📅 *Extrato de ").append(mesLabel).append("/").append(ym.getYear()).append("*:\n");
+            boolean temPrevisto = false;
             for (TransacaoDTO t : exibidas) {
                 String data = t.getDataTransacao() != null
                     ? t.getDataTransacao().toLocalDate().format(FMT_DATA_EXTRATO)
@@ -1048,8 +1069,19 @@ public class WhatsAppCommandService {
                 String desc = t.getDescricao() != null && !t.getDescricao().isBlank() ? t.getDescricao() : "—";
                 String cat = t.getCategoriaNome() != null && !t.getCategoriaNome().isBlank() ? t.getCategoriaNome() : "Sem categoria";
                 BigDecimal valor = t.getValor() != null ? t.getValor().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+                boolean previsto = t.getStatusConferencia() == TransacaoDTO.StatusConferencia.PREVISTO;
+                if (previsto) {
+                    temPrevisto = true;
+                }
                 sb.append("• ").append(data).append(" | ").append(desc)
-                    .append(" - *").append(BRL.format(valor)).append("* (").append(cat).append(")\n");
+                    .append(" - *").append(BRL.format(valor)).append("* (").append(cat).append(")");
+                if (previsto) {
+                    sb.append(" _(PREVISTO — não impacta saldo)_");
+                }
+                sb.append("\n");
+            }
+            if (temPrevisto) {
+                sb.append("\n_Itens *(PREVISTO)* são previsões fiscais/planejadas — o saldo real só muda quando confirmares no app ou avisares que caiu na conta._");
             }
             if (total > LIMITE_EXTRATO_WHATSAPP) {
                 sb.append("\n_Mostrando as últimas ").append(LIMITE_EXTRATO_WHATSAPP)
@@ -1059,6 +1091,278 @@ public class WhatsAppCommandService {
         } catch (RuntimeException e) {
             log.info("WhatsApp listar transações: {}", e.getMessage());
             return msgErro(userId, "Extrato", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private Optional<String> tryExplicarProvisaoFiscal(Long userId, String text) {
+        if (!textoPerguntaProvisaoFiscal(text)) {
+            return Optional.empty();
+        }
+        List<TransacaoDTO> provisoes = transacaoService.listarProvisoesFiscaisPrevistas(userId);
+        if (provisoes.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<TransacaoDTO> alvo = resolverProvisaoFiscalPorTexto(provisoes, text);
+        if (alvo.isEmpty() && provisoes.size() == 1) {
+            alvo = Optional.of(provisoes.get(0));
+        }
+        if (alvo.isEmpty()) {
+            return Optional.of(msgInfo("Provisão fiscal",
+                "Tens várias provisões fiscais pendentes. Especifica qual (ex.: *13º 1ª parcela* ou *restituição IR*)."));
+        }
+        return Optional.of(formatarExplicacaoProvisaoFiscal(userId, alvo.get()));
+    }
+
+    private Optional<String> tryConfirmarProvisaoFiscal(Long userId, String text) {
+        if (!textoConfirmaProvisaoFiscal(text)) {
+            return Optional.empty();
+        }
+        List<TransacaoDTO> provisoes = transacaoService.listarProvisoesFiscaisPrevistas(userId);
+        if (provisoes.isEmpty()) {
+            return Optional.of(msgInfo("Provisão fiscal",
+                "Não encontrei provisões fiscais pendentes para confirmar. Se já caiu na conta, regista como *receita* normal."));
+        }
+        Optional<TransacaoDTO> alvo = resolverProvisaoFiscalPorTexto(provisoes, text);
+        if (alvo.isEmpty() && provisoes.size() == 1) {
+            alvo = Optional.of(provisoes.get(0));
+        }
+        if (alvo.isEmpty()) {
+            return Optional.of(msgInfo("Provisão fiscal",
+                "Qual provisão confirmar? Ex.: *confirma a 1ª parcela do 13* ou *restituição IR caiu na conta*."));
+        }
+        ObjectNode cmd = JsonNodeFactory.instance.objectNode();
+        return Optional.of(handleConfirmFiscalProvision(cmd, userId, text, alvo.get()));
+    }
+
+    private String handleConfirmFiscalProvision(JsonNode cmd, Long userId, String sourceText) {
+        List<TransacaoDTO> provisoes = transacaoService.listarProvisoesFiscaisPrevistas(userId);
+        Optional<TransacaoDTO> alvo = resolverProvisaoFiscalPorTexto(provisoes, sourceText);
+        if (alvo.isEmpty() && provisoes.size() == 1) {
+            alvo = Optional.of(provisoes.get(0));
+        }
+        if (alvo.isEmpty()) {
+            return msgInfo("Provisão fiscal",
+                "Não identifiquei qual provisão confirmar. Cita *13º*, *restituição IR* ou o nome exato.");
+        }
+        return handleConfirmFiscalProvision(cmd, userId, sourceText, alvo.get());
+    }
+
+    private String handleConfirmFiscalProvision(JsonNode cmd, Long userId, String sourceText, TransacaoDTO provisao) {
+        try {
+            Long contaId = resolverContaIdParaProvisao(cmd, userId, sourceText);
+            TransacaoDTO confirmada = transacaoService.confirmarProvisaoFiscal(provisao.getId(), userId, contaId);
+            String contaNome = confirmada.getContaBancariaNome() != null
+                ? confirmada.getContaBancariaNome()
+                : "conta padrão";
+            BigDecimal valor = confirmada.getValor() != null
+                ? confirmada.getValor().setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+            BigDecimal patrimonio = saldoService.patrimonioLiquido(userId).setScale(2, RoundingMode.HALF_UP);
+            String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+            return msgOk("Provisão confirmada",
+                voc + ", efetivei *" + confirmada.getDescricao() + "* de *" + BRL.format(valor)
+                    + "* na *" + contaNome + "*.\n\n"
+                    + "O valor entrou no teu saldo real — patrimônio atualizado: *" + BRL.format(patrimonio) + "*.");
+        } catch (RuntimeException e) {
+            return msgErro(userId, "Provisão fiscal", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private Long resolverContaIdParaProvisao(JsonNode cmd, Long userId, String sourceText) {
+        String accountToken = cmd.path("accountName").asText("");
+        if (accountToken.isBlank()) {
+            accountToken = cmd.path("bank").asText("");
+        }
+        if (accountToken.isBlank() && sourceText != null) {
+            Matcher m = Pattern.compile("(?i)(?:conta|no|na)\\s+([\\p{L}0-9 ]{2,40})$").matcher(sourceText.trim());
+            if (m.find()) {
+                accountToken = m.group(1).trim();
+            }
+        }
+        if (accountToken.isBlank()) {
+            return null;
+        }
+        List<ContaBancaria> contas = contaBancariaService.encontrarAtivasPorApelidoNormalizado(userId, accountToken);
+        if (contas.size() == 1) {
+            return contas.get(0).getId();
+        }
+        return null;
+    }
+
+    private String formatarExplicacaoProvisaoFiscal(Long userId, TransacaoDTO provisao) {
+        String voc = jarvisProtocolService.resolveTratamento(userId, usuarioRepository);
+        BigDecimal valor = provisao.getValor() != null
+            ? provisao.getValor().setScale(2, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+        String data = provisao.getDataTransacao() != null
+            ? provisao.getDataTransacao().toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+            : "data prevista";
+        return msgInfo("Provisão fiscal",
+            voc + ", sobre *" + provisao.getDescricao() + "* (*" + BRL.format(valor) + "* em " + data + "):\n\n"
+                + "Isso ainda é só uma *previsão* (status PREVISTO) — o dinheiro *não entrou* no teu saldo real. "
+                + "É uma estimativa com base no teu planejamento fiscal/contracheque.\n\n"
+                + "Quando cair na conta, diz algo como *confirma o 13* ou confirma no app para atualizar o patrimônio.");
+    }
+
+    private Optional<TransacaoDTO> resolverProvisaoFiscalPorTexto(List<TransacaoDTO> provisoes, String text) {
+        if (provisoes == null || provisoes.isEmpty() || text == null) {
+            return Optional.empty();
+        }
+        String n = normalize(text);
+        List<TransacaoDTO> candidatas = new ArrayList<>();
+        for (TransacaoDTO t : provisoes) {
+            String desc = normalize(t.getDescricao() != null ? t.getDescricao() : "");
+            if (n.contains("13") && (desc.contains("13") || desc.contains("decimo"))) {
+                candidatas.add(t);
+                continue;
+            }
+            if ((n.contains("restituicao") || n.contains("ir")) && desc.contains("ir")) {
+                candidatas.add(t);
+                continue;
+            }
+            if (n.contains("1 parcela") && desc.contains("1")) {
+                candidatas.add(t);
+                continue;
+            }
+            if (n.contains("2 parcela") && desc.contains("2")) {
+                candidatas.add(t);
+            }
+        }
+        if (candidatas.size() == 1) {
+            return Optional.of(candidatas.get(0));
+        }
+        if (candidatas.isEmpty()) {
+            for (TransacaoDTO t : provisoes) {
+                String desc = normalize(t.getDescricao() != null ? t.getDescricao() : "");
+                if (!desc.isBlank() && n.contains(desc.substring(0, Math.min(desc.length(), 12)))) {
+                    candidatas.add(t);
+                }
+            }
+        }
+        return candidatas.size() == 1 ? Optional.of(candidatas.get(0)) : Optional.empty();
+    }
+
+    private boolean textoPerguntaProvisaoFiscal(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (textoConfirmaProvisaoFiscal(text)) {
+            return false;
+        }
+        boolean fiscal = n.contains("13") || n.contains("decimo terceiro") || n.contains("decimo")
+            || n.contains("restituicao") || n.contains("provisao fiscal") || n.contains("ir ");
+        if (!fiscal) {
+            return false;
+        }
+        return n.contains("?") || n.contains("quanto") || n.contains("recebi") || n.contains("caiu")
+            || n.contains("entrou") || n.contains("saldo") || n.contains("impacta")
+            || n.contains("conta") || n.contains("previst") || n.contains("previsao");
+    }
+
+    private boolean textoConfirmaProvisaoFiscal(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        boolean fiscal = n.contains("13") || n.contains("decimo") || n.contains("restituicao") || n.contains("ir");
+        boolean confirma = n.contains("confirma") || n.contains("efetiva") || n.contains("caiu")
+            || n.contains("entrou") || n.contains("recebi") || n.contains("deposit");
+        return fiscal && confirma;
+    }
+
+    private String handleRecordConsignmentLoan(JsonNode cmd, Long userId, String sourceText) {
+        try {
+            PropostaEmprestimoConsignado proposta = PropostaEmprestimoConsignado.fromComando(cmd, sourceText);
+            if (!proposta.temMinimoParaCalcular()) {
+                return msgErro(userId, "Empréstimo consignado",
+                    "Preciso do valor tomado e das parcelas (ex.: *fiz consignado de 10 mil em 24x de 550, caiu no Itaú*).");
+            }
+            ResultadoRegistroEmprestimo preview = emprestimoService.calcularRegistro(userId, proposta);
+            if (preview.isPrecisaConfirmacao()) {
+                awaitingEmprestimoConfirm.put(userId, new PendingEmprestimoConsignadoDraft(proposta, preview));
+                if (preview.getContasAmbiguas() != null && !preview.getContasAmbiguas().isEmpty()) {
+                    return msgInfo("Empréstimo consignado",
+                        preview.getMensagemConfirmacao() + "\n\nContas candidatas: *"
+                            + String.join("*, *", preview.getContasAmbiguas()) + "*.");
+                }
+                return msgInfo("Empréstimo consignado", preview.getMensagemConfirmacao());
+            }
+            ResultadoRegistroEmprestimo registrado = emprestimoService.registrar(userId, proposta);
+            String narrativa = openAiService.narrarRegistroEmprestimo(userId, registrado);
+            return msgOk("Empréstimo registrado", narrativa);
+        } catch (RuntimeException e) {
+            return msgErro(userId, "Empréstimo consignado", humanizarErroComando(e.getMessage()));
+        }
+    }
+
+    private Optional<String> tryResolveEmprestimoConfirmacao(Long userId, String text) {
+        PendingEmprestimoConsignadoDraft draft = awaitingEmprestimoConfirm.get(userId);
+        if (draft == null || text == null) {
+            return Optional.empty();
+        }
+        String n = normalize(text);
+        if (n.startsWith("nao") || n.equals("n") || n.contains("cancel")) {
+            awaitingEmprestimoConfirm.remove(userId);
+            return Optional.of(msgInfo("Empréstimo", "Ok, não registrei o consignado."));
+        }
+        if (!(n.startsWith("sim") || n.equals("s") || n.contains("confirmo") || n.contains("pode registrar"))) {
+            return Optional.empty();
+        }
+        try {
+            PropostaEmprestimoConsignado proposta = draft.proposta;
+            if (proposta.getNomeConta() == null && draft.preview.getContasAmbiguas() != null
+                && draft.preview.getContasAmbiguas().size() == 1) {
+                proposta.setNomeConta(draft.preview.getContasAmbiguas().get(0));
+            }
+            ResultadoRegistroEmprestimo registrado = emprestimoService.registrar(userId, proposta);
+            awaitingEmprestimoConfirm.remove(userId);
+            if (registrado.isPrecisaConfirmacao()) {
+                return Optional.of(msgInfo("Empréstimo consignado", registrado.getMensagemConfirmacao()));
+            }
+            String narrativa = openAiService.narrarRegistroEmprestimo(userId, registrado);
+            return Optional.of(msgOk("Empréstimo registrado", narrativa));
+        } catch (RuntimeException e) {
+            awaitingEmprestimoConfirm.remove(userId);
+            return Optional.of(msgErro(userId, "Empréstimo consignado", humanizarErroComando(e.getMessage())));
+        }
+    }
+
+    private Optional<String> tryCancelarEmprestimoConsignado(Long userId, String text) {
+        if (!textoCancelaEmprestimoConsignado(text)) {
+            return Optional.empty();
+        }
+        try {
+            String emprestimoId = emprestimoService.resolverUltimoEmprestimoId(userId);
+            if (emprestimoId == null) {
+                return Optional.of(msgInfo("Empréstimo",
+                    "Não encontrei empréstimo consignado registrado para cancelar."));
+            }
+            emprestimoService.cancelarEmprestimo(userId, emprestimoId);
+            return Optional.of(msgOk("Empréstimo cancelado",
+                "Reverti o consignado mais recente — crédito estornado e parcelas futuras removidas. "
+                    + "Confere o saldo da conta no app."));
+        } catch (RuntimeException e) {
+            return Optional.of(msgErro(userId, "Empréstimo", humanizarErroComando(e.getMessage())));
+        }
+    }
+
+    private static boolean textoCancelaEmprestimoConsignado(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        return (n.contains("cancela") || n.contains("desfaz") || n.contains("remove"))
+            && (n.contains("consignado") || n.contains("emprestimo"));
+    }
+
+    private static final class PendingEmprestimoConsignadoDraft {
+        final PropostaEmprestimoConsignado proposta;
+        final ResultadoRegistroEmprestimo preview;
+
+        PendingEmprestimoConsignadoDraft(PropostaEmprestimoConsignado proposta, ResultadoRegistroEmprestimo preview) {
+            this.proposta = proposta;
+            this.preview = preview;
         }
     }
 
@@ -1799,6 +2103,8 @@ public class WhatsAppCommandService {
             && !"SET_SALARY_CONFIG".equals(action)
             && !"SET_INCOME_PROFILE".equals(action)
             && !"GET_FINANCIAL_ADVICE".equals(action)
+            && !"CONFIRM_FISCAL_PROVISION".equals(action)
+            && !"RECORD_CONSIGNMENT_LOAN".equals(action)
             && !"MANAGE_ENTITY".equals(action)
             && !"LIST_DEBTS".equals(action)
             && !"SETTLE_DEBT".equals(action)
@@ -1849,6 +2155,8 @@ public class WhatsAppCommandService {
             case "CHECK_CARD_STATUS" -> handleCheckCardStatus(cmd, userId, sourceText);
             case "SET_SALARY_CONFIG" -> handleSetSalaryConfig(cmd, userId, sourceText);
             case "SET_INCOME_PROFILE" -> handleSetIncomeProfile(cmd, userId, sourceText);
+            case "CONFIRM_FISCAL_PROVISION" -> handleConfirmFiscalProvision(cmd, userId, sourceText);
+            case "RECORD_CONSIGNMENT_LOAN" -> handleRecordConsignmentLoan(cmd, userId, sourceText);
             case "MANAGE_ENTITY" -> {
                 if (parecePedidoCriarMeta(sourceText) || parecePedidoCriarMeta(cmd)) {
                     yield handleCreateMeta(cmd, userId, sourceText);

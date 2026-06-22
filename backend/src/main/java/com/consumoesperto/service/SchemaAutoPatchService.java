@@ -68,12 +68,14 @@ public class SchemaAutoPatchService {
         ensureTransacaoOrigemFiscalColumn();
         ensureContasBancariasTable();
         ensureContaBancariaChequeEspecialColumn();
+        ensureContaBancariaSaldoInicialColumn();
         ensureDebitosInternosTable();
         ensureAgendamentosPagamentosTable();
         ensureAssinaturasRecorrentesTable();
         ensureRendasTable();
         ensureTransferenciasContasTable();
         ensureTransacaoContaBancariaColumn();
+        ensureTransacaoEmprestimoIdColumn();
         ensureUsuarioGeneroColumns();
         ensureUsuarioJarvisPerfilColumns();
         ensureUsuarioFotoUrlTextColumn();
@@ -457,6 +459,34 @@ public class SchemaAutoPatchService {
         }
     }
 
+    private void ensureContaBancariaSaldoInicialColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema FROM information_schema.tables "
+                    + "WHERE table_name = 'contas_bancarias' AND table_type = 'BASE TABLE' "
+                    + "AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + schema + ".contas_bancarias "
+                        + "ADD COLUMN IF NOT EXISTS saldo_inicial NUMERIC(19,2)"
+                );
+                executeDdlAutocommit(
+                    "UPDATE " + schema + ".contas_bancarias "
+                        + "SET saldo_inicial = saldo_atual WHERE saldo_inicial IS NULL"
+                );
+            }
+            log.info("Schema patch: coluna saldo_inicial verificada em contas_bancarias.");
+        } catch (Exception e) {
+            log.warn("Falha ao adicionar saldo_inicial em contas_bancarias: {}", e.getMessage());
+        }
+    }
+
     /** Permite saldo_atual negativo dentro do limite de cheque especial. */
     private void removerCheckSaldoNaoNegativoContas() {
         try {
@@ -646,6 +676,29 @@ public class SchemaAutoPatchService {
             }
         } catch (Exception e) {
             log.warn("Falha ao ADD conta_bancaria_id em transacoes: {}", e.getMessage());
+        }
+    }
+
+    private void ensureTransacaoEmprestimoIdColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema FROM information_schema.tables "
+                    + "WHERE table_name = 'transacoes' AND table_type = 'BASE TABLE' "
+                    + "AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + schema + ".transacoes ADD COLUMN IF NOT EXISTS emprestimo_id VARCHAR(36)"
+                );
+            }
+            log.info("Schema patch: coluna emprestimo_id verificada em transacoes.");
+        } catch (Exception e) {
+            log.warn("Falha ao ADD emprestimo_id em transacoes: {}", e.getMessage());
         }
     }
 

@@ -139,6 +139,10 @@ public class Transacao {
     @Column(name = "grupo_parcela_id", length = 36)
     private String grupoParcelaId;
 
+    /** Agrupa crédito + parcelas de um empréstimo consignado (UUID). */
+    @Column(name = "emprestimo_id", length = 36)
+    private String emprestimoId;
+
     @Column(name = "parcela_atual")
     private Integer parcelaAtual;
 
@@ -204,6 +208,9 @@ public class Transacao {
 
     public String getGrupoParcelaId() { return grupoParcelaId; }
     public void setGrupoParcelaId(String grupoParcelaId) { this.grupoParcelaId = grupoParcelaId; }
+
+    public String getEmprestimoId() { return emprestimoId; }
+    public void setEmprestimoId(String emprestimoId) { this.emprestimoId = emprestimoId; }
 
     public Integer getParcelaAtual() { return parcelaAtual; }
     public void setParcelaAtual(Integer parcelaAtual) { this.parcelaAtual = parcelaAtual; }

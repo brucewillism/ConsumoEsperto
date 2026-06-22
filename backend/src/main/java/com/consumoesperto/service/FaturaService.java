@@ -349,8 +349,7 @@ public class FaturaService {
         boolean estornou = false;
         List<Transacao> pagamentos = transacaoRepository.findPagamentosFaturaConfirmadosComContaPorFaturaId(faturaId);
         for (Transacao pagamento : pagamentos) {
-            BigDecimal impacto = saldoMovimentacaoService.impactoConfirmado(pagamento);
-            if (impacto.compareTo(BigDecimal.ZERO) == 0) {
+            if (!saldoMovimentacaoService.impactaSaldo(pagamento)) {
                 continue;
             }
             saldoMovimentacaoService.aplicarExclusao(pagamento);

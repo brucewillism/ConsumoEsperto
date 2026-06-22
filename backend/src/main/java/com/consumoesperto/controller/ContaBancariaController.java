@@ -74,4 +74,13 @@ public class ContaBancariaController {
         contaBancariaService.inativar(id, currentUser.getId());
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{id}/reconciliar-saldo")
+    @Operation(summary = "Reconciliar saldo da conta",
+        description = "Recalcula saldo_atual a partir de saldo_inicial + transações confirmadas (idempotente).")
+    public ResponseEntity<SaldoService.ResultadoReconciliacaoSaldo> reconciliarSaldo(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        return ResponseEntity.ok(saldoService.reconciliarSaldo(id, currentUser.getId()));
+    }
 }

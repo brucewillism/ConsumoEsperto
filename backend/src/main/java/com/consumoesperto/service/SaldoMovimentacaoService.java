@@ -10,9 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 
 /**
  * Atualiza {@link ContaBancaria#getSaldoAtual()} conforme o ciclo de vida das transações confirmadas.
+ * Fonte única de verdade para {@link #impactaSaldo(Transacao)} e {@link #deltaSaldo(Transacao)}.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,18 +31,21 @@ public class SaldoMovimentacaoService {
         BigDecimal valor,
         Transacao.TipoTransacao tipoTransacao,
         Transacao.StatusConferencia statusConferencia,
-        Long faturaId
+        Long faturaId,
+        LocalDate dataTransacao
     ) {
         static MovimentacaoSnapshot from(Transacao t) {
             if (t == null) {
                 return null;
             }
+            LocalDate data = t.getDataTransacao() != null ? t.getDataTransacao().toLocalDate() : null;
             return new MovimentacaoSnapshot(
                 t.getContaBancaria() != null ? t.getContaBancaria().getId() : null,
                 t.getValor(),
                 t.getTipoTransacao(),
                 t.getStatusConferencia(),
-                t.getFatura() != null ? t.getFatura().getId() : null
+                t.getFatura() != null ? t.getFatura().getId() : null,
+                data
             );
         }
     }
@@ -49,9 +54,53 @@ public class SaldoMovimentacaoService {
         return MovimentacaoSnapshot.from(transacao);
     }
 
+    /**
+     * Uma transação só impacta o saldo se todas as condições forem verdadeiras:
+     * conta vinculada, confirmada, data não-futura, e tipo elegível (não despesa de cartão na fatura).
+     */
+    public boolean impactaSaldo(Transacao transacao) {
+        return impactaSaldo(MovimentacaoSnapshot.from(transacao));
+    }
+
+    public boolean impactaSaldo(MovimentacaoSnapshot snap) {
+        if (snap == null || snap.contaBancariaId() == null) {
+            return false;
+        }
+        if (snap.statusConferencia() != Transacao.StatusConferencia.CONFIRMADA) {
+            return false;
+        }
+        if (snap.dataTransacao() != null && snap.dataTransacao().isAfter(LocalDate.now())) {
+            return false;
+        }
+        if (snap.faturaId() != null
+            && snap.tipoTransacao() != Transacao.TipoTransacao.PAGAMENTO_FATURA) {
+            return false;
+        }
+        return snap.tipoTransacao() != null && snap.valor() != null;
+    }
+
+    /** Delta monetário (+ receita, − despesa/investimento/pagamento fatura). */
+    public BigDecimal deltaSaldo(Transacao transacao) {
+        if (!impactaSaldo(transacao)) {
+            return BigDecimal.ZERO;
+        }
+        return deltaSaldo(MovimentacaoSnapshot.from(transacao));
+    }
+
+    private BigDecimal deltaSaldo(MovimentacaoSnapshot snap) {
+        if (snap == null || snap.tipoTransacao() == null || snap.valor() == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal valor = scale(snap.valor());
+        return switch (snap.tipoTransacao()) {
+            case RECEITA -> valor;
+            case DESPESA, INVESTIMENTO, PAGAMENTO_FATURA -> valor.negate();
+        };
+    }
+
     @Transactional
     public void aplicarCriacao(Transacao transacao) {
-        BigDecimal delta = impactoConfirmado(transacao);
+        BigDecimal delta = deltaSaldo(transacao);
         if (delta.compareTo(BigDecimal.ZERO) == 0 || transacao.getContaBancaria() == null) {
             return;
         }
@@ -60,8 +109,8 @@ public class SaldoMovimentacaoService {
 
     @Transactional
     public void sincronizarMovimentacao(MovimentacaoSnapshot antes, Transacao depois) {
-        if (antes != null) {
-            BigDecimal impactoAnterior = impactoConfirmado(antes);
+        if (antes != null && impactaSaldo(antes)) {
+            BigDecimal impactoAnterior = deltaSaldo(antes);
             if (impactoAnterior.compareTo(BigDecimal.ZERO) != 0 && antes.contaBancariaId() != null) {
                 aplicarDelta(antes.contaBancariaId(), impactoAnterior.negate());
             }
@@ -71,7 +120,7 @@ public class SaldoMovimentacaoService {
 
     @Transactional
     public void aplicarExclusao(Transacao transacao) {
-        BigDecimal impacto = impactoConfirmado(transacao);
+        BigDecimal impacto = deltaSaldo(transacao);
         if (impacto.compareTo(BigDecimal.ZERO) == 0 || transacao.getContaBancaria() == null) {
             return;
         }
@@ -104,6 +153,18 @@ public class SaldoMovimentacaoService {
         log.info("[MULTICARTEIRA] Transferência {} → {} valor {}", contaOrigemId, contaDestinoId, v);
     }
 
+    /** Define saldo nominal após reconciliação idempotente (não valida cheque especial). */
+    @Transactional
+    public BigDecimal definirSaldoReconciliado(Long contaId, BigDecimal saldoCalculado) {
+        ContaBancaria conta = contaBancariaRepository.findById(contaId)
+            .orElseThrow(() -> new RuntimeException("Conta bancária não encontrada: " + contaId));
+        BigDecimal saldo = scale(saldoCalculado);
+        conta.setSaldoAtual(saldo);
+        contaBancariaRepository.save(conta);
+        log.info("[MULTICARTEIRA] Conta {} saldo reconciliado → {}", contaId, saldo);
+        return saldo;
+    }
+
     private void aplicarDelta(Long contaId, BigDecimal delta) {
         ContaBancaria conta = contaBancariaRepository.findById(contaId)
             .orElseThrow(() -> new RuntimeException("Conta bancária não encontrada: " + contaId));
@@ -119,35 +180,6 @@ public class SaldoMovimentacaoService {
         conta.setSaldoAtual(saldo);
         contaBancariaRepository.save(conta);
         log.debug("[MULTICARTEIRA] Conta {} saldo → {} (delta {})", contaId, saldo, delta);
-    }
-
-    /** Só movimenta conta quando confirmada, com carteira; despesas de cartão/fatura não movimentam, exceto PAGAMENTO_FATURA. */
-    public BigDecimal impactoConfirmado(Transacao transacao) {
-        if (transacao == null) {
-            return BigDecimal.ZERO;
-        }
-        return impactoConfirmado(MovimentacaoSnapshot.from(transacao));
-    }
-
-    private BigDecimal impactoConfirmado(MovimentacaoSnapshot snap) {
-        if (snap == null || snap.contaBancariaId() == null) {
-            return BigDecimal.ZERO;
-        }
-        if (snap.statusConferencia() != Transacao.StatusConferencia.CONFIRMADA) {
-            return BigDecimal.ZERO;
-        }
-        if (snap.faturaId() != null
-            && snap.tipoTransacao() != Transacao.TipoTransacao.PAGAMENTO_FATURA) {
-            return BigDecimal.ZERO;
-        }
-        if (snap.tipoTransacao() == null || snap.valor() == null) {
-            return BigDecimal.ZERO;
-        }
-        BigDecimal valor = scale(snap.valor());
-        return switch (snap.tipoTransacao()) {
-            case RECEITA -> valor;
-            case DESPESA, INVESTIMENTO, PAGAMENTO_FATURA -> valor.negate();
-        };
     }
 
     private static BigDecimal scale(BigDecimal valor) {

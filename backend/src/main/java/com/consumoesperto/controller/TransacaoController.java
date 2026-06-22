@@ -138,6 +138,7 @@ public class TransacaoController {
         TransacaoDTO transacaoAtualizada = transacaoService.atualizarStatusConferencia(
             id,
             request.getStatusConferencia(),
+            request.getContaBancariaId(),
             currentUser.getId()
         );
         return ResponseEntity.ok(transacaoAtualizada);
@@ -303,12 +304,23 @@ public class TransacaoController {
         @NotNull(message = "statusConferencia é obrigatório")
         private TransacaoDTO.StatusConferencia statusConferencia;
 
+        /** Conta que recebeu/pagou o valor ao confirmar — usa a padrão se omitida. */
+        private Long contaBancariaId;
+
         public TransacaoDTO.StatusConferencia getStatusConferencia() {
             return statusConferencia;
         }
 
         public void setStatusConferencia(TransacaoDTO.StatusConferencia statusConferencia) {
             this.statusConferencia = statusConferencia;
+        }
+
+        public Long getContaBancariaId() {
+            return contaBancariaId;
+        }
+
+        public void setContaBancariaId(Long contaBancariaId) {
+            this.contaBancariaId = contaBancariaId;
         }
     }
 }

@@ -36,6 +36,10 @@ public class ContaBancaria {
     @Column(name = "saldo_atual", nullable = false, precision = 19, scale = 2)
     private BigDecimal saldoAtual;
 
+    /** Saldo de abertura da conta — base idempotente para {@link com.consumoesperto.service.SaldoService#reconciliarSaldo}. */
+    @Column(name = "saldo_inicial", precision = 19, scale = 2)
+    private BigDecimal saldoInicial;
+
     /**
      * Limite de cheque especial. Zero = sem cheque especial. Não soma ao saldo —
      * apenas define o quão negativo o saldo pode ficar (piso = -limiteChequeEspecial).
@@ -69,6 +73,9 @@ public class ContaBancaria {
         if (saldoAtual == null) {
             saldoAtual = BigDecimal.ZERO;
         }
+        if (saldoInicial == null) {
+            saldoInicial = saldoAtual;
+        }
     }
 
     @PreUpdate
@@ -93,6 +100,9 @@ public class ContaBancaria {
 
     public BigDecimal getSaldoAtual() { return saldoAtual; }
     public void setSaldoAtual(BigDecimal saldoAtual) { this.saldoAtual = saldoAtual; }
+
+    public BigDecimal getSaldoInicial() { return saldoInicial; }
+    public void setSaldoInicial(BigDecimal saldoInicial) { this.saldoInicial = saldoInicial; }
 
     /** Nunca retorna nulo (protege registros migrados e falhas de deserialização). */
     public BigDecimal getLimiteChequeEspecial() {

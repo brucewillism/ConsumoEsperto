@@ -24,6 +24,9 @@ public class ContextoFinanceiro {
     /** Total mensal de assinaturas ativas. */
     private BigDecimal assinaturas;
 
+    /** Soma das parcelas de empréstimo PREVISTO que vencem no mês corrente. */
+    private BigDecimal parcelasEmprestimosAtivos;
+
     /** Reserva de emergência atual (= patrimônio líquido disponível). */
     private BigDecimal reservaEmergencia;
 
@@ -32,4 +35,33 @@ public class ContextoFinanceiro {
 
     /** Escudo atual em meses (patrimônio ÷ gasto mensal), quando calculável. */
     private BigDecimal mesesReservaAtual;
+
+    /** Despesas fixas + assinaturas + parcelas de empréstimo ativas no mês. */
+    public BigDecimal comprometimentoMensal() {
+        return nz(despesasFixas).add(nz(assinaturas)).add(nz(parcelasEmprestimosAtivos));
+    }
+
+    /** Renda líquida menos comprometimento mensal; {@code null} se renda não configurada. */
+    public BigDecimal rendaLivre() {
+        if (rendaLiquidaMensal == null || rendaLiquidaMensal.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return rendaLiquidaMensal.subtract(comprometimentoMensal()).max(BigDecimal.ZERO)
+            .setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    /** Percentual da renda comprometido no mês; {@code null} se renda ausente. */
+    public BigDecimal percentualRendaComprometida() {
+        if (rendaLiquidaMensal == null || rendaLiquidaMensal.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return comprometimentoMensal()
+            .divide(rendaLiquidaMensal, 4, java.math.RoundingMode.HALF_UP)
+            .multiply(BigDecimal.valueOf(100))
+            .setScale(1, java.math.RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
+    }
 }

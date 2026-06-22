@@ -123,6 +123,9 @@ public class TransacaoService {
         if (transacaoDTO.getGrupoParcelaId() != null && !transacaoDTO.getGrupoParcelaId().isBlank()) {
             transacao.setGrupoParcelaId(transacaoDTO.getGrupoParcelaId().trim());
         }
+        if (transacaoDTO.getEmprestimoId() != null && !transacaoDTO.getEmprestimoId().isBlank()) {
+            transacao.setEmprestimoId(transacaoDTO.getEmprestimoId().trim());
+        }
         if (transacaoDTO.getParcelaAtual() != null) {
             transacao.setParcelaAtual(transacaoDTO.getParcelaAtual());
         }
@@ -257,6 +260,9 @@ public class TransacaoService {
         if (transacaoDTO.getStatusConferencia() != null) {
             transacao.setStatusConferencia(Transacao.StatusConferencia.valueOf(transacaoDTO.getStatusConferencia().name()));
         }
+        if (transacao.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA) {
+            garantirContaParaEfetivacao(transacao, usuarioId, transacaoDTO.getContaBancariaId());
+        }
         if (transacaoDTO.getCnpj() != null) {
             transacao.setCnpj(normalizarCnpjOpcional(transacaoDTO.getCnpj()));
         }
@@ -290,6 +296,15 @@ public class TransacaoService {
     }
 
     public TransacaoDTO atualizarStatusConferencia(Long id, TransacaoDTO.StatusConferencia status, Long usuarioId) {
+        return atualizarStatusConferencia(id, status, null, usuarioId);
+    }
+
+    public TransacaoDTO atualizarStatusConferencia(
+        Long id,
+        TransacaoDTO.StatusConferencia status,
+        Long contaBancariaId,
+        Long usuarioId
+    ) {
         Transacao transacao = transacaoRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
 
@@ -298,7 +313,11 @@ public class TransacaoService {
         }
 
         SaldoMovimentacaoService.MovimentacaoSnapshot snap = saldoMovimentacaoService.capturarSnapshot(transacao);
-        transacao.setStatusConferencia(Transacao.StatusConferencia.valueOf(status.name()));
+        Transacao.StatusConferencia novoStatus = Transacao.StatusConferencia.valueOf(status.name());
+        transacao.setStatusConferencia(novoStatus);
+        if (novoStatus == Transacao.StatusConferencia.CONFIRMADA) {
+            garantirContaParaEfetivacao(transacao, usuarioId, contaBancariaId);
+        }
         Transacao atualizada = transacaoRepository.save(transacao);
         saldoMovimentacaoService.sincronizarMovimentacao(snap, atualizada);
         transacaoSemanticaIndexService.agendarIndexacao(atualizada.getId());
@@ -310,6 +329,33 @@ public class TransacaoService {
             financialProactiveService.aposDespesaSalva(atualizada);
         }
         return converterParaDTO(atualizada);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransacaoDTO> listarProvisoesFiscaisPrevistas(Long usuarioId) {
+        return transacaoRepository.findProvisoesFiscaisPrevistasByUsuario(usuarioId).stream()
+            .map(this::converterParaDTO)
+            .collect(Collectors.toList());
+    }
+
+    public TransacaoDTO confirmarProvisaoFiscal(Long transacaoId, Long usuarioId, Long contaBancariaId) {
+        Transacao transacao = transacaoRepository.findById(transacaoId)
+            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
+            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+        }
+        if (transacao.getOrigemFiscal() == null) {
+            throw new RuntimeException("Esta transação não é uma provisão fiscal.");
+        }
+        if (transacao.getStatusConferencia() != Transacao.StatusConferencia.PREVISTO) {
+            throw new RuntimeException("A provisão já foi efetivada ou não está mais como PREVISTO.");
+        }
+        return atualizarStatusConferencia(
+            transacaoId,
+            TransacaoDTO.StatusConferencia.CONFIRMADA,
+            contaBancariaId,
+            usuarioId
+        );
     }
 
     /**
@@ -665,6 +711,7 @@ public class TransacaoService {
             dto.setContaBancariaNome(transacao.getContaBancaria().getNome());
         }
         dto.setGrupoParcelaId(transacao.getGrupoParcelaId());
+        dto.setEmprestimoId(transacao.getEmprestimoId());
         dto.setParcelaAtual(transacao.getParcelaAtual());
         dto.setTotalParcelas(transacao.getTotalParcelas());
         dto.setValorReal(transacao.getValorReal());
@@ -701,6 +748,24 @@ public class TransacaoService {
     }
 
     /**
+     * Ao efetivar (CONFIRMADA), exige conta bancária — padrão ou explícita — para movimentar saldo.
+     */
+    private void garantirContaParaEfetivacao(Transacao transacao, Long usuarioId, Long contaBancariaId) {
+        if (transacao.getFatura() != null) {
+            return;
+        }
+        if (transacao.getContaBancaria() != null) {
+            return;
+        }
+        ContaBancaria conta = contaBancariaService.resolverContaParaTransacao(usuarioId, contaBancariaId);
+        if (conta == null) {
+            throw new RuntimeException(
+                "Para confirmar esta transação, cadastre uma conta bancária ou informe qual conta recebeu o valor.");
+        }
+        transacao.setContaBancaria(conta);
+    }
+
+    /**
      * Associa transação à carteira bancária. Despesas de cartão (fatura) não movimentam conta.
      */
     private void aplicarVinculoConta(Transacao transacao, TransacaoDTO dto, Long usuarioId, boolean criacaoNova) {
@@ -716,6 +781,9 @@ public class TransacaoService {
             return;
         }
         if (criacaoNova) {
+            transacao.setContaBancaria(contaBancariaService.resolverContaParaTransacao(usuarioId, null));
+        } else if (transacao.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA
+            && transacao.getContaBancaria() == null) {
             transacao.setContaBancaria(contaBancariaService.resolverContaParaTransacao(usuarioId, null));
         }
     }

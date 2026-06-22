@@ -397,6 +397,57 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("fim") LocalDateTime fim
     );
 
+    /** Transações confirmadas vinculadas à conta — base da reconciliação idempotente de saldo. */
+    @Query("SELECT t FROM Transacao t WHERE t.contaBancaria.id = :contaId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "ORDER BY t.dataTransacao ASC, t.id ASC")
+    List<Transacao> findEfetivadasPorConta(@Param("contaId") Long contaId);
+
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.origemFiscal IS NOT NULL "
+        + "ORDER BY t.dataTransacao DESC")
+    List<Transacao> findProvisoesFiscaisPrevistasByUsuario(@Param("usuarioId") Long usuarioId);
+
+    /** Parcelas de empréstimo PREVISTO ativas (compromisso mensal recorrente por empréstimo). */
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "ORDER BY t.emprestimoId ASC, t.parcelaAtual ASC")
+    List<Transacao> findParcelasEmprestimoPrevistasAtivas(@Param("usuarioId") Long usuarioId);
+
+    /** Parcelas de empréstimo PREVISTO que vencem no mês — projeção de caixa do mês. */
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim")
+    BigDecimal sumParcelasEmprestimoPrevistasNoMes(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.emprestimoId = :emprestimoId "
+        + "ORDER BY t.dataTransacao ASC, t.id ASC")
+    List<Transacao> findByUsuarioIdAndEmprestimoIdOrderByDataTransacaoAsc(
+        @Param("usuarioId") Long usuarioId,
+        @Param("emprestimoId") String emprestimoId
+    );
+
+    @Query("SELECT DISTINCT t.emprestimoId FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "ORDER BY t.emprestimoId DESC")
+    List<String> findEmprestimoIdsByUsuario(@Param("usuarioId") Long usuarioId);
+
     /** Provisões PREVISTO vencidas (fantasmas) — fiscal ou despesa estimada. */
     @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "

@@ -23,9 +23,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.TextStyle;
+import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Monta o bloco "CONTEXTO ATUAL" injetado no system prompt da persona J.A.R.V.I.S.
@@ -72,6 +74,7 @@ public class JarvisContextoFinanceiroService {
             }
             BigDecimal fixas = nz(despesaFixaService.somarValorMensal(userId));
             BigDecimal assinaturas = nz(assinaturaRecorrenteService.totalAssinaturasAtivas(userId));
+            BigDecimal parcelasEmprestimo = somarCompromissoMensalEmprestimosAtivos(userId);
             BigDecimal gastoMensal = resolverGastoMensalMedio(userId);
             BigDecimal mesesReserva = null;
             if (gastoMensal != null && gastoMensal.compareTo(BigDecimal.ZERO) > 0) {
@@ -82,6 +85,7 @@ public class JarvisContextoFinanceiroService {
                 .rendaLiquidaMensal(renda)
                 .despesasFixas(fixas)
                 .assinaturas(assinaturas)
+                .parcelasEmprestimosAtivos(parcelasEmprestimo)
                 .reservaEmergencia(patrimonio)
                 .gastoMensalMedio(gastoMensal)
                 .mesesReservaAtual(mesesReserva)
@@ -122,6 +126,26 @@ public class JarvisContextoFinanceiroService {
 
     private static BigDecimal nz(BigDecimal v) {
         return v != null ? v.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Uma parcela por empréstimo ativo — compromisso mensal recorrente até quitar as PREVISTO restantes.
+     */
+    private BigDecimal somarCompromissoMensalEmprestimosAtivos(Long userId) {
+        List<Transacao> parcelas = transacaoRepository.findParcelasEmprestimoPrevistasAtivas(userId);
+        if (parcelas.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        Map<String, BigDecimal> porEmprestimo = new LinkedHashMap<>();
+        for (Transacao t : parcelas) {
+            if (t.getEmprestimoId() == null || t.getValor() == null) {
+                continue;
+            }
+            porEmprestimo.putIfAbsent(t.getEmprestimoId(), t.getValor());
+        }
+        return porEmprestimo.values().stream()
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
     }
 
     /** Bloco textual pronto para anexar ao system prompt. Nunca lança exceção. */

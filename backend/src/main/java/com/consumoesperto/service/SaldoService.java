@@ -3,9 +3,11 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.ProjecaoMesResumoDTO;
 import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.SerieProjecaoSafraDTO;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.Transacao;
+import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +21,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,8 +38,10 @@ public class SaldoService {
 
     private final TransacaoRepository transacaoRepository;
     private final FaturaRepository faturaRepository;
+    private final ContaBancariaRepository contaBancariaRepository;
     private final OpenAiService openAiService;
     private final ContaBancariaService contaBancariaService;
+    private final SaldoMovimentacaoService saldoMovimentacaoService;
     private final RendaConfigService rendaConfigService;
     private final PlanejamentoFiscalService planejamentoFiscalService;
     private final ConciliacaoAuditoriaService conciliacaoAuditoriaService;
@@ -46,20 +49,31 @@ public class SaldoService {
     public SaldoService(
         TransacaoRepository transacaoRepository,
         FaturaRepository faturaRepository,
+        ContaBancariaRepository contaBancariaRepository,
         OpenAiService openAiService,
         ContaBancariaService contaBancariaService,
+        SaldoMovimentacaoService saldoMovimentacaoService,
         RendaConfigService rendaConfigService,
         @Lazy PlanejamentoFiscalService planejamentoFiscalService,
         @Lazy ConciliacaoAuditoriaService conciliacaoAuditoriaService
     ) {
         this.transacaoRepository = transacaoRepository;
         this.faturaRepository = faturaRepository;
+        this.contaBancariaRepository = contaBancariaRepository;
         this.openAiService = openAiService;
         this.contaBancariaService = contaBancariaService;
+        this.saldoMovimentacaoService = saldoMovimentacaoService;
         this.rendaConfigService = rendaConfigService;
         this.planejamentoFiscalService = planejamentoFiscalService;
         this.conciliacaoAuditoriaService = conciliacaoAuditoriaService;
     }
+
+    public record ResultadoReconciliacaoSaldo(
+        Long contaId,
+        BigDecimal saldoAnterior,
+        BigDecimal saldoCalculado,
+        int transacoesConsideradas
+    ) {}
 
     /**
      * Projeção de fechamento do mês corrente — fonte única para Forecast, Sentinela e alertas.
@@ -361,6 +375,35 @@ public class SaldoService {
 
     private static BigDecimal nz(BigDecimal v) {
         return v != null ? v.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Recalcula {@link ContaBancaria#getSaldoAtual()} a partir de {@code saldo_inicial}
+     * + soma das transações confirmadas elegíveis — idempotente e seguro para reparos retroativos.
+     */
+    @Transactional
+    public ResultadoReconciliacaoSaldo reconciliarSaldo(Long contaId, Long usuarioId) {
+        ContaBancaria conta = contaBancariaService.buscarEntidade(contaId, usuarioId);
+        BigDecimal saldoAnterior = nz(conta.getSaldoAtual());
+        BigDecimal saldoInicial = conta.getSaldoInicial();
+        if (saldoInicial == null) {
+            saldoInicial = saldoAnterior;
+            conta.setSaldoInicial(saldoInicial);
+            contaBancariaRepository.save(conta);
+        }
+        BigDecimal saldoCalculado = nz(saldoInicial);
+        int consideradas = 0;
+        for (Transacao t : transacaoRepository.findEfetivadasPorConta(contaId)) {
+            if (saldoMovimentacaoService.impactaSaldo(t)) {
+                saldoCalculado = saldoCalculado.add(saldoMovimentacaoService.deltaSaldo(t));
+                consideradas++;
+            }
+        }
+        saldoCalculado = saldoCalculado.setScale(2, RoundingMode.HALF_UP);
+        saldoMovimentacaoService.definirSaldoReconciliado(contaId, saldoCalculado);
+        log.info("[SALDO] Reconciliação conta {} user {} — {} → {} ({} tx)",
+            contaId, usuarioId, saldoAnterior, saldoCalculado, consideradas);
+        return new ResultadoReconciliacaoSaldo(contaId, saldoAnterior, saldoCalculado, consideradas);
     }
 
     public void notificarAlteracaoSaldo(Long usuarioId) {

@@ -93,7 +93,9 @@ public class FinancialAdviceCalculator {
 
         BigDecimal renda = ctx.getRendaLiquidaMensal();
         if (renda != null && renda.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal comprometimentoAtual = nz(ctx.getDespesasFixas()).add(nz(ctx.getAssinaturas()));
+            BigDecimal comprometimentoAtual = nz(ctx.getDespesasFixas())
+                .add(nz(ctx.getAssinaturas()))
+                .add(nz(ctx.getParcelasEmprestimosAtivos()));
             BigDecimal comprometimentoNovo = comprometimentoAtual.add(parcela);
             r.setPercentualRendaComprometida(
                 comprometimentoNovo.divide(renda, 4, RoundingMode.HALF_UP)
@@ -106,9 +108,36 @@ public class FinancialAdviceCalculator {
     }
 
     /**
+     * Converte taxa anual (% a.a., ex.: 25.00) para taxa mensal decimal (ex.: 0.0188).
+     */
+    public double taxaAnualParaMensal(BigDecimal taxaAnualPercent) {
+        if (taxaAnualPercent == null || taxaAnualPercent.compareTo(BigDecimal.ZERO) <= 0) {
+            return 0.0;
+        }
+        double aa = taxaAnualPercent.doubleValue() / 100.0;
+        return Math.pow(1.0 + aa, 1.0 / 12.0) - 1.0;
+    }
+
+    /**
+     * Parcela Price: PMT = PV × i / (1 − (1+i)^−n).
+     */
+    public BigDecimal calcularParcelaPrice(BigDecimal valorTomado, double taxaMensal, int parcelas) {
+        if (valorTomado == null || valorTomado.compareTo(BigDecimal.ZERO) <= 0 || parcelas <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        double pv = valorTomado.doubleValue();
+        double i = taxaMensal;
+        if (i <= 0.0) {
+            return valorTomado.divide(BigDecimal.valueOf(parcelas), 2, RoundingMode.HALF_UP);
+        }
+        double pmt = pv * i / (1.0 - Math.pow(1.0 + i, -parcelas));
+        return BigDecimal.valueOf(pmt).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
      * Resolve taxa mensal por bisseção: PV = PMT × (1 − (1+i)^−n) / i
      */
-    double resolverTaxaMensal(double pv, double pmt, int n) {
+    public double resolverTaxaMensal(double pv, double pmt, int n) {
         if (pv <= 0 || pmt <= 0 || n <= 0 || pmt * n <= pv) {
             return 0.0;
         }
