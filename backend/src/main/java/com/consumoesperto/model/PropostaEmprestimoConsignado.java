@@ -24,6 +24,10 @@ public class PropostaEmprestimoConsignado {
         "(?i)(\\d{1,3})\\s*(?:x|vezes)\\s*(?:de\\s*)?(\\d{1,3}(?:[.,]\\d{3})*(?:[.,]\\d{2})?|\\d+(?:[.,]\\d{2})?)"
     );
 
+    private static final Pattern PARCELAS_DE_PATTERN = Pattern.compile(
+        "(?i)(\\d{1,3})\\s*parcelas?\\s*(?:de\\s*)?(\\d{1,3}(?:[.,]\\d{3})*(?:[.,]\\d{2})?|\\d+(?:[.,]\\d{2})?)"
+    );
+
     public static PropostaEmprestimoConsignado fromComando(JsonNode cmd, String sourceText) {
         PropostaEmprestimoConsignado.PropostaEmprestimoConsignadoBuilder b = PropostaEmprestimoConsignado.builder();
         b.valorTomado(firstMoney(cmd, "valorTomado", "valorTotal", "amount"));
@@ -58,7 +62,12 @@ public class PropostaEmprestimoConsignado {
         }
         if (p.getQuantidadeParcelas() == null || p.getValorParcela() == null) {
             Matcher m = PARCELA_PATTERN.matcher(text);
-            if (m.find()) {
+            boolean found = m.find();
+            if (!found) {
+                m = PARCELAS_DE_PATTERN.matcher(text);
+                found = m.find();
+            }
+            if (found) {
                 if (p.getQuantidadeParcelas() == null) {
                     p.setQuantidadeParcelas(Integer.parseInt(m.group(1)));
                 }
@@ -82,7 +91,13 @@ public class PropostaEmprestimoConsignado {
     }
 
     private static BigDecimal extrairValorTomado(String text) {
-        Matcher m = Pattern.compile("(?i)(?:de|consignado|emprestimo|empréstimo)\\s+(?:de\\s+)?(\\d{1,3}(?:[.,]\\d{3})*(?:[.,]\\d{2})?|\\d+(?:[.,]\\d{2})?|\\d+)\\s*(?:k|mil)?)")
+        Matcher m = Pattern.compile(
+            "(?i)(?:no\\s+)?valor\\s+(?:de\\s+)?(\\d{1,3}(?:[.,]\\d{3})*(?:[.,]\\d{2})?|\\d+(?:[.,]\\d{2})?)"
+        ).matcher(text);
+        if (m.find()) {
+            return parseMoney(m.group(1));
+        }
+        m = Pattern.compile("(?i)(?:de|consignado|emprestimo|empréstimo)\\s+(?:de\\s+)?(\\d{1,3}(?:[.,]\\d{3})*(?:[.,]\\d{2})?|\\d+(?:[.,]\\d{2})?|\\d+)\\s*(?:k|mil)?)")
             .matcher(text);
         if (m.find()) {
             return parseMoney(m.group(1));

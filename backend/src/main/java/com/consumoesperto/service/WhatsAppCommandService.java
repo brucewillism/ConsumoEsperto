@@ -312,6 +312,10 @@ public class WhatsAppCommandService {
         if (cancelarEmprestimo.isPresent()) {
             return cancelarEmprestimo;
         }
+        Optional<String> registrarEmprestimo = tryRegistrarEmprestimoConsignadoPorTexto(userId, text);
+        if (registrarEmprestimo.isPresent()) {
+            return registrarEmprestimo;
+        }
         Optional<String> explicarProvisao = tryExplicarProvisaoFiscal(userId, text);
         if (explicarProvisao.isPresent()) {
             return explicarProvisao;
@@ -1338,6 +1342,37 @@ public class WhatsAppCommandService {
             || n.contains("1 parcela") || n.contains("primeira parcela")
             || n.contains("2 parcela") || n.contains("segunda parcela")
             || n.contains("restituicao");
+    }
+
+    private Optional<String> tryRegistrarEmprestimoConsignadoPorTexto(Long userId, String text) {
+        if (!textoRegistraEmprestimoConsignadoPassado(text)) {
+            return Optional.empty();
+        }
+        ObjectNode cmd = JsonNodeFactory.instance.objectNode();
+        cmd.put("action", "RECORD_CONSIGNMENT_LOAN");
+        cmd.put("confianca", 1.0d);
+        return Optional.of(handleRecordConsignmentLoan(cmd, userId, text));
+    }
+
+    /** Passado ("fiz", "contratei") + consignado → registrar, não pedir conselho. */
+    private static boolean textoRegistraEmprestimoConsignadoPassado(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (!n.contains("consignado") && !n.contains("emprestimo")) {
+            return false;
+        }
+        if (n.contains("vale a pena") || n.contains("vale pena") || n.contains("compensa")
+            || n.contains("devo pegar") || n.contains("posso pegar") || n.contains("devo fazer")
+            || n.contains("sera que") || n.contains("o que acha") || n.contains("?")) {
+            return false;
+        }
+        return n.contains("fiz ") || n.contains("fiz um") || n.contains("contratei")
+            || n.contains("peguei") || n.contains("tomei") || n.contains("recebi")
+            || n.contains("caiu na conta") || n.contains("caiu no") || n.contains("entrou na conta")
+            || n.contains("formalizei") || n.contains("fechei") || n.contains("assinei")
+            || n.contains("ja fiz") || n.contains("ja peguei");
     }
 
     private String handleRecordConsignmentLoan(JsonNode cmd, Long userId, String sourceText) {
@@ -2686,6 +2721,9 @@ public class WhatsAppCommandService {
         if (sourceText == null || sourceText.isBlank()) {
             return Optional.empty();
         }
+        if (textoRegistraEmprestimoConsignadoPassado(sourceText)) {
+            return Optional.empty();
+        }
         String t = Normalizer.normalize(sourceText, Normalizer.Form.NFD)
             .replaceAll("\\p{M}", "")
             .toLowerCase(Locale.ROOT);
@@ -2705,17 +2743,14 @@ public class WhatsAppCommandService {
             || t.contains("oraculo") || t.contains("oráculo")
             || t.contains("analise se") || t.contains("análise se")
             || t.contains("analise:") || t.contains("análise:")
-            || t.contains("consignado")
-            || t.contains("emprestimo") || t.contains("empréstimo")
-            || t.contains("financiamento") || t.contains("financiar")
+            || emprestimoOuFinanciamentoPergunta(t)
             || t.contains("iphone")
             || t.contains("notebook")
             || t.contains("geladeira")
             || t.contains("televisao") || t.contains("televisão")
             || t.contains("carro zero")
             || t.contains("moto")
-            || t.contains("parcelado em")
-            || t.contains("parcela")
+            || (t.contains("parcela") && perguntaSobreCompraOuEmprestimo(t))
             || (t.contains("comprar") && (t.contains("agora") || t.contains("essa") || t.contains("este") || t.contains("isto")));
         if (!intencaoAnalise) {
             return Optional.empty();
@@ -2738,6 +2773,25 @@ public class WhatsAppCommandService {
             log.warn("[ADVISOR] falha atalho grande compra userId={}: {}", userId, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /** Consignado/empréstimo só vira conselho quando há intenção de pergunta, não relato no passado. */
+    private static boolean emprestimoOuFinanciamentoPergunta(String t) {
+        if (t == null || t.isBlank()) {
+            return false;
+        }
+        boolean tema = t.contains("consignado") || t.contains("emprestimo") || t.contains("financiamento")
+            || t.contains("financiar");
+        if (!tema) {
+            return false;
+        }
+        return t.contains("devo") || t.contains("posso") || t.contains("vale") || t.contains("acha")
+            || t.contains("compensa") || t.contains("sera que") || t.contains("?");
+    }
+
+    private static boolean perguntaSobreCompraOuEmprestimo(String t) {
+        return t.contains("devo") || t.contains("posso") || t.contains("vale") || t.contains("comprar")
+            || t.contains("acha") || t.contains("compensa") || t.contains("?");
     }
 
     /** Cadastro de cartão / limite / vencimento — não confundir com cenário de “grande compra”. */
