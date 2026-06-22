@@ -97,6 +97,13 @@ public class OpenAiService {
     @Value("${consumoesperto.ai.embedding-model:text-embedding-3-small}")
     private String embeddingModel;
 
+    /** Jarvis v8 — transcrição de voz (gpt-4o-transcribe por defeito; alternativa: gpt-4o-mini-transcribe). */
+    @Value("${consumoesperto.jarvis.transcription-model:gpt-4o-transcribe}")
+    private String platformTranscriptionModel;
+
+    @Value("${consumoesperto.jarvis.transcription-language:pt}")
+    private String transcriptionLanguage;
+
     @PostConstruct
     void initAiRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -924,11 +931,18 @@ public class OpenAiService {
 
     private String whisperModelFor(AiProviderType p, AiProvidersConfig cfg) {
         return switch (p) {
-            case GROQ -> groq(cfg).getWhisperModel();
-            case OPENAI -> openai(cfg).getWhisperModel();
+            case GROQ -> firstNonBlank(groq(cfg).getWhisperModel(), platformTranscriptionModel);
+            case OPENAI -> firstNonBlank(openai(cfg).getWhisperModel(), platformTranscriptionModel);
             case CLAUDE, GEMINI, DEEPSEEK -> "";
             case OLLAMA -> ollama(cfg).getModel();
         };
+    }
+
+    private static String firstNonBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary.trim();
+        }
+        return fallback != null && !fallback.isBlank() ? fallback.trim() : "gpt-4o-transcribe";
     }
 
     private String apiKeyFor(AiProviderType p, AiProvidersConfig cfg) {
@@ -1001,6 +1015,9 @@ public class OpenAiService {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("model", model);
         body.add("response_format", "text");
+        if (transcriptionLanguage != null && !transcriptionLanguage.isBlank()) {
+            body.add("language", transcriptionLanguage.trim());
+        }
         body.add("file", audioResource);
 
         HttpEntity<MultiValueMap<String, Object>> entity = new HttpEntity<>(body, headers);

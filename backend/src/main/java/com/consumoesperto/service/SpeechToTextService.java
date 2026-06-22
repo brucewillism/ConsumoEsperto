@@ -12,13 +12,9 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class SpeechToTextService {
 
-    private final OpenAiService openAiService;
+    private final WhisperTranscriptionService whisperTranscriptionService;
 
     public String transcrever(byte[] audioBytes, String filename, String contentType, Long userId) {
-        log.info("[JARVIS-LOG] STT início bytes={} mime={} userId={}",
-            audioBytes == null ? -1 : audioBytes.length, contentType, userId);
-        String out = openAiService.transcribeAudio(audioBytes, filename, contentType, userId);
-        log.info("[JARVIS-LOG] STT concluído userId={} chars={}", userId, out == null ? 0 : out.length());
-        return out != null ? out : "";
+        return whisperTranscriptionService.transcrever(audioBytes, filename, contentType, userId);
     }
 }

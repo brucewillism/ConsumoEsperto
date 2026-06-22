@@ -383,7 +383,7 @@ public class AiProvidersConfigService {
         OpenaiSection o = new OpenaiSection();
         o.setBaseUrl("https://api.openai.com/v1");
         o.setModel("gpt-4o-mini");
-        o.setWhisperModel("gpt-4o-mini-transcribe");
+        o.setWhisperModel("gpt-4o-transcribe");
         return o;
     }
 

@@ -78,6 +78,8 @@ public class WhatsAppCommandService {
     private final OpenAiService openAiService;
     private final EvolutionApiService evolutionApiService;
     private final EvolutionMediaService evolutionMediaService;
+    private final WhatsAppMediaService whatsAppMediaService;
+    private final WhisperTranscriptionService whisperTranscriptionService;
     @SuppressWarnings("deprecation")
     private final TwilioWhatsAppService twilioWhatsAppService;
     private final TransacaoService transacaoService;
@@ -110,7 +112,6 @@ public class WhatsAppCommandService {
     private final CronosJarvisService cronosJarvisService;
     private final CerebroSemanticoService cerebroSemanticoService;
 
-    private final SpeechToTextService speechToTextService;
 
     private final ConciergeNfceUrlService conciergeNfceUrlService;
 
@@ -170,6 +171,15 @@ public class WhatsAppCommandService {
     private final Map<Long, PendingDespesaFixaDraft> awaitingDespesaFixaDia = new ConcurrentHashMap<>();
     private final Map<Long, PendingAmbiguidadeTransferencia> awaitingAmbiguidadeTransferencia = new ConcurrentHashMap<>();
     private final Map<Long, PendingEmprestimoConsignadoDraft> awaitingEmprestimoConfirm = new ConcurrentHashMap<>();
+    private final Map<Long, PendingVoiceMutationDraft> awaitingVoiceMutationConfirm = new ConcurrentHashMap<>();
+
+    private static final java.util.Set<String> ACOES_MUTACAO_VOZ = java.util.Set.of(
+        "CREATE_EXPENSE", "CREATE_INCOME", "CREATE_CARD", "CREATE_BANK_ACCOUNT", "CREATE_CATEGORY",
+        "CREATE_BUDGET", "CREATE_META", "CREATE_FIXED_EXPENSE", "CREATE_SUBSCRIPTION",
+        "UPDATE_ENTITY_CONFIG", "UPDATE_ACCOUNT_CONFIG", "TRANSFER_BETWEEN_ACCOUNTS",
+        "SET_SALARY_CONFIG", "SET_INCOME_PROFILE", "CONFIRM_FISCAL_PROVISION",
+        "SETTLE_DEBT", "TOGGLE_SUBSCRIPTION", "SPLIT_BILL", "MANAGE_ENTITY"
+    );
 
     /** “Jarvis, anote isso: …” — grava memória semântica financeira. */
     private static final Pattern JARVIS_ANOTE_ISSO = Pattern.compile(
@@ -212,7 +222,8 @@ public class WhatsAppCommandService {
                 return;
             }
             String sourceText = extractText(body, mediaUrl, mediaContentType, userId);
-            String response = processJarvisCommand(userId, sourceText, from, null);
+            boolean fromVoice = mediaContentType != null && mediaContentType.startsWith("audio/");
+            String response = processJarvisCommand(userId, sourceText, from, null, fromVoice);
             sendOutgoingIfPresent(from, response, userId);
         } catch (Exception e) {
             log.error("Erro ao processar comando WhatsApp", e);
@@ -236,22 +247,28 @@ public class WhatsAppCommandService {
      * Pipeline único J.A.R.V.I.S. (app, WhatsApp Twilio e Evolution) — mesmos pré-processadores e mesma IA.
      */
     public String processJarvisCommand(Long userId, String sourceText, String whatsappFrom, String evolutionInstanceHint) {
+        return processJarvisCommand(userId, sourceText, whatsappFrom, evolutionInstanceHint, false);
+    }
+
+    public String processJarvisCommand(Long userId, String sourceText, String whatsappFrom,
+                                       String evolutionInstanceHint, boolean fromVoice) {
         String text = sourceText == null ? "" : sourceText.trim();
         if (text.isBlank()) {
             return msgErro(userId, "J.A.R.V.I.S.", "Digite uma pergunta ou comando financeiro.");
         }
 
         Optional<String> tutorial = jarvisTutorialService.tryHandle(userId, text, () ->
-            processJarvisCommandSemTutorial(userId, text, whatsappFrom, evolutionInstanceHint)
+            processJarvisCommandSemTutorial(userId, text, whatsappFrom, evolutionInstanceHint, fromVoice)
         );
         if (tutorial.isPresent()) {
             return tutorial.get();
         }
 
-        return processJarvisCommandSemTutorial(userId, text, whatsappFrom, evolutionInstanceHint);
+        return processJarvisCommandSemTutorial(userId, text, whatsappFrom, evolutionInstanceHint, fromVoice);
     }
 
-    private String processJarvisCommandSemTutorial(Long userId, String sourceText, String whatsappFrom, String evolutionInstanceHint) {
+    private String processJarvisCommandSemTutorial(Long userId, String sourceText, String whatsappFrom,
+                                                   String evolutionInstanceHint, boolean fromVoice) {
         String text = sourceText == null ? "" : sourceText.trim();
 
         Optional<String> pre = executarPreProcessadoresJarvis(userId, text);
@@ -264,10 +281,124 @@ public class WhatsAppCommandService {
         if ("GENERATE_REPORT".equals(act) || "GERAR_RELATORIO".equals(act)) {
             return handleGenerateReport(parsed, userId, whatsappFrom, text, evolutionInstanceHint);
         }
+        Optional<String> voiceIntercept = tryInterceptarMutacaoPorVoz(userId, parsed, text, fromVoice);
+        if (voiceIntercept.isPresent()) {
+            return voiceIntercept.get();
+        }
         return executeCommand(parsed, userId, text);
     }
 
+    private Optional<String> tryInterceptarMutacaoPorVoz(Long userId, JsonNode parsed, String text, boolean fromVoice) {
+        if (!fromVoice || userId == null) {
+            return Optional.empty();
+        }
+        String action = parsed.path("action").asText("");
+        if (!ACOES_MUTACAO_VOZ.contains(action) || "UNKNOWN".equals(action)) {
+            return Optional.empty();
+        }
+        if ("RECORD_CONSIGNMENT_LOAN".equals(action)) {
+            return Optional.empty();
+        }
+        ObjectNode copy = parsed.deepCopy();
+        awaitingVoiceMutationConfirm.put(userId, new PendingVoiceMutationDraft(copy, text));
+        return Optional.of(montarEcoConfirmacaoVoz(userId, copy, text));
+    }
+
+    private String montarEcoConfirmacaoVoz(Long userId, JsonNode cmd, String transcription) {
+        String vocative = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+        String resumo = resumirComandoParaEco(cmd, transcription);
+        return msgInfo("Confirmação de voz",
+            "Entendi o seguinte do seu áudio, " + vocative + ":\n*" + resumo + "*\n\nConfirma? (responda *sim*)");
+    }
+
+    private String resumirComandoParaEco(JsonNode cmd, String transcription) {
+        String action = cmd.path("action").asText("");
+        BigDecimal valor = extrairValorEco(cmd, transcription);
+        String desc = firstNonBlankEco(
+            cmd.path("description").asText(""),
+            cmd.path("descricao").asText(""),
+            cmd.path("merchant").asText("")
+        );
+        String valorFmt = valor != null ? BRL.format(valor) : "";
+        return switch (action) {
+            case "CREATE_EXPENSE" -> "Registrar despesa de " + valorFmt
+                + (desc.isBlank() ? "" : " — " + desc);
+            case "CREATE_INCOME" -> "Registrar receita de " + valorFmt
+                + (desc.isBlank() ? "" : " — " + desc);
+            case "TRANSFER_BETWEEN_ACCOUNTS" -> "Transferir " + valorFmt + " de "
+                + cmd.path("fromAccount").asText(cmd.path("contaOrigem").asText("?")) + " para "
+                + cmd.path("toAccount").asText(cmd.path("contaDestino").asText("?"));
+            case "CONFIRM_FISCAL_PROVISION" -> "Confirmar provisão fiscal"
+                + (desc.isBlank() ? "" : ": " + desc);
+            case "RECORD_CONSIGNMENT_LOAN" -> "Registrar consignado de " + valorFmt;
+            default -> {
+                String rotulo = action.replace('_', ' ').toLowerCase(Locale.ROOT);
+                yield rotulo + (valorFmt.isBlank() ? "" : " — " + valorFmt)
+                    + (desc.isBlank() ? "" : " (" + desc + ")");
+            }
+        };
+    }
+
+    private static BigDecimal extrairValorEco(JsonNode cmd, String transcription) {
+        if (cmd.has("amount") && !cmd.path("amount").asText("").isBlank()) {
+            try {
+                return new BigDecimal(cmd.path("amount").asText("0").replace(",", "."));
+            } catch (Exception ignored) {
+                // tenta texto
+            }
+        }
+        if (cmd.has("valor") && !cmd.path("valor").asText("").isBlank()) {
+            try {
+                return new BigDecimal(cmd.path("valor").asText("0").replace(",", "."));
+            } catch (Exception ignored) {
+                // tenta texto
+            }
+        }
+        if (transcription == null || transcription.isBlank()) {
+            return null;
+        }
+        Matcher matcher = Pattern.compile("(\\d+[\\.,]?\\d{0,2})").matcher(transcription);
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(matcher.group(1).replace(".", "").replace(",", "."));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String firstNonBlankEco(String... parts) {
+        for (String p : parts) {
+            if (p != null && !p.isBlank()) {
+                return p.trim();
+            }
+        }
+        return "";
+    }
+
+    private Optional<String> tryResolveVoiceMutationConfirm(Long userId, String text) {
+        PendingVoiceMutationDraft draft = awaitingVoiceMutationConfirm.get(userId);
+        if (draft == null) {
+            return Optional.empty();
+        }
+        String n = normalize(text);
+        if (n.startsWith("nao") || n.equals("n") || n.contains("cancel")) {
+            awaitingVoiceMutationConfirm.remove(userId);
+            return Optional.of(msgInfo("Comando de voz", "Ok, não registrei nada."));
+        }
+        if (!(n.startsWith("sim") || n.equals("s") || n.contains("confirmo") || n.contains("pode registrar"))) {
+            return Optional.empty();
+        }
+        awaitingVoiceMutationConfirm.remove(userId);
+        return Optional.of(executeCommand(draft.parsedCommand, userId, draft.sourceText));
+    }
+
     private Optional<String> executarPreProcessadoresJarvis(Long userId, String text) {
+        Optional<String> voiceConfirm = tryResolveVoiceMutationConfirm(userId, text);
+        if (voiceConfirm.isPresent()) {
+            return voiceConfirm;
+        }
         Optional<String> ambiguidade = tryResolveAmbiguidadeTransferencia(userId, text);
         if (ambiguidade.isPresent()) {
             return ambiguidade;
@@ -1425,6 +1556,16 @@ public class WhatsAppCommandService {
             && (n.contains("consignado") || n.contains("emprestimo"));
     }
 
+    private static final class PendingVoiceMutationDraft {
+        final JsonNode parsedCommand;
+        final String sourceText;
+
+        PendingVoiceMutationDraft(JsonNode parsedCommand, String sourceText) {
+            this.parsedCommand = parsedCommand;
+            this.sourceText = sourceText;
+        }
+    }
+
     private static final class PendingEmprestimoConsignadoDraft {
         final PropostaEmprestimoConsignado proposta;
         final ResultadoRegistroEmprestimo preview;
@@ -1924,14 +2065,14 @@ public class WhatsAppCommandService {
             if (supportedMedia && (mediaBytes == null || mediaBytes.length == 0)
                 && evolutionInstanceName != null && !evolutionInstanceName.isBlank()
                 && incoming.getMessageKeyId() != null && !incoming.getMessageKeyId().isBlank()) {
-                byte[] fromEvolution = evolutionMediaService.fetchBase64FromMediaMessage(
+                byte[] fromEvolution = whatsAppMediaService.downloadEvolutionAudio(
                     evolutionInstanceName.trim(), from, incoming.getMessageKeyId(), fromMe, evolutionApiKeyOverride);
                 if (fromEvolution != null && fromEvolution.length > 0) {
                     mediaBytes = fromEvolution;
                 }
             }
             if ((mediaBytes == null || mediaBytes.length == 0) && incoming.getMediaUrl() != null && !incoming.getMediaUrl().isBlank()) {
-                mediaBytes = evolutionMediaService.fetchMedia(incoming.getMediaUrl(), evolutionApiKeyOverride);
+                mediaBytes = whatsAppMediaService.downloadFromUrl(incoming.getMediaUrl(), evolutionApiKeyOverride);
             }
 
             String response;
@@ -1961,11 +2102,9 @@ public class WhatsAppCommandService {
                 if ("audio".equalsIgnoreCase(mediaType) && (sourceText == null || sourceText.isBlank())) {
                     log.warn("Audio Evolution sem bytes ou transcricao vazia: userId={} from={} bytes={} evolutionInstance={}",
                         userId, from, mediaBytes == null ? -1 : mediaBytes.length, evolutionInstanceName);
-                    response = "Não consegui obter ou transcrever o áudio.\n\n"
-                        + "• Na Evolution: ativa *Webhook → Base64* para mídia no payload (ou confirma getBase64FromMediaMessage).\n"
-                        + "• No app: vincula o *mesmo* número que envia as mensagens.\n"
-                        + "• No servidor: chave Groq da plataforma (`GROQ_API_KEY` / `consumoesperto.ai.platform-groq-api-key`), "
-                        + "e `evolution.url` + `evolution.apikey` alinhados à instância.";
+                    response = msgInfo("Áudio",
+                        "Chefe, não consegui entender bem o áudio (ruído ou falha de conexão). "
+                            + "Pode digitar pra mim por segurança?");
                 } else {
                     Optional<String> importContrEv = tryImportacaoContrachequeInstrucoes(userId, sourceText);
                     if (importContrEv.isPresent()) {
@@ -1974,7 +2113,8 @@ public class WhatsAppCommandService {
                         if ("text".equalsIgnoreCase(resolveEffectiveMediaType(mediaType, sourceText)) && !incoming.isJarvisInstantAckSent()) {
                             sendOutgoingMessage(from, jarvisProtocolService.statusLeituraTextoEmAndamento(), userId, webhookEvolutionInstanceHint);
                         }
-                        response = processJarvisCommand(userId, sourceText, from, evolutionInstanceName);
+                        response = processJarvisCommand(userId, sourceText, from, evolutionInstanceName,
+                            "audio".equalsIgnoreCase(mediaType));
                     }
                 }
             }
@@ -2077,12 +2217,13 @@ public class WhatsAppCommandService {
 
     private String extractText(String body, String mediaUrl, String mediaContentType, Long userId) {
         if (mediaUrl != null && !mediaUrl.isBlank() && mediaContentType != null && mediaContentType.startsWith("audio/")) {
-            byte[] media = twilioWhatsAppService.downloadMedia(mediaUrl);
+            byte[] media = whatsAppMediaService.downloadTwilioMedia(mediaUrl);
+            if (media == null || media.length == 0) {
+                return "";
+            }
             String mime = normalizeAudioMimeForTranscription(mediaContentType);
             String filename = filenameForTranscription(mime);
-            String transcript = openAiService.transcribeAudio(media, filename, mime, userId);
-            log.info("Comando de voz transcrito: {}", transcript);
-            return transcript;
+            return whisperTranscriptionService.transcreverSeguro(media, filename, mime, userId).orElse("");
         }
         return body != null ? body : "";
     }
@@ -2093,9 +2234,9 @@ public class WhatsAppCommandService {
                 mediaContentType != null ? mediaContentType : "audio/ogg"
             );
             String filename = filenameForTranscription(mime);
-            String transcript = speechToTextService.transcrever(mediaBytes, filename, mime, userId);
-            log.info("[JARVIS-LOG] Comando de voz Evolution transcrito: {}", transcript);
-            return transcript;
+            Optional<String> transcript = whisperTranscriptionService.transcreverSeguro(mediaBytes, filename, mime, userId);
+            transcript.ifPresent(t -> log.info("[JARVIS-LOG] Comando de voz Evolution transcrito: {}", t));
+            return transcript.orElse("");
         }
         return body != null ? body : "";
     }
