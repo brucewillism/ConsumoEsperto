@@ -448,6 +448,18 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         + "ORDER BY t.emprestimoId DESC")
     List<String> findEmprestimoIdsByUsuario(@Param("usuarioId") Long usuarioId);
 
+    /** Transações PREVISTO no horizonte — simulação Sentinela. */
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim "
+        + "ORDER BY t.dataTransacao ASC")
+    List<Transacao> findPrevistasUsuarioEntre(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
     /** Provisões PREVISTO vencidas (fantasmas) — fiscal ou despesa estimada. */
     @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "

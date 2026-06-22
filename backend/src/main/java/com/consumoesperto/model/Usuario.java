@@ -162,6 +162,10 @@ public class Usuario {
     @Column(name = "whatsapp_number", unique = true, length = 20)
     private String whatsappNumero;
 
+    /** Opt-in para alertas proativos WhatsApp (Sentinela v8). Default true. */
+    @Column(name = "opt_in_notificacoes", nullable = false)
+    private Boolean optInNotificacoes = true;
+
     /**
      * Refresh token Google (escopo calendar.readonly) para integração Cronos — sensível; concedido via fluxo dedicado.
      */
@@ -278,6 +282,9 @@ public class Usuario {
 
     public String getWhatsappNumero() { return whatsappNumero; }
     public void setWhatsappNumero(String whatsappNumero) { this.whatsappNumero = whatsappNumero; }
+
+    public Boolean getOptInNotificacoes() { return optInNotificacoes; }
+    public void setOptInNotificacoes(Boolean optInNotificacoes) { this.optInNotificacoes = optInNotificacoes; }
 
     public String getGoogleCalendarRefreshToken() { return googleCalendarRefreshToken; }
     public void setGoogleCalendarRefreshToken(String googleCalendarRefreshToken) {

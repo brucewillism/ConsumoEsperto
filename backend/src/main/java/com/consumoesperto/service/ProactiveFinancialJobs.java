@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.OrcamentoDTO;
+import com.consumoesperto.model.RiscoFluxo;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.FaturaRepository;
@@ -47,6 +48,24 @@ public class ProactiveFinancialJobs {
     private final FinancialProactiveService financialProactiveService;
     private final ConciliacaoAuditoriaService conciliacaoAuditoriaService;
     private final UsuarioSessaoContextoService sessaoContextoService;
+    private final AlertaTempestadeService alertaTempestadeService;
+    private final AlertaDispatchService alertaDispatchService;
+
+    /** Sentinela v8 — alerta proativo de fluxo (90 dias), 9h. */
+    @Scheduled(cron = "0 0 9 * * *", zone = "America/Sao_Paulo")
+    public void enviarAlertaTempestadeDiario() {
+        for (Usuario usuario : usuarioRepository.findAll()) {
+            if (usuario.getWhatsappNumero() == null || usuario.getWhatsappNumero().isBlank()) {
+                continue;
+            }
+            try {
+                RiscoFluxo risco = alertaTempestadeService.simular(usuario.getId());
+                alertaDispatchService.dispatchAlerta(usuario, risco);
+            } catch (Exception e) {
+                log.warn("[SENTINELA] Falha userId={}: {}", usuario.getId(), e.getMessage());
+            }
+        }
+    }
 
     @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)

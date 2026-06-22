@@ -78,6 +78,8 @@ public class SchemaAutoPatchService {
         ensureTransacaoEmprestimoIdColumn();
         ensureUsuarioGeneroColumns();
         ensureUsuarioJarvisPerfilColumns();
+        ensureUsuarioOptInNotificacoesColumn();
+        ensureAlertasEnviadosTable();
         ensureUsuarioFotoUrlTextColumn();
         ensureUsuarioGoogleCalendarColumns();
         ensureMetasFinanceirasCronosColumns();
@@ -986,6 +988,57 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: colunas tratamento / jarvis_configurado verificadas em usuarios.");
         } catch (Exception e) {
             log.warn("Falha ao aplicar colunas J.A.R.V.I.S. em usuarios: {}", e.getMessage());
+        }
+    }
+
+    private void ensureUsuarioOptInNotificacoesColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedUsuarios = schema + ".usuarios";
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedUsuarios
+                        + " ADD COLUMN IF NOT EXISTS opt_in_notificacoes BOOLEAN NOT NULL DEFAULT TRUE");
+                executeDdlAutocommit(
+                    "UPDATE " + qualifiedUsuarios
+                        + " SET opt_in_notificacoes = TRUE WHERE opt_in_notificacoes IS NULL");
+            }
+            log.info("Schema patch: coluna opt_in_notificacoes verificada em usuarios.");
+        } catch (Exception e) {
+            log.warn("Falha ao aplicar coluna opt_in_notificacoes: {}", e.getMessage());
+        }
+    }
+
+    private void ensureAlertasEnviadosTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.alertas_enviados ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL,"
+                    + "periodo VARCHAR(16) NOT NULL,"
+                    + "gravidade VARCHAR(16) NOT NULL,"
+                    + "data_envio DATE NOT NULL,"
+                    + "data_criacao TIMESTAMP NOT NULL DEFAULT NOW()"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_alerta_enviado_usuario_periodo "
+                    + "ON public.alertas_enviados (usuario_id, periodo)"
+            );
+            log.info("Schema patch: tabela alertas_enviados verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao criar tabela alertas_enviados: {}", e.getMessage());
         }
     }
 
