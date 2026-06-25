@@ -149,7 +149,7 @@ Conteúdo gerado a partir do catálogo em `WhatsAppAppParityService`.
 | Tipo | Comportamento |
 |------|----------------|
 | Texto | Comandos em linguagem natural |
-| Áudio | Transcrição (Groq) → texto |
+| Áudio | Transcrição Whisper/Groq/OpenAI → texto; resposta PTT opcional (ElevenLabs) |
 | Foto | OCR cupom fiscal → confirmação `sim`/`não` |
 | PDF | Fatura de cartão ou contracheque → varredura → confirmação |
 | URL NFC-e | Leitura automática de nota fiscal |
@@ -180,24 +180,26 @@ Legenda de canais no catálogo:
 | Renda | `/renda` | PDF contracheque ou texto de salário |
 | Despesas fixas | `/perfil` | «salve essa despesa fixa de 250…» |
 | Relatórios | `/relatorios` | «gera PDF de maio» |
-| Simulações | `/simulacoes` | «quero comprar notebook 4500…» |
+| Simulações / Advisor | `/simulacoes` | «quero comprar notebook 4500…» · «vale a pena consignado?» |
 | Investimentos | `/investimentos` | «onde investir o saldo?» |
 | Previsão do mês | `/dashboard` | «como vou fechar o mês?» |
+| Sentinela | `/dashboard` | «disponibilidade real» · relatório dia 5 |
 | Modo Viagem | Dashboard + Calendar no perfil | `sim`/`não` após sugestão Cronos |
+| Assinaturas | `/assinaturas` | «cadastra assinatura Netflix 55,90» |
 | Chat IA | Painel no dashboard | Linguagem natural |
 
 ### Só WhatsApp
 
 - Cupom / nota (foto OCR)
-- Comandos por voz (áudio)
+- Comandos por voz (áudio) — transcrição + confirmação `sim`/`não` para mutações
 - Memória semântica: «Jarvis, anote isso: …»
+- **Registo de empréstimo consignado** (crédito + parcelas previstas) — ver [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md)
 
 ### Só app
 
 - Vincular WhatsApp / QR Evolution
 - Score e nível
 - Família (grupo, convites, orçamentos partilhados) — [`MODULO_FAMILIA.md`](MODULO_FAMILIA.md)
-- Assinaturas recorrentes (`/assinaturas`)
 
 **Ver catálogo completo:** app → **WhatsApp** → «O que fazer em cada tela», ou API `GET /api/whatsapp/paridade`.
 
@@ -242,6 +244,19 @@ API: `GET/POST /api/jarvis/modo-viagem/*`
 Upload → extração → confirmação → atualiza renda e lança receita «Salário».  
 App: `/renda` · API: `/api/renda-config/contracheques/*`
 
+### Protocolo Sentinela e Advisor
+
+- **Sentinela:** disponibilidade real após obrigações; consulta por texto ou relatório automático dia 5; alerta reactivo pós-despesa.
+- **Advisor:** conselho determinístico sobre consignado, parcelamento e grandes compras.
+- **Empréstimo consignado:** registo atómico via WhatsApp (crédito + parcelas PREVISTO).
+
+Guia completo: [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md).
+
+### Planejamento fiscal (13º / IR)
+
+Provisões PREVISTO sincronizadas a partir do perfil fiscal; confirmação `sim`/`não` no WhatsApp.  
+API app: `/api/planejamento-fiscal` · Serviço: `PlanejamentoFiscalService`.
+
 ### Cupom (OCR)
 
 Foto no WhatsApp → leitura → confirmação `sim`/`não` → despesa.  
@@ -252,6 +267,7 @@ No app: lançamento manual em `/transacoes`.
 O bot mantém conversas em memória por utilizador, por exemplo:
 
 - confirmação de fatura, contracheque, cupom;
+- **confirmação de empréstimo consignado** (valor atípico, parcela estimada ou conta ambígua);
 - receita automática no dia de pagamento;
 - filas de contenção e Modo Viagem;
 - simulação / gravação de meta;
@@ -281,6 +297,10 @@ Base: `/api` (autenticado com JWT, exceto rotas `/api/public/*` e `/api/auth/*`)
 | `/api/metas` | Metas financeiras |
 | `/api/despesas-fixas` | Despesas recorrentes |
 | `/api/renda-config` | Salário, contracheques |
+| `/api/planejamento-fiscal` | Configuração IR/13º e provisões |
+| `/api/amortizacao-sazonal` | Simulação debt snowball sazonal |
+| `/api/agendamentos-pagamentos` | Agendamentos de pagamento |
+| `/api/rendas` | Rendimentos (distinto de renda-config) |
 | `/api/relatorios` | Relatórios e PDF |
 | `/api/simulacoes` | Simulações |
 | `/api/projecoes` | Projeções / dashboard |
@@ -292,6 +312,7 @@ Base: `/api` (autenticado com JWT, exceto rotas `/api/public/*` e `/api/auth/*`)
 | `/api/ia-chat` | Chat IA (motor JARVIS) |
 | `/api/config` | Chaves de IA por utilizador |
 | `/api/jarvis` | Memória, feedback, protocolos |
+| `/api/jarvis/otimizar-metas` | Protocolo otimização de tetos/metas |
 | `/api/jarvis/sugestoes-contencao` | Contenção |
 | `/api/jarvis/modo-viagem` | Modo Viagem |
 | `/api/whatsapp/paridade` | Catálogo app ↔ WhatsApp |
@@ -322,10 +343,14 @@ Configuração: `.env` / variáveis no `docker-compose.yml` · por utilizador: `
 | Uso | Serviço típico |
 |-----|----------------|
 | Interpretar comandos WhatsApp | `OpenAiService.parseCommand` |
+| Conselho financeiro (Advisor) | `FinancialAdviceCalculator` + `OpenAiService.narrarConselho` |
+| Registo empréstimo consignado | `EmprestimoService` |
 | Extrair PDF fatura/contracheque | `DocumentoIAContextService` |
 | OCR cupom / visão | Serviços de visão + Groq |
-| Transcrição áudio | Groq |
+| Transcrição áudio | `SpeechToTextService` (Whisper/Groq/OpenAI) |
+| Resposta voz WhatsApp (opcional) | `TextToSpeechService` (ElevenLabs) |
 | RAG / memória / insights | `CerebroSemanticoService`, pgvector |
+| Sentinela / disponibilidade real | `PrevisaoFluxoCaixaService`, `SentinelaProtocolService` |
 | Respostas analíticas | `tryRespostaRagAnalitico` |
 
 ---
@@ -381,6 +406,7 @@ Mais detalhes e troubleshooting: [`docker/README.md`](../docker/README.md), [`do
 | [`docs/MODULO_FAMILIA.md`](MODULO_FAMILIA.md) | Grupo familiar e partilha |
 | [`docs/FRONTEND_OVERLAY_MODAIS.md`](FRONTEND_OVERLAY_MODAIS.md) | Modais e overlay CDK |
 | [`docs/WHATSAPP_EVOLUTION.md`](WHATSAPP_EVOLUTION.md) | Evolution: QR, privacidade, sessão |
+| [`docs/JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) | Advisor, consignado, Sentinela, fiscal, áudio, jobs |
 | [`.env.example`](../.env.example) | Variáveis de ambiente comentadas |
 | [`.cursor/rules/stack-local.mdc`](../.cursor/rules/stack-local.mdc) | Regra para agentes: stack local |
 | **`docs/VISAO_GERAL.md`** (este ficheiro) | Visão de produto e arquitetura |
@@ -393,5 +419,6 @@ Mais detalhes e troubleshooting: [`docker/README.md`](../docker/README.md), [`do
 2. **Novas rotas Angular** → secção 4 (`app.routes.ts`).
 3. **Novos controllers** → secção 8.
 4. **Mudança de portas ou serviços Docker** → secção 3 e `docker/README.md`.
+5. **Protocolos JARVIS (Advisor, consignado, Sentinela)** → [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md).
 
 Quando em dúvida, o catálogo em **`/whatsapp-config`** no app reflete o que está em código via `GET /api/whatsapp/paridade`.

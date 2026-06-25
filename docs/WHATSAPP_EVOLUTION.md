@@ -106,6 +106,25 @@ O backend aplica estas definições via serviços de integração Evolution apó
 
 ---
 
+## Áudio e mídia
+
+### Entrada (STT)
+
+1. Evolution envia áudio no webhook (bytes no payload ou URL de mídia).
+2. **`EvolutionMediaService`** obtém o ficheiro (Base64 ou download).
+3. **`SpeechToTextService`** transcreve via Groq Whisper / OpenAI (`OpenAiService.transcribeAudio`).
+4. Texto transcrito segue o pipeline normal de comandos.
+
+Confirmações por voz (`sim` / `não`) têm prioridade para mutações pendentes (fatura, cupom, empréstimo, etc.).
+
+### Saída (TTS — opcional)
+
+Com `JARVIS_WHATSAPP_VOICE_REPLY=true` e chaves ElevenLabs configuradas, respostas podem ser enviadas também como **PTT** (`TextToSpeechService` → `EvolutionApiService.enviarWhatsAppAudioPtt`).
+
+Serviços: `EvolutionMediaService`, `SpeechToTextService`, `TextToSpeechService`.
+
+---
+
 ## Troubleshooting
 
 | Problema | Acção |
@@ -115,6 +134,7 @@ O backend aplica estas definições via serviços de integração Evolution apó
 | Sessão cai após restart | `EVOLUTION_SESSION_STICKY=true`; não reiniciar Evolution em loop |
 | Sem notificações no telemóvel | Desactivar `alwaysOnline`/`readMessages`; activar `EVOLUTION_PRIVACY_SET_UNAVAILABLE` |
 | Webhook não chega ao Spring | `WEBHOOK_GLOBAL_URL` → `http://backend:8087/api/public/evolution/webhook` (Docker) ou `http://127.0.0.1:18081/...` (local) |
+| Áudio não transcrito | Verificar chaves Groq/OpenAI; logs `[JARVIS-LOG] STT`; mídia via `EvolutionMediaService` |
 | Password Postgres com `@` no URI | Percent-encode na `DATABASE_CONNECTION_URI` |
 
 Mais contexto: [`CONFIGURACAO_AMBIENTE.md`](../CONFIGURACAO_AMBIENTE.md), [`docker/README.md`](../docker/README.md).

@@ -13,6 +13,7 @@ Aplicação de finanças pessoais com **app web** (Angular), assistente **J.A.R.
 | [`docs/MODULO_FAMILIA.md`](docs/MODULO_FAMILIA.md) | Grupo familiar, convites, orçamentos partilhados, racha-contas |
 | [`docs/FRONTEND_OVERLAY_MODAIS.md`](docs/FRONTEND_OVERLAY_MODAIS.md) | Modais Material/CDK, scroll e cliques |
 | [`docs/WHATSAPP_EVOLUTION.md`](docs/WHATSAPP_EVOLUTION.md) | Pareamento QR, privacidade, sessão estável |
+| [`docs/JARVIS_PROTOCOLOS.md`](docs/JARVIS_PROTOCOLOS.md) | Advisor, consignado, Sentinela, fiscal, áudio, jobs |
 | [`.env.example`](.env.example) | Variáveis de ambiente comentadas |
 | [`.cursor/rules/stack-local.mdc`](.cursor/rules/stack-local.mdc) | Regra para agentes: stack local |
 

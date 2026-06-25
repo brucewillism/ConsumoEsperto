@@ -11,6 +11,7 @@ Mapa de todos os ficheiros de referência do repositório.
 | [`MODULO_FAMILIA.md`](MODULO_FAMILIA.md) | Grupo familiar, convites, partilha de orçamentos, racha-contas |
 | [`FRONTEND_OVERLAY_MODAIS.md`](FRONTEND_OVERLAY_MODAIS.md) | Modais Angular Material: overlay CDK, scroll, z-index |
 | [`WHATSAPP_EVOLUTION.md`](WHATSAPP_EVOLUTION.md) | Evolution API: QR, webhook, privacidade, sessão |
+| [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) | Advisor, empréstimo consignado, Sentinela, fiscal, áudio, cron jobs |
 
 ## Ambiente e deploy
 
@@ -42,7 +43,10 @@ Mapa de todos os ficheiros de referência do repositório.
 | Catálogo app ↔ WhatsApp | `backend/.../WhatsAppAppParityService.java` |
 | API família | `backend/.../GrupoFamiliarController.java` |
 | Webhook WhatsApp | `backend/.../EvolutionWebhookController.java` (ou equivalente em `/api/public/evolution/webhook`) |
-| Migrações BD | `backend/src/main/resources/db/migration/` |
+| Schema BD (patches runtime) | `backend/.../SchemaAutoPatchService.java` |
+| Catálogo app ↔ WhatsApp | `backend/.../WhatsAppAppParityService.java` |
+| Empréstimo consignado | `backend/.../EmprestimoService.java` |
+| Sentinela / disponibilidade | `backend/.../PrevisaoFluxoCaixaService.java`, `SentinelaProtocolService.java` |
 
 ## Agentes Cursor
 
@@ -55,7 +59,8 @@ Mapa de todos os ficheiros de referência do repositório.
 Ao alterar funcionalidades visíveis ao utilizador:
 
 1. Atualizar `WhatsAppAppParityService.CATALOGO` (fonte da verdade do catálogo).
-2. Atualizar secções relevantes em `VISAO_GERAL.md` e guias temáticos em `docs/`.
+2. Atualizar [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) e secções relevantes em `VISAO_GERAL.md`.
 3. Se mudarem portas ou serviços Docker → `docker/README.md` e `stack-ports.ps1`.
+4. Schema BD → `SchemaAutoPatchService.java` (não há Flyway SQL neste repo).
 
 **Última revisão:** junho/2026

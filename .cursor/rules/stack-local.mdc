@@ -33,3 +33,5 @@ Modais Material exigem `@angular/cdk/overlay-prebuilt.css` em `angular.json` e z
 ## Persona J.A.R.V.I.S. no WhatsApp
 
 As respostas do bot no WhatsApp (incluindo OCR de cupom, PDF de fatura/contracheque, erros e previsões) são formatadas via **`JarvisProtocolService`** e assinadas com **`J.A.R.V.I.S. | ConsumoEsperto 🚀`** no envio (`WhatsAppCommandService` / `WhatsAppNotificationService`). Mensagens de “leitura em andamento” e falhas de API seguem o mesmo tom institucional.
+
+Protocolos avançados (Advisor, consignado, Sentinela, fiscal, áudio): [`docs/JARVIS_PROTOCOLOS.md`](../../docs/JARVIS_PROTOCOLOS.md).

@@ -106,6 +106,21 @@ O dashboard e o sentinela leem esta tabela; **sem ela**, podem aparecer erros ao
 
 Enquanto a tabela não existir, alguns métodos (`CerebroSemanticoService`) devolvem listas vazias em vez de derrubar a API inteira.
 
+## Variáveis J.A.R.V.I.S. (opcionais)
+
+Além das chaves de IA por provider (Groq, OpenAI, etc.), o backend reconhece:
+
+| Variável | Efeito |
+|----------|--------|
+| `JARVIS_WHATSAPP_VOICE_REPLY` | Resposta em áudio PTT no WhatsApp (requer ElevenLabs) |
+| `ELEVENLABS_API_KEY` | Chave ElevenLabs TTS |
+| `ELEVENLABS_VOICE_ID` | Voz ElevenLabs |
+| `ELEVENLABS_MODEL_ID` | Modelo (default `eleven_multilingual_v2`) |
+| `JARVIS_ALERTA_RISCO_COOLDOWN_MINUTES` | Cooldown entre alertas Sentinela reactivos (default 30) |
+
+Timeout de transacção Spring: `spring.transaction.default-timeout=30s` — operações em lote (ex.: empréstimo com muitas parcelas) devem usar persistência optimizada; ver [`docs/JARVIS_PROTOCOLOS.md`](docs/JARVIS_PROTOCOLOS.md).
+
+Protocolos Advisor, consignado e Sentinela: [`docs/JARVIS_PROTOCOLOS.md`](docs/JARVIS_PROTOCOLOS.md).
 
 ## Como Subir
 

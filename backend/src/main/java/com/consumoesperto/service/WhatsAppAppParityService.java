@@ -148,6 +148,33 @@ public class WhatsAppAppParityService {
             List.of("Resumo e gráficos", "Projeção e previsão (carregamento em fases)"),
             null
         ),
+        item("conselho-financeiro", "Conselheiro financeiro (Advisor)", "/simulacoes", "Simulações", "BOTH",
+            List.of(
+                "vale a pena consignado de 10 mil em 24x?",
+                "devo pegar esse empréstimo?",
+                "quero comprar notebook 4500 em 12x, compensa?"
+            ),
+            List.of("Simulador de compras", "Chat IA no dashboard"),
+            "Cálculo determinístico (Selic, taxa BCB consignado) + narração IA."
+        ),
+        item("emprestimo-consignado", "Empréstimo consignado", "/transacoes", "Transações", "WHATSAPP_ONLY",
+            List.of(
+                "fiz consignado de 13.937,77 em 78x de 464",
+                "peguei empréstimo consignado de 10 mil em 24x, caiu no Itaú",
+                "cancela consignado"
+            ),
+            List.of("Ver lançamentos em Transações (crédito + parcelas previstas)"),
+            "Registo atómico: crédito na conta + parcelas PREVISTO. Confirmação sim/não se valor atípico ou conta ambígua."
+        ),
+        item("sentinela-disponibilidade", "Sentinela — disponibilidade real", "/dashboard", "Dashboard", "BOTH",
+            List.of(
+                "sentinela",
+                "qual minha disponibilidade real?",
+                "fluxo de caixa líquido"
+            ),
+            List.of("Projeção no dashboard", "Relatório automático dia 5 de cada mês"),
+            "Margem após obrigações fixas, parcelas e provisões. Alerta reactivo após despesas de risco."
+        ),
         item("importacoes", "Importações pendentes", "/importacoes-pendentes", "Importações", "BOTH",
             List.of(
                 "confirmar importação de fatura (sim/não)",
@@ -165,7 +192,7 @@ public class WhatsAppAppParityService {
         item("whatsapp-audio", "Comandos por voz", "", "", "WHATSAPP_ONLY",
             List.of("mensagem de áudio: «gastei 30 no mercado»"),
             List.of(),
-            "Transcrição automática (Groq) no servidor."
+            "Transcrição Whisper/Groq no servidor. Resposta em áudio (PTT) opcional com JARVIS_WHATSAPP_VOICE_REPLY=true."
         ),
         item("whatsapp-jarvis", "Memória J.A.R.V.I.S.", "", "", "WHATSAPP_ONLY",
             List.of("Jarvis, anote isso: não comprar eletrónica em janeiro"),
