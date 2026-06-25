@@ -1056,9 +1056,8 @@ public class FaturaPdfImportService {
             throw new IllegalArgumentException(
                 "Esta importação não está vinculada a um cartão válido. Cadastre o cartão no app e reimporte o PDF.");
         }
-        YearMonth ymVencimento = imp.getDataVencimento() != null
-            ? YearMonth.from(imp.getDataVencimento())
-            : (imp.getDataFechamento() != null ? YearMonth.from(imp.getDataFechamento()) : YearMonth.now());
+        YearMonth ymVencimento = mesVencimentoImportacao(imp);
+        YearMonth ymFechamento = mesFechamentoImportacao(imp, ymVencimento);
         String numeroCanonico = ymVencimento + "-" + cartao.getId();
 
         Optional<Fatura> porNumero = faturaRepository.findByCartaoCreditoIdAndNumeroFatura(cartao.getId(), numeroCanonico);
@@ -1068,8 +1067,8 @@ public class FaturaPdfImportService {
 
         if (nz(imp.getValorTotal()).compareTo(BigDecimal.ZERO) <= 0) {
             Optional<Fatura> pagaMes = faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartao.getId()).stream()
-                .filter(f -> f.getDataVencimento() != null && YearMonth.from(f.getDataVencimento()).equals(ymVencimento))
                 .filter(f -> f.getStatusFatura() == Fatura.StatusFatura.PAGA)
+                .filter(f -> correspondeCicloImportacao(f, ymVencimento, ymFechamento))
                 .findFirst();
             if (pagaMes.isPresent()) {
                 log.info("Importação PDF reutiliza fatura PAGA id={} cartaoId={} mes={} (total PDF zerado)",
@@ -1078,15 +1077,18 @@ public class FaturaPdfImportService {
             }
         }
 
-        Optional<Fatura> existenteMes = faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartao.getId()).stream()
-            .filter(f -> f.getDataVencimento() != null && YearMonth.from(f.getDataVencimento()).equals(ymVencimento))
+        Optional<Fatura> existenteCiclo = faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartao.getId()).stream()
             .filter(f -> f.getStatusFatura() != Fatura.StatusFatura.PAGA
                 && f.getStatusFatura() != Fatura.StatusFatura.CANCELADA)
-            .min(java.util.Comparator.comparingInt(f -> prioridadeFaturaParaImportacao(f.getStatusFatura())));
-        if (existenteMes.isPresent()) {
-            log.info("Importação PDF reutiliza fatura existente id={} status={} cartaoId={} mes={}",
-                existenteMes.get().getId(), existenteMes.get().getStatusFatura(), cartao.getId(), ymVencimento);
-            return atualizarFaturaParaImportacao(existenteMes.get(), imp, numeroCanonico);
+            .filter(f -> correspondeCicloImportacao(f, ymVencimento, ymFechamento))
+            .max(java.util.Comparator
+                .comparingInt((Fatura f) -> scoreCorrespondenciaCicloImportacao(f, ymVencimento, ymFechamento))
+                .thenComparingInt(f -> prioridadeFaturaParaImportacao(f.getStatusFatura())));
+        if (existenteCiclo.isPresent()) {
+            log.info("Importação PDF substitui fatura existente id={} status={} cartaoId={} venc={} fech={}",
+                existenteCiclo.get().getId(), existenteCiclo.get().getStatusFatura(), cartao.getId(),
+                ymVencimento, ymFechamento);
+            return atualizarFaturaParaImportacao(existenteCiclo.get(), imp, numeroCanonico);
         }
 
         Fatura f = new Fatura();
@@ -1106,21 +1108,71 @@ public class FaturaPdfImportService {
 
     private static int prioridadeFaturaParaImportacao(Fatura.StatusFatura status) {
         if (status == Fatura.StatusFatura.PREVISTA) {
-            return 0;
-        }
-        if (status == Fatura.StatusFatura.ABERTA) {
-            return 1;
-        }
-        if (status == Fatura.StatusFatura.PARCIAL) {
-            return 2;
-        }
-        if (status == Fatura.StatusFatura.VENCIDA) {
             return 3;
         }
-        return 9;
+        if (status == Fatura.StatusFatura.ABERTA) {
+            return 2;
+        }
+        if (status == Fatura.StatusFatura.PARCIAL) {
+            return 1;
+        }
+        if (status == Fatura.StatusFatura.VENCIDA) {
+            return 0;
+        }
+        return -1;
+    }
+
+    private static YearMonth mesVencimentoImportacao(ImportacaoFaturaCartao imp) {
+        if (imp.getDataVencimento() != null) {
+            return YearMonth.from(imp.getDataVencimento());
+        }
+        if (imp.getDataFechamento() != null) {
+            return YearMonth.from(imp.getDataFechamento());
+        }
+        return YearMonth.now();
+    }
+
+    private static YearMonth mesFechamentoImportacao(ImportacaoFaturaCartao imp, YearMonth ymVencimento) {
+        if (imp.getDataFechamento() != null) {
+            return YearMonth.from(imp.getDataFechamento());
+        }
+        return ymVencimento;
+    }
+
+    /** Vencimento ou fechamento no mesmo mês/ciclo do PDF. */
+    private static boolean correspondeCicloImportacao(Fatura f, YearMonth ymVencimento, YearMonth ymFechamento) {
+        if (f == null) {
+            return false;
+        }
+        if (f.getDataVencimento() != null && YearMonth.from(f.getDataVencimento()).equals(ymVencimento)) {
+            return true;
+        }
+        if (f.getDataFechamento() != null && YearMonth.from(f.getDataFechamento()).equals(ymFechamento)) {
+            return true;
+        }
+        return false;
+    }
+
+    /** Maior score = melhor candidata a ser substituída pelo PDF real. */
+    private static int scoreCorrespondenciaCicloImportacao(Fatura f, YearMonth ymVencimento, YearMonth ymFechamento) {
+        int score = 0;
+        if (f.getDataVencimento() != null && YearMonth.from(f.getDataVencimento()).equals(ymVencimento)) {
+            score += 4;
+        }
+        if (f.getDataFechamento() != null && YearMonth.from(f.getDataFechamento()).equals(ymFechamento)) {
+            score += 4;
+        }
+        if (f.getStatusFatura() == Fatura.StatusFatura.PREVISTA) {
+            score += 2;
+        }
+        return score;
     }
 
     private Fatura atualizarFaturaParaImportacao(Fatura f, ImportacaoFaturaCartao imp, String numeroCanonico) {
+        boolean eraPrevista = f.getStatusFatura() == Fatura.StatusFatura.PREVISTA;
+        if (eraPrevista && f.getId() != null) {
+            limparLancamentosProjetadosDaFatura(f.getId());
+        }
         f.setNumeroFatura(numeroCanonico);
         boolean jaPaga = f.getStatusFatura() == Fatura.StatusFatura.PAGA || f.isPaga();
         if (!jaPaga) {
@@ -1143,14 +1195,24 @@ public class FaturaPdfImportService {
     }
 
     /**
-     * Após importar o PDF real, remove PREVISTAS duplicadas do mesmo mês/cartão
+     * Após importar o PDF real, remove PREVISTAS duplicadas do mesmo ciclo/cartão
      * (projeções de parcelas que ficaram obsoletas).
      */
     private void descartarPrevistasObsoletasDoMes(Long cartaoId, Fatura faturaMantida) {
-        if (cartaoId == null || faturaMantida == null || faturaMantida.getDataVencimento() == null) {
+        if (cartaoId == null || faturaMantida == null) {
             return;
         }
-        YearMonth ym = YearMonth.from(faturaMantida.getDataVencimento());
+        YearMonth ymVenc = faturaMantida.getDataVencimento() != null
+            ? YearMonth.from(faturaMantida.getDataVencimento())
+            : null;
+        YearMonth ymFech = faturaMantida.getDataFechamento() != null
+            ? YearMonth.from(faturaMantida.getDataFechamento())
+            : ymVenc;
+        if (ymVenc == null && ymFech == null) {
+            return;
+        }
+        YearMonth ymVencFinal = ymVenc != null ? ymVenc : ymFech;
+        YearMonth ymFechFinal = ymFech != null ? ymFech : ymVencFinal;
         for (Fatura f : faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartaoId)) {
             if (f.getId() == null || f.getId().equals(faturaMantida.getId())) {
                 continue;
@@ -1158,18 +1220,28 @@ public class FaturaPdfImportService {
             if (f.getStatusFatura() != Fatura.StatusFatura.PREVISTA) {
                 continue;
             }
-            if (f.getDataVencimento() == null || !YearMonth.from(f.getDataVencimento()).equals(ym)) {
+            if (!correspondeCicloImportacao(f, ymVencFinal, ymFechFinal)) {
                 continue;
             }
-            List<com.consumoesperto.model.Transacao> txs =
-                transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(f.getId());
-            if (!txs.isEmpty()) {
-                transacaoRepository.deleteAll(txs);
-            }
+            limparLancamentosProjetadosDaFatura(f.getId());
             faturaRepository.delete(f);
-            log.info("Removida PREVISTA obsoleta id={} após importação PDF (cartaoId={} mes={})",
-                f.getId(), cartaoId, ym);
+            log.info("Removida PREVISTA obsoleta id={} após importação PDF (cartaoId={} venc={} fech={})",
+                f.getId(), cartaoId, ymVencFinal, ymFechFinal);
         }
+    }
+
+    private void limparLancamentosProjetadosDaFatura(Long faturaId) {
+        if (faturaId == null) {
+            return;
+        }
+        List<com.consumoesperto.model.Transacao> txs =
+            transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(faturaId);
+        if (txs.isEmpty()) {
+            return;
+        }
+        transacaoRepository.deleteAll(txs);
+        log.info("[FaturaPDF] Removidos {} lançamento(s) projetados da fatura id={} (substituídos pelo PDF)",
+            txs.size(), faturaId);
     }
 
     private List<String> auditarGastosFantasmas(Long usuarioId, Long cartaoId, List<ImportacaoFaturaItemDTO> itens) {
