@@ -92,6 +92,7 @@ public class FaturaPdfImportService {
     private final ItauFaturaPdfLayoutStrategy itauFaturaPdfLayoutStrategy;
     private final PdfTextExtractionService pdfTextExtractionService;
     private final CartaoCreditoService cartaoCreditoService;
+    private final SaldoService saldoService;
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
     public static boolean isBulletVisivelAoUsuario(String linhaAuditoria) {
@@ -318,7 +319,7 @@ public class FaturaPdfImportService {
         return confirmarComResumo(usuarioId, importacaoId, request, true).criadas();
     }
 
-    @Transactional
+    @Transactional(timeout = 120)
     public ResultadoConfirmacaoFatura confirmarComResumo(
         Long usuarioId,
         Long importacaoId,
@@ -390,7 +391,7 @@ public class FaturaPdfImportService {
                 dto.setTotalParcelas(item.getTotalParcelas());
                 dto.setGrupoParcelaId(parcelGroupId(imp, item));
             }
-            transacaoService.criarTransacao(dto, usuarioId, false, false);
+            transacaoService.criarTransacao(dto, usuarioId, false, false, false);
             futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item, faturasParaSincronizar);
             criadas++;
         }
@@ -419,6 +420,7 @@ public class FaturaPdfImportService {
         for (Long faturaId : faturasParaSincronizar) {
             faturaService.sincronizarValorFaturaComTransacoes(faturaId);
         }
+        saldoService.notificarAlteracaoSaldo(usuarioId);
         descartarPrevistasObsoletasDoMes(imp.getCartaoCredito().getId(), fatura);
         scoreService.registrarEvento(usuarioId, ScoreService.EventoScore.IMPORTACAO_CONSISTENTE, "Fatura PDF importada em dia");
         contencaoJarvisService.ativarFilaWhatsAppAposConfirmacao(usuarioId, importacaoId);
@@ -734,7 +736,7 @@ public class FaturaPdfImportService {
             dto.setGrupoParcelaId(grupo);
             dto.setParcelaAtual(parcela);
             dto.setTotalParcelas(item.getTotalParcelas());
-            transacaoService.criarTransacao(dto, usuarioId, false, false);
+            transacaoService.criarTransacao(dto, usuarioId, false, false, false);
             faturasParaSincronizar.add(faturaFutura.getId());
             criadas++;
         }
@@ -1026,7 +1028,7 @@ public class FaturaPdfImportService {
                 dto.setDataTransacao(venc.atStartOfDay());
                 dto.setFaturaId(prevista.getId());
                 dto.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
-                transacaoService.criarTransacao(dto, usuarioId, false, false);
+                transacaoService.criarTransacao(dto, usuarioId, false, false, false);
                 criadas++;
             }
             faturasParaSincronizar.add(prevista.getId());
@@ -1062,6 +1064,18 @@ public class FaturaPdfImportService {
         Optional<Fatura> porNumero = faturaRepository.findByCartaoCreditoIdAndNumeroFatura(cartao.getId(), numeroCanonico);
         if (porNumero.isPresent()) {
             return atualizarFaturaParaImportacao(porNumero.get(), imp, numeroCanonico);
+        }
+
+        if (nz(imp.getValorTotal()).compareTo(BigDecimal.ZERO) <= 0) {
+            Optional<Fatura> pagaMes = faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartao.getId()).stream()
+                .filter(f -> f.getDataVencimento() != null && YearMonth.from(f.getDataVencimento()).equals(ymVencimento))
+                .filter(f -> f.getStatusFatura() == Fatura.StatusFatura.PAGA)
+                .findFirst();
+            if (pagaMes.isPresent()) {
+                log.info("Importação PDF reutiliza fatura PAGA id={} cartaoId={} mes={} (total PDF zerado)",
+                    pagaMes.get().getId(), cartao.getId(), ymVencimento);
+                return atualizarFaturaParaImportacao(pagaMes.get(), imp, numeroCanonico);
+            }
         }
 
         Optional<Fatura> existenteMes = faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartao.getId()).stream()
@@ -1108,11 +1122,17 @@ public class FaturaPdfImportService {
 
     private Fatura atualizarFaturaParaImportacao(Fatura f, ImportacaoFaturaCartao imp, String numeroCanonico) {
         f.setNumeroFatura(numeroCanonico);
-        f.setStatusFatura(Fatura.StatusFatura.ABERTA);
-        f.setPaga(false);
-        f.setValorTotal(nz(imp.getValorTotal()));
-        f.setValorFatura(nz(imp.getValorTotal()));
-        f.setValorMinimo(nz(imp.getPagamentoMinimo()));
+        boolean jaPaga = f.getStatusFatura() == Fatura.StatusFatura.PAGA || f.isPaga();
+        if (!jaPaga) {
+            f.setStatusFatura(Fatura.StatusFatura.ABERTA);
+            f.setPaga(false);
+        }
+        BigDecimal totalPdf = nz(imp.getValorTotal());
+        if (totalPdf.compareTo(BigDecimal.ZERO) > 0) {
+            f.setValorTotal(totalPdf);
+            f.setValorFatura(totalPdf);
+            f.setValorMinimo(nz(imp.getPagamentoMinimo()));
+        }
         if (imp.getDataVencimento() != null) {
             f.setDataVencimento(imp.getDataVencimento());
         }

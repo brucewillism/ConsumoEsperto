@@ -93,7 +93,7 @@ public class TransacaoService {
     }
 
     public TransacaoDTO criarTransacao(TransacaoDTO transacaoDTO, Long usuarioId, boolean executarProativos) {
-        return criarTransacao(transacaoDTO, usuarioId, executarProativos, true);
+        return criarTransacao(transacaoDTO, usuarioId, executarProativos, true, true);
     }
 
     /**
@@ -105,6 +105,20 @@ public class TransacaoService {
         Long usuarioId,
         boolean executarProativos,
         boolean sincronizarFaturaImediata
+    ) {
+        return criarTransacao(transacaoDTO, usuarioId, executarProativos, sincronizarFaturaImediata, true);
+    }
+
+    /**
+     * @param notificarSaldo quando {@code false}, adia {@link SaldoService#notificarAlteracaoSaldo}
+     *        (útil em importação em lote de fatura).
+     */
+    public TransacaoDTO criarTransacao(
+        TransacaoDTO transacaoDTO,
+        Long usuarioId,
+        boolean executarProativos,
+        boolean sincronizarFaturaImediata,
+        boolean notificarSaldo
     ) {
         // Cria uma nova instância de transação a partir dos dados do DTO
         Transacao transacao = new Transacao();
@@ -141,7 +155,11 @@ public class TransacaoService {
 
         Long categoriaId = transacaoDTO.getCategoriaId();
         boolean parcelaEmprestimo = transacaoDTO.getEmprestimoId() != null && !transacaoDTO.getEmprestimoId().isBlank();
-        if (categoriaId == null && transacao.getTipoTransacao() == Transacao.TipoTransacao.DESPESA && !parcelaEmprestimo) {
+        boolean despesaFatura = transacaoDTO.getFaturaId() != null;
+        if (categoriaId == null
+            && transacao.getTipoTransacao() == Transacao.TipoTransacao.DESPESA
+            && !parcelaEmprestimo
+            && !despesaFatura) {
             categoriaId = financialProactiveService.sugerirCategoria(usuarioId, transacao.getDescricao())
                 .map(Categoria::getId)
                 .orElse(null);
@@ -170,7 +188,9 @@ public class TransacaoService {
         if (sincronizarFaturaImediata && transacaoSalva.getFatura() != null) {
             faturaService.sincronizarValorFaturaComTransacoes(transacaoSalva.getFatura().getId());
         }
-        saldoService.notificarAlteracaoSaldo(usuarioId);
+        if (notificarSaldo) {
+            saldoService.notificarAlteracaoSaldo(usuarioId);
+        }
         if (executarProativos && transacaoSalva.getTipoTransacao() == Transacao.TipoTransacao.DESPESA) {
             financialProactiveService.aposDespesaSalva(transacaoSalva);
         } else if (executarProativos && transacaoSalva.getTipoTransacao() == Transacao.TipoTransacao.INVESTIMENTO

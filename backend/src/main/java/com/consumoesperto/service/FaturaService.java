@@ -582,7 +582,9 @@ public class FaturaService {
         }
         f.setValorFatura(sum);
         f.setValorTotal(sum);
-        f.setValorMinimo(sum);
+        if (f.getStatusFatura() != Fatura.StatusFatura.PAGA && !f.isPaga()) {
+            f.setValorMinimo(sum);
+        }
         faturaRepository.save(f);
     }
 

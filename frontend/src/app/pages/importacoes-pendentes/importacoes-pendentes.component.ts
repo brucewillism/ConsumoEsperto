@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatExpansionModule } from '@angular/material/expansion';
 import { MatIconModule } from '@angular/material/icon';
 import { ImportacaoFatura, ImportacaoFaturaService } from '../../services/importacao-fatura.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
@@ -22,6 +23,7 @@ import { LoadingIndicatorComponent } from '../../components/loading-indicator/lo
     MatButtonModule,
     MatCardModule,
     MatCheckboxModule,
+    MatExpansionModule,
     MatIconModule,
     WhatsappParityHintComponent,
     LoadingIndicatorComponent,
@@ -250,7 +252,14 @@ export class ImportacoesPendentesComponent implements OnInit {
   }
 
   conciliacaoOk(imp: ImportacaoFatura): boolean {
+    if (this.faturaTotalZerada(imp)) {
+      return false;
+    }
     const tol = Math.max(5, Math.min(120, Number(imp.valorTotal || 0) * 0.02));
     return Number(imp.diferencaLancamentos ?? 999) <= tol;
+  }
+
+  faturaTotalZerada(imp: ImportacaoFatura): boolean {
+    return Number(imp.valorTotal || 0) <= 0;
   }
 }

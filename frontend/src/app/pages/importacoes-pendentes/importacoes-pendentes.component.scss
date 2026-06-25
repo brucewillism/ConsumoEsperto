@@ -226,6 +226,28 @@
   margin: 4px 0;
 }
 
+.items-panel {
+  margin-top: 4px;
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.items-panel ::ng-deep .mat-expansion-panel-body {
+  padding: 0 12px 12px;
+}
+
+.items-panel ::ng-deep .mat-expansion-panel-header-title {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.items-panel ::ng-deep .mat-expansion-panel-header-description {
+  color: #9ca3af;
+  justify-content: flex-end;
+}
+
 .items {
   display: grid;
   gap: 8px;

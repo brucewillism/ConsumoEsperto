@@ -112,7 +112,12 @@
       </div>
     </div>
 
-    <p class="conciliacao-hint" *ngIf="!conciliacaoOk(imp)">
+    <p class="conciliacao-hint" *ngIf="faturaTotalZerada(imp)">
+      Total da fatura zerado no PDF — comum quando a fatura já foi paga. Você pode importar os lançamentos
+      para registro histórico; o total será recalculado pela soma dos itens.
+    </p>
+
+    <p class="conciliacao-hint" *ngIf="!faturaTotalZerada(imp) && !conciliacaoOk(imp)">
       A IA pode ter omitido lançamentos do PDF. Revise a lista, reimporte o arquivo ou confirme mesmo assim
       e complete os faltantes depois em Transações.
     </p>
@@ -121,18 +126,29 @@
       <p *ngFor="let a of imp.auditorias">• {{ a }}</p>
     </div>
 
-    <div class="items">
-      <label class="item-row" *ngFor="let item of imp.itens">
-        <mat-checkbox [(ngModel)]="item.selecionado" [disabled]="!item.novo"></mat-checkbox>
-        <span class="date">{{ item.data | date:'dd/MM' }}</span>
-        <span class="desc">
-          {{ item.descricao }}
-          <small *ngIf="item.totalParcelas">Parcela {{ item.parcelaAtual }}/{{ item.totalParcelas }}</small>
-        </span>
-        <strong>{{ brl(item.valor) }}</strong>
-        <em [class.old]="!item.novo">{{ item.novo ? 'novo' : 'já lançado' }}</em>
-      </label>
-    </div>
+    <mat-expansion-panel class="items-panel">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          Lançamentos ({{ imp.itens.length }})
+        </mat-panel-title>
+        <mat-panel-description>
+          {{ imp.novosDetectados }} novos · {{ brl(somaSelecionados(imp)) }} selecionados
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="items">
+        <label class="item-row" *ngFor="let item of imp.itens">
+          <mat-checkbox [(ngModel)]="item.selecionado" [disabled]="!item.novo"></mat-checkbox>
+          <span class="date">{{ item.data | date:'dd/MM' }}</span>
+          <span class="desc">
+            {{ item.descricao }}
+            <small *ngIf="item.totalParcelas">Parcela {{ item.parcelaAtual }}/{{ item.totalParcelas }}</small>
+          </span>
+          <strong>{{ brl(item.valor) }}</strong>
+          <em [class.old]="!item.novo">{{ item.novo ? 'novo' : 'já lançado' }}</em>
+        </label>
+      </div>
+    </mat-expansion-panel>
 
     <div class="actions">
       <button mat-raised-button color="primary" (click)="confirmar(imp)" [disabled]="confirmandoId === imp.id || imp.aguardandoEscolhaSaldoAnterior || apagandoId === imp.id">
