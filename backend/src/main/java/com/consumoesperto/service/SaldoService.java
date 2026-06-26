@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.config.ForecastProjecaoConfig;
 import com.consumoesperto.dto.ProjecaoMesResumoDTO;
 import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.SerieProjecaoSafraDTO;
@@ -45,6 +46,8 @@ public class SaldoService {
     private final RendaConfigService rendaConfigService;
     private final PlanejamentoFiscalService planejamentoFiscalService;
     private final ConciliacaoAuditoriaService conciliacaoAuditoriaService;
+    private final DespesaFixaService despesaFixaService;
+    private final ForecastProjecaoConfig forecastProjecaoConfig;
 
     public SaldoService(
         TransacaoRepository transacaoRepository,
@@ -55,7 +58,9 @@ public class SaldoService {
         SaldoMovimentacaoService saldoMovimentacaoService,
         RendaConfigService rendaConfigService,
         @Lazy PlanejamentoFiscalService planejamentoFiscalService,
-        @Lazy ConciliacaoAuditoriaService conciliacaoAuditoriaService
+        @Lazy ConciliacaoAuditoriaService conciliacaoAuditoriaService,
+        DespesaFixaService despesaFixaService,
+        ForecastProjecaoConfig forecastProjecaoConfig
     ) {
         this.transacaoRepository = transacaoRepository;
         this.faturaRepository = faturaRepository;
@@ -66,6 +71,8 @@ public class SaldoService {
         this.rendaConfigService = rendaConfigService;
         this.planejamentoFiscalService = planejamentoFiscalService;
         this.conciliacaoAuditoriaService = conciliacaoAuditoriaService;
+        this.despesaFixaService = despesaFixaService;
+        this.forecastProjecaoConfig = forecastProjecaoConfig;
     }
 
     public record ResultadoReconciliacaoSaldo(
@@ -222,15 +229,26 @@ public class SaldoService {
         BigDecimal receitasSalariaisConfirmadas = nz(
             transacaoRepository.sumReceitaSalarialConfirmadaPeriodo(usuarioId, inicio, fimMes));
         BigDecimal receitasPrevistas = calcularReceitasPrevistasMes(
-            usuarioId, rendaLiquida, receitasSalariaisConfirmadas, diaAtual, diasNoMes);
+            usuarioId, rendaLiquida, receitasSalariaisConfirmadas, diaAtual, diasNoMes, hoje);
 
-        BigDecimal despesasPrevistas = gastoProjetado.subtract(gastoAtual).max(BigDecimal.ZERO)
-            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal despesasPrevistas;
+        if (ProjecaoMesCaixaSupport.usarModoAntiSusto(diaAtual, forecastProjecaoConfig.getDiaLiminarAntiSusto())) {
+            BigDecimal fixasRestantes = nz(despesaFixaService.somarValorRestanteNoMes(usuarioId, hoje));
+            BigDecimal parcelasEmprestimo = nz(transacaoRepository.sumParcelasEmprestimoPrevistasNoMes(
+                usuarioId, hoje.atStartOfDay(), fimMes));
+            despesasPrevistas = ProjecaoMesCaixaSupport.calcularDespesasPrevistasAntiSusto(
+                mediaDiaria, diaAtual, diasNoMes, fixasRestantes, parcelasEmprestimo,
+                forecastProjecaoConfig.getMargemVariavelPct());
+            gastoProjetado = gastoAtual.add(despesasPrevistas).setScale(2, RoundingMode.HALF_UP);
+        } else {
+            despesasPrevistas = gastoProjetado.subtract(gastoAtual).max(BigDecimal.ZERO)
+                .setScale(2, RoundingMode.HALF_UP);
+        }
 
         BigDecimal receitasFiscaisBrutas = nz(
             planejamentoFiscalService.somarReceitasPrevistasNoMes(usuarioId, ym));
-        BigDecimal receitasFiscaisPrevistas = conciliacaoAuditoriaService
-            .receitasFiscaisLiquidasNoMes(usuarioId, ym, receitasFiscaisBrutas);
+        BigDecimal receitasFiscaisPrevistas = calcularReceitasFiscaisLiquidasNoMes(
+            usuarioId, ym, inicio, fimMes, receitasFiscaisBrutas);
 
         BigDecimal patrimonio = patrimonioInicialOverride != null
             ? nz(patrimonioInicialOverride)
@@ -272,12 +290,12 @@ public class SaldoService {
         BigDecimal receitasSalariaisConfirmadas = nz(
             transacaoRepository.sumReceitaSalarialConfirmadaPeriodo(usuarioId, inicio, fimMes));
         BigDecimal receitasPrevistas = calcularReceitasPrevistasMes(
-            usuarioId, rendaLiquida, receitasSalariaisConfirmadas, 1, diasNoMes);
+            usuarioId, rendaLiquida, receitasSalariaisConfirmadas, 1, diasNoMes, ym.atDay(1));
 
         BigDecimal receitasFiscaisBrutas = nz(
             planejamentoFiscalService.somarReceitasPrevistasNoMes(usuarioId, ym));
-        BigDecimal receitasFiscaisPrevistas = conciliacaoAuditoriaService
-            .receitasFiscaisLiquidasNoMes(usuarioId, ym, receitasFiscaisBrutas);
+        BigDecimal receitasFiscaisPrevistas = calcularReceitasFiscaisLiquidasNoMes(
+            usuarioId, ym, inicio, fimMes, receitasFiscaisBrutas);
 
         BigDecimal patrimonio = nz(patrimonioInicial);
         BigDecimal saldoProjetado = patrimonio
@@ -298,7 +316,8 @@ public class SaldoService {
         BigDecimal rendaLiquida,
         BigDecimal receitasSalariaisConfirmadas,
         int diaAtual,
-        int diasNoMes
+        int diasNoMes,
+        LocalDate referencia
     ) {
         TipoConfiguracaoRenda tipo = rendaConfigService.obterDto(usuarioId)
             .map(RendaConfigDTO::getTipoConfiguracaoRenda)
@@ -308,8 +327,40 @@ public class SaldoService {
             return rendaLiquida.multiply(BigDecimal.valueOf(diasRestantes))
                 .divide(BigDecimal.valueOf(Math.max(1, diasNoMes)), 2, RoundingMode.HALF_UP);
         }
-        return rendaLiquida.subtract(receitasSalariaisConfirmadas).max(BigDecimal.ZERO)
-            .setScale(2, RoundingMode.HALF_UP);
+        Integer diaPagamentoCfg = rendaConfigService.obterDto(usuarioId)
+            .map(RendaConfigDTO::getDiaPagamento)
+            .orElse(null);
+        int diaPagamento = (diaPagamentoCfg != null && diaPagamentoCfg >= 1)
+            ? diaPagamentoCfg
+            : SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO;
+        return ProjecaoMesCaixaSupport.calcularGapSalarial(
+            rendaLiquida,
+            receitasSalariaisConfirmadas,
+            referencia.getDayOfMonth(),
+            diasNoMes,
+            diaPagamento
+        );
+    }
+
+    /**
+     * Receitas fiscais previstas líquidas — fantasmas e 13º já confirmado no mês (evita double-dipping).
+     */
+    private BigDecimal calcularReceitasFiscaisLiquidasNoMes(
+        Long usuarioId,
+        YearMonth ym,
+        LocalDateTime inicio,
+        LocalDateTime fim,
+        BigDecimal receitasFiscaisBrutas
+    ) {
+        BigDecimal decimoPrevisto = nz(transacaoRepository.sumReceitaDecimoTerceiroPrevistaPeriodo(
+            usuarioId, inicio, fim));
+        BigDecimal decimoConfirmado = nz(transacaoRepository.sumReceitaDecimoTerceiroConfirmadaPeriodo(
+            usuarioId, inicio, fim));
+        BigDecimal fantasmasBruto = conciliacaoAuditoriaService.receitasFiscaisLiquidasNoMes(
+            usuarioId, ym, receitasFiscaisBrutas);
+        BigDecimal fantasmas = receitasFiscaisBrutas.subtract(fantasmasBruto).max(BigDecimal.ZERO);
+        return ProjecaoMesCaixaSupport.deduplicarReceitasFiscais(
+            receitasFiscaisBrutas, decimoPrevisto, decimoConfirmado, fantasmas);
     }
 
     private static String formatarRotuloMes(YearMonth ym) {

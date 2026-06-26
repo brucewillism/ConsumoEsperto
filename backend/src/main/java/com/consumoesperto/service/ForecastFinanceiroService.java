@@ -111,10 +111,19 @@ public class ForecastFinanceiroService {
 
     private void aplicarAnaliseIa(Long usuarioId, ForecastFinanceiroDTO dto) {
         BigDecimal probFallback = calcularProbabilidadeFallback(dto.getRendaLiquida(), dto.getGastoProjetado());
+        probFallback = ProjecaoMesCaixaSupport.suavizarProbabilidadeComSaldoPositivo(
+            probFallback, dto.getSaldoProjetado());
         dto.setProbabilidadeVermelho(probFallback);
         dto.setNivelRisco(nivel(probFallback));
-        dto.setMensagemIa("Mantendo o ritmo atual, você deve fechar com saldo projetado de "
-            + BRL.format(dto.getSaldoProjetado()) + ".");
+        if (ProjecaoMesCaixaSupport.saldoProjetadoRobustoPositivo(dto.getSaldoProjetado())
+            && probFallback.compareTo(BigDecimal.valueOf(55)) >= 0) {
+            dto.setMensagemIa("O ritmo de gastos está elevado em relação à renda, mas o saldo projetado de fechamento "
+                + "permanece positivo (*" + BRL.format(dto.getSaldoProjetado()) + "*). "
+                + "Vale revisar despesas discricionárias antes de novos lançamentos.");
+        } else {
+            dto.setMensagemIa("Mantendo o ritmo atual, você deve fechar com saldo projetado de "
+                + BRL.format(dto.getSaldoProjetado()) + ".");
+        }
         try {
             JsonNode json = openAiService.gerarJson(
                 usuarioId,
@@ -133,6 +142,7 @@ public class ForecastFinanceiroService {
             );
             BigDecimal prob = BigDecimal.valueOf(json.path("probabilidadeVermelho").asDouble(probFallback.doubleValue()))
                 .setScale(2, RoundingMode.HALF_UP);
+            prob = ProjecaoMesCaixaSupport.suavizarProbabilidadeComSaldoPositivo(prob, dto.getSaldoProjetado());
             dto.setProbabilidadeVermelho(prob.max(BigDecimal.ZERO).min(BigDecimal.valueOf(100)));
             String nivel = json.path("nivelRisco").asText(nivel(dto.getProbabilidadeVermelho())).trim().toUpperCase(Locale.ROOT);
             dto.setNivelRisco(nivel.isBlank() ? nivel(dto.getProbabilidadeVermelho()) : nivel);

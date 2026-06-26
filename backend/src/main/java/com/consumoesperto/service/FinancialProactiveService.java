@@ -140,7 +140,8 @@ public class FinancialProactiveService {
         var forecast = forecastFinanceiroService.calcular(uid);
         var sentinela = sentinelaProtocolService.calcularMargemSentinela(transacao);
         boolean forecastRuim = forecast.getSaldoProjetado().compareTo(BigDecimal.ZERO) < 0
-            || forecast.getProbabilidadeVermelho().compareTo(BigDecimal.valueOf(70)) >= 0;
+            || (forecast.getProbabilidadeVermelho().compareTo(BigDecimal.valueOf(70)) >= 0
+                && !ProjecaoMesCaixaSupport.saldoProjetadoRobustoPositivo(forecast.getSaldoProjetado()));
         boolean sentinelaRuim = sentinela.nivelAlerta() != SentinelaProtocolService.NivelAlertaSentinela.OK;
         if (!forecastRuim && !sentinelaRuim) {
             return;

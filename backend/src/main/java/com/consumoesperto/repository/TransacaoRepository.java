@@ -372,13 +372,50 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("fim") LocalDateTime fim
     );
 
-    /** Receitas confirmadas no período excluindo 13º/IR (gap salarial mensal). */
+    /**
+     * Receitas salariais confirmadas no período — categoria Salário, recorrentes ou holerite automático;
+     * exclui 13º/IR ({@code origemFiscal}) e entradas avulsas sem vínculo salarial.
+     */
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
         + "AND t.origemFiscal IS NULL AND t.excluido = false "
-        + "AND t.dataTransacao BETWEEN :inicio AND :fim")
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim "
+        + "AND (t.recorrente = true "
+        + "OR LOWER(COALESCE(t.categoria.nome, '')) IN ('salário', 'salario') "
+        + "OR LOWER(COALESCE(t.descricao, '')) LIKE '%salário líquido%' "
+        + "OR LOWER(COALESCE(t.descricao, '')) LIKE '%salario liquido%')")
     BigDecimal sumReceitaSalarialConfirmadaPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.origemFiscal IN ("
+        + "com.consumoesperto.model.OrigemProvisionamentoFiscal.DECIMO_TERCEIRO_UNICO, "
+        + "com.consumoesperto.model.OrigemProvisionamentoFiscal.DECIMO_TERCEIRA_PRIMEIRA, "
+        + "com.consumoesperto.model.OrigemProvisionamentoFiscal.DECIMO_TERCEIRA_SEGUNDA) "
+        + "AND t.excluido = false "
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim")
+    BigDecimal sumReceitaDecimoTerceiroPrevistaPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.origemFiscal IN ("
+        + "com.consumoesperto.model.OrigemProvisionamentoFiscal.DECIMO_TERCEIRO_UNICO, "
+        + "com.consumoesperto.model.OrigemProvisionamentoFiscal.DECIMO_TERCEIRA_PRIMEIRA, "
+        + "com.consumoesperto.model.OrigemProvisionamentoFiscal.DECIMO_TERCEIRA_SEGUNDA) "
+        + "AND t.excluido = false "
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim")
+    BigDecimal sumReceitaDecimoTerceiroConfirmadaPeriodo(
         @Param("usuarioId") Long usuarioId,
         @Param("inicio") LocalDateTime inicio,
         @Param("fim") LocalDateTime fim
