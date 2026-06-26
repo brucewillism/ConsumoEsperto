@@ -484,8 +484,9 @@ public class FaturaService {
     }
 
     /**
-     * Localiza ou cria a fatura em aberto/parcial do cartão (ciclo atual). Não altera valores;
-     * o total da fatura deve refletir a soma das {@link com.consumoesperto.model.Transacao} vinculadas.
+     * Localiza ou cria a fatura do ciclo corrente do cartão (ABERTA, PARCIAL ou PREVISTA).
+     * Lançamentos manuais/WhatsApp devem cair na mesma fatura PREVISTA já exibida no painel (ex.: projeção PDF),
+     * e não numa ABERTA duplicada — o total é sempre recalculado via {@link #sincronizarValorFaturaComTransacoes}.
      */
     public Fatura resolverFaturaAbertaParaCartao(Long usuarioId, CartaoCredito cartao) {
         if (cartao == null) {
@@ -494,14 +495,21 @@ public class FaturaService {
         if (!Objects.equals(cartao.getUsuario().getId(), usuarioId)) {
             throw new RuntimeException("Cartão não pertence ao usuário");
         }
+        List<Fatura.StatusFatura> statusesCicloAberto = List.of(
+            Fatura.StatusFatura.ABERTA,
+            Fatura.StatusFatura.PARCIAL,
+            Fatura.StatusFatura.PREVISTA
+        );
         List<Fatura> abertas = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
             cartao.getId(),
-            List.of(Fatura.StatusFatura.ABERTA, Fatura.StatusFatura.PARCIAL)
+            statusesCicloAberto
         );
+        LocalDateTime corteVencimento = LocalDateTime.now().minusDays(5);
         Fatura faturaAlvo = abertas.stream()
-            .filter(f -> f.getDataVencimento() != null && f.getDataVencimento().isAfter(LocalDateTime.now().minusDays(5)))
+            .filter(f -> f.getDataVencimento() != null && f.getDataVencimento().isAfter(corteVencimento))
             .min(Comparator.comparing(Fatura::getDataVencimento))
-            .orElseGet(() -> criarFaturaBase(cartao));
+            .orElseGet(() -> obterOuCriarFaturaParaVencimentoAlvo(
+                usuarioId, cartao, calcularProximoVencimentoLocalDate(cartao)));
         if (faturaAlvo.getStatusFatura() == null || faturaAlvo.getStatusFatura() == Fatura.StatusFatura.CANCELADA) {
             faturaAlvo.setStatusFatura(Fatura.StatusFatura.ABERTA);
         }
@@ -588,27 +596,14 @@ public class FaturaService {
         faturaRepository.save(f);
     }
 
-    private Fatura criarFaturaBase(CartaoCredito cartao) {
-        LocalDateTime agora = LocalDateTime.now();
+    private static LocalDate calcularProximoVencimentoLocalDate(CartaoCredito cartao) {
         LocalDate proximoVencimentoBase = LocalDate.now();
         int dia = Math.max(1, Math.min(28, cartao.getDiaVencimento() == null ? 10 : cartao.getDiaVencimento()));
         LocalDate venc = LocalDate.of(proximoVencimentoBase.getYear(), proximoVencimentoBase.getMonth(), dia);
         if (!venc.isAfter(LocalDate.now())) {
             venc = venc.plusMonths(1);
         }
-
-        Fatura nova = new Fatura();
-        nova.setCartaoCredito(cartao);
-        nova.setUsuario(cartao.getUsuario());
-        nova.setStatusFatura(Fatura.StatusFatura.ABERTA);
-        nova.setDataFechamento(agora);
-        nova.setDataVencimento(venc.atTime(12, 0));
-        nova.setValorFatura(BigDecimal.ZERO);
-        nova.setValorTotal(BigDecimal.ZERO);
-        nova.setValorMinimo(BigDecimal.ZERO);
-        nova.setValorPago(BigDecimal.ZERO);
-        nova.setNumeroFatura(String.format("%d-%02d-%d", venc.getYear(), venc.getMonthValue(), cartao.getId()));
-        return faturaRepository.save(nova);
+        return venc;
     }
 
     /**
