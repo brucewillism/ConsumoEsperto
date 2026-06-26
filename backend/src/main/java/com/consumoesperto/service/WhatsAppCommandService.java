@@ -3566,24 +3566,13 @@ public class WhatsAppCommandService {
 
     private boolean pagamentoIndicaContaBancaria(JsonNode cmd, String sourceText) {
         String pm = cmd.path("paymentMethod").asText("").trim();
+        if (WhatsappPaymentMethodHeuristics.indicaCartaoExplicito(pm, sourceText)) {
+            return false;
+        }
         if ("CONTA".equalsIgnoreCase(pm) || "CONTA_BANCARIA".equalsIgnoreCase(pm)) {
             return true;
         }
-        return textoIndicaPagamentoEmConta(sourceText);
-    }
-
-    private boolean textoIndicaPagamentoEmConta(String sourceText) {
-        if (sourceText == null || sourceText.isBlank()) {
-            return false;
-        }
-        String t = normalize(sourceText);
-        if (t.contains("pix") || t.contains("ted") || t.contains(" doc ") || t.startsWith("doc ")
-            || t.contains("transferencia") || t.contains("transferência") || t.contains("debito em conta")
-            || t.contains("débito em conta") || t.contains("debito na conta") || t.contains("débito na conta")) {
-            return true;
-        }
-        return t.contains("na conta") || t.contains("da conta") || t.contains("em conta")
-            || t.contains("conta corrente") || t.contains("conta bancaria") || t.contains("conta bancária");
+        return WhatsappPaymentMethodHeuristics.indicaPagamentoEmConta(sourceText);
     }
 
     private String resolveAccountToken(JsonNode cmd, String sourceText) {
