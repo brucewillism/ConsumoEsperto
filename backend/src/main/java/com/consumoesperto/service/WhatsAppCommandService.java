@@ -3987,8 +3987,12 @@ public class WhatsAppCommandService {
         if (!bank.isBlank()) {
             return bank;
         }
+        String extracted = WhatsappPaymentMethodHeuristics.extrairReferenciaCartaoDoTexto(sourceText);
+        if (!extracted.isBlank()) {
+            return extracted;
+        }
         String lower = normalize(sourceText);
-        for (String token : new String[]{"nubank", "itau", "inter", "santander", "bradesco", "caixa", "bb", "picpay"}) {
+        for (String token : new String[]{"nubank", "itau", "inter", "santander", "bradesco", "caixa", "bb", "picpay", "azul", "c6", "next", "neon"}) {
             if (lower.contains(token)) {
                 return token;
             }

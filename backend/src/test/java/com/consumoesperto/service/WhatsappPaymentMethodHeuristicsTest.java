@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,5 +30,13 @@ class WhatsappPaymentMethodHeuristicsTest {
     void paymentMethodJsonCartaoPrevalece() {
         assertTrue(WhatsappPaymentMethodHeuristics.indicaCartaoExplicito("CARD", "paguei via pix"));
         assertFalse(WhatsappPaymentMethodHeuristics.indicaCartaoExplicito("CONTA", "no cartao itau em 2x"));
+    }
+
+    @Test
+    void extraiCartaoAzulDoTexto() {
+        String msg = "registra uma despesa com o nome pix pamela priscila ribeiro de alcantara no valor de 3340,54 em 2x no cartao azul";
+        assertEquals("azul", WhatsappPaymentMethodHeuristics.extrairReferenciaCartaoDoTexto(msg));
+        assertFalse(WhatsappPaymentMethodHeuristics.indicaPagamentoEmConta(msg));
+        assertTrue(WhatsappPaymentMethodHeuristics.indicaPixBeneficiarioComCartao(msg));
     }
 }
