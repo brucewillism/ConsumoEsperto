@@ -39,4 +39,13 @@ class WhatsappPaymentMethodHeuristicsTest {
         assertFalse(WhatsappPaymentMethodHeuristics.indicaPagamentoEmConta(msg));
         assertTrue(WhatsappPaymentMethodHeuristics.indicaPixBeneficiarioComCartao(msg));
     }
+
+    @Test
+    void cardNameDaIaComBeneficiarioPixDeveSerIgnorado() {
+        assertTrue(WhatsappPaymentMethodHeuristics.cardNamePareceBeneficiarioPixOuDescricao(
+            "pix pamela priscila ribeiro de alcantara"));
+        assertFalse(WhatsappPaymentMethodHeuristics.cardNamePareceBeneficiarioPixOuDescricao("Itau"));
+        assertEquals("itau", WhatsappPaymentMethodHeuristics.extrairReferenciaCartaoDoTexto(
+            "registra uma despesa com o nome pix pamela priscila ribeiro de alcantara no valor de 3340,54 em 2x no cartao itau"));
+    }
 }

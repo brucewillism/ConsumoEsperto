@@ -99,6 +99,23 @@ public final class WhatsappPaymentMethodHeuristics {
         return s;
     }
 
+    /**
+     * A IA costuma colocar o beneficiário PIX em {@code cardName} (ex.: «pix pamela …») em vez do banco/apelido do cartão.
+     */
+    public static boolean cardNamePareceBeneficiarioPixOuDescricao(String cardName) {
+        if (cardName == null || cardName.isBlank()) {
+            return false;
+        }
+        String t = normalize(cardName);
+        if (t.length() > 28) {
+            return true;
+        }
+        if (pixPareceNomeEstabelecimento(t)) {
+            return true;
+        }
+        return t.startsWith("pix ") || t.matches(".*\\bpix\\s+[a-z]{3,}.*");
+    }
+
     static boolean indicaPixComoMeioPagamento(String normalizedText) {
         if (normalizedText == null || !normalizedText.contains("pix")) {
             return false;

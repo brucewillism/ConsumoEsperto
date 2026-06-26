@@ -3975,21 +3975,22 @@ public class WhatsAppCommandService {
         if (pagamentoIndicaContaBancaria(cmd, sourceText)) {
             return "";
         }
+        // «no cartão Itaú» no texto prevalece sobre cardName errado da IA (beneficiário PIX na descrição)
+        String fromText = WhatsappPaymentMethodHeuristics.extrairReferenciaCartaoDoTexto(sourceText);
+        if (!fromText.isBlank()) {
+            return fromText;
+        }
         String nomeNormalizado = cmd.path("nome_normalizado").asText("").trim();
-        if (!nomeNormalizado.isBlank()) {
+        if (!nomeNormalizado.isBlank() && !WhatsappPaymentMethodHeuristics.cardNamePareceBeneficiarioPixOuDescricao(nomeNormalizado)) {
             return nomeNormalizado;
         }
         String cardName = cmd.path("cardName").asText("");
         String bank = cmd.path("bank").asText("");
-        if (!cardName.isBlank()) {
-            return cardName;
-        }
         if (!bank.isBlank()) {
             return bank;
         }
-        String extracted = WhatsappPaymentMethodHeuristics.extrairReferenciaCartaoDoTexto(sourceText);
-        if (!extracted.isBlank()) {
-            return extracted;
+        if (!cardName.isBlank() && !WhatsappPaymentMethodHeuristics.cardNamePareceBeneficiarioPixOuDescricao(cardName)) {
+            return cardName;
         }
         String lower = normalize(sourceText);
         for (String token : new String[]{"nubank", "itau", "inter", "santander", "bradesco", "caixa", "bb", "picpay", "azul", "c6", "next", "neon"}) {

@@ -179,6 +179,8 @@ public class OpenAiService {
             "- Em despesas: paymentMethod=CONTA para PIX, TED, transferência ou débito na conta (ex.: 'fiz um pix de 50 da conta Nubank'); " +
             "preencher accountName ou bank com o banco da conta; NÃO preencher cardName nesses casos. " +
             "paymentMethod=CARTAO para compras na fatura (ex.: 'gastei 50 no cartão Nubank', 'paguei no Nubank' sem PIX). " +
+            "Despesa com beneficiário PIX no extrato do cartão (ex.: 'pix Maria Silva 3340 no cartão Itaú em 2x'): paymentMethod=CARTAO, " +
+            "bank ou cardName = cartão citado (Itaú/Nubank/Azul), description = nome do beneficiário; NÃO use paymentMethod=CONTA nem cardName=beneficiário. " +
             "Quando houver referência só de cartão/fatura, preencher cardName/bank.\n" +
             "- Se for receita: action CREATE_INCOME e preencher description + amount.\n" +
             "- Se for cadastro de cartão: action CREATE_CARD e preencher cardName, bank, cardNumber (últimos 4 dígitos) e dueDay (1-31); " +
