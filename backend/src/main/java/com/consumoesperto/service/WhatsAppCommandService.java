@@ -1929,7 +1929,7 @@ public class WhatsAppCommandService {
             incoming.getMediaBytes() == null ? -1 : incoming.getMediaBytes().length);
         String from = incoming.getFromJid();
         boolean fromMe = incoming.isFromMe();
-        if (!whatsAppBotAllowlist.isEvolutionSelfChatThread(from, userId)) {
+        if (!whatsAppBotAllowlist.isEvolutionSelfChatThread(from, userId, evolutionInstanceName)) {
             log.warn("[WhatsAppFilter] Evolution async: ignorado (nao e conversa consigo mesmo; userId={}, from={}, fromMe={})",
                 userId, from, fromMe);
             return;

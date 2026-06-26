@@ -96,6 +96,11 @@ public class EvolutionPairingService {
 
     private final ConcurrentHashMap<Long, PairingCredCacheEntry> pairingCredCache = new ConcurrentHashMap<>();
 
+    /** ownerJid da instância Evolution (TTL curto — evita GET fetchInstances a cada webhook). */
+    private final ConcurrentHashMap<String, InstanceOwnerCacheEntry> instanceOwnerCache = new ConcurrentHashMap<>();
+
+    private static final long INSTANCE_OWNER_CACHE_MS = 3_600_000L;
+
     /** QR devolvido em POST /instance/create (TTL curto). */
     private final ConcurrentHashMap<String, CachedInstancePairing> recentPairingByInstance = new ConcurrentHashMap<>();
 
@@ -504,6 +509,56 @@ public class EvolutionPairingService {
             });
         }
         evolutionInstanceSettingsService.ensurePhoneFriendlyOnConnect(inst);
+        invalidateInstanceOwnerCache(inst);
+    }
+
+    /**
+     * Conversa consigo mesmo na Evolution: o {@code remoteJid} pode ser o número real ligado
+     * ({@code 5581...@s.whatsapp.net}) em vez do JID fixo «mensagens para você» ({@code 558000012008}).
+     * Aceita quando coincide com o {@code ownerJid} da instância, mesmo que o perfil/IA tenham outro MSISDN.
+     */
+    public boolean remoteJidMatchesInstanceOwner(String instanceName, String remoteJid) {
+        if (instanceName == null || instanceName.isBlank() || remoteJid == null || remoteJid.isBlank()) {
+            return false;
+        }
+        if (remoteJid.contains("@lid")) {
+            return false;
+        }
+        Optional<String> ownerOpt = resolveInstanceOwnerDigitsCached(instanceName.trim());
+        if (ownerOpt.isEmpty()) {
+            return false;
+        }
+        String candidate = digitsOnly(remoteJidLocalPart(remoteJid));
+        if (candidate.length() < 10) {
+            return false;
+        }
+        return msisdnDigitsMatch(ownerOpt.get(), candidate);
+    }
+
+    public void invalidateInstanceOwnerCache(String instanceName) {
+        if (instanceName != null && !instanceName.isBlank()) {
+            instanceOwnerCache.remove(instanceName.trim());
+        }
+    }
+
+    private Optional<String> resolveInstanceOwnerDigitsCached(String instanceName) {
+        long now = System.currentTimeMillis();
+        InstanceOwnerCacheEntry cached = instanceOwnerCache.get(instanceName);
+        if (cached != null && now - cached.cachedAtMs < INSTANCE_OWNER_CACHE_MS) {
+            return Optional.ofNullable(cached.ownerDigits);
+        }
+        Optional<String> fresh = fetchInstanceOwnerDigits(instanceName);
+        instanceOwnerCache.put(instanceName, new InstanceOwnerCacheEntry(fresh.orElse(null), now));
+        return fresh;
+    }
+
+    private static String remoteJidLocalPart(String jidOrPhone) {
+        String local = jidOrPhone.trim();
+        int at = local.indexOf('@');
+        if (at > 0) {
+            local = local.substring(0, at);
+        }
+        return local.replace("whatsapp:", "").trim();
     }
 
     public Optional<String> fetchInstanceOwnerDigits(String instanceName) {
@@ -735,6 +790,16 @@ public class EvolutionPairingService {
     }
 
     /** Credenciais + opcional dígitos do WhatsApp para query {@code ?number=} (cache TTL curto contra polling). */
+    private static final class InstanceOwnerCacheEntry {
+        final String ownerDigits;
+        final long cachedAtMs;
+
+        InstanceOwnerCacheEntry(String ownerDigits, long cachedAtMs) {
+            this.ownerDigits = ownerDigits;
+            this.cachedAtMs = cachedAtMs;
+        }
+    }
+
     private static final class PairingCredCacheEntry {
         final ResolvedEvolutionCred cred;
         final Optional<String> whatsappDigits;

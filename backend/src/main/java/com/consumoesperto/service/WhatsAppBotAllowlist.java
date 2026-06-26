@@ -25,6 +25,7 @@ public class WhatsAppBotAllowlist {
 
     private final AiProvidersConfigService aiProvidersConfigService;
     private final UsuarioRepository usuarioRepository;
+    private final EvolutionPairingService evolutionPairingService;
 
     @Value("${consumoesperto.whatsapp.authorized-numbers-extra:}")
     private String authorizedNumbersExtraRaw;
@@ -139,6 +140,14 @@ public class WhatsAppBotAllowlist {
      * Ecos/linhas de resposta do bot são filtrados depois em {@code WhatsAppCommandService}.
      */
     public boolean isEvolutionSelfChatThread(String remoteJid, Long userId) {
+        return isEvolutionSelfChatThread(remoteJid, userId, null);
+    }
+
+    /**
+     * Evolution API: só na conversa «eu comigo» ({@code remoteJid} = teu número, JID «mensagens para você»
+     * ou o {@code ownerJid} da instância Evolution ligada).
+     */
+    public boolean isEvolutionSelfChatThread(String remoteJid, Long userId, String evolutionInstanceName) {
         if (remoteJid == null || remoteJid.isBlank() || userId == null) {
             return false;
         }
@@ -151,7 +160,12 @@ public class WhatsAppBotAllowlist {
         if (isWhatsAppNotesToSelfJid(remoteJid)) {
             return true;
         }
-        return matchesMyNumber(remoteJid, userId) || matchesAuthorizedExtrasGlobal(remoteJid);
+        if (matchesMyNumber(remoteJid, userId) || matchesAuthorizedExtrasGlobal(remoteJid)) {
+            return true;
+        }
+        return evolutionInstanceName != null
+            && !evolutionInstanceName.isBlank()
+            && evolutionPairingService.remoteJidMatchesInstanceOwner(evolutionInstanceName, remoteJid);
     }
 
     /** Prioridade do “dono” na config (comportamento antigo de {@code isConfigured}). */

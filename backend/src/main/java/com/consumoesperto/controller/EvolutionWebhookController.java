@@ -147,7 +147,7 @@ public class EvolutionWebhookController {
             return ResponseEntity.ok(Map.of("status", "ignored", "reason", "only-respond-owner-no-explicit-phone"));
         }
 
-        String ignoreReason = shouldIgnoreReason(incoming, userId);
+        String ignoreReason = shouldIgnoreReason(incoming, userId, instance);
         if (ignoreReason != null) {
             log.info("Evolution webhook ignorado: instance={} remoteJid={} fromMe={} mediaType={} reason={}",
                 instance, incoming.getFromJid(), incoming.isFromMe(), incoming.getMediaType(), ignoreReason);
@@ -301,7 +301,7 @@ public class EvolutionWebhookController {
     /**
      * @return motivo curto para ignorar, ou {@code null} se deve processar
      */
-    private String shouldIgnoreReason(EvolutionIncomingMessageDTO incoming, Long userId) {
+    private String shouldIgnoreReason(EvolutionIncomingMessageDTO incoming, Long userId, String evolutionInstanceName) {
         String fromJid = incoming.getFromJid();
 
         if (fromJid.endsWith("@g.us") || fromJid.endsWith("@broadcast") || fromJid.equalsIgnoreCase("status@broadcast")) {
@@ -313,10 +313,10 @@ public class EvolutionWebhookController {
             return botEchoReason;
         }
 
-        if (!whatsAppBotAllowlist.isEvolutionSelfChatThread(fromJid, userId)) {
-            log.warn("[WhatsAppFilter] Mensagem ignorada: só na conversa com o próprio número (remoteJid={}, fromMe={}, userId={}). "
+        if (!whatsAppBotAllowlist.isEvolutionSelfChatThread(fromJid, userId, evolutionInstanceName)) {
+            log.warn("[WhatsAppFilter] Mensagem ignorada: só na conversa com o próprio número (remoteJid={}, fromMe={}, userId={}, instance={}). "
                     + "Confirma o chat 'mensagens para ti' e +55 no perfil ou dono WhatsApp na IA.",
-                fromJid, incoming.isFromMe(), userId);
+                fromJid, incoming.isFromMe(), userId, evolutionInstanceName);
             return "not-self-chat-thread";
         }
 
