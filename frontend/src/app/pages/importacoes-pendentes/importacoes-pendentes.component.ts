@@ -252,14 +252,18 @@ export class ImportacoesPendentesComponent implements OnInit {
   }
 
   conciliacaoOk(imp: ImportacaoFatura): boolean {
-    if (this.faturaTotalZerada(imp)) {
-      return false;
+    if (imp.situacaoLeituraPdf === 'PAGA_NO_BANCO') {
+      return (imp.itens?.length ?? 0) > 0 && Number(imp.somaLancamentos || 0) > 0;
     }
     const tol = Math.max(5, Math.min(120, Number(imp.valorTotal || 0) * 0.02));
     return Number(imp.diferencaLancamentos ?? 999) <= tol;
   }
 
+  faturaPagaNoBanco(imp: ImportacaoFatura): boolean {
+    return imp.situacaoLeituraPdf === 'PAGA_NO_BANCO';
+  }
+
   faturaTotalZerada(imp: ImportacaoFatura): boolean {
-    return Number(imp.valorTotal || 0) <= 0;
+    return this.faturaPagaNoBanco(imp);
   }
 }

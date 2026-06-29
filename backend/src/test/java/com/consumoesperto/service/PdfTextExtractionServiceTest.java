@@ -2,6 +2,8 @@ package com.consumoesperto.service;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -32,5 +34,14 @@ class PdfTextExtractionServiceTest {
             "Fatura Itaú vencimento 02/06/2026 LANÇAMENTOS 05/05 MERCADO 45,90 Total desta fatura 165,90"
                 + " x".repeat(80)
         ));
+    }
+
+    @Test
+    void variantesSenhaIncluemCpfComZerosAEsquerda() {
+        List<String> v = PdfTextExtractionService.montarVariantesSenha("123456");
+        assertTrue(v.contains("123456"));
+        assertTrue(v.contains("0000123456"));
+        assertTrue(v.contains("00001"));
+        assertTrue(v.contains("000012"));
     }
 }

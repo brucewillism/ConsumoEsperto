@@ -71,6 +71,8 @@
     <div class="import-head">
       <div>
         <h2>{{ imp.bancoCartao }}</h2>
+        <span class="situacao-badge" *ngIf="faturaPagaNoBanco(imp)">Já paga no banco</span>
+        <span class="situacao-badge aberta" *ngIf="imp.situacaoLeituraPdf === 'ABERTA'">Em aberto</span>
         <span *ngIf="imp.cartaoCreditoNome">Cartão vinculado: <strong>{{ imp.cartaoCreditoNome }}</strong> · </span>
         <span>Vencimento: {{ imp.dataVencimento | date:'dd/MM/yyyy' }} · Total {{ brl(imp.valorTotal) }}</span>
       </div>
@@ -112,9 +114,9 @@
       </div>
     </div>
 
-    <p class="conciliacao-hint" *ngIf="faturaTotalZerada(imp)">
-      Total da fatura zerado no PDF — comum quando a fatura já foi paga. Você pode importar os lançamentos
-      para registro histórico; o total será recalculado pela soma dos itens.
+    <p class="conciliacao-hint" *ngIf="faturaPagaNoBanco(imp)">
+      Fatura já paga no banco (total zerado no PDF). O sistema usa a soma dos lançamentos como valor —
+      confirme para registrar no histórico e depois marque como paga em Faturas.
     </p>
 
     <p class="conciliacao-hint" *ngIf="!faturaTotalZerada(imp) && !conciliacaoOk(imp)">

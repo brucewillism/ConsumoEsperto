@@ -153,6 +153,22 @@
   margin: 0 0 4px;
 }
 
+.situacao-badge {
+  display: inline-block;
+  margin: 0 8px 4px 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(251, 191, 36, 0.2);
+  color: #fcd34d;
+}
+
+.situacao-badge.aberta {
+  background: rgba(96, 165, 250, 0.2);
+  color: #93c5fd;
+}
+
 .import-head span,
 .item-row small {
   color: #9ca3af;

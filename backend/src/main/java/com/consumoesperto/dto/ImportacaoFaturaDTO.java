@@ -26,6 +26,8 @@ public class ImportacaoFaturaDTO {
     private BigDecimal somaLancamentos;
     /** |valorTotal − somaLancamentos| (conciliação). */
     private BigDecimal diferencaLancamentos;
+    /** ABERTA ou PAGA_NO_BANCO — detectado automaticamente no PDF. */
+    private String situacaoLeituraPdf;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -82,4 +84,7 @@ public class ImportacaoFaturaDTO {
 
     public BigDecimal getDiferencaLancamentos() { return diferencaLancamentos; }
     public void setDiferencaLancamentos(BigDecimal diferencaLancamentos) { this.diferencaLancamentos = diferencaLancamentos; }
+
+    public String getSituacaoLeituraPdf() { return situacaoLeituraPdf; }
+    public void setSituacaoLeituraPdf(String situacaoLeituraPdf) { this.situacaoLeituraPdf = situacaoLeituraPdf; }
 }

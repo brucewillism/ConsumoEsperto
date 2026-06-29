@@ -32,6 +32,8 @@ export interface ImportacaoFatura {
   saldoFaturaAtual?: number | null;
   somaLancamentos?: number | null;
   diferencaLancamentos?: number | null;
+  /** ABERTA = a pagar; PAGA_NO_BANCO = já quitada no banco (total zerado no PDF). */
+  situacaoLeituraPdf?: 'ABERTA' | 'PAGA_NO_BANCO' | null;
 }
 
 @Injectable({ providedIn: 'root' })

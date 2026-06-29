@@ -67,6 +67,7 @@ public class FaturaPdfImportService {
     static final String META_PROJECAO_FATURA_ITAU_PREFIX = "__PROJECAO_FATURA_ITAU__:";
     static final String META_TRECHO_PROXIMAS_ITAU_PREFIX = "__TRECHO_PROXIMAS_ITAU__:";
     static final String META_TEXTO_PDF_ITAU_PREFIX = "__TEXTO_PDF_ITAU__:";
+    static final String META_SITUACAO_LEITURA_PREFIX = "__SITUACAO_LEITURA__:";
 
     public record ResultadoConfirmacaoFatura(int criadas, int conciliadas, int futuras) {
         public int registrosNaFaturaAtual() {
@@ -101,6 +102,7 @@ public class FaturaPdfImportService {
             && !linhaAuditoria.startsWith(META_PROJECAO_FATURA_ITAU_PREFIX)
             && !linhaAuditoria.startsWith(META_TRECHO_PROXIMAS_ITAU_PREFIX)
             && !linhaAuditoria.startsWith(META_TEXTO_PDF_ITAU_PREFIX)
+            && !linhaAuditoria.startsWith(META_SITUACAO_LEITURA_PREFIX)
             && !linhaAuditoria.startsWith(SaldoAnteriorFaturaBbSupport.META_SALDO_ANTERIOR_BB_PREFIX);
     }
 
@@ -201,14 +203,20 @@ public class FaturaPdfImportService {
         enriquecerParcelasNosItens(itens);
         itens = layoutEfetivo.sanitizarLancamentos(itens);
         BigDecimal somaPosFinalizar = somaValoresItens(itens);
-        if (valorTotal.compareTo(BigDecimal.ZERO) <= 0 && somaPosFinalizar.compareTo(BigDecimal.ZERO) > 0) {
-            valorTotal = somaPosFinalizar;
-            if (FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
-                auditorias.add(
-                    "Total da fatura zerado no PDF — comum quando a fatura já foi paga. "
-                        + "Você pode importar os lançamentos para registro histórico; "
-                        + "o total será recalculado pela soma dos itens.");
+        FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf situacao =
+            FaturaPdfLayoutSupport.detectarSituacaoLeituraFatura(textoPdf, valorTotalPdf);
+        auditorias.add(META_SITUACAO_LEITURA_PREFIX + situacao.name());
+        if (situacao == FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO) {
+            if (somaPosFinalizar.compareTo(BigDecimal.ZERO) > 0) {
+                valorTotal = somaPosFinalizar;
             }
+            auditorias.add(
+                "Leitura automática: fatura já paga no banco (total zerado no PDF). "
+                    + "O valor registrado será a soma dos lançamentos para histórico e pagamento no app.");
+        } else if (valorTotal.compareTo(BigDecimal.ZERO) > 0) {
+            auditorias.add("Leitura automática: fatura em aberto — total do PDF usado para conciliação.");
+        } else if (somaPosFinalizar.compareTo(BigDecimal.ZERO) > 0) {
+            valorTotal = somaPosFinalizar;
         }
         for (ImportacaoFaturaItemDTO item : itens) {
             boolean novo = buscarExistentes(usuarioId, item).isEmpty();
@@ -530,12 +538,30 @@ public class FaturaPdfImportService {
             dto.setAguardandoEscolhaSaldoAnterior(!m.resolvido());
         });
         dto.setDataCriacao(imp.getDataCriacao());
+        lerSituacaoLeitura(auditoriasCompletas).ifPresent(s -> dto.setSituacaoLeituraPdf(s.name()));
         BigDecimal soma = somaValoresItens(dto.getItens());
         dto.setSomaLancamentos(soma);
         if (imp.getValorTotal() != null) {
             dto.setDiferencaLancamentos(imp.getValorTotal().subtract(soma).abs().setScale(2, RoundingMode.HALF_UP));
         }
         return dto;
+    }
+
+    private static Optional<FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf> lerSituacaoLeitura(List<String> auditorias) {
+        if (auditorias == null) {
+            return Optional.empty();
+        }
+        for (String linha : auditorias) {
+            if (linha != null && linha.startsWith(META_SITUACAO_LEITURA_PREFIX)) {
+                String raw = linha.substring(META_SITUACAO_LEITURA_PREFIX.length()).trim();
+                try {
+                    return Optional.of(FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.valueOf(raw));
+                } catch (IllegalArgumentException ignored) {
+                    return Optional.empty();
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     private Optional<BigDecimal> ultimoValorFaturaConfirmadaCartao(Long cartaoCreditoId) {

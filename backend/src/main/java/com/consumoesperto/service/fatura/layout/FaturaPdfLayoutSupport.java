@@ -2,6 +2,7 @@ package com.consumoesperto.service.fatura.layout;
 
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
 
+import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
@@ -109,6 +110,32 @@ public final class FaturaPdfLayoutSupport {
             return "Banco do Nordeste";
         }
         return "";
+    }
+
+    /** Modo de leitura detectado automaticamente a partir do PDF. */
+    public enum SituacaoLeituraFaturaPdf {
+        /** Fatura ainda em aberto — total do PDF é referência para conciliação. */
+        ABERTA,
+        /** Fatura já quitada no banco — total zerado; valor = soma dos lançamentos. */
+        PAGA_NO_BANCO
+    }
+
+    /**
+     * Detecta se o PDF é de fatura em aberto ou já paga no banco (total R$ 0,00).
+     */
+    public static SituacaoLeituraFaturaPdf detectarSituacaoLeituraFatura(String texto, BigDecimal valorTotalPdf) {
+        if (pareceFaturaPagaNoTexto(texto)) {
+            return SituacaoLeituraFaturaPdf.PAGA_NO_BANCO;
+        }
+        if (valorTotalPdf != null && valorTotalPdf.compareTo(BigDecimal.ZERO) > 0) {
+            return SituacaoLeituraFaturaPdf.ABERTA;
+        }
+        if (texto != null && texto.matches(
+            "(?is).*(?:valor da fatura|total desta fatura|total para pagamento)[^\\d]{0,80}R\\$\\s*0[,.]00.*"
+        )) {
+            return SituacaoLeituraFaturaPdf.PAGA_NO_BANCO;
+        }
+        return SituacaoLeituraFaturaPdf.ABERTA;
     }
 
     /** Fatura já paga — total R$ 0,00 no PDF; lançamentos costumam vir após o resumo. */
