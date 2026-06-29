@@ -25,9 +25,12 @@ public class PdfTextExtractionService {
     private static final Pattern DATA_BR = Pattern.compile("\\d{2}/\\d{2}(?:/\\d{2,4})?");
     private static final Pattern VALOR_BR = Pattern.compile("\\d{1,3}(?:\\.\\d{3})*,\\d{2}");
 
-    /**
-     * Uma entrada por página (índice 0 = primeira página).
-     */
+    private record ResultadoExtracao(List<String> paginas, boolean desbloqueado) {
+        static ResultadoExtracao falha() {
+            return new ResultadoExtracao(List.of(), false);
+        }
+    }
+
     public List<String> extrairTextoPorPagina(byte[] pdfBytes) {
         return extrairTextoPorPagina(pdfBytes, null);
     }
@@ -47,19 +50,44 @@ public class PdfTextExtractionService {
             return extrairPdfAberto(pdfBytes);
         }
 
-        List<String> paginas = tentarExtrairPaginas(pdfBytes, null);
+        List<String> paginas = tentarExtrairPaginasCombinado(pdfBytes, null);
         if (temTextoUtil(paginas)) {
             return paginas;
         }
         if (senhaLimpa.isBlank()) {
             throw new IllegalArgumentException(mensagemPdfProtegidoItau(null));
         }
+
+        List<String> melhorPaginas = paginas;
+        int melhorScore = scoreTexto(paginas);
+        boolean desbloqueouComSenha = false;
+
         for (String senha : montarVariantesSenha(senhaInformada)) {
-            paginas = tentarExtrairPaginas(pdfBytes, senha);
-            if (temTextoUtil(paginas)) {
-                log.info("PDF desbloqueado ({} página(s) com texto).", paginas.size());
-                return paginas;
+            ResultadoExtracao box = extrairComPdfBox(pdfBytes, senha);
+            ResultadoExtracao open = extrairComOpenPdf(pdfBytes, senha);
+            if (box.desbloqueado() || open.desbloqueado()) {
+                desbloqueouComSenha = true;
             }
+            List<String> merged = escolherMelhorPaginas(box.paginas(), open.paginas());
+            if (temTextoUtil(merged)) {
+                log.info("PDF desbloqueado ({} página(s) com texto).", merged.size());
+                return merged;
+            }
+            int score = scoreTexto(merged);
+            if (score > melhorScore) {
+                melhorScore = score;
+                melhorPaginas = merged;
+            }
+        }
+
+        if (desbloqueouComSenha && melhorScore > 0) {
+            log.warn("PDF desbloqueado com senha, texto parcial (score={}).", melhorScore);
+            return melhorPaginas;
+        }
+        if (desbloqueouComSenha) {
+            throw new IllegalArgumentException(
+                "Abri o PDF com a senha, mas não consegui ler o texto da fatura. "
+                    + "Tente baixar o PDF de novo pelo app do Inter ou envie por WhatsApp.");
         }
         throw new IllegalArgumentException(mensagemPdfProtegidoItau(senhaInformada));
     }
@@ -98,23 +126,18 @@ public class PdfTextExtractionService {
     }
 
     public boolean textoPareceFaturaLegivel(String texto) {
-        if (texto == null || texto.isBlank()) {
-            return false;
-        }
-        if (texto.length() < 120) {
-            return false;
-        }
-        return DATA_BR.matcher(texto).find() && VALOR_BR.matcher(texto).find();
+        return temTextoUtil(texto == null || texto.isBlank() ? List.of() : List.of(texto));
     }
 
     public static String mensagemPdfProtegidoItau(String senhaInformada) {
         if (senhaInformada == null || senhaInformada.isBlank()) {
             return "Este PDF está protegido por senha. Informe a senha apenas nesses casos: "
-                + "Itaú (5 primeiros dígitos do CPF) ou Inter (6 primeiros dígitos). "
+                + "Itaú (5 primeiros dígitos do CPF) ou Inter (6 primeiros dígitos, com zeros à esquerda). "
                 + "Nubank, Mercado Pago e a maioria dos bancos enviam PDF aberto — deixe o campo de senha vazio.";
         }
         return "Não consegui abrir o PDF com a senha informada. "
-            + "Itaú: 5 primeiros dígitos do CPF; Inter: 6 primeiros dígitos (somente números). "
+            + "Itaú: 5 primeiros dígitos do CPF; Inter: 6 primeiros dígitos do CPF (somente números, "
+            + "incluindo zero à esquerda — ex.: CPF 012.345.678-90 → senha 012345). "
             + "Se o banco for Nubank ou outro sem senha, apague o campo e envie de novo.";
     }
 
@@ -131,6 +154,9 @@ public class PdfTextExtractionService {
         }
         if (!digitos.isBlank()) {
             senhas.add(digitos);
+            if (digitos.length() == 5) {
+                senhas.add("0" + digitos);
+            }
             if (digitos.length() >= 4) {
                 senhas.add(digitos.substring(0, 4));
             }
@@ -146,12 +172,15 @@ public class PdfTextExtractionService {
                 senhas.add(cpf11.substring(0, 5));
                 senhas.add(cpf11.substring(0, 6));
             }
+            if (digitos.length() == 6) {
+                senhas.add("0" + digitos.substring(0, 5));
+            }
         }
         return new ArrayList<>(senhas);
     }
 
     private List<String> extrairPdfAberto(byte[] pdfBytes) {
-        List<String> paginas = tentarExtrairPaginas(pdfBytes, null);
+        List<String> paginas = tentarExtrairPaginasCombinado(pdfBytes, null);
         if (temTextoUtil(paginas)) {
             return paginas;
         }
@@ -179,20 +208,44 @@ public class PdfTextExtractionService {
         return false;
     }
 
-    private List<String> tentarExtrairPaginas(byte[] pdfBytes, String senha) {
-        List<String> pdfBox = tentarExtrairComPdfBox(pdfBytes, senha);
-        if (!pdfBox.isEmpty()) {
-            return pdfBox;
-        }
-        return tentarExtrairComOpenPdf(pdfBytes, senha);
+    private List<String> tentarExtrairPaginasCombinado(byte[] pdfBytes, String senha) {
+        ResultadoExtracao box = extrairComPdfBox(pdfBytes, senha);
+        ResultadoExtracao open = extrairComOpenPdf(pdfBytes, senha);
+        return escolherMelhorPaginas(box.paginas(), open.paginas());
     }
 
-    private List<String> tentarExtrairComPdfBox(byte[] pdfBytes, String senha) {
+    private static List<String> escolherMelhorPaginas(List<String> a, List<String> b) {
+        if (scoreTexto(a) >= scoreTexto(b)) {
+            return a == null || a.isEmpty() ? (b == null ? List.of() : b) : a;
+        }
+        return b == null ? List.of() : b;
+    }
+
+    private static int scoreTexto(List<String> paginas) {
+        if (paginas == null || paginas.isEmpty()) {
+            return 0;
+        }
+        String joined = String.join("\n", paginas).trim();
+        if (joined.isEmpty()) {
+            return 0;
+        }
+        int score = joined.length();
+        if (DATA_BR.matcher(joined).find()) {
+            score += 500;
+        }
+        if (VALOR_BR.matcher(joined).find()) {
+            score += 500;
+        }
+        String n = joined.toLowerCase(Locale.ROOT);
+        if (n.contains("fatura") || n.contains("inter") || n.contains("itau") || n.contains("vencimento")) {
+            score += 300;
+        }
+        return score;
+    }
+
+    private ResultadoExtracao extrairComPdfBox(byte[] pdfBytes, String senha) {
         List<String> paginas = new ArrayList<>();
         try (PDDocument doc = abrirPdfBox(pdfBytes, senha)) {
-            if (doc == null) {
-                return paginas;
-            }
             PDFTextStripper stripper = new PDFTextStripper();
             int total = doc.getNumberOfPages();
             for (int i = 1; i <= total; i++) {
@@ -201,12 +254,17 @@ public class PdfTextExtractionService {
                 String pageText = stripper.getText(doc);
                 paginas.add(pageText != null ? pageText.trim() : "");
             }
+            boolean desbloqueado = senha == null || senha.isBlank() ? !doc.isEncrypted() : true;
+            return new ResultadoExtracao(paginas, desbloqueado);
+        } catch (InvalidPasswordException e) {
+            return ResultadoExtracao.falha();
         } catch (IOException e) {
             log.debug("PDFBox falhou senha={}: {}", senha != null ? "***" : "(vazia)", e.getMessage());
+            return ResultadoExtracao.falha();
         } catch (Exception e) {
             log.debug("PDFBox erro inesperado: {}", e.getMessage());
+            return ResultadoExtracao.falha();
         }
-        return paginas;
     }
 
     private static PDDocument abrirPdfBox(byte[] pdfBytes, String senha) throws IOException {
@@ -216,15 +274,17 @@ public class PdfTextExtractionService {
         return PDDocument.load(pdfBytes);
     }
 
-    private List<String> tentarExtrairComOpenPdf(byte[] pdfBytes, String senha) {
+    private ResultadoExtracao extrairComOpenPdf(byte[] pdfBytes, String senha) {
         List<String> paginas = new ArrayList<>();
         Object reader = null;
+        boolean desbloqueado = false;
         try {
             Class<?> readerClass = Class.forName("com.lowagie.text.pdf.PdfReader");
             reader = abrirReaderOpenPdf(readerClass, pdfBytes, senha);
+            desbloqueado = senha != null && !senha.isBlank();
             int pages = (Integer) readerClass.getMethod("getNumberOfPages").invoke(reader);
             if (pages <= 0) {
-                return paginas;
+                return new ResultadoExtracao(paginas, desbloqueado);
             }
             Class<?> extractorClass = Class.forName("com.lowagie.text.pdf.parser.PdfTextExtractor");
             try {
@@ -244,6 +304,7 @@ public class PdfTextExtractionService {
             }
         } catch (Exception e) {
             log.debug("OpenPDF falhou senha={}: {}", senha != null ? "***" : "(vazia)", e.getMessage());
+            return ResultadoExtracao.falha();
         } finally {
             if (reader != null) {
                 try {
@@ -253,7 +314,7 @@ public class PdfTextExtractionService {
                 }
             }
         }
-        return paginas;
+        return new ResultadoExtracao(paginas, desbloqueado);
     }
 
     private static Object abrirReaderOpenPdf(Class<?> readerClass, byte[] pdfBytes, String senha) throws Exception {
@@ -293,11 +354,17 @@ public class PdfTextExtractionService {
         if (paginas == null || paginas.isEmpty()) {
             return false;
         }
-        String joined = String.join("\n", paginas);
-        if (textoPareceFaturaLegivel(joined)) {
+        return temTextoUtil(String.join("\n", paginas));
+    }
+
+    private boolean temTextoUtil(String joined) {
+        if (joined == null || joined.isBlank()) {
+            return false;
+        }
+        if (joined.length() >= 120 && DATA_BR.matcher(joined).find() && VALOR_BR.matcher(joined).find()) {
             return true;
         }
-        if (joined.length() < 400) {
+        if (joined.length() < 200) {
             return false;
         }
         String n = joined.toLowerCase(Locale.ROOT);
@@ -306,7 +373,10 @@ public class PdfTextExtractionService {
             || n.contains("lancamento")
             || n.contains("lançamento")
             || n.contains("banco inter")
-            || n.contains("itau");
+            || n.contains("intermedium")
+            || n.contains(" detalhamento")
+            || n.contains("itau")
+            || (n.contains("inter") && n.contains("cart"));
         return pareceFatura && (DATA_BR.matcher(joined).find() || VALOR_BR.matcher(joined).find());
     }
 
@@ -315,7 +385,7 @@ public class PdfTextExtractionService {
             .replaceAll("[^\\p{L}\\p{N}\\p{Punct}\\s]", " ")
             .replaceAll("\\s+", " ")
             .trim();
-        if (!textoPareceFaturaLegivel(fallback)) {
+        if (!temTextoUtil(fallback)) {
             log.warn("Texto do PDF insuficiente após extração ({} chars).", fallback.length());
             return List.of("");
         }

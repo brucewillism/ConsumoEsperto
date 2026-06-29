@@ -123,12 +123,10 @@ public class DocumentoIAContextService {
         List<String> paginas = pdfTextExtractionService.extrairTextoPorPagina(pdfBytes, senhaPdf);
         String fullText = juntarPaginas(paginas);
         if (!pdfTextExtractionService.textoPareceFaturaLegivel(fullText)) {
-            if (pdfTextExtractionService.pdfPareceCriptografado(pdfBytes)) {
-                throw new IllegalArgumentException(PdfTextExtractionService.mensagemPdfProtegidoItau(senhaPdf));
-            }
             throw new IllegalArgumentException(
                 "Não consegui ler texto suficiente do PDF. Verifique se o arquivo está legível. "
-                    + "Senha só é necessária em PDFs protegidos (Itaú, Inter); Nubank e similares costumam vir abertos.");
+                    + "Inter: 6 primeiros dígitos do CPF (com zero à esquerda); Itaú: 5 primeiros dígitos. "
+                    + "Nubank e similares costumam vir abertos — deixe a senha vazia.");
         }
         log.info("[PDF-FULL-SCAN] layout={} paginasExtraidas={} caracteresTotais={}",
             layoutFatura.layout(), paginas.size(), fullText.length());

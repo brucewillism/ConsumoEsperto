@@ -37,11 +37,24 @@ class PdfTextExtractionServiceTest {
     }
 
     @Test
+    void aceitaTextoInterComLayoutRecente() {
+        String inter = ("Banco Inter fatura cartao detalhamento da fatura data de vencimento 05/07/2026 "
+            + "valor da fatura 632,96 lancamentos ").repeat(3);
+        assertTrue(service.textoPareceFaturaLegivel(inter));
+    }
+
+    @Test
     void variantesSenhaIncluemCpfComZerosAEsquerda() {
         List<String> v = PdfTextExtractionService.montarVariantesSenha("123456");
         assertTrue(v.contains("123456"));
         assertTrue(v.contains("0000123456"));
         assertTrue(v.contains("00001"));
         assertTrue(v.contains("000012"));
+    }
+
+    @Test
+    void variantesSenhaInterComZeroAEsquerda() {
+        List<String> v = PdfTextExtractionService.montarVariantesSenha("12345");
+        assertTrue(v.contains("012345"));
     }
 }
