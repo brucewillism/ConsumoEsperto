@@ -614,6 +614,14 @@ public class FaturaService {
         if (f == null) {
             return;
         }
+        if (sum.compareTo(BigDecimal.ZERO) == 0) {
+            BigDecimal mantido = f.getValorTotal() != null && f.getValorTotal().compareTo(BigDecimal.ZERO) > 0
+                ? f.getValorTotal()
+                : f.getValorFatura();
+            if (mantido != null && mantido.compareTo(BigDecimal.ZERO) > 0) {
+                return;
+            }
+        }
         f.setValorFatura(sum);
         f.setValorTotal(sum);
         if (f.getStatusFatura() != Fatura.StatusFatura.PAGA && !f.isPaga()) {

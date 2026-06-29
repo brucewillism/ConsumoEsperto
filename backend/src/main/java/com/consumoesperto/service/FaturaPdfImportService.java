@@ -223,6 +223,11 @@ public class FaturaPdfImportService {
             item.setNovo(novo);
             item.setSelecionado(novo);
         }
+        if (situacao == FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO) {
+            for (ImportacaoFaturaItemDTO item : itens) {
+                item.setSelecionado(true);
+            }
+        }
         imp.setValorTotal(valorTotal);
         BigDecimal pagamentoMinimo = readMoney(extracted.path("pagamentoMinimo"));
         if (pagamentoMinimo.compareTo(BigDecimal.ZERO) <= 0 && layoutEfetivo.layout() == BancoFaturaLayout.ITAU) {
@@ -365,7 +370,16 @@ public class FaturaPdfImportService {
             ? new HashSet<>(request.getIndices())
             : null;
         List<ImportacaoFaturaItemDTO> itensContabilizados = itensContabilizadosNaConfirmacao(itens, indices);
-        if (nz(imp.getValorTotal()).compareTo(BigDecimal.ZERO) <= 0) {
+        Optional<FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf> situacaoPdf =
+            lerSituacaoLeitura(readAuditorias(imp.getAuditoriaJson()));
+        boolean faturaPagaNoPdf = situacaoPdf.orElse(FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.ABERTA)
+            == FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO;
+        if (faturaPagaNoPdf) {
+            BigDecimal somaPdf = somaValoresItens(itens);
+            if (somaPdf.compareTo(BigDecimal.ZERO) > 0) {
+                imp.setValorTotal(somaPdf);
+            }
+        } else if (nz(imp.getValorTotal()).compareTo(BigDecimal.ZERO) <= 0) {
             BigDecimal totalResolvido = resolverValorTotalParaFatura(imp, itensContabilizados);
             if (totalResolvido.compareTo(BigDecimal.ZERO) > 0) {
                 imp.setValorTotal(totalResolvido);
@@ -402,7 +416,10 @@ public class FaturaPdfImportService {
                 futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item, faturasParaSincronizar);
                 continue;
             }
-            if (!selecionado || !item.isNovo()) {
+            if (!faturaPagaNoPdf && (!selecionado || !item.isNovo())) {
+                continue;
+            }
+            if (faturaPagaNoPdf && !selecionado) {
                 continue;
             }
             TransacaoDTO dto = new TransacaoDTO();
@@ -443,6 +460,7 @@ public class FaturaPdfImportService {
         imp.setStatus(ImportacaoFaturaCartao.Status.CONFIRMADA);
         imp.setDataConfirmacao(LocalDateTime.now());
         importacaoRepository.save(imp);
+        persistirValorTotalImportacaoNaFatura(fatura, imp, itens);
         for (Long faturaId : faturasParaSincronizar) {
             faturaService.sincronizarValorFaturaComTransacoes(faturaId);
         }
@@ -1294,6 +1312,28 @@ public class FaturaPdfImportService {
             f.setDataFechamento(imp.getDataFechamento());
         }
         return faturaRepository.save(f);
+    }
+
+    /** Garante valor da fatura paga no PDF (= soma dos lançamentos) antes da sincronização por transações. */
+    private void persistirValorTotalImportacaoNaFatura(
+        Fatura fatura,
+        ImportacaoFaturaCartao imp,
+        List<ImportacaoFaturaItemDTO> itens
+    ) {
+        if (fatura == null || fatura.getId() == null || imp == null) {
+            return;
+        }
+        BigDecimal total = resolverValorTotalParaFatura(imp, itens);
+        if (total.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        fatura.setValorTotal(total);
+        fatura.setValorFatura(total);
+        BigDecimal minimo = nz(imp.getPagamentoMinimo());
+        if (fatura.getStatusFatura() != Fatura.StatusFatura.PAGA && !fatura.isPaga()) {
+            fatura.setValorMinimo(minimo.compareTo(BigDecimal.ZERO) > 0 ? minimo : total);
+        }
+        faturaRepository.save(fatura);
     }
 
     /**
