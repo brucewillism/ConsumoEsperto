@@ -268,8 +268,13 @@ public class FaturaService {
     public void deletarFatura(Long id, Long usuarioId) {
         Fatura fatura = faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
                 .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
+        Long cartaoId = fatura.getCartaoCredito() != null ? fatura.getCartaoCredito().getId() : null;
+        java.time.LocalDateTime vencimento = fatura.getDataVencimento();
         removerTransacoesDaFatura(fatura.getId(), usuarioId, true, fatura.getStatusFatura());
         faturaRepository.delete(fatura);
+        if (cartaoId != null && vencimento != null) {
+            limparPrevistasDoCartaoAPartirDoMes(cartaoId, usuarioId, vencimento);
+        }
     }
 
     /**
@@ -339,6 +344,27 @@ public class FaturaService {
         }
         log.info("Fatura id={}: {} transação(ões) removida(s) com estorno de saldo quando aplicável.", faturaId, txs.size());
         return txs.size();
+    }
+
+    /**
+     * Ao excluir uma fatura real, remove PREVISTAS do mesmo cartão com vencimento no mês ou depois,
+     * para não reutilizar parcelas projetadas obsoletas numa reimportação.
+     */
+    private void limparPrevistasDoCartaoAPartirDoMes(Long cartaoId, Long usuarioId, java.time.LocalDateTime vencimentoReferencia) {
+        YearMonth ymRef = YearMonth.from(vencimentoReferencia);
+        for (Fatura f : faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartaoId)) {
+            if (f.getStatusFatura() != Fatura.StatusFatura.PREVISTA || f.getDataVencimento() == null) {
+                continue;
+            }
+            YearMonth ym = YearMonth.from(f.getDataVencimento());
+            if (ym.isBefore(ymRef)) {
+                continue;
+            }
+            removerTransacoesDaFatura(f.getId(), usuarioId, false, Fatura.StatusFatura.PREVISTA);
+            faturaRepository.delete(f);
+            log.info("PREVISTA id={} removida após exclusão de fatura (cartaoId={} venc>={})",
+                f.getId(), cartaoId, ymRef);
+        }
     }
 
     /**

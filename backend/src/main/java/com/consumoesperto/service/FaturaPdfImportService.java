@@ -353,6 +353,7 @@ public class FaturaPdfImportService {
                 + " Você pode confirmar mesmo assim e completar os lançamentos faltantes depois, ou reimportar o PDF.");
         }
         Fatura fatura = resolverFatura(imp);
+        limparPrevistasFuturasAntesReimportacao(imp.getCartaoCredito().getId(), mesVencimentoImportacao(imp));
         if (imp.getCartaoCredito() != null) {
             try {
                 cartaoCreditoService.vincularFaturasDeCartoesInativosCorrespondentes(imp.getCartaoCredito());
@@ -673,6 +674,9 @@ public class FaturaPdfImportService {
         int count = 0;
         boolean parcelasAtualizadas = false;
         for (com.consumoesperto.model.Transacao tx : existentes) {
+            if (!FaturaImportConciliacaoSupport.deveVincularTransacaoExistenteNaFatura(tx, fatura, item)) {
+                continue;
+            }
             if (tx.getFatura() == null || tx.getFatura().getId() == null || !tx.getFatura().getId().equals(fatura.getId())) {
                 tx.setFatura(fatura);
                 count++;
@@ -1227,6 +1231,25 @@ public class FaturaPdfImportService {
             faturaRepository.delete(f);
             log.info("Removida PREVISTA obsoleta id={} após importação PDF (cartaoId={} venc={} fech={})",
                 f.getId(), cartaoId, ymVencFinal, ymFechFinal);
+        }
+    }
+
+    private void limparPrevistasFuturasAntesReimportacao(Long cartaoId, YearMonth mesImportacao) {
+        if (cartaoId == null || mesImportacao == null) {
+            return;
+        }
+        for (Fatura f : faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartaoId)) {
+            if (f.getStatusFatura() != Fatura.StatusFatura.PREVISTA || f.getDataVencimento() == null) {
+                continue;
+            }
+            YearMonth ym = YearMonth.from(f.getDataVencimento());
+            if (!ym.isAfter(mesImportacao)) {
+                continue;
+            }
+            limparLancamentosProjetadosDaFatura(f.getId());
+            faturaRepository.delete(f);
+            log.info("[FaturaPDF] PREVISTA futura id={} removida antes de reimportação (cartaoId={} venc={})",
+                f.getId(), cartaoId, ym);
         }
     }
 

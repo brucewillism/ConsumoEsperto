@@ -43,6 +43,9 @@ public final class InterFaturaTextoExtrator {
     private static final Pattern PARCELA_TEXTO = Pattern.compile(
         "(?i)parcela\\s+(\\d{1,2})\\s+de\\s+(\\d{1,2})"
     );
+    private static final Pattern PARCELA_PARENTESES = Pattern.compile(
+        "\\(\\s*(\\d{1,2})\\s*/\\s*(\\d{1,2})\\s*\\)"
+    );
     private static final Pattern VALOR_FATURA_RESUMO = Pattern.compile(
         "(?i)valor da fatura[^\\d]{0,100}(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
     );
@@ -68,7 +71,13 @@ public final class InterFaturaTextoExtrator {
         "movimentacoes do cartao",
         "movimentações do cartão",
         "compras realizadas no mes",
-        "compras realizadas no mês"
+        "compras realizadas no mês",
+        "historico de transacoes",
+        "histórico de transações",
+        "historico da fatura",
+        "histórico da fatura",
+        "compras e lancamentos",
+        "compras e lançamentos"
     };
     private static final String[] MARCADORES_FIM_TRANSACOES = {
         "proxima fatura",
@@ -99,11 +108,17 @@ public final class InterFaturaTextoExtrator {
         String resumo = textoPdf.length() > 4_500 ? textoPdf.substring(0, 4_500) : textoPdf;
         Matcher valor = VALOR_FATURA_RESUMO.matcher(resumo);
         if (valor.find()) {
-            return Optional.of(parseMoney(valor.group(1)));
+            BigDecimal lido = parseMoney(valor.group(1));
+            if (lido.compareTo(BigDecimal.ZERO) > 0) {
+                return Optional.of(lido);
+            }
         }
         Matcher total = TOTAL_FATURA_RESUMO.matcher(resumo);
         if (total.find()) {
-            return Optional.of(parseMoney(total.group(1)));
+            BigDecimal lido = parseMoney(total.group(1));
+            if (lido.compareTo(BigDecimal.ZERO) > 0) {
+                return Optional.of(lido);
+            }
         }
         return Optional.empty();
     }
@@ -137,16 +152,25 @@ public final class InterFaturaTextoExtrator {
         Optional<BigDecimal> totalPdf = extrairTotalFatura(textoPdf);
         BigDecimal somaTexto = somaValores(doTexto);
         BigDecimal somaDestino = somaValores(destino);
+        boolean totalPositivo = totalPdf.isPresent() && totalPdf.get().compareTo(BigDecimal.ZERO) > 0;
 
-        boolean textoMaisProximoDoTotal = totalPdf.isPresent()
+        boolean textoMaisProximoDoTotal = totalPositivo
             && !doTexto.isEmpty()
             && distanciaAoTotal(somaTexto, totalPdf.get())
                 .compareTo(distanciaAoTotal(somaDestino, totalPdf.get())) < 0;
-        boolean textoBateComTotal = totalPdf.isPresent()
+        boolean textoBateComTotal = totalPositivo
             && !doTexto.isEmpty()
             && distanciaAoTotal(somaTexto, totalPdf.get()).compareTo(new BigDecimal("1.00")) <= 0;
+        boolean destinoGenerico = pareceListaGenericaIa(destino);
+        boolean substituirPorTexto = !doTexto.isEmpty() && (
+            destino.isEmpty()
+            || destinoGenerico
+            || !totalPositivo
+            || textoMaisProximoDoTotal
+            || textoBateComTotal
+        );
 
-        if (!doTexto.isEmpty() && (destino.isEmpty() || textoMaisProximoDoTotal || textoBateComTotal)) {
+        if (substituirPorTexto) {
             int tamanhoAnterior = destino.size();
             BigDecimal somaAnterior = somaDestino;
             destino.clear();
@@ -206,7 +230,15 @@ public final class InterFaturaTextoExtrator {
         podarEspurios(itens, textoPdf);
 
         List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
-        if (total != null && !doTexto.isEmpty()) {
+        if ((total == null || total.compareTo(BigDecimal.ZERO) <= 0) && !doTexto.isEmpty()) {
+            if (itens.isEmpty() || pareceListaGenericaIa(itens) || doTexto.size() >= itens.size()) {
+                itens.clear();
+                itens.addAll(doTexto);
+                podarEspurios(itens, textoPdf);
+                log.info("Inter finalizar: fatura paga/total zerado — {} lançamento(s) do texto.", itens.size());
+            }
+            total = somaValores(itens);
+        } else if (total != null && !doTexto.isEmpty()) {
             BigDecimal somaAtual = somaValores(itens);
             BigDecimal somaTexto = somaValores(doTexto);
             if (distanciaAoTotal(somaTexto, total).compareTo(distanciaAoTotal(somaAtual, total)) <= 0) {
@@ -333,9 +365,55 @@ public final class InterFaturaTextoExtrator {
             extrairLinhasDoTrecho(fallback, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO_SEM_RS, false, totalPdf);
             extrairBlocosMultilinha(fallback, ano, vencimento, dataCorte, out);
         }
+        if (out.isEmpty()) {
+            extrairLancamentosModoAmplo(norm, ano, vencimento, dataCorte, out, totalPdf);
+        }
         removerLinhasResumoFatura(out, totalPdf.orElse(null), vencimento);
         podarEspurios(out, textoPdf);
         return out;
+    }
+
+    /** Fallback quando o recorte «Detalhamento» falha — usa trecho entre corte e próximas faturas. */
+    private static void extrairLancamentosModoAmplo(
+        String norm,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out,
+        Optional<BigDecimal> totalPdf
+    ) {
+        int fim = localizarIndiceProximas(norm);
+        if (fim < 0) {
+            fim = norm.length();
+        }
+        int inicio = resolverInicioSecaoDetalhamento(norm);
+        if (inicio >= fim) {
+            return;
+        }
+        String trecho = substringSeguro(norm, inicio, fim);
+        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO, true, totalPdf);
+        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO_SEM_RS, false, totalPdf);
+        extrairBlocosMultilinha(trecho, ano, vencimento, dataCorte, out);
+    }
+
+    static boolean pareceListaGenericaIa(List<ImportacaoFaturaItemDTO> itens) {
+        if (itens == null || itens.isEmpty()) {
+            return false;
+        }
+        if (itens.size() == 1) {
+            String n = FaturaPdfLayoutSupport.norm(itens.get(0).getDescricao());
+            return n.contains("lancamento da fatura")
+                || n.equals("lancamento")
+                || n.contains("despesa fatura")
+                || n.length() < 8;
+        }
+        long genericos = itens.stream()
+            .filter(i -> {
+                String n = FaturaPdfLayoutSupport.norm(i.getDescricao());
+                return n.contains("lancamento da fatura") || n.length() < 5;
+            })
+            .count();
+        return genericos >= itens.size();
     }
 
     private static void extrairBlocosMultilinha(
@@ -829,14 +907,23 @@ public final class InterFaturaTextoExtrator {
 
     private static void aplicarParcelaDaDescricao(ImportacaoFaturaItemDTO item, String texto) {
         Matcher pm = PARCELA_TEXTO.matcher(texto);
-        if (!pm.find()) {
-            return;
+        if (pm.find()) {
+            try {
+                item.setParcelaAtual(Integer.parseInt(pm.group(1)));
+                item.setTotalParcelas(Integer.parseInt(pm.group(2)));
+                return;
+            } catch (NumberFormatException ignored) {
+                // tenta formato (N/N)
+            }
         }
-        try {
-            item.setParcelaAtual(Integer.parseInt(pm.group(1)));
-            item.setTotalParcelas(Integer.parseInt(pm.group(2)));
-        } catch (NumberFormatException ignored) {
-            // parcela opcional
+        Matcher pp = PARCELA_PARENTESES.matcher(texto);
+        if (pp.find()) {
+            try {
+                item.setParcelaAtual(Integer.parseInt(pp.group(1)));
+                item.setTotalParcelas(Integer.parseInt(pp.group(2)));
+            } catch (NumberFormatException ignored) {
+                // parcela opcional
+            }
         }
     }
 

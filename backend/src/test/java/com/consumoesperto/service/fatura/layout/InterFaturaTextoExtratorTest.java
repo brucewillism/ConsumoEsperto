@@ -168,6 +168,54 @@ class InterFaturaTextoExtratorTest {
         assertEquals("MERCADO LIVRE", itens.get(0).getDescricao());
     }
 
+    @Test
+    void complementarSubstituiListaGenericaDaIaQuandoFaturaPaga() {
+        String textoPago = """
+            Banco Inter
+            Valor da fatura R$ 0,00
+            Fatura paga
+            Data de vencimento 02/07/2026
+            Data de corte: 25/06/2026
+            Detalhamento da fatura
+            21/05 PARC SALDO TOT - R DO BRASIL TECNO (5/6) R$ 273,14
+            Próximas faturas
+            21/05 PARC SALDO TOT - R DO BRASIL TECNO (6/6) R$ 273,14
+            """;
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        destino.add(item("Lançamento da fatura", new BigDecimal("273.14"), null, null, null));
+
+        InterFaturaTextoExtrator.complementar(destino, textoPago, 2026);
+
+        assertEquals(1, destino.size());
+        assertTrue(destino.get(0).getDescricao().contains("PARC SALDO"));
+        assertEquals(5, destino.get(0).getParcelaAtual());
+        assertEquals(6, destino.get(0).getTotalParcelas());
+        assertTrue(InterFaturaTextoExtrator.pareceListaGenericaIa(
+            List.of(item("Lançamento da fatura", new BigDecimal("273.14"), null, null, null))
+        ));
+    }
+
+    @Test
+    void finalizarSubstituiListaGenericaQuandoTotalZerado() {
+        String textoPago = """
+            Banco Inter
+            Valor da fatura R$ 0,00
+            Data de vencimento 02/07/2026
+            Data de corte: 25/06/2026
+            Detalhamento da fatura
+            21/05 PARC SALDO TOT - R DO BRASIL TECNO (5/6) R$ 273,14
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        destino.add(item("Lançamento da fatura", new BigDecimal("273.14"), null, null, null));
+
+        InterFaturaTextoExtrator.finalizarListaInter(destino, textoPago, BigDecimal.ZERO, 2026);
+
+        assertEquals(1, destino.size());
+        assertTrue(destino.get(0).getDescricao().contains("PARC SALDO"));
+        assertEquals(new BigDecimal("273.14"), destino.get(0).getValor());
+    }
+
     private static ImportacaoFaturaItemDTO item(
         String desc,
         BigDecimal valor,
