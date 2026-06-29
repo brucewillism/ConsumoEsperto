@@ -315,6 +315,42 @@ class ItauFaturaTextoExtratorTest {
         assertTrue(destino.get(0).getDescricao().contains("PATRICIA"));
     }
 
+    @Test
+    void extraiComprasEProdutosServicosNaFaturaAberta() {
+        String texto = """
+            Itaú Unibanco
+            Total desta fatura R$ 4.418,63
+            Resumo da fatura
+            LANÇAMENTOS: compras e saques
+            05/05 MERCADO CENTRAL 2.405,15
+            LANÇAMENTOS: produtos e serviços
+            01/05 ANUIDADE DIFERENCIADA 2.013,48
+            Total desta fatura R$ 4.418,63
+            Compras parceladas - proximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> itens = ItauFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(2, itens.size());
+        BigDecimal soma = itens.stream()
+            .map(ImportacaoFaturaItemDTO::getValor)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(new BigDecimal("4418.63"), soma);
+    }
+
+    @Test
+    void naoConfundePagamentoRecebidoComFaturaPaga() {
+        String texto = """
+            Itaú Unibanco
+            Total desta fatura R$ 4.418,63
+            LANÇAMENTOS: compras e saques
+            05/05 PAGAMENTO RECEBIDO - CREDITO 100,00
+            06/05 LOJA EXEMPLO 200,00
+            Total desta fatura R$ 4.418,63
+            """;
+        assertFalse(FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(texto));
+        List<ImportacaoFaturaItemDTO> itens = ItauFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(2, itens.size());
+    }
+
     private static ImportacaoFaturaItemDTO item(
         String desc,
         java.math.BigDecimal valor,

@@ -117,13 +117,13 @@ public final class FaturaPdfLayoutSupport {
             return false;
         }
         String n = norm(texto);
-        if (contem(n, "fatura paga", "pagamento efetuado", "pagamento recebido", "fatura quitada")) {
+        if (contem(n, "fatura paga", "pagamento efetuado", "fatura quitada")) {
             return true;
         }
         boolean totalZerado = texto.matches(
             "(?is).*(?:valor da fatura|total desta fatura)[^\\d]{0,80}R\\$\\s*0[,.]00.*"
         );
-        return totalZerado && contem(n, "paga", "efetuado", "recebido", "quitada");
+        return totalZerado && contem(n, "fatura paga", "pagamento efetuado", "fatura quitada");
     }
 
     /** Um item genérico da IA («Lançamento da fatura») indica falha na extração detalhada. */
