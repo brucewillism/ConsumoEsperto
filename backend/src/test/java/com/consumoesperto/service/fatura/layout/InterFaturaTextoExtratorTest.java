@@ -190,7 +190,7 @@ class InterFaturaTextoExtratorTest {
         assertTrue(destino.get(0).getDescricao().contains("PARC SALDO"));
         assertEquals(5, destino.get(0).getParcelaAtual());
         assertEquals(6, destino.get(0).getTotalParcelas());
-        assertTrue(InterFaturaTextoExtrator.pareceListaGenericaIa(
+        assertTrue(FaturaPdfLayoutSupport.pareceListaGenericaIa(
             List.of(item("Lançamento da fatura", new BigDecimal("273.14"), null, null, null))
         ));
     }

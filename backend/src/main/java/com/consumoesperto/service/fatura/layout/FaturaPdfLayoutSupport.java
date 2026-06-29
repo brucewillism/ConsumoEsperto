@@ -1,6 +1,9 @@
 package com.consumoesperto.service.fatura.layout;
 
+import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
+
 import java.text.Normalizer;
+import java.util.List;
 import java.util.Locale;
 
 public final class FaturaPdfLayoutSupport {
@@ -106,5 +109,41 @@ public final class FaturaPdfLayoutSupport {
             return "Banco do Nordeste";
         }
         return "";
+    }
+
+    /** Fatura já paga — total R$ 0,00 no PDF; lançamentos costumam vir após o resumo. */
+    public static boolean pareceFaturaPagaNoTexto(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return false;
+        }
+        String n = norm(texto);
+        if (contem(n, "fatura paga", "pagamento efetuado", "pagamento recebido", "fatura quitada")) {
+            return true;
+        }
+        boolean totalZerado = texto.matches(
+            "(?is).*(?:valor da fatura|total desta fatura)[^\\d]{0,80}R\\$\\s*0[,.]00.*"
+        );
+        return totalZerado && contem(n, "paga", "efetuado", "recebido", "quitada");
+    }
+
+    /** Um item genérico da IA («Lançamento da fatura») indica falha na extração detalhada. */
+    public static boolean pareceListaGenericaIa(List<ImportacaoFaturaItemDTO> itens) {
+        if (itens == null || itens.isEmpty()) {
+            return false;
+        }
+        if (itens.size() == 1) {
+            String n = norm(itens.get(0).getDescricao());
+            return n.contains("lancamento da fatura")
+                || n.equals("lancamento")
+                || n.contains("despesa fatura")
+                || n.length() < 8;
+        }
+        long genericos = itens.stream()
+            .filter(i -> {
+                String n = norm(i.getDescricao());
+                return n.contains("lancamento da fatura") || n.length() < 5;
+            })
+            .count();
+        return genericos >= itens.size();
     }
 }

@@ -151,10 +151,13 @@ public final class ItauFaturaTextoExtrator {
             return Optional.empty();
         }
         Matcher m = TOTAL_FATURA.matcher(textoPdf);
-        if (!m.find()) {
-            return Optional.empty();
+        while (m.find()) {
+            BigDecimal lido = parseMoney(m.group(1));
+            if (lido.compareTo(BigDecimal.ZERO) > 0) {
+                return Optional.of(lido);
+            }
         }
-        return Optional.of(parseMoney(m.group(1)));
+        return Optional.empty();
     }
 
     public static Optional<BigDecimal> extrairPagamentoMinimo(String textoPdf) {
@@ -180,14 +183,35 @@ public final class ItauFaturaTextoExtrator {
         Optional<BigDecimal> totalPdf = extrairTotalFatura(textoPdf);
         BigDecimal somaTexto = somaValores(doTexto);
         BigDecimal somaDestino = somaValores(destino);
+        boolean totalPositivo = totalPdf.isPresent() && totalPdf.get().compareTo(BigDecimal.ZERO) > 0;
+        boolean destinoGenerico = FaturaPdfLayoutSupport.pareceListaGenericaIa(destino);
 
         boolean textoMaisCompleto = doTexto.size() > destino.size();
-        boolean textoMaisProximoDoTotal = totalPdf.isPresent()
+        boolean textoMaisProximoDoTotal = totalPositivo
             && distanciaAoTotal(somaTexto, totalPdf.get())
                 .compareTo(distanciaAoTotal(somaDestino, totalPdf.get())) < 0;
+        boolean substituirPorTexto = !doTexto.isEmpty() && (
+            destino.isEmpty()
+            || destinoGenerico
+            || !totalPositivo
+            || textoMaisCompleto
+            || textoMaisProximoDoTotal
+        );
 
-        if (destino.isEmpty() || textoMaisCompleto || textoMaisProximoDoTotal) {
-            mesclarPreferindoTexto(destino, doTexto);
+        if (substituirPorTexto) {
+            int tamanhoAnterior = destino.size();
+            if (destinoGenerico || !totalPositivo || doTexto.size() >= tamanhoAnterior) {
+                destino.clear();
+                destino.addAll(doTexto);
+                log.info(
+                    "Itaú texto: lista substituída por {} lançamento(s) do PDF (antes: {} soma {}).",
+                    doTexto.size(),
+                    tamanhoAnterior,
+                    somaDestino
+                );
+            } else {
+                mesclarPreferindoTexto(destino, doTexto);
+            }
             reconciliarComTotalFatura(destino, textoPdf, anoReferencia, totalPdf);
             propagarParcelasTextoParaDestino(destino, doTexto);
             return;
@@ -855,9 +879,75 @@ public final class ItauFaturaTextoExtrator {
     /** Do primeiro bloco de lançamentos até o total da fatura (inclui encargos e produtos/serviços). */
     private static String recortarTrechosLancamentos(String textoPdf) {
         String norm = textoPdf.replace('\r', '\n');
+        boolean faturaPaga = FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf);
         int inicio = localizarInicioSecaoLancamentos(norm);
-        int fim = localizarFimTrecho(norm, inicio);
-        return norm.substring(inicio, fim);
+        if (faturaPaga) {
+            int posPaga = localizarInicioPosResumoFaturaPaga(norm);
+            if (posPaga >= 0) {
+                inicio = inicio > 0 ? Math.max(inicio, posPaga) : posPaga;
+            }
+        }
+        int fim = localizarFimTrecho(norm, inicio, faturaPaga);
+        String trecho = norm.substring(inicio, fim);
+        if (faturaPaga && !trechoContemLancamentos(trecho)) {
+            String alternativo = recortarTrechoFaturaPaga(norm);
+            if (!alternativo.isBlank() && trechoContemLancamentos(alternativo)) {
+                return alternativo;
+            }
+        }
+        return trecho;
+    }
+
+    private static boolean trechoContemLancamentos(String trecho) {
+        if (trecho == null || trecho.isBlank()) {
+            return false;
+        }
+        return LINHA_LANCAMENTO.matcher(trecho).find()
+            || LINHA_LANCAMENTO_PARCELA_APOS_VALOR.matcher(trecho).find()
+            || LINHA_DATA_DESCRICAO.matcher(trecho).find();
+    }
+
+    private static int localizarInicioPosResumoFaturaPaga(String norm) {
+        int melhor = -1;
+        for (String marcador : new String[] {
+            "fatura paga", "pagamento efetuado", "pagamento recebido",
+            "total desta fatura", "valor da fatura",
+            "detalhamento da fatura", "historico de compras", "histórico de compras"
+        }) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx < 0) {
+                continue;
+            }
+            int nl = norm.indexOf('\n', idx);
+            int pos = nl >= 0 ? nl + 1 : idx;
+            melhor = melhor < 0 ? pos : Math.max(melhor, pos);
+        }
+        return melhor;
+    }
+
+    /** Trecho amplo após resumo de fatura paga até «próximas faturas». */
+    private static String recortarTrechoFaturaPaga(String norm) {
+        int inicio = localizarInicioPosResumoFaturaPaga(norm);
+        if (inicio < 0) {
+            inicio = localizarInicioSecaoLancamentos(norm);
+        }
+        if (inicio < 0) {
+            inicio = 0;
+        }
+        int fim = norm.length();
+        for (String marcador : MARCADORES_FIM_LANCAMENTOS) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx > inicio + 40) {
+                fim = Math.min(fim, idx);
+            }
+        }
+        for (String marcador : MARCADORES_FIM_PROXIMAS) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx > inicio + 40) {
+                fim = Math.min(fim, idx);
+            }
+        }
+        return inicio < fim ? norm.substring(inicio, fim) : "";
     }
 
     private static int localizarInicioSecaoLancamentos(String norm) {
@@ -888,6 +978,10 @@ public final class ItauFaturaTextoExtrator {
     }
 
     private static int localizarFimTrecho(String norm, int inicio) {
+        return localizarFimTrecho(norm, inicio, false);
+    }
+
+    private static int localizarFimTrecho(String norm, int inicio, boolean faturaPaga) {
         int fim = norm.length();
         String restante = norm.substring(inicio);
         for (String marcador : MARCADORES_FIM_LANCAMENTOS) {
@@ -896,10 +990,12 @@ public final class ItauFaturaTextoExtrator {
                 fim = Math.min(fim, inicio + idx);
             }
         }
-        for (String marcador : MARCADORES_FIM_FATURA) {
-            int idx = indexOfIgnoreCase(restante, marcador);
-            if (idx > 0) {
-                fim = Math.min(fim, inicio + idx);
+        if (!faturaPaga) {
+            for (String marcador : MARCADORES_FIM_FATURA) {
+                int idx = indexOfIgnoreCase(restante, marcador);
+                if (idx > 0) {
+                    fim = Math.min(fim, inicio + idx);
+                }
             }
         }
         return fim;

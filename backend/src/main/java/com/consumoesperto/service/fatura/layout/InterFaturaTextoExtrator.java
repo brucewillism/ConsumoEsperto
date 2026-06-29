@@ -77,7 +77,12 @@ public final class InterFaturaTextoExtrator {
         "historico da fatura",
         "histórico da fatura",
         "compras e lancamentos",
-        "compras e lançamentos"
+        "compras e lançamentos",
+        "fatura paga",
+        "pagamento efetuado",
+        "pagamento recebido",
+        "lancamentos desta fatura",
+        "lançamentos desta fatura"
     };
     private static final String[] MARCADORES_FIM_TRANSACOES = {
         "proxima fatura",
@@ -161,7 +166,7 @@ public final class InterFaturaTextoExtrator {
         boolean textoBateComTotal = totalPositivo
             && !doTexto.isEmpty()
             && distanciaAoTotal(somaTexto, totalPdf.get()).compareTo(new BigDecimal("1.00")) <= 0;
-        boolean destinoGenerico = pareceListaGenericaIa(destino);
+        boolean destinoGenerico = FaturaPdfLayoutSupport.pareceListaGenericaIa(destino);
         boolean substituirPorTexto = !doTexto.isEmpty() && (
             destino.isEmpty()
             || destinoGenerico
@@ -231,7 +236,7 @@ public final class InterFaturaTextoExtrator {
 
         List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
         if ((total == null || total.compareTo(BigDecimal.ZERO) <= 0) && !doTexto.isEmpty()) {
-            if (itens.isEmpty() || pareceListaGenericaIa(itens) || doTexto.size() >= itens.size()) {
+            if (itens.isEmpty() || FaturaPdfLayoutSupport.pareceListaGenericaIa(itens) || doTexto.size() >= itens.size()) {
                 itens.clear();
                 itens.addAll(doTexto);
                 podarEspurios(itens, textoPdf);
@@ -368,6 +373,9 @@ public final class InterFaturaTextoExtrator {
         if (out.isEmpty()) {
             extrairLancamentosModoAmplo(norm, ano, vencimento, dataCorte, out, totalPdf);
         }
+        if (out.isEmpty() && FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
+            extrairLancamentosFaturaPaga(norm, ano, vencimento, dataCorte, out, totalPdf);
+        }
         removerLinhasResumoFatura(out, totalPdf.orElse(null), vencimento);
         podarEspurios(out, textoPdf);
         return out;
@@ -396,24 +404,45 @@ public final class InterFaturaTextoExtrator {
         extrairBlocosMultilinha(trecho, ano, vencimento, dataCorte, out);
     }
 
+    /** Fatura paga: lançamentos costumam vir após «Valor da fatura R$ 0,00» / «Fatura paga». */
+    private static void extrairLancamentosFaturaPaga(
+        String norm,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out,
+        Optional<BigDecimal> totalPdf
+    ) {
+        int inicio = -1;
+        for (String marcador : new String[] {
+            "fatura paga", "pagamento efetuado", "pagamento recebido",
+            "valor da fatura", "detalhamento da fatura", "data de corte"
+        }) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx < 0) {
+                continue;
+            }
+            int nl = norm.indexOf('\n', idx);
+            inicio = Math.max(inicio, nl >= 0 ? nl + 1 : idx);
+        }
+        if (inicio < 0) {
+            inicio = 0;
+        }
+        int fim = localizarIndiceProximas(norm);
+        if (fim < 0 || fim <= inicio) {
+            fim = norm.length();
+        }
+        String trecho = substringSeguro(norm, inicio, fim);
+        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO, true, totalPdf);
+        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO_SEM_RS, false, totalPdf);
+        extrairBlocosMultilinha(trecho, ano, vencimento, dataCorte, out);
+        if (!out.isEmpty()) {
+            log.info("Inter fatura paga: {} lançamento(s) extraído(s) do trecho pós-resumo.", out.size());
+        }
+    }
+
     static boolean pareceListaGenericaIa(List<ImportacaoFaturaItemDTO> itens) {
-        if (itens == null || itens.isEmpty()) {
-            return false;
-        }
-        if (itens.size() == 1) {
-            String n = FaturaPdfLayoutSupport.norm(itens.get(0).getDescricao());
-            return n.contains("lancamento da fatura")
-                || n.equals("lancamento")
-                || n.contains("despesa fatura")
-                || n.length() < 8;
-        }
-        long genericos = itens.stream()
-            .filter(i -> {
-                String n = FaturaPdfLayoutSupport.norm(i.getDescricao());
-                return n.contains("lancamento da fatura") || n.length() < 5;
-            })
-            .count();
-        return genericos >= itens.size();
+        return FaturaPdfLayoutSupport.pareceListaGenericaIa(itens);
     }
 
     private static void extrairBlocosMultilinha(

@@ -200,6 +200,16 @@ public class FaturaPdfImportService {
         layoutEfetivo.finalizarLancamentosDoTexto(textoPdf, itens, valorTotal, anoReferencia);
         enriquecerParcelasNosItens(itens);
         itens = layoutEfetivo.sanitizarLancamentos(itens);
+        BigDecimal somaPosFinalizar = somaValoresItens(itens);
+        if (valorTotal.compareTo(BigDecimal.ZERO) <= 0 && somaPosFinalizar.compareTo(BigDecimal.ZERO) > 0) {
+            valorTotal = somaPosFinalizar;
+            if (FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
+                auditorias.add(
+                    "Total da fatura zerado no PDF — comum quando a fatura já foi paga. "
+                        + "Você pode importar os lançamentos para registro histórico; "
+                        + "o total será recalculado pela soma dos itens.");
+            }
+        }
         for (ImportacaoFaturaItemDTO item : itens) {
             boolean novo = buscarExistentes(usuarioId, item).isEmpty();
             item.setNovo(novo);
@@ -274,7 +284,8 @@ public class FaturaPdfImportService {
         boolean temMinimoOuFechamento = readMoney(extracted.path("pagamentoMinimo")).compareTo(BigDecimal.ZERO) > 0
             || parseDate(extracted.path("dataFechamento").asText("")) != null;
         boolean temLancamentos = extracted.path("lancamentos").isArray() && extracted.path("lancamentos").size() > 0;
-        return temCartao && temVencimento && temTotal && temLancamentos && temMinimoOuFechamento;
+        return temCartao && temVencimento && temLancamentos && temMinimoOuFechamento
+            && (temTotal || temLancamentos);
     }
 
     @Transactional(readOnly = true)

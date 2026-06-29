@@ -282,4 +282,52 @@ class ItauFaturaTextoExtratorTest {
         assertEquals(new BigDecimal("179.05"), soma);
         assertEquals(2, destino.size());
     }
+
+    @Test
+    void extraiLancamentosAposTotalZeradoFaturaPaga() {
+        String texto = """
+            Itaú Unibanco
+            Total desta fatura R$ 0,00
+            Fatura paga em 05/06/2026
+            10/05 PIX PATRICIA B 03/10 55,58
+            12/05 MERCADO CENTRAL 45,90
+            Compras parceladas - proximas faturas
+            10/07/2026 55,58
+            """;
+        List<ImportacaoFaturaItemDTO> itens = ItauFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(2, itens.size());
+        assertTrue(itens.stream().anyMatch(i -> i.getDescricao().contains("PATRICIA")));
+        assertEquals(3, itens.stream().filter(i -> i.getDescricao().contains("PATRICIA")).findFirst().orElseThrow().getParcelaAtual());
+    }
+
+    @Test
+    void complementarSubstituiListaGenericaQuandoFaturaPaga() {
+        String texto = """
+            Itaú Unibanco
+            Total desta fatura R$ 0,00
+            Fatura paga
+            10/05 PIX PATRICIA B 03/10 55,58
+            """;
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        destino.add(item("Lançamento da fatura", new BigDecimal("55.58"), null, null, null));
+        ItauFaturaTextoExtrator.complementar(destino, texto, 2026);
+        assertEquals(1, destino.size());
+        assertTrue(destino.get(0).getDescricao().contains("PATRICIA"));
+    }
+
+    private static ImportacaoFaturaItemDTO item(
+        String desc,
+        java.math.BigDecimal valor,
+        java.time.LocalDate data,
+        Integer parcela,
+        Integer total
+    ) {
+        ImportacaoFaturaItemDTO i = new ImportacaoFaturaItemDTO();
+        i.setDescricao(desc);
+        i.setValor(valor);
+        i.setData(data);
+        i.setParcelaAtual(parcela);
+        i.setTotalParcelas(total);
+        return i;
+    }
 }
