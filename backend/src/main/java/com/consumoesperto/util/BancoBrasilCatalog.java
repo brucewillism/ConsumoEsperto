@@ -3,6 +3,7 @@ package com.consumoesperto.util;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * IDs de banco gravados no cadastro (ex.: {@code bb}) e nomes extraídos de PDF/WhatsApp
