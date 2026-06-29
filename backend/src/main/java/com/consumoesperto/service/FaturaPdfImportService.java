@@ -357,6 +357,12 @@ public class FaturaPdfImportService {
             ? new HashSet<>(request.getIndices())
             : null;
         List<ImportacaoFaturaItemDTO> itensContabilizados = itensContabilizadosNaConfirmacao(itens, indices);
+        if (nz(imp.getValorTotal()).compareTo(BigDecimal.ZERO) <= 0) {
+            BigDecimal totalResolvido = resolverValorTotalParaFatura(imp, itensContabilizados);
+            if (totalResolvido.compareTo(BigDecimal.ZERO) > 0) {
+                imp.setValorTotal(totalResolvido);
+            }
+        }
         boolean ignorarDivergencia = request != null && request.isIgnorarDivergencia();
         Optional<String> divergencia = validarSomaParaConfirmacao(imp.getValorTotal(), itensContabilizados, readAuditorias(imp.getAuditoriaJson()));
         if (divergencia.isPresent() && !ignorarDivergencia) {
@@ -554,6 +560,28 @@ public class FaturaPdfImportService {
             .map(i -> i.getValor() != null ? i.getValor() : BigDecimal.ZERO)
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * PDF de fatura já paga costuma vir com total R$ 0,00; o valor persistido deve ser a soma dos lançamentos.
+     */
+    static BigDecimal resolverValorTotalParaFatura(BigDecimal valorImportacao, List<ImportacaoFaturaItemDTO> itens) {
+        BigDecimal doImp = valorImportacao != null ? valorImportacao : BigDecimal.ZERO;
+        if (doImp.compareTo(BigDecimal.ZERO) > 0) {
+            return doImp.setScale(2, RoundingMode.HALF_UP);
+        }
+        return somaValoresItens(itens);
+    }
+
+    private BigDecimal resolverValorTotalParaFatura(ImportacaoFaturaCartao imp, List<ImportacaoFaturaItemDTO> itensPreferidos) {
+        if (imp == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        List<ImportacaoFaturaItemDTO> itens = itensPreferidos;
+        if (itens == null || itens.isEmpty()) {
+            itens = readItens(imp.getItensJson());
+        }
+        return resolverValorTotalParaFatura(imp.getValorTotal(), itens);
     }
 
     private String mensagemCartaoNaoEncontrado(Long usuarioId, String banco) {
@@ -1080,7 +1108,8 @@ public class FaturaPdfImportService {
             return atualizarFaturaParaImportacao(porNumero.get(), imp, numeroCanonico);
         }
 
-        if (nz(imp.getValorTotal()).compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal totalEfetivoImportacao = resolverValorTotalParaFatura(imp, readItens(imp.getItensJson()));
+        if (totalEfetivoImportacao.compareTo(BigDecimal.ZERO) <= 0) {
             Optional<Fatura> pagaMes = faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartao.getId()).stream()
                 .filter(f -> f.getStatusFatura() == Fatura.StatusFatura.PAGA)
                 .filter(f -> correspondeCicloImportacao(f, ymVencimento, ymFechamento))
@@ -1110,9 +1139,11 @@ public class FaturaPdfImportService {
         f.setCartaoCredito(cartao);
         f.setUsuario(imp.getUsuario());
         f.setNumeroFatura(numeroCanonico);
-        f.setValorTotal(nz(imp.getValorTotal()));
-        f.setValorFatura(nz(imp.getValorTotal()));
-        f.setValorMinimo(nz(imp.getPagamentoMinimo()));
+        BigDecimal totalNova = resolverValorTotalParaFatura(imp, readItens(imp.getItensJson()));
+        f.setValorTotal(totalNova);
+        f.setValorFatura(totalNova);
+        BigDecimal minimo = nz(imp.getPagamentoMinimo());
+        f.setValorMinimo(minimo.compareTo(BigDecimal.ZERO) > 0 ? minimo : totalNova);
         f.setValorPago(BigDecimal.ZERO);
         f.setPaga(false);
         f.setStatusFatura(Fatura.StatusFatura.ABERTA);
@@ -1194,11 +1225,12 @@ public class FaturaPdfImportService {
             f.setStatusFatura(Fatura.StatusFatura.ABERTA);
             f.setPaga(false);
         }
-        BigDecimal totalPdf = nz(imp.getValorTotal());
+        BigDecimal totalPdf = resolverValorTotalParaFatura(imp, readItens(imp.getItensJson()));
         if (totalPdf.compareTo(BigDecimal.ZERO) > 0) {
             f.setValorTotal(totalPdf);
             f.setValorFatura(totalPdf);
-            f.setValorMinimo(nz(imp.getPagamentoMinimo()));
+            BigDecimal minimo = nz(imp.getPagamentoMinimo());
+            f.setValorMinimo(minimo.compareTo(BigDecimal.ZERO) > 0 ? minimo : totalPdf);
         }
         if (imp.getDataVencimento() != null) {
             f.setDataVencimento(imp.getDataVencimento());
