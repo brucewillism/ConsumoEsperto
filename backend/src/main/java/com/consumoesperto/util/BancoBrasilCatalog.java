@@ -56,18 +56,39 @@ public final class BancoBrasilCatalog {
         if (a.equals(b) || a.contains(b) || b.contains(a)) {
             return true;
         }
-        String idA = resolverIdCanonico(a);
-        String idB = resolverIdCanonico(b);
-        if (idA != null && idB != null) {
-            return idA.equals(idB);
+        Optional<String> idA = idCanonicoDe(bancoCadastrado);
+        Optional<String> idB = idCanonicoDe(bancoReferencia);
+        if (idA.isPresent() && idB.isPresent()) {
+            return idA.get().equals(idB.get());
         }
-        if (idA != null) {
-            return aliasCanonicoContem(idA, b);
+        if (idA.isPresent()) {
+            return aliasCanonicoContem(idA.get(), b);
         }
-        if (idB != null) {
-            return aliasCanonicoContem(idB, a);
+        if (idB.isPresent()) {
+            return aliasCanonicoContem(idB.get(), a);
         }
         return false;
+    }
+
+    /** Resolve o id canônico do emissor (ex.: «Itaú» → {@code itau}). */
+    public static java.util.Optional<String> idCanonicoDe(String rotulo) {
+        if (rotulo == null || rotulo.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String n = ApelidoNormalizador.normalizar(rotulo);
+        if (n.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String id = resolverIdCanonico(n);
+        if (id != null) {
+            return java.util.Optional.of(id);
+        }
+        for (Map.Entry<String, List<String>> entry : CANONICAL_ALIASES.entrySet()) {
+            if (aliasCanonicoContem(entry.getKey(), n)) {
+                return java.util.Optional.of(entry.getKey());
+            }
+        }
+        return java.util.Optional.empty();
     }
 
     private static String resolverIdCanonico(String normalizado) {

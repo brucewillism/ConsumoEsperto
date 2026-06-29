@@ -695,9 +695,7 @@ public class FaturaPdfImportService {
         if (ativos.isEmpty()) {
             return Optional.empty();
         }
-        final String bancoRef = FaturaPdfLayoutSupport.bancoExtraidoUtil(banco) ? banco : "";
-        String token = norm(bancoRef);
-        if (token.isBlank()) {
+        if (banco == null || banco.isBlank() || !FaturaPdfLayoutSupport.bancoExtraidoUtil(banco)) {
             if (ativos.size() == 1) {
                 return Optional.of(ativos.get(0));
             }
@@ -705,9 +703,40 @@ public class FaturaPdfImportService {
                 usuarioId, ativos.size());
             return Optional.empty();
         }
+
+        List<CartaoCredito> viaApelido = cartaoCreditoService.encontrarAtivosPorApelidoNormalizado(usuarioId, banco);
+        if (viaApelido.size() == 1) {
+            return Optional.of(viaApelido.get(0));
+        }
+
+        Optional<String> idPdf = BancoBrasilCatalog.idCanonicoDe(banco);
+        if (idPdf.isPresent()) {
+            List<CartaoCredito> mesmaFamilia = ativos.stream()
+                .filter(c -> cartaoMesmaFamiliaBancaria(c, idPdf.get()))
+                .toList();
+            if (mesmaFamilia.size() == 1) {
+                log.info("[FaturaPDF] cartão id={} vinculado por família bancária única ({})",
+                    mesmaFamilia.get(0).getId(), banco);
+                return Optional.of(mesmaFamilia.get(0));
+            }
+            if (mesmaFamilia.size() > 1) {
+                log.warn("[FaturaPDF] {} cartões ativos na família {} — use apelido distinto em Cartões",
+                    mesmaFamilia.size(), idPdf.get());
+                return Optional.of(mesmaFamilia.get(0));
+            }
+        }
+
+        String token = norm(banco);
         return ativos.stream()
-            .filter(c -> cartaoCorrespondeBancoExtraido(c, bancoRef, token))
+            .filter(c -> cartaoCorrespondeBancoExtraido(c, banco, token))
             .findFirst();
+    }
+
+    private static boolean cartaoMesmaFamiliaBancaria(CartaoCredito cartao, String idCanonico) {
+        return BancoBrasilCatalog.idCanonicoDe(cartao.getBanco()).filter(idCanonico::equals).isPresent()
+            || BancoBrasilCatalog.idCanonicoDe(cartao.getNome()).filter(idCanonico::equals).isPresent()
+            || BancoBrasilCatalog.bancosCorrespondem(cartao.getBanco(), idCanonico)
+            || BancoBrasilCatalog.bancosCorrespondem(cartao.getNome(), idCanonico);
     }
 
     private static boolean cartaoCorrespondeBancoExtraido(CartaoCredito c, String bancoRef, String tokenNorm) {

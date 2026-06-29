@@ -74,6 +74,8 @@ class FaturaPdfImportDocumentoTest {
     void cartaoItauAzulCorrespondeAoEmissorItau() {
         assertTrue(BancoBrasilCatalog.bancosCorrespondem("itau azul", "Itaú"));
         assertTrue(BancoBrasilCatalog.bancosCorrespondem("itau", "Itaú"));
+        assertEquals("itau", BancoBrasilCatalog.idCanonicoDe("Itaú").orElseThrow());
+        assertEquals("itau", BancoBrasilCatalog.idCanonicoDe("itau azul").orElseThrow());
     }
 
     private static void assertEqualsLayout(BancoFaturaLayout expected, BancoFaturaLayout actual) {
