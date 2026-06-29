@@ -167,9 +167,12 @@ public final class InterFaturaTextoExtrator {
             && !doTexto.isEmpty()
             && distanciaAoTotal(somaTexto, totalPdf.get()).compareTo(new BigDecimal("1.00")) <= 0;
         boolean destinoGenerico = FaturaPdfLayoutSupport.pareceListaGenericaIa(destino);
+        boolean destinoTemGenericos = destino.stream()
+            .anyMatch(i -> FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(i.getDescricao()));
         boolean substituirPorTexto = !doTexto.isEmpty() && (
             destino.isEmpty()
             || destinoGenerico
+            || destinoTemGenericos
             || !totalPositivo
             || textoMaisProximoDoTotal
             || textoBateComTotal
@@ -235,6 +238,7 @@ public final class InterFaturaTextoExtrator {
         podarEspurios(itens, textoPdf);
 
         List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
+        itens.removeIf(i -> FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(i.getDescricao()));
         if ((total == null || total.compareTo(BigDecimal.ZERO) <= 0) && !doTexto.isEmpty()) {
             if (itens.isEmpty() || FaturaPdfLayoutSupport.pareceListaGenericaIa(itens) || doTexto.size() >= itens.size()) {
                 itens.clear();
@@ -320,6 +324,8 @@ public final class InterFaturaTextoExtrator {
         }
         int antes = itens.size();
         itens.removeIf(i -> deveIgnorarDescricao(i.getDescricao()) || pareceLinhaEncargoInter(i.getDescricao()));
+        itens.removeIf(i -> pareceLinhaSimulacaoTaxaInter(i.getDescricao(), i.getValor()));
+        itens.removeIf(i -> FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(i.getDescricao()));
         removerItensSoEmSecoesPosteriores(itens, textoPdf);
         colapsarMesmaDataValorParcelaMenor(itens);
         deduplicarParcelasFuturasMesmoPlano(itens);
@@ -534,7 +540,8 @@ public final class InterFaturaTextoExtrator {
 
     private static boolean descricaoInvalida(String descricao) {
         String n = FaturaPdfLayoutSupport.norm(descricao);
-        return n.isBlank() || n.equals("r$") || n.length() < 3;
+        return n.isBlank() || n.equals("r$") || n.length() < 3
+            || FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(descricao);
     }
 
     static boolean descricaoInvalidaPublica(String descricao) {
@@ -1055,12 +1062,41 @@ public final class InterFaturaTextoExtrator {
             || n.contains("iof do rotativo")
             || n.contains("iof adicional")
             || n.contains("iof diario")
+            || n.contains("iof internacional")
             || n.contains("encargos rotativos")
+            || n.contains("encargos maximo")
+            || n.contains("maximo proximo periodo")
             || n.contains("juros do rotativo")
             || n.contains("juros rotativos")
+            || n.contains("juros de mora")
+            || n.contains("juros de parcelamento")
+            || n.contains("multa por atraso")
             || n.contains("juros e encargos")
             || n.contains("encargos em caso")
-            || n.contains("valor total financiado");
+            || n.contains("valor total financiado")
+            || n.matches(".*\\d+ \\d{2}% am.*")
+            || n.contains("% am")
+            || n.contains("% a m");
+    }
+
+    /** Linhas da tabela de encargos/simulação (ex.: «Juros de mora 1,00% am» R$ 0,01). */
+    static boolean pareceLinhaSimulacaoTaxaInter(String descricao, BigDecimal valor) {
+        if (pareceLinhaEncargoInter(descricao)) {
+            return true;
+        }
+        String n = FaturaPdfLayoutSupport.norm(descricao);
+        if (n.isBlank()) {
+            return false;
+        }
+        if (n.contains("% am") || n.contains("% a m")) {
+            return true;
+        }
+        if (valor != null
+            && valor.compareTo(new BigDecimal("1.00")) < 0
+            && (n.contains("juros") || n.contains("multa") || n.contains("iof") || n.contains("encargos"))) {
+            return true;
+        }
+        return false;
     }
 
     private static BigDecimal parseMoney(String raw) {

@@ -127,23 +127,29 @@ public final class FaturaPdfLayoutSupport {
     }
 
     /** Um item genérico da IA («Lançamento da fatura») indica falha na extração detalhada. */
+    public static boolean pareceDescricaoGenericaIa(String descricao) {
+        if (descricao == null || descricao.isBlank()) {
+            return true;
+        }
+        String n = norm(descricao);
+        return n.contains("lancamento da fatura")
+            || n.equals("lancamento")
+            || n.contains("despesa fatura")
+            || n.contains("despesa no cartao")
+            || n.length() < 5;
+    }
+
+    /** Um item genérico da IA («Lançamento da fatura») indica falha na extração detalhada. */
     public static boolean pareceListaGenericaIa(List<ImportacaoFaturaItemDTO> itens) {
         if (itens == null || itens.isEmpty()) {
             return false;
         }
         if (itens.size() == 1) {
-            String n = norm(itens.get(0).getDescricao());
-            return n.contains("lancamento da fatura")
-                || n.equals("lancamento")
-                || n.contains("despesa fatura")
-                || n.length() < 8;
+            return pareceDescricaoGenericaIa(itens.get(0).getDescricao());
         }
         long genericos = itens.stream()
-            .filter(i -> {
-                String n = norm(i.getDescricao());
-                return n.contains("lancamento da fatura") || n.length() < 5;
-            })
+            .filter(i -> pareceDescricaoGenericaIa(i.getDescricao()))
             .count();
-        return genericos >= itens.size();
+        return genericos >= itens.size() || genericos > 0;
     }
 }

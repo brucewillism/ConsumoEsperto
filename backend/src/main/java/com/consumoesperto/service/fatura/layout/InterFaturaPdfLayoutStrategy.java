@@ -62,6 +62,8 @@ public class InterFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
             String n = FaturaPdfLayoutSupport.norm(item.getDescricao());
             if (InterFaturaTextoExtrator.deveIgnorarDescricao(item.getDescricao())
                 || InterFaturaTextoExtrator.pareceLinhaEncargoInter(item.getDescricao())
+                || InterFaturaTextoExtrator.pareceLinhaSimulacaoTaxaInter(item.getDescricao(), item.getValor())
+                || FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(item.getDescricao())
                 || InterFaturaTextoExtrator.descricaoInvalidaPublica(item.getDescricao())
                 || n.contains("parcelar fatura")
                 || n.contains("limite disponivel")

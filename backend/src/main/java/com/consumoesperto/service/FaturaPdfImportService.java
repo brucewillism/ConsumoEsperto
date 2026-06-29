@@ -1601,6 +1601,10 @@ public class FaturaPdfImportService {
                 log.info("Ignorando linha de rodapé/simulação na fatura: '{}' = {}", item.getDescricao(), item.getValor());
                 continue;
             }
+            if (FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(item.getDescricao())) {
+                log.info("Ignorando lançamento genérico da IA: '{}' = {}", item.getDescricao(), item.getValor());
+                continue;
+            }
             if (item.getData() != null) {
                 existeItemComData = true;
             }

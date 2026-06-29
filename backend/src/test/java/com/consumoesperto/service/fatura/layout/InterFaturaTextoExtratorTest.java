@@ -216,6 +216,54 @@ class InterFaturaTextoExtratorTest {
         assertEquals(new BigDecimal("273.14"), destino.get(0).getValor());
     }
 
+    @Test
+    void complementarRemoveGenericosDaIaEMisturaEncargosSimulados() {
+        String texto = """
+            Banco Inter
+            Valor da fatura R$ 1.606,69
+            Data de vencimento 02/07/2026
+            Data de corte: 25/06/2026
+            Detalhamento da fatura
+            21/05 PARC SALDO TOT - R DO BRASIL TECNO (5/6) R$ 273,14
+            28/04 APPLE.COM/BILL R$ 11,50
+            Opções de pagamento
+            Encargos Máximo Próximo Período 19,00% am R$ 0,19
+            Juros de mora 1,00% am R$ 0,01
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        destino.add(item("Lançamento da fatura", new BigDecimal("585.69"), LocalDate.of(2026, 6, 25), null, null));
+        destino.add(item("Lançamento da fatura", new BigDecimal("273.14"), LocalDate.of(2026, 6, 25), null, null));
+        destino.add(item("Encargos Máximo Próximo Período 19,00% am", new BigDecimal("0.19"), LocalDate.of(2026, 6, 25), null, null));
+        destino.add(item("APPLE.COM/BILL", new BigDecimal("11.50"), LocalDate.of(2026, 4, 28), null, null));
+
+        InterFaturaTextoExtrator.complementar(destino, texto, 2026);
+
+        assertFalse(destino.stream().anyMatch(i -> i.getDescricao().contains("Lançamento da fatura")));
+        assertFalse(destino.stream().anyMatch(i -> i.getDescricao().contains("Encargos Máximo")));
+        assertTrue(destino.stream().anyMatch(i -> i.getDescricao().contains("PARC SALDO")));
+        assertTrue(destino.stream().anyMatch(i -> i.getDescricao().contains("APPLE")));
+    }
+
+    @Test
+    void ignoraLinhasSimulacaoTaxaAm() {
+        assertTrue(InterFaturaTextoExtrator.pareceLinhaSimulacaoTaxaInter(
+            "Juros de mora 1,00% am", new BigDecimal("0.01")));
+        assertTrue(InterFaturaTextoExtrator.pareceLinhaSimulacaoTaxaInter(
+            "IOF Internacional 3,50% am", new BigDecimal("0.04")));
+        String texto = """
+            Banco Inter
+            Valor da fatura R$ 100,00
+            Detalhamento da fatura
+            12/05 MERCADO LIVRE R$ 100,00
+            Juros de mora 1,00% am R$ 0,01
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(1, itens.size());
+        assertEquals("MERCADO LIVRE", itens.get(0).getDescricao());
+    }
+
     private static ImportacaoFaturaItemDTO item(
         String desc,
         BigDecimal valor,
