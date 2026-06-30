@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * Verifica diariamente (9h, 12h e 18h BRT) se há salários automáticos pendentes no mês corrente.
+ * Verifica no dia de pagamento (00h01, 9h, 12h e 18h BRT) se há salários automáticos pendentes.
  */
 @Component
 @RequiredArgsConstructor
@@ -19,6 +19,12 @@ public class SalarioAutomaticoScheduler {
 
     private final RendaConfigRepository rendaConfigRepository;
     private final SalarioAutomaticoService salarioAutomaticoService;
+
+    /** 00h01 — credita salário no dia de pagamento assim que vira o dia civil (ex.: 30 → 00h01). */
+    @Scheduled(cron = "0 1 0 * * ?", zone = "America/Sao_Paulo")
+    public void lancarReceitasSalariaisMeiaNoite() {
+        lancarReceitasSalariais();
+    }
 
     @Scheduled(cron = "0 0 9,12,18 * * ?", zone = "America/Sao_Paulo")
     public void lancarReceitasSalariais() {
