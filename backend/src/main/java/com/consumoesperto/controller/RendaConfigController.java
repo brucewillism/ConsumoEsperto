@@ -9,6 +9,7 @@ import com.consumoesperto.service.RendaConfigService;
 import com.consumoesperto.service.SalarioAutomaticoService;
 import com.consumoesperto.service.WhatsAppCommandService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -48,7 +49,9 @@ public class RendaConfigController {
 
     @GetMapping("/contracheques")
     public ResponseEntity<java.util.List<ContrachequeDTO>> historicoContracheques(@AuthenticationPrincipal UserPrincipal currentUser) {
-        return ResponseEntity.ok(contrachequeImportService.listarHistorico(currentUser.getId()));
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .body(contrachequeImportService.listarHistorico(currentUser.getId()));
     }
 
     @PostMapping(value = "/contracheques/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

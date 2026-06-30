@@ -46,7 +46,7 @@ public class SalarioAutomaticoService {
     private final CategoriaRepository categoriaRepository;
     private final UsuarioRepository usuarioRepository;
     private final SaldoMovimentacaoService saldoMovimentacaoService;
-    private final ObjectProvider<ContrachequeImportService> contrachequeImportProvider;
+    private final ObjectProvider<ContrachequeImportService> contrachequeImportProvider; // liquido por competência
 
     /**
      * @return {@code true} se criou a receita confirmada nesta invocação
@@ -108,11 +108,6 @@ public class SalarioAutomaticoService {
 
         cfg.setUltimoMesLancamentoAuto(ym);
         rendaConfigRepository.save(cfg);
-        try {
-            contrachequeImportProvider.getObject().garantirEspelhoMesAtual(uid);
-        } catch (Exception e) {
-            log.warn("Espelho de contracheque após salário automático userId={}: {}", uid, e.getMessage());
-        }
         log.info(
             "Salário automático lançado userId={} valor={} ym={} data={} contaId={}",
             uid,

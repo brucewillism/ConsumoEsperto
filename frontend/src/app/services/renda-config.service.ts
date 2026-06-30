@@ -81,7 +81,10 @@ export class RendaConfigService {
   }
 
   historicoContracheques(): Observable<ContrachequeDto[]> {
-    return this.http.get<ContrachequeDto[]>(`${this.apiUrl}/contracheques`, { headers: this.headers() });
+    return this.http.get<ContrachequeDto[]>(`${this.apiUrl}/contracheques`, {
+      headers: this.headers(),
+      params: { _: String(Date.now()) }
+    });
   }
 
   confirmarContracheque(id: number): Observable<ContrachequeDto> {
