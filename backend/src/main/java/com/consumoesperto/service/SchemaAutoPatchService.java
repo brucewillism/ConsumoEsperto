@@ -20,6 +20,7 @@ import java.util.List;
 public class SchemaAutoPatchService {
 
     private final JdbcTemplate jdbcTemplate;
+    private final DadosLegadosSanitizationService dadosLegadosSanitizationService;
 
     /** Extensão {@code vector} (pgvector) instalada nesta base. */
     private boolean isPgVectorExtensionInstalled() {
@@ -119,6 +120,11 @@ public class SchemaAutoPatchService {
         } catch (Exception e) {
             // Não derruba a aplicação; apenas registra para troubleshooting.
             log.warn("Falha ao aplicar schema patch automático: {}", e.getMessage());
+        }
+        try {
+            dadosLegadosSanitizationService.aplicarPatchV83SeNecessario();
+        } catch (Exception e) {
+            log.warn("Data patch v8.3 (sanitização legada): {}", e.getMessage());
         }
     }
 

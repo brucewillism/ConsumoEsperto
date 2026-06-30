@@ -174,6 +174,48 @@ public class SalarioAutomaticoService {
         tentarLancarSalarioMesAtual(usuarioId);
     }
 
+    /** Poda duplicatas salariais nos últimos 12 meses — usado na migração v8.3 e catch-up amplo. */
+    @Transactional
+    public int sanitizarSalariosDuplicadosHistorico(Long usuarioId) {
+        if (usuarioId == null) {
+            return 0;
+        }
+        int antes = contarReceitasSalarioConfirmadas(usuarioId);
+        LocalDate hoje = LocalDate.now(ZONA_BR);
+        for (int i = 0; i < 12; i++) {
+            podarSalariosDuplicadosMes(usuarioId, hoje.minusMonths(i));
+        }
+        int depois = contarReceitasSalarioConfirmadas(usuarioId);
+        return Math.max(0, antes - depois);
+    }
+
+    /** Executa poda salarial legada para todos os usuários (idempotente). */
+    @Transactional
+    public int sanitizarSalariosDuplicadosTodosUsuarios() {
+        List<Long> ids = usuarioRepository.findAll().stream()
+            .map(Usuario::getId)
+            .filter(id -> id != null)
+            .toList();
+        int podas = 0;
+        for (Long uid : ids) {
+            podas += sanitizarSalariosDuplicadosHistorico(uid);
+        }
+        return podas;
+    }
+
+    private int contarReceitasSalarioConfirmadas(Long usuarioId) {
+        LocalDate hoje = LocalDate.now(ZONA_BR);
+        LocalDateTime inicio = hoje.minusMonths(12).withDayOfMonth(1).atStartOfDay();
+        LocalDateTime fim = hoje.withDayOfMonth(hoje.lengthOfMonth()).atTime(23, 59, 59);
+        return (int) transacaoRepository.findByUsuarioIdAndDataTransacaoBetween(usuarioId, inicio, fim).stream()
+            .filter(t -> !t.isExcluido())
+            .filter(t -> t.getTipoTransacao() == Transacao.TipoTransacao.RECEITA)
+            .filter(t -> t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA)
+            .filter(t -> t.getOrigemFiscal() == null)
+            .filter(this::pareceReceitaSalario)
+            .count();
+    }
+
     /**
      * Receita confirmada antes do dia de pagamento fica com data futura e não credita a conta na criação.
      * No dia do pagamento, aplica o crédito pendente (uma vez por mês) em vez de reconciliar a conta inteira.
