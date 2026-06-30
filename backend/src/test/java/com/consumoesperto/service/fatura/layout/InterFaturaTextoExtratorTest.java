@@ -418,6 +418,50 @@ class InterFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiLinhasDescricaoValorSemDataNaTabela() {
+        String texto = """
+            Banco Inter
+            Valor da fatura R$ 0,00
+            Fatura paga
+            Data de corte: 25/06/2026
+            Detalhamento da fatura
+            Data          Beneficiário                    Valor
+            MERCADO LIVRE*COMPRA                   89,90
+            POSTO IPIRANGA LTDA                   120,00
+            UBER TRIP HELP                         47,68
+            DESPESAS DO MÊS R$ 657,58
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertTrue(itens.size() >= 3, "esperado >=3, obteve " + itens.size());
+        assertTrue(itens.stream().anyMatch(i -> i.getDescricao().contains("MERCADO")));
+        assertTrue(itens.stream().anyMatch(i -> i.getDescricao().contains("POSTO")));
+        assertFalse(itens.stream().anyMatch(i -> InterFaturaTextoExtrator.pareceLancamentoFallbackConsolidado(i)));
+    }
+
+    @Test
+    void complementarMantemIaQuandoTextoSoTemFallback() {
+        String textoPago = """
+            Banco Inter
+            Valor da fatura R$ 0,00
+            Fatura paga
+            Data de corte: 25/06/2026
+            Detalhamento da fatura
+            R $ 0 , 0 0 DESPESAS DO MÊS R$ 657,58
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        destino.add(item("MERCADO LIVRE", new BigDecimal("89.90"), LocalDate.of(2026, 5, 12), null, null));
+        destino.add(item("POSTO IPIRANGA", new BigDecimal("120.00"), LocalDate.of(2026, 5, 15), null, null));
+        destino.add(item("UBER TRIP", new BigDecimal("47.68"), LocalDate.of(2026, 5, 20), null, null));
+
+        InterFaturaTextoExtrator.complementar(destino, textoPago, 2026);
+
+        assertEquals(3, destino.size());
+        assertEquals(3, InterFaturaTextoExtrator.contarLancamentosDetalhe(destino));
+    }
+
+    @Test
     void fallbackSubtotalDespesasDoMesQuandoFaturaPagaSemDetalhe() {
         String texto = """
             Banco Inter
@@ -430,10 +474,11 @@ class InterFaturaTextoExtratorTest {
             Despesas da fatura CARTÃO 2306 Data Movimentação Beneficiário PAGAMENTO ON LINE R$ 33,89
             Próximas faturas
             """;
-        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(texto, 2026);
-        assertEquals(1, itens.size());
-        assertEquals(new BigDecimal("657.58"), itens.get(0).getValor());
-        assertEquals("Despesas do cartão no período", itens.get(0).getDescricao());
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        InterFaturaTextoExtrator.complementar(destino, texto, 2026);
+        assertEquals(1, destino.size());
+        assertEquals(new BigDecimal("657.58"), destino.get(0).getValor());
+        assertEquals(InterFaturaTextoExtrator.DESCRICAO_FALLBACK_FATURA_PAGA, destino.get(0).getDescricao());
     }
 
     @Test

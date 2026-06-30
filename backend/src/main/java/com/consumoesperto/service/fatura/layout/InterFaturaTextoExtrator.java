@@ -41,6 +41,17 @@ public final class InterFaturaTextoExtrator {
         "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(.{2,140}?)\\s+(?:R\\$\\s*)?(\\d{1,3}(?:[.\\s]\\d{3})*,\\d{2})",
         Pattern.CASE_INSENSITIVE
     );
+    /** Descrição + valor na mesma linha (tabela Inter sem data explícita). */
+    private static final Pattern LINHA_DESC_VALOR = Pattern.compile(
+        "^(.{4,}?)\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$",
+        Pattern.CASE_INSENSITIVE
+    );
+    /** Descrição e valor separados por tabulação ou múltiplos espaços. */
+    private static final Pattern LINHA_COLUNAS_DESC_VALOR = Pattern.compile(
+        "^(?:\\d{2}/\\d{2}(?:/\\d{4})?\\s+)?(.{4,}?)[\\t\\s]{2,}(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$",
+        Pattern.CASE_INSENSITIVE
+    );
+    public static final String DESCRICAO_FALLBACK_FATURA_PAGA = "Despesas do cartão no período";
     /** Data, estabelecimento e valor em linhas separadas. */
     private static final Pattern BLOCO_MULTILINHA = Pattern.compile(
         "(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s*\\r?\\n\\s*([^\\n\\d][^\\n]{2,}?)\\s*\\r?\\n\\s*(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
@@ -198,6 +209,14 @@ public final class InterFaturaTextoExtrator {
             || textoMaisProximoDoTotal
             || textoBateComTotal
         );
+        if (substituirPorTexto && !listaTemMaisDetalheQue(doTexto, destino) && contarLancamentosDetalhe(destino) > 0) {
+            substituirPorTexto = false;
+            log.info(
+                "Inter texto: mantendo {} lançamento(s) detalhado(s) da IA (texto só tem {} item(ns) útil(is)).",
+                destino.size(),
+                doTexto.size()
+            );
+        }
 
         if (substituirPorTexto) {
             int tamanhoAnterior = destino.size();
@@ -210,9 +229,14 @@ public final class InterFaturaTextoExtrator {
                 tamanhoAnterior,
                 somaAnterior
             );
-        } else if (!doTexto.isEmpty()) {
+        } else if (!doTexto.isEmpty() && (destino.isEmpty() || listaTemMaisDetalheQue(doTexto, destino))) {
             int inseridos = 0;
             for (ImportacaoFaturaItemDTO candidato : doTexto) {
+                if (pareceLancamentoFallbackConsolidado(candidato)
+                    || deveIgnorarDescricao(candidato.getDescricao())
+                    || FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(candidato.getDescricao())) {
+                    continue;
+                }
                 if (!jaExiste(destino, candidato)) {
                     destino.add(candidato);
                     inseridos++;
@@ -224,6 +248,16 @@ public final class InterFaturaTextoExtrator {
         }
 
         podarEspurios(destino, textoPdf);
+        if (destino.isEmpty() && FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
+            aplicarFallbackFaturaPagaSemDetalhe(
+                textoPdf,
+                reconstruirTextoPdfInter(textoPdf),
+                anoReferencia,
+                extrairDataVencimento(textoPdf),
+                extrairDataCorte(textoPdf),
+                destino
+            );
+        }
     }
 
     /**
@@ -261,7 +295,8 @@ public final class InterFaturaTextoExtrator {
         List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia);
         itens.removeIf(i -> FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(i.getDescricao()));
         if ((total == null || total.compareTo(BigDecimal.ZERO) <= 0) && !doTexto.isEmpty()) {
-            if (itens.isEmpty() || FaturaPdfLayoutSupport.pareceListaGenericaIa(itens) || doTexto.size() >= itens.size()) {
+            boolean textoTemMaisDetalhe = listaTemMaisDetalheQue(doTexto, itens);
+            if (itens.isEmpty() || FaturaPdfLayoutSupport.pareceListaGenericaIa(itens) || textoTemMaisDetalhe) {
                 itens.clear();
                 itens.addAll(doTexto);
                 podarEspurios(itens, textoPdf);
@@ -444,7 +479,6 @@ public final class InterFaturaTextoExtrator {
         }
         removerLinhasResumoFatura(out, totalPdf.orElse(null), vencimento);
         podarEspurios(out, textoOriginal);
-        aplicarFallbackFaturaPagaSemDetalhe(textoOriginal, norm, ano, vencimento, dataCorte, out);
     }
 
     /** PDF Inter criptografado costuma extrair caracteres em linhas verticais — remonta datas/valores. */
@@ -532,6 +566,8 @@ public final class InterFaturaTextoExtrator {
         extrairBlocosMultilinha(trecho, ano, vencimento, dataCorte, out);
         extrairLancamentosPorLinhasConsecutivas(trecho, ano, vencimento, dataCorte, out, totalPdf);
         extrairParesDescricaoValor(trecho, ano, vencimento, dataCorte, out, totalPdf);
+        extrairLinhasDescricaoValorSemData(trecho, ano, vencimento, dataCorte, out, totalPdf);
+        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO_AMPLA, false, totalPdf);
         if (out.size() > antes) {
             log.info("Inter pré-subtotal: {} lançamento(s) extraído(s) (total {}).", out.size() - antes, out.size());
         }
@@ -1633,7 +1669,7 @@ public final class InterFaturaTextoExtrator {
             data = LocalDate.of(ano > 0 ? ano : YearMonth.now().getYear(), 6, 1);
         }
         ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
-        item.setDescricao("Despesas do cartão no período");
+        item.setDescricao(DESCRICAO_FALLBACK_FATURA_PAGA);
         item.setValor(subtotal.get());
         item.setData(data);
         out.add(item);
@@ -1676,6 +1712,100 @@ public final class InterFaturaTextoExtrator {
             }
         }
         return Optional.empty();
+    }
+
+    /** Tabela Inter: estabelecimento e valor na mesma linha, sem data no início. */
+    private static void extrairLinhasDescricaoValorSemData(
+        String trecho,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out,
+        Optional<BigDecimal> totalFatura
+    ) {
+        if (trecho == null || trecho.isBlank()) {
+            return;
+        }
+        LocalDate dataPadrao = dataCorte.orElse(vencimento.orElse(null));
+        for (String linhaRaw : trecho.split("\\r?\\n")) {
+            String linha = linhaRaw.trim();
+            if (linha.isEmpty() || pareceLinhaCabecalhoTabelaInter(linha)) {
+                continue;
+            }
+            Matcher colunas = LINHA_COLUNAS_DESC_VALOR.matcher(linha);
+            Matcher descValor = LINHA_DESC_VALOR.matcher(linha);
+            Matcher alvo = colunas.matches() ? colunas : (descValor.matches() ? descValor : null);
+            if (alvo == null) {
+                continue;
+            }
+            String desc = limparDescricao(alvo.group(1));
+            if (desc.isBlank() || deveIgnorarDescricao(desc) || descricaoInvalida(desc)) {
+                continue;
+            }
+            BigDecimal valor = parseMoney(alvo.group(2));
+            if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            LocalDate data = dataPadrao;
+            Matcher dataPrefix = Pattern.compile("^(\\d{2})/(\\d{2})(?:/(\\d{4}))?").matcher(linha);
+            if (dataPrefix.find()) {
+                data = parseDataInter(
+                    dataPrefix.group(1), dataPrefix.group(2), dataPrefix.group(3), ano, vencimento
+                );
+            }
+            if (dataCorte.isPresent() && data != null && data.isAfter(dataCorte.get())) {
+                continue;
+            }
+            if (pareceDataVencimentoComTotal(data, valor, vencimento, totalFatura)) {
+                continue;
+            }
+            ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
+            item.setData(data);
+            item.setDescricao(desc);
+            item.setValor(valor);
+            aplicarParcelaDaDescricao(item, desc);
+            if (!jaExiste(out, item)) {
+                out.add(item);
+            }
+        }
+    }
+
+    static boolean pareceLinhaCabecalhoTabelaInter(String linha) {
+        String n = FaturaPdfLayoutSupport.norm(linha);
+        if (n.isBlank() || n.length() < 3) {
+            return true;
+        }
+        return n.equals("data")
+            || n.contains("beneficiario")
+            || n.contains("descricao")
+            || n.contains("estabelecimento")
+            || (n.contains("data movimentacao"))
+            || (n.contains("valor") && n.length() < 25);
+    }
+
+    public static boolean pareceLancamentoFallbackConsolidado(ImportacaoFaturaItemDTO item) {
+        if (item == null || item.getDescricao() == null) {
+            return false;
+        }
+        return DESCRICAO_FALLBACK_FATURA_PAGA.equalsIgnoreCase(item.getDescricao().trim())
+            || FaturaPdfLayoutSupport.norm(item.getDescricao()).equals("despesas do cartao no periodo");
+    }
+
+    public static long contarLancamentosDetalhe(List<ImportacaoFaturaItemDTO> itens) {
+        if (itens == null || itens.isEmpty()) {
+            return 0;
+        }
+        return itens.stream()
+            .filter(i -> !pareceLancamentoFallbackConsolidado(i))
+            .filter(i -> !FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(i.getDescricao()))
+            .count();
+    }
+
+    private static boolean listaTemMaisDetalheQue(
+        List<ImportacaoFaturaItemDTO> candidato,
+        List<ImportacaoFaturaItemDTO> referencia
+    ) {
+        return contarLancamentosDetalhe(candidato) > contarLancamentosDetalhe(referencia);
     }
 
     /** Trecho compacto para reprocessar lançamentos na confirmação. */

@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
+import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -467,11 +468,21 @@ public class DocumentoIAContextService {
             && valorTotal.compareTo(BigDecimal.ZERO) > 0
             && soma != null
             && valorTotal.subtract(soma).abs().compareTo(new BigDecimal("1.00")) > 0;
-        if (!poucosItens && !somaDivergente && !subcapturaSuspeita) {
+        boolean faturaPagaPoucoDetalhe = FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(text)
+            && text != null
+            && text.length() > 4_000
+            && lancamentos.size() < 8;
+        if (!poucosItens && !somaDivergente && !subcapturaSuspeita && !faturaPagaPoucoDetalhe) {
             return extracted;
         }
 
+        String instrucaoFaturaPaga = faturaPagaPoucoDetalhe
+            ? " FATURA JÁ PAGA (total R$ 0,00): extraia CADA compra/parcela do «Detalhamento da fatura», "
+                + "linha a linha. Ignore «Despesas do mês» (subtotal) e «Pagamento on line». "
+                + "valorTotal pode ser 0; preencha lancamentos com a soma real das compras. "
+            : " ";
         String systemRetry = "Você é extrator/auditor de fatura de cartão brasileira. Retorne apenas JSON válido. "
+            + instrucaoFaturaPaga
             + taxasEhLeituraFaturaBase().replace("\n\n", "\n ")
             + auditoriaFinanceiraHumanaLinhas().replace("\n\n", "\n ")
             + " Refaça a extração completa usando TODO o texto fornecido, linha a linha nas tabelas, sem omitir lançamentos. "
