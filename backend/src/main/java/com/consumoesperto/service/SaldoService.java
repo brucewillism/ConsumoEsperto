@@ -428,9 +428,11 @@ public class SaldoService {
         return v != null ? v.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     }
 
+    private static final BigDecimal TOLERANCIA_RECONCILIACAO = new BigDecimal("0.02");
+
     /**
      * Recalcula {@link ContaBancaria#getSaldoAtual()} a partir de {@code saldo_inicial}
-     * + soma das transações confirmadas elegíveis — idempotente e seguro para reparos retroativos.
+     * + soma das transações confirmadas elegíveis — idempotente e corrige drift por crédito duplicado.
      */
     @Transactional
     public ResultadoReconciliacaoSaldo reconciliarSaldo(Long contaId, Long usuarioId) {
@@ -445,18 +447,44 @@ public class SaldoService {
                 consideradas++;
             }
         }
+        somaImpactos = nz(somaImpactos);
+
         BigDecimal saldoInicial = conta.getSaldoInicial();
-        if (saldoInicial == null) {
-            // Conta já movimentada incrementalmente: deriva abertura para não somar transações em cima do saldo atual.
+        boolean aberturaCorrompida = saldoInicial != null
+            && saldoInicial.compareTo(saldoAnterior) == 0
+            && consideradas > 0;
+        if (aberturaCorrompida || saldoInicial == null) {
             saldoInicial = saldoAnterior.subtract(somaImpactos);
             conta.setSaldoInicial(saldoInicial);
             contaBancariaRepository.save(conta);
         }
         BigDecimal saldoCalculado = nz(saldoInicial).add(somaImpactos).setScale(2, RoundingMode.HALF_UP);
+
+        if (saldoCalculado.subtract(saldoAnterior).abs().compareTo(TOLERANCIA_RECONCILIACAO) > 0) {
+            log.info(
+                "[SALDO] Reparo drift conta {} user {} — {} → {} (abertura {} + {} tx, soma movimentos {})",
+                contaId, usuarioId, saldoAnterior, saldoCalculado, saldoInicial, consideradas, somaImpactos
+            );
+        }
         saldoMovimentacaoService.definirSaldoReconciliado(contaId, saldoCalculado);
         log.info("[SALDO] Reconciliação conta {} user {} — {} → {} ({} tx)",
             contaId, usuarioId, saldoAnterior, saldoCalculado, consideradas);
         return new ResultadoReconciliacaoSaldo(contaId, saldoAnterior, saldoCalculado, consideradas);
+    }
+
+    /** Recalcula saldo de todas as contas ativas (catch-up após bugs de crédito duplicado). */
+    @Transactional
+    public void reconciliarTodasContasAtivas(Long usuarioId) {
+        for (ContaBancaria conta : contaBancariaRepository.findByUsuarioIdAndAtivaTrueOrderByPadraoDescNomeAsc(usuarioId)) {
+            if (conta.getId() == null) {
+                continue;
+            }
+            try {
+                reconciliarSaldo(conta.getId(), usuarioId);
+            } catch (Exception e) {
+                log.warn("[SALDO] Falha ao reconciliar conta {} user {}: {}", conta.getId(), usuarioId, e.getMessage());
+            }
+        }
     }
 
     public void notificarAlteracaoSaldo(Long usuarioId) {

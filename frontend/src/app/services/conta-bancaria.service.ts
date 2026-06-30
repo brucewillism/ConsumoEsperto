@@ -51,4 +51,12 @@ export class ContaBancariaService {
   inativar(id: number): Observable<void> {
     return this.http.delete<void>(`${this.API_URL}/${id}`, { headers: this.getHeaders() });
   }
+
+  reconciliarSaldo(id: number): Observable<{ saldoAnterior: number; saldoCalculado: number; transacoesConsideradas: number }> {
+    return this.http.post<{ saldoAnterior: number; saldoCalculado: number; transacoesConsideradas: number }>(
+      `${this.API_URL}/${id}/reconciliar-saldo`,
+      {},
+      { headers: this.getHeaders() }
+    );
+  }
 }

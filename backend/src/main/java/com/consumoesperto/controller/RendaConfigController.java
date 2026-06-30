@@ -30,7 +30,7 @@ public class RendaConfigController {
     @GetMapping
     public ResponseEntity<RendaConfigDTO> obter(@AuthenticationPrincipal UserPrincipal currentUser) {
         try {
-            salarioAutomaticoService.tentarLancarSalarioMesAtual(currentUser.getId());
+            salarioAutomaticoService.executarCatchUpSalario(currentUser.getId());
         } catch (Exception ignored) {
             // catch-up best-effort — não bloqueia leitura da configuração
         }

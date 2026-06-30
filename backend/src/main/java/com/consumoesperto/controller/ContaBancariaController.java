@@ -34,7 +34,12 @@ public class ContaBancariaController {
             @AuthenticationPrincipal UserPrincipal currentUser,
             @RequestParam(defaultValue = "true") boolean apenasAtivas) {
         try {
-            salarioAutomaticoService.tentarLancarSalarioMesAtual(currentUser.getId());
+            salarioAutomaticoService.executarCatchUpSalario(currentUser.getId());
+        } catch (Exception ignored) {
+            // catch-up best-effort
+        }
+        try {
+            saldoService.reconciliarTodasContasAtivas(currentUser.getId());
         } catch (Exception ignored) {
             // catch-up best-effort
         }

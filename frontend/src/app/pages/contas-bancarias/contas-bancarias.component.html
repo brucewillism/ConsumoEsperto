@@ -61,6 +61,10 @@
         Sem cheque especial — clique em <strong>Editar</strong> e preencha o campo abaixo do nome da conta.
       </p>
       <div class="conta-actions">
+        <button mat-button (click)="reconciliarSaldo(c)" [disabled]="reconciliandoId === c.id">
+          <mat-icon>sync</mat-icon>
+          {{ reconciliandoId === c.id ? 'Recalculando…' : 'Recalcular saldo' }}
+        </button>
         <button mat-button (click)="abrirForm(c)">
           <mat-icon>edit</mat-icon>
           Editar

@@ -60,21 +60,22 @@ public class SalarioAutomaticoService {
             return false;
         }
         LocalDate hoje = LocalDate.now(ZONA_BR);
-        int ym = hoje.getYear() * 100 + hoje.getMonthValue();
-        int diaPagamento = resolverDiaPagamento(cfg);
-        if (diaPagamento > hoje.getDayOfMonth()) {
-            return false;
-        }
         Usuario u = cfg.getUsuario();
         if (u == null) {
             return false;
         }
         Long uid = u.getId();
+        podarSalariosDuplicadosMes(uid, hoje);
+
+        int ym = hoje.getYear() * 100 + hoje.getMonthValue();
+        int diaPagamento = resolverDiaPagamento(cfg);
+        if (diaPagamento > hoje.getDayOfMonth()) {
+            return false;
+        }
         BigDecimal valorReferencia = resolverValorSalarioMes(cfg, uid, YearMonth.from(hoje));
         if (valorReferencia.compareTo(BigDecimal.ZERO) <= 0) {
             return false;
         }
-        podarSalariosDuplicadosMes(uid, hoje);
         Integer ultimo = cfg.getUltimoMesLancamentoAuto();
         List<Transacao> existentes = buscarReceitasSalarioMes(uid, hoje);
         if (!existentes.isEmpty()) {
@@ -158,6 +159,19 @@ public class SalarioAutomaticoService {
         return rendaConfigRepository.findByUsuarioId(usuarioId)
             .map(this::tentarLancarSalarioMesAtual)
             .orElse(false);
+    }
+
+    /** Remove duplicatas recentes e tenta creditar salário pendente (catch-up ao abrir Contas/Renda). */
+    @Transactional
+    public void executarCatchUpSalario(Long usuarioId) {
+        if (usuarioId == null) {
+            return;
+        }
+        LocalDate hoje = LocalDate.now(ZONA_BR);
+        for (int i = 0; i < 6; i++) {
+            podarSalariosDuplicadosMes(usuarioId, hoje.minusMonths(i));
+        }
+        tentarLancarSalarioMesAtual(usuarioId);
     }
 
     /**

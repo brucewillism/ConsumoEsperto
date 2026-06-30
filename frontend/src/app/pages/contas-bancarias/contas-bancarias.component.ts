@@ -58,6 +58,7 @@ export class ContasBancariasComponent implements OnInit {
   loading = false;
   loadingHistorico = false;
   salvando = false;
+  reconciliandoId: number | null = null;
   tipos = TIPOS_CONTA;
   form!: FormGroup;
   editando: ContaBancaria | null = null;
@@ -241,6 +242,29 @@ export class ContasBancariasComponent implements OnInit {
           error: () => this.snackBar.open('Erro ao inativar', 'Fechar', { duration: 3000 }),
         });
       });
+  }
+
+  reconciliarSaldo(conta: ContaBancaria): void {
+    if (!conta.id) {
+      return;
+    }
+    this.reconciliandoId = conta.id;
+    this.contaService.reconciliarSaldo(conta.id).subscribe({
+      next: (r) => {
+        this.reconciliandoId = null;
+        this.financaAlteracao.notificar('contas');
+        this.carregar({ silent: true });
+        const msg =
+          r.saldoAnterior !== r.saldoCalculado
+            ? `Saldo recalculado: ${this.brl(r.saldoAnterior)} → ${this.brl(r.saldoCalculado)}`
+            : 'Saldo já estava consistente com as transações';
+        this.snackBar.open(msg, 'Fechar', { duration: 4500 });
+      },
+      error: (err) => {
+        this.reconciliandoId = null;
+        this.snackBar.open(resolveHttpError(err, 'Erro ao recalcular saldo'), 'Fechar', { duration: 4000 });
+      },
+    });
   }
 
   brl(v: number): string {
