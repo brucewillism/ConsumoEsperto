@@ -36,12 +36,7 @@ public class ContaBancariaController {
         try {
             salarioAutomaticoService.executarCatchUpSalario(currentUser.getId());
         } catch (Exception ignored) {
-            // catch-up best-effort
-        }
-        try {
-            saldoService.reconciliarTodasContasAtivas(currentUser.getId());
-        } catch (Exception ignored) {
-            // catch-up best-effort
+            // catch-up best-effort — não reconcilia saldo automaticamente (evita sobrescrever movimentação)
         }
         return ResponseEntity.ok(contaBancariaService.listarPorUsuario(currentUser.getId(), apenasAtivas));
     }
@@ -89,10 +84,21 @@ public class ContaBancariaController {
 
     @PostMapping("/{id}/reconciliar-saldo")
     @Operation(summary = "Reconciliar saldo da conta",
-        description = "Recalcula saldo_atual a partir de saldo_inicial + transações confirmadas (idempotente).")
+        description = "Realinha saldo_inicial com transações e transferências; mantém saldo_atual se houver divergência.")
     public ResponseEntity<SaldoService.ResultadoReconciliacaoSaldo> reconciliarSaldo(
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         return ResponseEntity.ok(saldoService.reconciliarSaldo(id, currentUser.getId()));
+    }
+
+    @PostMapping("/{id}/sincronizar-saldo")
+    @Operation(summary = "Informar saldo do app bancário",
+        description = "Ajusta saldo_atual ao valor informado e recalcula saldo_inicial (reparo manual).")
+    public ResponseEntity<SaldoService.ResultadoReconciliacaoSaldo> sincronizarSaldo(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestBody java.util.Map<String, BigDecimal> body) {
+        BigDecimal saldo = body != null ? body.get("saldoAtual") : null;
+        return ResponseEntity.ok(saldoService.sincronizarSaldoReferenciaExterna(id, currentUser.getId(), saldo));
     }
 }

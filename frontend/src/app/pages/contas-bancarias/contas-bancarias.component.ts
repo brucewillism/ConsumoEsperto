@@ -24,6 +24,8 @@ import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.dire
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '../../shared/utils/form.utils';
 import { escutarAlteracoesFinanceiras } from '../../shared/utils/financa-alteracao-refresh.util';
+import { Observable, of } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
 @Component({
   selector: 'app-contas-bancarias',
@@ -78,6 +80,7 @@ export class ContasBancariasComponent implements OnInit {
       saldoAtual: [0, Validators.required],
       limiteChequeEspecial: [0],
       padrao: [false],
+      saldoReferenciaApp: [''],
     });
   }
 
@@ -165,10 +168,11 @@ export class ContasBancariasComponent implements OnInit {
         saldoAtual: conta.saldoAtual,
         limiteChequeEspecial: conta.limiteChequeEspecial ?? 0,
         padrao: !!conta.padrao,
+        saldoReferenciaApp: '',
       });
       this.form.get('saldoAtual')?.disable();
     } else {
-      this.form.reset({ tipo: 'CORRENTE', saldoAtual: 0, limiteChequeEspecial: 0, padrao: false });
+      this.form.reset({ tipo: 'CORRENTE', saldoAtual: 0, limiteChequeEspecial: 0, padrao: false, saldoReferenciaApp: '' });
       this.form.get('saldoAtual')?.enable();
     }
     openCeFormDialog(this.dialog, this.formTpl, {
@@ -205,7 +209,13 @@ export class ContasBancariasComponent implements OnInit {
         })
       : this.contaService.criar(payload);
 
-    req$.subscribe({
+    const saldoApp = parseValorBrasileiro(raw.saldoReferenciaApp);
+    const syncSaldo$: Observable<unknown> =
+      this.editando?.id && saldoApp != null
+        ? this.contaService.sincronizarSaldo(this.editando.id, saldoApp)
+        : of(null);
+
+    syncSaldo$.pipe(switchMap(() => req$)).subscribe({
       next: () => {
         this.salvando = false;
         this.dialog.closeAll();

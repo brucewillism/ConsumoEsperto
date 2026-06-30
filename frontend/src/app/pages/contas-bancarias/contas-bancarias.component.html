@@ -131,6 +131,12 @@
 
       <p class="hint" *ngIf="editando">O saldo é atualizado automaticamente pelas transações confirmadas.</p>
 
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full" *ngIf="editando">
+        <mat-label>Saldo no app bancário (correção)</mat-label>
+        <input matInput type="text" inputmode="decimal" formControlName="saldoReferenciaApp" ceMask="decimal" placeholder="Opcional">
+        <mat-hint>Preencha só se divergir do banco — ajusta o saldo e realinha o histórico interno.</mat-hint>
+      </mat-form-field>
+
       <div class="cheque-especial-bloco">
         <h3>Cheque especial (saldo negativo controlado)</h3>
         <p class="cheque-especial-explica">

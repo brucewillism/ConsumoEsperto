@@ -11,6 +11,7 @@ import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
+import com.consumoesperto.repository.TransferenciaContaRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,7 @@ public class SaldoService {
     private final TransacaoRepository transacaoRepository;
     private final FaturaRepository faturaRepository;
     private final ContaBancariaRepository contaBancariaRepository;
+    private final TransferenciaContaRepository transferenciaContaRepository;
     private final OpenAiService openAiService;
     private final ContaBancariaService contaBancariaService;
     private final SaldoMovimentacaoService saldoMovimentacaoService;
@@ -53,6 +55,7 @@ public class SaldoService {
         TransacaoRepository transacaoRepository,
         FaturaRepository faturaRepository,
         ContaBancariaRepository contaBancariaRepository,
+        TransferenciaContaRepository transferenciaContaRepository,
         OpenAiService openAiService,
         ContaBancariaService contaBancariaService,
         SaldoMovimentacaoService saldoMovimentacaoService,
@@ -65,6 +68,7 @@ public class SaldoService {
         this.transacaoRepository = transacaoRepository;
         this.faturaRepository = faturaRepository;
         this.contaBancariaRepository = contaBancariaRepository;
+        this.transferenciaContaRepository = transferenciaContaRepository;
         this.openAiService = openAiService;
         this.contaBancariaService = contaBancariaService;
         this.saldoMovimentacaoService = saldoMovimentacaoService;
@@ -431,8 +435,9 @@ public class SaldoService {
     private static final BigDecimal TOLERANCIA_RECONCILIACAO = new BigDecimal("0.02");
 
     /**
-     * Recalcula {@link ContaBancaria#getSaldoAtual()} a partir de {@code saldo_inicial}
-     * + soma das transações confirmadas elegíveis — idempotente e corrige drift por crédito duplicado.
+     * Realinha {@code saldo_inicial} com transações + transferências internas.
+     * Mantém {@link ContaBancaria#getSaldoAtual()} (movimentação incremental) quando a fórmula diverge —
+     * evita negativar contas por abertura corrompida ou transferências omitidas.
      */
     @Transactional
     public ResultadoReconciliacaoSaldo reconciliarSaldo(Long contaId, Long usuarioId) {
@@ -448,43 +453,59 @@ public class SaldoService {
             }
         }
         somaImpactos = nz(somaImpactos);
+        BigDecimal liquidoTransferencias = somaTransferenciasLiquido(contaId);
 
         BigDecimal saldoInicial = conta.getSaldoInicial();
-        boolean aberturaCorrompida = saldoInicial != null
-            && saldoInicial.compareTo(saldoAnterior) == 0
-            && consideradas > 0;
-        if (aberturaCorrompida || saldoInicial == null) {
-            saldoInicial = saldoAnterior.subtract(somaImpactos);
+        if (saldoInicial == null) {
+            saldoInicial = saldoAnterior.subtract(somaImpactos).subtract(liquidoTransferencias);
             conta.setSaldoInicial(saldoInicial);
             contaBancariaRepository.save(conta);
         }
-        BigDecimal saldoCalculado = nz(saldoInicial).add(somaImpactos).setScale(2, RoundingMode.HALF_UP);
 
-        if (saldoCalculado.subtract(saldoAnterior).abs().compareTo(TOLERANCIA_RECONCILIACAO) > 0) {
+        BigDecimal saldoFormula = nz(saldoInicial).add(somaImpactos).add(liquidoTransferencias)
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal saldoFinal = saldoFormula;
+
+        if (saldoFormula.subtract(saldoAnterior).abs().compareTo(TOLERANCIA_RECONCILIACAO) > 0) {
+            saldoInicial = saldoAnterior.subtract(somaImpactos).subtract(liquidoTransferencias);
+            conta.setSaldoInicial(saldoInicial);
+            contaBancariaRepository.save(conta);
+            saldoFinal = saldoAnterior;
             log.info(
-                "[SALDO] Reparo drift conta {} user {} — {} → {} (abertura {} + {} tx, soma movimentos {})",
-                contaId, usuarioId, saldoAnterior, saldoCalculado, saldoInicial, consideradas, somaImpactos
+                "[SALDO] Realinhamento abertura conta {} user {} — fórmula {} ≠ incremental {} ({} tx, transfer {})",
+                contaId, usuarioId, saldoFormula, saldoAnterior, consideradas, liquidoTransferencias
             );
         }
-        saldoMovimentacaoService.definirSaldoReconciliado(contaId, saldoCalculado);
-        log.info("[SALDO] Reconciliação conta {} user {} — {} → {} ({} tx)",
-            contaId, usuarioId, saldoAnterior, saldoCalculado, consideradas);
-        return new ResultadoReconciliacaoSaldo(contaId, saldoAnterior, saldoCalculado, consideradas);
+
+        if (saldoFinal.subtract(saldoAnterior).abs().compareTo(TOLERANCIA_RECONCILIACAO) > 0) {
+            saldoMovimentacaoService.definirSaldoReconciliado(contaId, saldoFinal);
+        }
+        log.info("[SALDO] Reconciliação conta {} user {} — {} → {} ({} tx, transfer {})",
+            contaId, usuarioId, saldoAnterior, saldoFinal, consideradas, liquidoTransferencias);
+        return new ResultadoReconciliacaoSaldo(contaId, saldoAnterior, saldoFinal, consideradas);
     }
 
-    /** Recalcula saldo de todas as contas ativas (catch-up após bugs de crédito duplicado). */
+    /**
+     * Define saldo conforme app bancário e recalcula {@code saldo_inicial} para bater com transações + transferências.
+     */
     @Transactional
-    public void reconciliarTodasContasAtivas(Long usuarioId) {
-        for (ContaBancaria conta : contaBancariaRepository.findByUsuarioIdAndAtivaTrueOrderByPadraoDescNomeAsc(usuarioId)) {
-            if (conta.getId() == null) {
-                continue;
-            }
-            try {
-                reconciliarSaldo(conta.getId(), usuarioId);
-            } catch (Exception e) {
-                log.warn("[SALDO] Falha ao reconciliar conta {} user {}: {}", conta.getId(), usuarioId, e.getMessage());
-            }
+    public ResultadoReconciliacaoSaldo sincronizarSaldoReferenciaExterna(
+        Long contaId,
+        Long usuarioId,
+        BigDecimal saldoReferencia
+    ) {
+        if (saldoReferencia == null) {
+            throw new IllegalArgumentException("Informe o saldo atual do app bancário.");
         }
+        BigDecimal referencia = nz(saldoReferencia);
+        saldoMovimentacaoService.definirSaldoReconciliado(contaId, referencia);
+        return reconciliarSaldo(contaId, usuarioId);
+    }
+
+    private BigDecimal somaTransferenciasLiquido(Long contaId) {
+        BigDecimal entradas = transferenciaContaRepository.sumValorEntradaPorConta(contaId);
+        BigDecimal saidas = transferenciaContaRepository.sumValorSaidaPorConta(contaId);
+        return nz(entradas).subtract(nz(saidas));
     }
 
     public void notificarAlteracaoSaldo(Long usuarioId) {
