@@ -246,7 +246,10 @@ public class PdfTextExtractionService {
         int scoreB = scorePagina(b);
         String combinado = a.trim() + "\n" + b.trim();
         int scoreCombinado = scorePagina(combinado);
-        if (scoreCombinado > Math.max(scoreA, scoreB) + 100) {
+        if (scoreCombinado > Math.max(scoreA, scoreB)) {
+            return combinado;
+        }
+        if (scoreA > 0 && scoreB > 0) {
             return combinado;
         }
         if (scoreA == scoreB) {

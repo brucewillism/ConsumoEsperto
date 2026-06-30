@@ -27,13 +27,18 @@ import java.util.regex.Pattern;
 public final class InterFaturaTextoExtrator {
 
     private static final Pattern LINHA_LANCAMENTO = Pattern.compile(
-        "(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s+(.+?)\\s+(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})",
+        "(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s+(.+?)\\s+(?:R\\$\\s*)?(\\d{1,3}(?:[.\\s]\\d{3})*,\\d{2})",
         Pattern.CASE_INSENSITIVE
     );
     /** Valor sem prefixo R$ (layout recente do PDF Inter). */
     private static final Pattern LINHA_LANCAMENTO_SEM_RS = Pattern.compile(
-        "(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s+(.{3,}?)\\s+(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*(?:$|\\r?\\n)",
+        "(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s+(.{3,}?)\\s+(\\d{1,3}(?:[.\\s]\\d{3})*,\\d{2})\\s*(?:$|\\r?\\n)",
         Pattern.CASE_INSENSITIVE | Pattern.MULTILINE
+    );
+    /** Scan amplo: data + descrição + valor (inclui milhar com espaço). */
+    private static final Pattern LINHA_LANCAMENTO_AMPLA = Pattern.compile(
+        "(\\d{2})/(\\d{2})(?:/(\\d{2,4}))?\\s+(.{2,140}?)\\s+(?:R\\$\\s*)?(\\d{1,3}(?:[.\\s]\\d{3})*,\\d{2})",
+        Pattern.CASE_INSENSITIVE
     );
     /** Data, estabelecimento e valor em linhas separadas. */
     private static final Pattern BLOCO_MULTILINHA = Pattern.compile(
@@ -360,11 +365,25 @@ public final class InterFaturaTextoExtrator {
 
     private static List<ImportacaoFaturaItemDTO> extrairLancamentosInterno(String textoPdf, int anoReferencia) {
         List<ImportacaoFaturaItemDTO> out = new ArrayList<>();
-        String norm = textoPdf.replace('\r', '\n');
+        String bruto = textoPdf.replace('\r', '\n');
+        String norm = reconstruirTextoPdfInter(bruto);
+        extrairLancamentosDoTextoNorm(norm, bruto, anoReferencia, out);
+        if (out.isEmpty() && !norm.equals(bruto)) {
+            extrairLancamentosDoTextoNorm(bruto, bruto, anoReferencia, out);
+        }
+        return out;
+    }
+
+    private static void extrairLancamentosDoTextoNorm(
+        String norm,
+        String textoOriginal,
+        int anoReferencia,
+        List<ImportacaoFaturaItemDTO> out
+    ) {
         String trecho = recortarTrechoTransacoes(norm);
-        Optional<LocalDate> dataCorte = extrairDataCorte(textoPdf);
-        Optional<LocalDate> vencimento = extrairDataVencimento(textoPdf);
-        Optional<BigDecimal> totalPdf = extrairTotalFatura(textoPdf);
+        Optional<LocalDate> dataCorte = extrairDataCorte(textoOriginal);
+        Optional<LocalDate> vencimento = extrairDataVencimento(textoOriginal);
+        Optional<BigDecimal> totalPdf = extrairTotalFatura(textoOriginal);
         int ano = vencimento.map(LocalDate::getYear).orElse(anoReferencia > 0 ? anoReferencia : YearMonth.now().getYear());
 
         extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO, true, totalPdf);
@@ -390,7 +409,7 @@ public final class InterFaturaTextoExtrator {
         if (out.isEmpty()) {
             extrairLancamentosModoAmplo(norm, ano, vencimento, dataCorte, out, totalPdf);
         }
-        if (out.isEmpty() || FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
+        if (out.isEmpty() || FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoOriginal)) {
             extrairLancamentosFaturaPaga(norm, ano, vencimento, dataCorte, out, totalPdf);
         }
         if (out.isEmpty() || somaValores(out).compareTo(BigDecimal.ZERO) <= 0) {
@@ -403,9 +422,79 @@ public final class InterFaturaTextoExtrator {
                 trechoColunas, ano, vencimento, dataCorte, out, totalPdf
             );
         }
+        if (out.isEmpty()) {
+            extrairLancamentosScanAmplo(norm, ano, vencimento, dataCorte, out, totalPdf);
+        }
         removerLinhasResumoFatura(out, totalPdf.orElse(null), vencimento);
-        podarEspurios(out, textoPdf);
-        return out;
+        podarEspurios(out, textoOriginal);
+    }
+
+    /** PDF Inter criptografado costuma extrair caracteres em linhas verticais — remonta datas/valores. */
+    static String reconstruirTextoPdfInter(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String norm = raw.replace('\r', '\n').replace('\u00A0', ' ');
+        norm = norm.replaceAll("(?m)(\\d{2})\\s+/\\s+(\\d{2})", "$1/$2");
+        norm = norm.replaceAll("(?m)(\\d{2})/(\\d{2})\\s+/\\s+(\\d{2,4})", "$1/$2/$3");
+        return juntarLinhasVerticaisPdf(norm);
+    }
+
+    private static String juntarLinhasVerticaisPdf(String norm) {
+        String[] linhas = norm.split("\n", -1);
+        StringBuilder sb = new StringBuilder();
+        StringBuilder run = new StringBuilder();
+        for (String linha : linhas) {
+            String t = linha.strip();
+            if (t.isEmpty()) {
+                flushRunVertical(sb, run);
+                sb.append('\n');
+                continue;
+            }
+            if (t.length() <= 3 && !t.contains(" ")) {
+                run.append(t);
+                continue;
+            }
+            flushRunVertical(sb, run);
+            sb.append(t).append('\n');
+        }
+        flushRunVertical(sb, run);
+        return sb.toString();
+    }
+
+    private static void flushRunVertical(StringBuilder sb, StringBuilder run) {
+        if (run.isEmpty()) {
+            return;
+        }
+        if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n') {
+            sb.append(' ');
+        }
+        sb.append(run).append('\n');
+        run.setLength(0);
+    }
+
+    /** Varre todo o trecho até «Próximas faturas» com regex tolerante. */
+    private static void extrairLancamentosScanAmplo(
+        String norm,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out,
+        Optional<BigDecimal> totalPdf
+    ) {
+        int fim = localizarIndiceProximas(norm);
+        if (fim < 0) {
+            fim = norm.length();
+        }
+        String scan = substringSeguro(norm, 0, fim);
+        extrairLinhasDoTrecho(scan, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO_AMPLA, true, totalPdf);
+        if (out.isEmpty()) {
+            String colapsado = scan.replaceAll("\\s+", " ");
+            extrairLinhasDoTrecho(colapsado, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO_AMPLA, false, totalPdf);
+        }
+        if (!out.isEmpty()) {
+            log.info("Inter scan amplo: {} lançamento(s) extraído(s).", out.size());
+        }
     }
 
     /** Fallback quando o recorte «Detalhamento» falha — usa trecho entre corte e próximas faturas. */
@@ -1247,7 +1336,15 @@ public final class InterFaturaTextoExtrator {
     }
 
     private static BigDecimal parseMoney(String raw) {
-        String n = raw.replace(".", "").replace(",", ".").trim();
+        if (raw == null || raw.isBlank()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        String n = raw.trim().replace(" ", "");
+        if (n.contains(",") && n.contains(".")) {
+            n = n.replace(".", "").replace(",", ".");
+        } else if (n.contains(",")) {
+            n = n.replace(",", ".");
+        }
         return new BigDecimal(n).setScale(2, RoundingMode.HALF_UP);
     }
 

@@ -198,6 +198,41 @@ class InterFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiTextoComCaracteresEmLinhasVerticais() {
+        String textoVertical = """
+            Banco Inter
+            Valor da fatura R$ 0,00
+            Fatura paga
+            Detalhamento da fatura
+            2
+            1
+            /
+            0
+            5
+            PARC SALDO TOT
+            273,14
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(textoVertical, 2026);
+        assertEquals(1, itens.size());
+        assertTrue(itens.get(0).getDescricao().contains("PARC SALDO"));
+        assertEquals(new BigDecimal("273.14"), itens.get(0).getValor());
+    }
+
+    @Test
+    void reconstruirTextoJuntaFragmentosDeData() {
+        String reconstruido = InterFaturaTextoExtrator.reconstruirTextoPdfInter("""
+            2
+            1
+            /
+            0
+            5
+            teste
+            """);
+        assertTrue(reconstruido.contains("21/05"));
+    }
+
+    @Test
     void extraiFaturaPagaDataDescricaoValorEmLinhasSeparadas() {
         String texto = """
             Banco Inter

@@ -210,9 +210,7 @@ public class FaturaPdfImportService {
             FaturaPdfLayoutSupport.detectarSituacaoLeituraFatura(textoPdf, valorTotalPdf);
         auditorias.add(META_SITUACAO_LEITURA_PREFIX + situacao.name());
         if (situacao == FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO) {
-            if (somaPosFinalizar.compareTo(BigDecimal.ZERO) > 0) {
-                valorTotal = somaPosFinalizar;
-            }
+            valorTotal = somaPosFinalizar.setScale(2, RoundingMode.HALF_UP);
             auditorias.add(
                 "Leitura automática: fatura já paga no banco (total zerado no PDF). "
                     + "O valor registrado será a soma dos lançamentos para histórico e pagamento no app.");
@@ -259,6 +257,7 @@ public class FaturaPdfImportService {
         if (BancoBrasilCatalog.bancosCorrespondem(banco, "inter")) {
             registrarDiagnosticoEArmazenamentoInter(auditorias, textoPdf, itens);
         }
+        validarExtracaoAntesPersistir(situacao, itens, valorTotal);
         imp.setAuditoriaJson(writeJson(auditorias));
         imp.setNovosDetectados((int) itens.stream().filter(ImportacaoFaturaItemDTO::isNovo).count());
         ImportacaoFaturaCartao salvo = importacaoRepository.save(imp);
@@ -384,10 +383,13 @@ public class FaturaPdfImportService {
         boolean faturaPagaNoPdf = situacaoPdf.orElse(FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.ABERTA)
             == FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO;
         if (faturaPagaNoPdf) {
-            BigDecimal somaPdf = somaValoresItens(itens);
-            if (somaPdf.compareTo(BigDecimal.ZERO) > 0) {
-                imp.setValorTotal(somaPdf);
+            BigDecimal somaPdf = somaValoresItens(itensContabilizados);
+            if (somaPdf.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException(
+                    "Fatura já paga no banco, mas não há lançamentos para registrar. "
+                        + "Descarte esta importação e reenvie o PDF do Inter com a senha correta.");
             }
+            imp.setValorTotal(somaPdf);
         } else if (nz(imp.getValorTotal()).compareTo(BigDecimal.ZERO) <= 0) {
             BigDecimal totalResolvido = resolverValorTotalParaFatura(imp, itensContabilizados);
             if (totalResolvido.compareTo(BigDecimal.ZERO) > 0) {
@@ -619,6 +621,17 @@ public class FaturaPdfImportService {
      * PDF de fatura já paga costuma vir com total R$ 0,00; o valor persistido deve ser a soma dos lançamentos.
      */
     static BigDecimal resolverValorTotalParaFatura(BigDecimal valorImportacao, List<ImportacaoFaturaItemDTO> itens) {
+        return resolverValorTotalParaFatura(valorImportacao, itens, false);
+    }
+
+    static BigDecimal resolverValorTotalParaFatura(
+        BigDecimal valorImportacao,
+        List<ImportacaoFaturaItemDTO> itens,
+        boolean faturaPagaNoPdf
+    ) {
+        if (faturaPagaNoPdf) {
+            return somaValoresItens(itens);
+        }
         BigDecimal doImp = valorImportacao != null ? valorImportacao : BigDecimal.ZERO;
         if (doImp.compareTo(BigDecimal.ZERO) > 0) {
             return doImp.setScale(2, RoundingMode.HALF_UP);
@@ -634,7 +647,43 @@ public class FaturaPdfImportService {
         if (itens == null || itens.isEmpty()) {
             itens = readItens(imp.getItensJson());
         }
-        return resolverValorTotalParaFatura(imp.getValorTotal(), itens);
+        boolean faturaPaga = lerSituacaoLeitura(readAuditorias(imp.getAuditoriaJson()))
+            .map(s -> s == FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO)
+            .orElse(false);
+        return resolverValorTotalParaFatura(imp.getValorTotal(), itens, faturaPaga);
+    }
+
+    private void validarExtracaoAntesPersistir(
+        FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf situacao,
+        List<ImportacaoFaturaItemDTO> itens,
+        BigDecimal valorTotal
+    ) {
+        boolean semItens = itens == null || itens.isEmpty();
+        boolean semTotal = valorTotal == null || valorTotal.compareTo(BigDecimal.ZERO) <= 0;
+        if (situacao == FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO && semItens) {
+            throw new IllegalArgumentException(
+                "Identifiquei fatura já paga no banco (total R$ 0,00 no PDF), "
+                    + "mas não extraí os lançamentos do período. "
+                    + "Confira a senha (6 primeiros dígitos do CPF, com zero à esquerda) e reenvie o PDF. "
+                    + "Se o erro persistir, baixe a fatura de novo pelo app do Inter.");
+        }
+        if (semItens && semTotal) {
+            throw new IllegalArgumentException(
+                "Não extraí lançamentos nem total desta fatura. Verifique se o PDF está legível. "
+                    + "Senha só é necessária em PDFs protegidos (ex.: Itaú, Inter).");
+        }
+        if (itens != null && !itens.isEmpty()) {
+            long comDescricaoValida = itens.stream()
+                .filter(i -> i.getDescricao() != null && i.getDescricao().trim().length() >= 3)
+                .filter(i -> !"R$".equalsIgnoreCase(i.getDescricao().trim()))
+                .filter(i -> !FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(i.getDescricao()))
+                .count();
+            if (comDescricaoValida == 0) {
+                throw new IllegalArgumentException(
+                    "Não consegui ler os lançamentos desta fatura — só identifiquei o total. "
+                        + "Se for Inter ou Itaú, reimporte informando os primeiros dígitos do CPF como senha do PDF.");
+            }
+        }
     }
 
     private String mensagemCartaoNaoEncontrado(Long usuarioId, String banco) {

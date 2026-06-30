@@ -35,6 +35,20 @@ class FaturaPdfImportServiceValorTest {
     }
 
     @Test
+    void usaSomaDosItensQuandoFaturaPagaNoPdf() {
+        ImportacaoFaturaItemDTO a = new ImportacaoFaturaItemDTO();
+        a.setValor(new BigDecimal("273.14"));
+        ImportacaoFaturaItemDTO b = new ImportacaoFaturaItemDTO();
+        b.setValor(new BigDecimal("18.00"));
+        BigDecimal total = FaturaPdfImportService.resolverValorTotalParaFatura(
+            BigDecimal.ZERO,
+            List.of(a, b),
+            true
+        );
+        assertEquals(new BigDecimal("291.14"), total);
+    }
+
+    @Test
     void retornaZeroSemItensETotalZerado() {
         assertEquals(BigDecimal.ZERO.setScale(2), FaturaPdfImportService.resolverValorTotalParaFatura(null, List.of()));
     }
