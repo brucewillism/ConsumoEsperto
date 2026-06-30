@@ -268,7 +268,7 @@
               <mat-icon>list</mat-icon>
               Transações
             </button>
-            <button *ngIf="fatura.status === 'PENDING' || fatura.status === 'OVERDUE' || fatura.status === 'PARTIAL'"
+            <button *ngIf="fatura.status === 'PENDING' || fatura.status === 'OVERDUE' || fatura.status === 'PARTIAL' || fatura.status === 'PREVISTA'"
                     mat-button color="accent" 
                     (click)="abrirPagamentoFatura(fatura)"
                     [disabled]="acaoEmAndamento">

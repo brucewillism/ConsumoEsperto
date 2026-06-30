@@ -335,20 +335,30 @@ public final class InterFaturaTextoExtrator {
 
     /** Remove simulações, encargos e duplicatas de «Próximas faturas» mesmo quando a IA as incluiu. */
     public static void podarEspurios(List<ImportacaoFaturaItemDTO> itens, String textoPdf) {
-        if (itens == null || itens.isEmpty() || textoPdf == null || textoPdf.isBlank()) {
+        if (itens == null || itens.isEmpty()) {
             return;
         }
         int antes = itens.size();
-        itens.removeIf(i -> deveIgnorarDescricao(i.getDescricao()) || pareceLinhaEncargoInter(i.getDescricao()));
-        itens.removeIf(i -> pareceLinhaSimulacaoTaxaInter(i.getDescricao(), i.getValor()));
-        itens.removeIf(i -> FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(i.getDescricao()));
-        removerItensSoEmSecoesPosteriores(itens, textoPdf);
-        colapsarMesmaDataValorParcelaMenor(itens);
-        deduplicarParcelasFuturasMesmoPlano(itens);
+        podarEspuriosPorDescricao(itens);
+        if (textoPdf != null && !textoPdf.isBlank()) {
+            removerItensSoEmSecoesPosteriores(itens, textoPdf);
+        }
         int removidos = antes - itens.size();
         if (removidos > 0) {
             log.info("Inter poda: {} lançamento(s) espúrio(s) removido(s).", removidos);
         }
+    }
+
+    /** Poda por descrição/valor — não depende do texto PDF (útil na confirmação). */
+    public static void podarEspuriosPorDescricao(List<ImportacaoFaturaItemDTO> itens) {
+        if (itens == null || itens.isEmpty()) {
+            return;
+        }
+        itens.removeIf(i -> deveIgnorarDescricao(i.getDescricao()) || pareceLinhaEncargoInter(i.getDescricao()));
+        itens.removeIf(i -> pareceLinhaSimulacaoTaxaInter(i.getDescricao(), i.getValor()));
+        itens.removeIf(i -> FaturaPdfLayoutSupport.pareceDescricaoGenericaIa(i.getDescricao()));
+        colapsarMesmaDataValorParcelaMenor(itens);
+        deduplicarParcelasFuturasMesmoPlano(itens);
     }
 
     public static List<ImportacaoFaturaItemDTO> extrairLancamentos(String textoPdf, int anoReferencia) {
@@ -1250,7 +1260,8 @@ public final class InterFaturaTextoExtrator {
             return "";
         }
         String d = raw.replaceAll("\\s+", " ").trim();
-        d = d.replaceAll("(?i)R\\$\\s*[\\d.,]+", "").trim();
+        // PDF vertical do Inter costuma colar «R $ 0 , 0 0» antes da descrição real.
+        d = d.replaceAll("(?i)R\\s*\\$\\s*[\\d\\s.,]+", "").trim();
         if (d.length() > 140) {
             d = d.substring(0, 140).trim();
         }
@@ -1263,6 +1274,7 @@ public final class InterFaturaTextoExtrator {
             return true;
         }
         return pareceLinhaEncargoInter(descricao)
+            || pareceLinhaResumoOuComprovanteInter(descricao)
             || n.contains("limite de credito")
             || n.contains("limite disponivel")
             || n.contains("opcoes de pagamento")
@@ -1283,6 +1295,32 @@ public final class InterFaturaTextoExtrator {
             || n.matches(".*\\d\\s*\\+\\s*\\d+x.*")
             || n.matches(".*\\d\\s+\\d+x.*")
             || n.matches(".*ate\\s+\\d+\\s*x.*");
+    }
+
+    /** Subtotais do resumo e comprovantes de pagamento da fatura (não são compras). */
+    static boolean pareceLinhaResumoOuComprovanteInter(String descricao) {
+        String n = FaturaPdfLayoutSupport.norm(descricao);
+        if (n.isBlank()) {
+            return false;
+        }
+        if (n.equals("despesas do mes")
+            || n.startsWith("despesas do mes ")
+            || n.contains("despesas do mes")) {
+            return true;
+        }
+        if (n.contains("despesas da fatura") && n.contains("cartao")) {
+            return true;
+        }
+        if (n.contains("pagamento on line") || n.contains("pagamento online")) {
+            return true;
+        }
+        if (n.contains("data movimentacao") || n.contains("beneficiario")) {
+            return true;
+        }
+        if (n.contains("historico de pagamento") || n.contains("comprovante de pagamento")) {
+            return true;
+        }
+        return n.contains("pagamento efetuado") && n.contains("cartao");
     }
 
     static boolean pareceLinhaEncargoInter(String descricao) {

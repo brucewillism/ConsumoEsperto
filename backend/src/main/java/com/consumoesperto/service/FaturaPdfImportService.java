@@ -371,6 +371,11 @@ public class FaturaPdfImportService {
         }
         if (BancoBrasilCatalog.bancosCorrespondem(imp.getBancoCartao(), "inter")) {
             reaplicarExtracaoInterAntesConfirmar(imp, itens);
+            InterFaturaTextoExtrator.podarEspuriosPorDescricao(itens);
+            String textoInter = lerTextoPdfInterDaAuditoria(imp.getAuditoriaJson());
+            if (!textoInter.isBlank()) {
+                InterFaturaTextoExtrator.podarEspurios(itens, textoInter);
+            }
         }
         log.info("Confirmando importação fatura importacaoId={} userId={} itens={} novos={}",
             importacaoId, usuarioId, itens.size(), imp.getNovosDetectados());

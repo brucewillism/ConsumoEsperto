@@ -272,7 +272,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   abrirPagamentoFatura(fatura: CreditCardInvoice): void {
-    if (fatura.status === 'PAID' || fatura.status === 'PREVISTA') {
+    if (fatura.status === 'PAID') {
       return;
     }
     const ref = this.dialog

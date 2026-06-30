@@ -64,6 +64,21 @@ class InterFaturaTextoExtratorTest {
     }
 
     @Test
+    void podaEspuriosPorDescricaoSemTextoPdf() {
+        List<ImportacaoFaturaItemDTO> itens = new ArrayList<>();
+        itens.add(item("R $ 0 , 0 0 DESPESAS DO MÊS", new BigDecimal("657.58"), LocalDate.of(2026, 7, 2), null, null));
+        itens.add(item(
+            "Despesas da fatura CARTÃO 2306****0982 Data Movimentação Beneficiário Valor 24 de jun. 2026 PAGAMENTO ON LINE",
+            new BigDecimal("33.89"), LocalDate.of(2026, 7, 2), null, null));
+        itens.add(item("PARC SALDO TOT", new BigDecimal("273.14"), LocalDate.of(2026, 5, 21), 5, 6));
+
+        InterFaturaTextoExtrator.podarEspuriosPorDescricao(itens);
+
+        assertEquals(1, itens.size());
+        assertTrue(itens.get(0).getDescricao().contains("PARC SALDO"));
+    }
+
+    @Test
     void ignoraSimulacaoParcelamento() {
         assertTrue(InterFaturaTextoExtrator.deveIgnorarDescricao("1 + 5x R$ 71,81"));
         assertTrue(InterFaturaTextoExtrator.deveIgnorarDescricao("Opções de pagamento"));
@@ -71,6 +86,36 @@ class InterFaturaTextoExtratorTest {
             "Total a pagar em encargos e IOF do rotativo"));
         assertTrue(InterFaturaTextoExtrator.pareceLinhaEncargoInter(
             "Valor total de juros e encargos"));
+    }
+
+    @Test
+    void ignoraResumoDespesasDoMesEComprovantePagamento() {
+        assertTrue(InterFaturaTextoExtrator.deveIgnorarDescricao("R $ 0 , 0 0 DESPESAS DO MÊS"));
+        assertTrue(InterFaturaTextoExtrator.deveIgnorarDescricao(
+            "Despesas da fatura CARTÃO 2306****0982 Data Movimentação Beneficiário Valor 24 de jun. 2026 PAGAMENTO ON LINE"));
+        assertTrue(InterFaturaTextoExtrator.pareceLinhaResumoOuComprovanteInter("DESPESAS DO MÊS"));
+    }
+
+    @Test
+    void extraiSomenteComprasIgnorandoResumoInter() {
+        String texto = """
+            Banco Inter
+            Valor da fatura R$ 0,00
+            Fatura paga
+            Data de vencimento 02/07/2026
+            Data de corte: 25/06/2026
+            Detalhamento da fatura
+            R $ 0 , 0 0 DESPESAS DO MÊS R$ 657,58
+            Despesas da fatura CARTÃO 2306****0982 Data Movimentação Beneficiário Valor
+            24 de jun. 2026 PAGAMENTO ON LINE - + R$ 33,89
+            21/05 PARC SALDO TOT - R DO BRASIL TECNO R$ 273,14
+            Parcela 05 de 06
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(1, itens.size());
+        assertTrue(itens.get(0).getDescricao().contains("PARC SALDO"));
+        assertEquals(new BigDecimal("273.14"), itens.get(0).getValor());
     }
 
     @Test
