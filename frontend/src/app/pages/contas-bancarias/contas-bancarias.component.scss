@@ -48,6 +48,57 @@
   flex-wrap: wrap;
 }
 
+.alerta-correcao {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+
+  mat-icon {
+    color: #fbbf24;
+    flex-shrink: 0;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: #fca5a5;
+    font-size: 14px;
+  }
+
+  button {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+}
+
+.hint-correcao {
+  margin: 0 0 16px;
+  color: #9ca3af;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.correcao-item {
+  margin-bottom: 12px;
+}
+
+.correcao-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.correcao-atual {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

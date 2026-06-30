@@ -1,6 +1,6 @@
 import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -33,6 +33,7 @@ import { switchMap } from 'rxjs/operators';
   imports: [
     CommonModule,
     ReactiveFormsModule,
+    FormsModule,
     MatCardModule,
     MatButtonModule,
     MatIconModule,
@@ -53,6 +54,7 @@ export class ContasBancariasComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   @ViewChild('formTpl') formTpl!: TemplateRef<unknown>;
+  @ViewChild('correcaoTpl') correcaoTpl!: TemplateRef<unknown>;
 
   contas: ContaBancaria[] = [];
   historicoTransferencias: TransferenciaConta[] = [];
@@ -61,6 +63,8 @@ export class ContasBancariasComponent implements OnInit {
   loadingHistorico = false;
   salvando = false;
   reconciliandoId: number | null = null;
+  salvandoCorrecao = false;
+  correcaoSaldos: { id: number; nome: string; saldoAtual: number; saldoApp: string }[] = [];
   tipos = TIPOS_CONTA;
   form!: FormGroup;
   editando: ContaBancaria | null = null;
@@ -273,6 +277,73 @@ export class ContasBancariasComponent implements OnInit {
       error: (err) => {
         this.reconciliandoId = null;
         this.snackBar.open(resolveHttpError(err, 'Erro ao recalcular saldo'), 'Fechar', { duration: 4000 });
+      },
+    });
+  }
+
+  temSaldoAnomalo(): boolean {
+    return this.contas.some((c) => this.contaPrecisaCorrecao(c));
+  }
+
+  contaPrecisaCorrecao(c: ContaBancaria): boolean {
+    const saldo = Number(c.saldoAtual) || 0;
+    const limite = Number(c.limiteChequeEspecial) || 0;
+    return limite > 0 && saldo < -(limite + 0.01);
+  }
+
+  abrirCorrecaoSaldos(): void {
+    this.correcaoSaldos = this.contas
+      .filter((c) => c.id != null)
+      .map((c) => ({
+        id: c.id!,
+        nome: c.nome,
+        saldoAtual: Number(c.saldoAtual) || 0,
+        saldoApp: '',
+      }));
+    openCeFormDialog(this.dialog, this.correcaoTpl, {
+      width: '520px',
+      panelClass: 'conta-correcao-dialog',
+      autoFocus: 'first-titled-element',
+    });
+  }
+
+  abrirCorrigirConta(conta: ContaBancaria): void {
+    if (!conta.id) {
+      return;
+    }
+    this.correcaoSaldos = [{
+      id: conta.id,
+      nome: conta.nome,
+      saldoAtual: Number(conta.saldoAtual) || 0,
+      saldoApp: '',
+    }];
+    openCeFormDialog(this.dialog, this.correcaoTpl, {
+      width: '480px',
+      panelClass: 'conta-correcao-dialog',
+      autoFocus: 'first-titled-element',
+    });
+  }
+
+  salvarCorrecaoSaldos(): void {
+    const itens = this.correcaoSaldos
+      .map((r) => ({ contaId: r.id, saldoAtual: parseValorBrasileiro(r.saldoApp) }))
+      .filter((r): r is { contaId: number; saldoAtual: number } => r.saldoAtual != null);
+    if (!itens.length) {
+      this.snackBar.open('Informe o saldo de ao menos uma conta (como aparece no app do banco)', 'Fechar', { duration: 4000 });
+      return;
+    }
+    this.salvandoCorrecao = true;
+    this.contaService.sincronizarSaldosLote(itens).subscribe({
+      next: () => {
+        this.salvandoCorrecao = false;
+        this.dialog.closeAll();
+        this.financaAlteracao.notificar('contas');
+        this.carregar({ silent: true });
+        this.snackBar.open('Saldos atualizados conforme o app bancário', 'Fechar', { duration: 3500 });
+      },
+      error: (err) => {
+        this.salvandoCorrecao = false;
+        this.snackBar.open(resolveHttpError(err, 'Erro ao corrigir saldos'), 'Fechar', { duration: 4000 });
       },
     });
   }

@@ -36,7 +36,12 @@ public class ContaBancariaController {
         try {
             salarioAutomaticoService.executarCatchUpSalario(currentUser.getId());
         } catch (Exception ignored) {
-            // catch-up best-effort — não reconcilia saldo automaticamente (evita sobrescrever movimentação)
+            // catch-up best-effort
+        }
+        try {
+            saldoService.repararSaldosPosBugReconciliacao(currentUser.getId());
+        } catch (Exception ignored) {
+            // reparo best-effort
         }
         return ResponseEntity.ok(contaBancariaService.listarPorUsuario(currentUser.getId(), apenasAtivas));
     }
@@ -89,6 +94,15 @@ public class ContaBancariaController {
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         return ResponseEntity.ok(saldoService.reconciliarSaldo(id, currentUser.getId()));
+    }
+
+    @PostMapping("/sincronizar-saldos")
+    @Operation(summary = "Informar saldos do app bancário em lote",
+        description = "Ajusta várias contas de uma vez — use após divergência de saldo.")
+    public ResponseEntity<java.util.List<SaldoService.ResultadoReconciliacaoSaldo>> sincronizarSaldosLote(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestBody java.util.List<SaldoService.SincronizarSaldoItem> body) {
+        return ResponseEntity.ok(saldoService.sincronizarSaldosReferenciaLote(currentUser.getId(), body));
     }
 
     @PostMapping("/{id}/sincronizar-saldo")

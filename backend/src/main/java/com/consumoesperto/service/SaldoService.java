@@ -508,6 +508,100 @@ public class SaldoService {
         return nz(entradas).subtract(nz(saidas));
     }
 
+    private BigDecimal somaImpactosTransacoes(Long contaId) {
+        BigDecimal soma = BigDecimal.ZERO;
+        for (Transacao t : transacaoRepository.findEfetivadasPorConta(contaId)) {
+            if (saldoMovimentacaoService.impactaSaldo(t)) {
+                soma = soma.add(saldoMovimentacaoService.deltaSaldo(t));
+            }
+        }
+        return nz(soma);
+    }
+
+    /**
+     * Reparo automático pós-bug de reconciliação (jun/2026): transferências omitidas ou saldo além do cheque especial.
+     */
+    @Transactional
+    public int repararSaldosPosBugReconciliacao(Long usuarioId) {
+        int reparadas = 0;
+        for (ContaBancaria conta : contaBancariaRepository.findByUsuarioIdAndAtivaTrueOrderByPadraoDescNomeAsc(usuarioId)) {
+            if (conta.getId() == null) {
+                continue;
+            }
+            if (tentarRepararContaPosBug(conta)) {
+                reparadas++;
+            }
+        }
+        if (reparadas > 0) {
+            log.warn("[SALDO] Reparo pós-bug user {} — {} conta(s) corrigida(s)", usuarioId, reparadas);
+        }
+        return reparadas;
+    }
+
+    @Transactional
+    public java.util.List<ResultadoReconciliacaoSaldo> sincronizarSaldosReferenciaLote(
+        Long usuarioId,
+        java.util.List<SincronizarSaldoItem> itens
+    ) {
+        if (itens == null || itens.isEmpty()) {
+            throw new IllegalArgumentException("Informe ao menos uma conta com saldo do app bancário.");
+        }
+        java.util.List<ResultadoReconciliacaoSaldo> resultados = new java.util.ArrayList<>();
+        for (SincronizarSaldoItem item : itens) {
+            if (item == null || item.contaId() == null || item.saldoAtual() == null) {
+                continue;
+            }
+            resultados.add(sincronizarSaldoReferenciaExterna(item.contaId(), usuarioId, item.saldoAtual()));
+        }
+        if (resultados.isEmpty()) {
+            throw new IllegalArgumentException("Nenhum saldo válido informado.");
+        }
+        return resultados;
+    }
+
+    public record SincronizarSaldoItem(Long contaId, BigDecimal saldoAtual) {}
+
+    private boolean tentarRepararContaPosBug(ContaBancaria conta) {
+        Long contaId = conta.getId();
+        BigDecimal soma = somaImpactosTransacoes(contaId);
+        BigDecimal liquidoTransferencias = somaTransferenciasLiquido(contaId);
+        BigDecimal atual = nz(conta.getSaldoAtual());
+        BigDecimal limite = nz(conta.getLimiteChequeEspecial());
+        BigDecimal ledgerAberturaZero = soma.add(liquidoTransferencias);
+
+        BigDecimal entradas = nz(transferenciaContaRepository.sumValorEntradaPorConta(contaId));
+        boolean saldoAlemCheque = limite.compareTo(BigDecimal.ZERO) > 0
+            && atual.compareTo(limite.negate()) < 0;
+        boolean ledgerRespeitaCheque = limite.compareTo(BigDecimal.ZERO) <= 0
+            || ledgerAberturaZero.compareTo(limite.negate()) >= 0;
+        boolean transferenciaNaoRefletida = entradas.compareTo(TOLERANCIA_RECONCILIACAO) > 0
+            && ledgerAberturaZero.subtract(atual).compareTo(new BigDecimal("1.00")) > 0;
+
+        if ((saldoAlemCheque && ledgerRespeitaCheque && ledgerAberturaZero.subtract(atual).abs().compareTo(TOLERANCIA_RECONCILIACAO) > 0)
+            || transferenciaNaoRefletida) {
+            aplicarReparoSaldoConta(conta, ledgerAberturaZero, soma, liquidoTransferencias);
+            return true;
+        }
+        return false;
+    }
+
+    private void aplicarReparoSaldoConta(
+        ContaBancaria conta,
+        BigDecimal novoSaldo,
+        BigDecimal somaImpactos,
+        BigDecimal liquidoTransferencias
+    ) {
+        BigDecimal saldo = nz(novoSaldo);
+        BigDecimal saldoInicial = saldo.subtract(somaImpactos).subtract(liquidoTransferencias);
+        conta.setSaldoInicial(saldoInicial);
+        contaBancariaRepository.save(conta);
+        saldoMovimentacaoService.definirSaldoReconciliado(conta.getId(), saldo);
+        log.info(
+            "[SALDO] Reparo conta {} — saldo {} (abertura {}, tx {}, transfer {})",
+            conta.getId(), saldo, saldoInicial, somaImpactos, liquidoTransferencias
+        );
+    }
+
     public void notificarAlteracaoSaldo(Long usuarioId) {
         if (usuarioId == null) {
             return;

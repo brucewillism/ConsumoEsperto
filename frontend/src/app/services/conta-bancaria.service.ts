@@ -67,4 +67,12 @@ export class ContaBancariaService {
       { headers: this.getHeaders() }
     );
   }
+
+  sincronizarSaldosLote(itens: { contaId: number; saldoAtual: number }[]): Observable<{ saldoAnterior: number; saldoCalculado: number; transacoesConsideradas: number }[]> {
+    return this.http.post<{ saldoAnterior: number; saldoCalculado: number; transacoesConsideradas: number }[]>(
+      `${this.API_URL}/sincronizar-saldos`,
+      itens,
+      { headers: this.getHeaders() }
+    );
+  }
 }

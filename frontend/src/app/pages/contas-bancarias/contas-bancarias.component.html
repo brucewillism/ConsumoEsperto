@@ -23,6 +23,15 @@
     </button>
   </div>
 
+  <section class="alerta-correcao" *ngIf="!loading && temSaldoAnomalo()">
+    <mat-icon>warning_amber</mat-icon>
+    <div>
+      <strong>Saldo inconsistente detectado</strong>
+      <p>Informe o saldo real de cada conta como aparece no app do banco para corrigir.</p>
+    </div>
+    <button mat-raised-button color="warn" (click)="abrirCorrecaoSaldos()">Corrigir saldos</button>
+  </section>
+
   <div class="empty" *ngIf="!loading && contas.length === 0">
     Nenhuma conta cadastrada. Crie a primeira carteira para vincular transações.
   </div>
@@ -61,6 +70,10 @@
         Sem cheque especial — clique em <strong>Editar</strong> e preencha o campo abaixo do nome da conta.
       </p>
       <div class="conta-actions">
+        <button mat-button color="accent" *ngIf="contaPrecisaCorrecao(c)" (click)="abrirCorrigirConta(c)">
+          <mat-icon>account_balance</mat-icon>
+          Saldo do app
+        </button>
         <button mat-button (click)="reconciliarSaldo(c)" [disabled]="reconciliandoId === c.id">
           <mat-icon>sync</mat-icon>
           {{ reconciliandoId === c.id ? 'Recalculando…' : 'Recalcular saldo' }}
@@ -159,5 +172,32 @@
       </button>
     </mat-dialog-actions>
     </form>
+  </div>
+</ng-template>
+
+<ng-template #correcaoTpl>
+  <div class="conta-dialog-wrap">
+    <h2 mat-dialog-title>Corrigir saldos</h2>
+    <mat-dialog-content class="ce-form-body">
+      <p class="hint-correcao">
+        Abra o app de cada banco e informe o saldo <strong>atual</strong> da conta corrente (não inclui limite do cartão).
+      </p>
+      <div class="correcao-item" *ngFor="let r of correcaoSaldos">
+        <div class="correcao-cabecalho">
+          <strong>{{ r.nome }}</strong>
+          <span class="correcao-atual">Agora: {{ brl(r.saldoAtual) }}</span>
+        </div>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
+          <mat-label>Saldo no app bancário</mat-label>
+          <input matInput type="text" inputmode="decimal" [(ngModel)]="r.saldoApp" [ngModelOptions]="{ standalone: true }" ceMask="decimal" placeholder="Ex.: 1.234,56">
+        </mat-form-field>
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close [disabled]="salvandoCorrecao">Cancelar</button>
+      <button mat-raised-button color="primary" (click)="salvarCorrecaoSaldos()" [disabled]="salvandoCorrecao">
+        {{ salvandoCorrecao ? 'Salvando…' : 'Aplicar saldos' }}
+      </button>
+    </mat-dialog-actions>
   </div>
 </ng-template>
