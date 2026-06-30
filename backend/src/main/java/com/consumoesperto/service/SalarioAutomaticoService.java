@@ -45,7 +45,7 @@ public class SalarioAutomaticoService {
     private final TransacaoService transacaoService;
     private final CategoriaRepository categoriaRepository;
     private final UsuarioRepository usuarioRepository;
-    private final SaldoService saldoService;
+    private final SaldoMovimentacaoService saldoMovimentacaoService;
     private final ObjectProvider<ContrachequeImportService> contrachequeImportProvider;
 
     /**
@@ -76,8 +76,11 @@ public class SalarioAutomaticoService {
         Integer ultimo = cfg.getUltimoMesLancamentoAuto();
         List<Transacao> existentes = buscarReceitasSalarioMes(uid, hoje);
         if (!existentes.isEmpty()) {
+            if (ultimo != null && ultimo == ym) {
+                return false;
+            }
             boolean efetivou = efetivarSaldoSalarioAgendado(cfg, uid, hoje);
-            if (ultimo == null || ultimo != ym) {
+            if (efetivou) {
                 cfg.setUltimoMesLancamentoAuto(ym);
                 rendaConfigRepository.save(cfg);
             }
@@ -161,7 +164,7 @@ public class SalarioAutomaticoService {
 
     /**
      * Receita confirmada antes do dia de pagamento fica com data futura e não credita a conta na criação.
-     * No dia do pagamento, reconcilia o saldo da conta destino em vez de duplicar o lançamento.
+     * No dia do pagamento, aplica o crédito pendente (uma vez por mês) em vez de reconciliar a conta inteira.
      */
     private boolean efetivarSaldoSalarioAgendado(RendaConfig cfg, Long usuarioId, LocalDate hoje) {
         List<Transacao> receitas = buscarReceitasSalarioMes(usuarioId, hoje);
@@ -173,6 +176,7 @@ public class SalarioAutomaticoService {
             log.warn("Salário automático: receita do mês sem conta destino userId={}", usuarioId);
             return false;
         }
+        boolean creditou = false;
         for (Transacao tx : receitas) {
             if (tx.getContaBancaria() == null) {
                 ContaBancaria conta = contaBancariaRepository.findById(contaId.get()).orElse(null);
@@ -181,17 +185,30 @@ public class SalarioAutomaticoService {
                     transacaoRepository.save(tx);
                 }
             }
+            if (!saldoMovimentacaoService.impactaSaldo(tx)) {
+                continue;
+            }
+            BigDecimal antes = contaBancariaRepository.findById(contaId.get())
+                .map(ContaBancaria::getSaldoAtual)
+                .orElse(BigDecimal.ZERO);
+            saldoMovimentacaoService.aplicarCriacao(tx);
+            BigDecimal depois = contaBancariaRepository.findById(contaId.get())
+                .map(ContaBancaria::getSaldoAtual)
+                .orElse(BigDecimal.ZERO);
+            if (depois.compareTo(antes) != 0) {
+                creditou = true;
+                log.info(
+                    "Salário automático: crédito userId={} txId={} valor={} contaId={} saldo {} → {}",
+                    usuarioId,
+                    tx.getId(),
+                    tx.getValor(),
+                    contaId.get(),
+                    antes,
+                    depois
+                );
+            }
         }
-        SaldoService.ResultadoReconciliacaoSaldo resultado = saldoService.reconciliarSaldo(contaId.get(), usuarioId);
-        log.info(
-            "Salário automático: saldo efetivado userId={} contaId={} saldo {} → {} ({} tx)",
-            usuarioId,
-            contaId.get(),
-            resultado.saldoAnterior(),
-            resultado.saldoCalculado(),
-            resultado.transacoesConsideradas()
-        );
-        return true;
+        return creditou;
     }
 
     private List<Transacao> buscarReceitasSalarioMes(Long usuarioId, LocalDate ref) {

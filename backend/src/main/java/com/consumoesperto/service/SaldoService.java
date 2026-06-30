@@ -436,21 +436,23 @@ public class SaldoService {
     public ResultadoReconciliacaoSaldo reconciliarSaldo(Long contaId, Long usuarioId) {
         ContaBancaria conta = contaBancariaService.buscarEntidade(contaId, usuarioId);
         BigDecimal saldoAnterior = nz(conta.getSaldoAtual());
-        BigDecimal saldoInicial = conta.getSaldoInicial();
-        if (saldoInicial == null) {
-            saldoInicial = saldoAnterior;
-            conta.setSaldoInicial(saldoInicial);
-            contaBancariaRepository.save(conta);
-        }
-        BigDecimal saldoCalculado = nz(saldoInicial);
+        List<Transacao> efetivadas = transacaoRepository.findEfetivadasPorConta(contaId);
+        BigDecimal somaImpactos = BigDecimal.ZERO;
         int consideradas = 0;
-        for (Transacao t : transacaoRepository.findEfetivadasPorConta(contaId)) {
+        for (Transacao t : efetivadas) {
             if (saldoMovimentacaoService.impactaSaldo(t)) {
-                saldoCalculado = saldoCalculado.add(saldoMovimentacaoService.deltaSaldo(t));
+                somaImpactos = somaImpactos.add(saldoMovimentacaoService.deltaSaldo(t));
                 consideradas++;
             }
         }
-        saldoCalculado = saldoCalculado.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal saldoInicial = conta.getSaldoInicial();
+        if (saldoInicial == null) {
+            // Conta já movimentada incrementalmente: deriva abertura para não somar transações em cima do saldo atual.
+            saldoInicial = saldoAnterior.subtract(somaImpactos);
+            conta.setSaldoInicial(saldoInicial);
+            contaBancariaRepository.save(conta);
+        }
+        BigDecimal saldoCalculado = nz(saldoInicial).add(somaImpactos).setScale(2, RoundingMode.HALF_UP);
         saldoMovimentacaoService.definirSaldoReconciliado(contaId, saldoCalculado);
         log.info("[SALDO] Reconciliação conta {} user {} — {} → {} ({} tx)",
             contaId, usuarioId, saldoAnterior, saldoCalculado, consideradas);
