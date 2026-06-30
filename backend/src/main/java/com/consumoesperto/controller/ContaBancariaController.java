@@ -5,6 +5,7 @@ import com.consumoesperto.dto.ContaBancariaUpdateDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.ContaBancariaService;
 import com.consumoesperto.service.SaldoService;
+import com.consumoesperto.service.SalarioAutomaticoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -25,12 +26,18 @@ public class ContaBancariaController {
 
     private final ContaBancariaService contaBancariaService;
     private final SaldoService saldoService;
+    private final SalarioAutomaticoService salarioAutomaticoService;
 
     @GetMapping
     @Operation(summary = "Listar contas do usuário")
     public ResponseEntity<List<ContaBancariaDTO>> listar(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @RequestParam(defaultValue = "true") boolean apenasAtivas) {
+        try {
+            salarioAutomaticoService.tentarLancarSalarioMesAtual(currentUser.getId());
+        } catch (Exception ignored) {
+            // catch-up best-effort
+        }
         return ResponseEntity.ok(contaBancariaService.listarPorUsuario(currentUser.getId(), apenasAtivas));
     }
 

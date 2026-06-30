@@ -5,10 +5,12 @@ import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.RendaConfig;
 import com.consumoesperto.model.TipoConfiguracaoRenda;
+import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.RendaConfigRepository;
+import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.util.ApelidoNormalizador;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.ZoneId;
+import java.util.List;
 
 /**
  * Lança receita confirmada de salário quando a opção automática está activa
@@ -37,9 +41,11 @@ public class SalarioAutomaticoService {
 
     private final RendaConfigRepository rendaConfigRepository;
     private final ContaBancariaRepository contaBancariaRepository;
+    private final TransacaoRepository transacaoRepository;
     private final TransacaoService transacaoService;
     private final CategoriaRepository categoriaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final SaldoService saldoService;
     private final ObjectProvider<ContrachequeImportService> contrachequeImportProvider;
 
     /**
@@ -62,15 +68,25 @@ public class SalarioAutomaticoService {
         if (cfg.getSalarioLiquido() == null || cfg.getSalarioLiquido().compareTo(BigDecimal.ZERO) <= 0) {
             return false;
         }
-        Integer ultimo = cfg.getUltimoMesLancamentoAuto();
-        if (ultimo != null && ultimo == ym) {
-            return false;
-        }
         Usuario u = cfg.getUsuario();
         if (u == null) {
             return false;
         }
         Long uid = u.getId();
+        Integer ultimo = cfg.getUltimoMesLancamentoAuto();
+        List<Transacao> existentes = buscarReceitasSalarioMes(uid, hoje);
+        if (!existentes.isEmpty()) {
+            boolean efetivou = efetivarSaldoSalarioAgendado(cfg, uid, hoje);
+            if (ultimo == null || ultimo != ym) {
+                cfg.setUltimoMesLancamentoAuto(ym);
+                rendaConfigRepository.save(cfg);
+            }
+            return efetivou;
+        }
+        if (ultimo != null && ultimo == ym) {
+            cfg.setUltimoMesLancamentoAuto(null);
+            rendaConfigRepository.save(cfg);
+        }
         int diaEfetivo = Math.min(diaPagamento, hoje.lengthOfMonth());
         LocalDateTime dataLancamento = hoje.withDayOfMonth(diaEfetivo).atStartOfDay();
 
@@ -141,6 +157,65 @@ public class SalarioAutomaticoService {
         return rendaConfigRepository.findByUsuarioId(usuarioId)
             .map(this::tentarLancarSalarioMesAtual)
             .orElse(false);
+    }
+
+    /**
+     * Receita confirmada antes do dia de pagamento fica com data futura e não credita a conta na criação.
+     * No dia do pagamento, reconcilia o saldo da conta destino em vez de duplicar o lançamento.
+     */
+    private boolean efetivarSaldoSalarioAgendado(RendaConfig cfg, Long usuarioId, LocalDate hoje) {
+        List<Transacao> receitas = buscarReceitasSalarioMes(usuarioId, hoje);
+        if (receitas.isEmpty()) {
+            return false;
+        }
+        java.util.Optional<Long> contaId = resolverContaDestinoSalario(cfg, usuarioId);
+        if (contaId.isEmpty()) {
+            log.warn("Salário automático: receita do mês sem conta destino userId={}", usuarioId);
+            return false;
+        }
+        for (Transacao tx : receitas) {
+            if (tx.getContaBancaria() == null) {
+                ContaBancaria conta = contaBancariaRepository.findById(contaId.get()).orElse(null);
+                if (conta != null) {
+                    tx.setContaBancaria(conta);
+                    transacaoRepository.save(tx);
+                }
+            }
+        }
+        SaldoService.ResultadoReconciliacaoSaldo resultado = saldoService.reconciliarSaldo(contaId.get(), usuarioId);
+        log.info(
+            "Salário automático: saldo efetivado userId={} contaId={} saldo {} → {} ({} tx)",
+            usuarioId,
+            contaId.get(),
+            resultado.saldoAnterior(),
+            resultado.saldoCalculado(),
+            resultado.transacoesConsideradas()
+        );
+        return true;
+    }
+
+    private List<Transacao> buscarReceitasSalarioMes(Long usuarioId, LocalDate ref) {
+        YearMonth ym = YearMonth.from(ref);
+        LocalDateTime inicio = ym.atDay(1).atStartOfDay();
+        LocalDateTime fim = ym.atEndOfMonth().atTime(23, 59, 59);
+        return transacaoRepository.findByUsuarioIdAndDataTransacaoBetween(usuarioId, inicio, fim).stream()
+            .filter(t -> t.getTipoTransacao() == Transacao.TipoTransacao.RECEITA)
+            .filter(t -> t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA)
+            .filter(t -> t.getOrigemFiscal() == null)
+            .filter(this::pareceReceitaSalario)
+            .toList();
+    }
+
+    private boolean pareceReceitaSalario(Transacao t) {
+        String desc = t.getDescricao() != null ? t.getDescricao().toLowerCase() : "";
+        if (desc.contains("salário") || desc.contains("salario")) {
+            return true;
+        }
+        if (t.getCategoria() != null && t.getCategoria().getNome() != null) {
+            String cat = t.getCategoria().getNome().toLowerCase();
+            return cat.contains("salário") || cat.contains("salario");
+        }
+        return false;
     }
 
     private Long resolveCategoriaSalario(Long usuarioId) {

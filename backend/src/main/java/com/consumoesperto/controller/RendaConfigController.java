@@ -6,6 +6,7 @@ import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.ContrachequeImportService;
 import com.consumoesperto.service.RendaConfigService;
+import com.consumoesperto.service.SalarioAutomaticoService;
 import com.consumoesperto.service.WhatsAppCommandService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,9 +24,15 @@ public class RendaConfigController {
     private final RendaConfigService rendaConfigService;
     private final ContrachequeImportService contrachequeImportService;
     private final WhatsAppCommandService whatsAppCommandService;
+    private final SalarioAutomaticoService salarioAutomaticoService;
 
     @GetMapping
     public ResponseEntity<RendaConfigDTO> obter(@AuthenticationPrincipal UserPrincipal currentUser) {
+        try {
+            salarioAutomaticoService.tentarLancarSalarioMesAtual(currentUser.getId());
+        } catch (Exception ignored) {
+            // catch-up best-effort — não bloqueia leitura da configuração
+        }
         return ResponseEntity.ok(
             rendaConfigService.obterDto(currentUser.getId()).orElse(RendaConfigDTO.vazio())
         );

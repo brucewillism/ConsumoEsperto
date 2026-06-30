@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.ZoneId;
 
 /**
  * Atualiza {@link ContaBancaria#getSaldoAtual()} conforme o ciclo de vida das transações confirmadas.
@@ -22,6 +23,7 @@ import java.time.LocalDate;
 public class SaldoMovimentacaoService {
 
     private static final int SCALE = 2;
+    private static final ZoneId ZONA_BR = ZoneId.of("America/Sao_Paulo");
 
     private final ContaBancariaRepository contaBancariaRepository;
 
@@ -69,7 +71,7 @@ public class SaldoMovimentacaoService {
         if (snap.statusConferencia() != Transacao.StatusConferencia.CONFIRMADA) {
             return false;
         }
-        if (snap.dataTransacao() != null && snap.dataTransacao().isAfter(LocalDate.now())) {
+        if (snap.dataTransacao() != null && snap.dataTransacao().isAfter(LocalDate.now(ZONA_BR))) {
             return false;
         }
         if (snap.faturaId() != null

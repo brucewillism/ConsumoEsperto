@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -497,7 +498,11 @@ public class ContrachequeImportService {
         }
 
         if (competenciaIgualMesAtual) {
-            rendaConfigService.marcarMesSalarialAutomaticoLancado(usuarioId, mesCivilAtual);
+            LocalDate hoje = LocalDate.now(ZONA_BR);
+            int diaEfetivoMesAtual = Math.min(diaPagamento, mesCivilAtual.lengthOfMonth());
+            if (hoje.getDayOfMonth() >= diaEfetivoMesAtual) {
+                rendaConfigService.marcarMesSalarialAutomaticoLancado(usuarioId, mesCivilAtual);
+            }
         }
 
         c.setStatus(ContrachequeImportado.Status.CONFIRMADO);
