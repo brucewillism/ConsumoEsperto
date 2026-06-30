@@ -148,6 +148,19 @@ public class ContrachequeImportService {
     }
 
     /**
+     * Líquido do holerite confirmado na competência (fonte preferida para o salário automático).
+     */
+    @Transactional(readOnly = true)
+    public Optional<BigDecimal> obterLiquidoConfirmadoCompetencia(Long usuarioId, int mes, int ano) {
+        return contrachequeRepository.findByUsuarioIdOrderByAnoDescMesDescDataCriacaoDesc(usuarioId).stream()
+            .filter(c -> c.getStatus() == ContrachequeImportado.Status.CONFIRMADO)
+            .filter(c -> c.getMes() != null && c.getAno() != null && c.getMes() == mes && c.getAno() == ano)
+            .map(ContrachequeImportado::getSalarioLiquido)
+            .filter(v -> v != null && v.compareTo(BigDecimal.ZERO) > 0)
+            .findFirst();
+    }
+
+    /**
      * Garante cartão de contracheque no mês civil corrente (salário automático), espelhando o template confirmado.
      */
     @Transactional
@@ -472,7 +485,15 @@ public class ContrachequeImportService {
             .map(RendaConfigDTO::getDiaPagamento)
             .filter(d -> d != null && d >= 1 && d <= 31)
             .orElse(SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO);
-        rendaConfigService.salvar(usuarioId, c.getSalarioBruto(), descontos, diaPagamento, Boolean.TRUE);
+        rendaConfigService.salvar(
+            usuarioId,
+            c.getSalarioBruto(),
+            descontos,
+            diaPagamento,
+            Boolean.TRUE,
+            null,
+            c.getSalarioLiquido()
+        );
 
         YearMonth competencia = YearMonth.of(c.getAno(), c.getMes());
         YearMonth mesCivilAtual = YearMonth.now(ZONA_BR);

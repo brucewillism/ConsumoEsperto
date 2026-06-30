@@ -181,6 +181,19 @@ public class RendaConfigService {
         Boolean receitaAutomaticaAtiva,
         Long contaBancariaId
     ) {
+        return salvar(usuarioId, salarioBruto, descontos, diaPagamento, receitaAutomaticaAtiva, contaBancariaId, null);
+    }
+
+    @Transactional
+    public RendaConfigDTO salvar(
+        Long usuarioId,
+        BigDecimal salarioBruto,
+        List<DescontoFixoDTO> descontos,
+        Integer diaPagamento,
+        Boolean receitaAutomaticaAtiva,
+        Long contaBancariaId,
+        BigDecimal salarioLiquidoDocumentado
+    ) {
         if (salarioBruto == null || salarioBruto.compareTo(BigDecimal.ZERO) < 0) {
             salarioBruto = BigDecimal.ZERO;
         }
@@ -201,7 +214,11 @@ public class RendaConfigService {
         BigDecimal totalDesc = limpos.stream()
             .map(DescontoFixoDTO::getValor)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal liquido = salarioBruto.subtract(totalDesc).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal liquidoCalculado = salarioBruto.subtract(totalDesc).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal liquido = salarioLiquidoDocumentado != null
+            && salarioLiquidoDocumentado.compareTo(BigDecimal.ZERO) > 0
+            ? salarioLiquidoDocumentado.setScale(2, RoundingMode.HALF_UP)
+            : liquidoCalculado;
 
         RendaConfig cfg = rendaConfigRepository.findByUsuarioId(usuarioId).orElseGet(RendaConfig::new);
         if (cfg.getId() == null) {

@@ -65,14 +65,16 @@ public class SalarioAutomaticoService {
         if (diaPagamento > hoje.getDayOfMonth()) {
             return false;
         }
-        if (cfg.getSalarioLiquido() == null || cfg.getSalarioLiquido().compareTo(BigDecimal.ZERO) <= 0) {
-            return false;
-        }
         Usuario u = cfg.getUsuario();
         if (u == null) {
             return false;
         }
         Long uid = u.getId();
+        BigDecimal valorReferencia = resolverValorSalarioMes(cfg, uid, YearMonth.from(hoje));
+        if (valorReferencia.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        podarSalariosDuplicadosMes(uid, hoje);
         Integer ultimo = cfg.getUltimoMesLancamentoAuto();
         List<Transacao> existentes = buscarReceitasSalarioMes(uid, hoje);
         if (!existentes.isEmpty()) {
@@ -92,10 +94,11 @@ public class SalarioAutomaticoService {
         }
         int diaEfetivo = Math.min(diaPagamento, hoje.lengthOfMonth());
         LocalDateTime dataLancamento = hoje.withDayOfMonth(diaEfetivo).atStartOfDay();
+        BigDecimal valorSalario = resolverValorSalarioMes(cfg, uid, YearMonth.from(hoje));
 
         TransacaoDTO dto = new TransacaoDTO();
         dto.setDescricao("Salário líquido (automático)");
-        dto.setValor(cfg.getSalarioLiquido());
+        dto.setValor(valorSalario);
         dto.setTipoTransacao(TransacaoDTO.TipoTransacao.RECEITA);
         dto.setCategoriaId(resolveCategoriaSalario(uid));
         dto.setDataTransacao(dataLancamento);
@@ -113,7 +116,7 @@ public class SalarioAutomaticoService {
         log.info(
             "Salário automático lançado userId={} valor={} ym={} data={} contaId={}",
             uid,
-            cfg.getSalarioLiquido(),
+            valorSalario,
             ym,
             dataLancamento,
             dto.getContaBancariaId()
@@ -176,39 +179,89 @@ public class SalarioAutomaticoService {
             log.warn("Salário automático: receita do mês sem conta destino userId={}", usuarioId);
             return false;
         }
-        boolean creditou = false;
-        for (Transacao tx : receitas) {
-            if (tx.getContaBancaria() == null) {
-                ContaBancaria conta = contaBancariaRepository.findById(contaId.get()).orElse(null);
-                if (conta != null) {
-                    tx.setContaBancaria(conta);
-                    transacaoRepository.save(tx);
-                }
-            }
-            if (!saldoMovimentacaoService.impactaSaldo(tx)) {
-                continue;
-            }
-            BigDecimal antes = contaBancariaRepository.findById(contaId.get())
-                .map(ContaBancaria::getSaldoAtual)
-                .orElse(BigDecimal.ZERO);
-            saldoMovimentacaoService.aplicarCriacao(tx);
-            BigDecimal depois = contaBancariaRepository.findById(contaId.get())
-                .map(ContaBancaria::getSaldoAtual)
-                .orElse(BigDecimal.ZERO);
-            if (depois.compareTo(antes) != 0) {
-                creditou = true;
-                log.info(
-                    "Salário automático: crédito userId={} txId={} valor={} contaId={} saldo {} → {}",
-                    usuarioId,
-                    tx.getId(),
-                    tx.getValor(),
-                    contaId.get(),
-                    antes,
-                    depois
-                );
+        Transacao canonica = escolherReceitaSalarioCanonica(receitas);
+        if (canonica.getContaBancaria() == null) {
+            ContaBancaria conta = contaBancariaRepository.findById(contaId.get()).orElse(null);
+            if (conta != null) {
+                canonica.setContaBancaria(conta);
+                transacaoRepository.save(canonica);
             }
         }
-        return creditou;
+        if (!saldoMovimentacaoService.impactaSaldo(canonica)) {
+            return false;
+        }
+        BigDecimal antes = contaBancariaRepository.findById(contaId.get())
+            .map(ContaBancaria::getSaldoAtual)
+            .orElse(BigDecimal.ZERO);
+        saldoMovimentacaoService.aplicarCriacao(canonica);
+        BigDecimal depois = contaBancariaRepository.findById(contaId.get())
+            .map(ContaBancaria::getSaldoAtual)
+            .orElse(BigDecimal.ZERO);
+        if (depois.compareTo(antes) == 0) {
+            return false;
+        }
+        log.info(
+            "Salário automático: crédito userId={} txId={} valor={} contaId={} saldo {} → {}",
+            usuarioId,
+            canonica.getId(),
+            canonica.getValor(),
+            contaId.get(),
+            antes,
+            depois
+        );
+        return true;
+    }
+
+    /**
+     * Remove lançamentos salariais duplicados no mês (ex.: contracheque + automático) e estorna o saldo do extra.
+     */
+    private void podarSalariosDuplicadosMes(Long usuarioId, LocalDate ref) {
+        List<Transacao> receitas = buscarReceitasSalarioMes(usuarioId, ref);
+        if (receitas.size() <= 1) {
+            return;
+        }
+        Transacao canonica = escolherReceitaSalarioCanonica(receitas);
+        for (Transacao tx : receitas) {
+            if (canonica.getId() != null && canonica.getId().equals(tx.getId())) {
+                continue;
+            }
+            log.warn(
+                "Salário duplicado removido userId={} txId={} desc={} valor={} (mantido txId={})",
+                usuarioId,
+                tx.getId(),
+                tx.getDescricao(),
+                tx.getValor(),
+                canonica.getId()
+            );
+            transacaoService.deletarTransacao(tx.getId(), usuarioId);
+        }
+    }
+
+    private Transacao escolherReceitaSalarioCanonica(List<Transacao> receitas) {
+        return receitas.stream()
+            .sorted((a, b) -> {
+                boolean autoA = pareceSalarioAutomatico(a);
+                boolean autoB = pareceSalarioAutomatico(b);
+                if (autoA != autoB) {
+                    return autoA ? 1 : -1;
+                }
+                long idA = a.getId() != null ? a.getId() : Long.MAX_VALUE;
+                long idB = b.getId() != null ? b.getId() : Long.MAX_VALUE;
+                return Long.compare(idA, idB);
+            })
+            .findFirst()
+            .orElse(receitas.get(0));
+    }
+
+    private boolean pareceSalarioAutomatico(Transacao t) {
+        String desc = t.getDescricao() != null ? t.getDescricao().toLowerCase() : "";
+        return desc.contains("automático") || desc.contains("automatico");
+    }
+
+    private BigDecimal resolverValorSalarioMes(RendaConfig cfg, Long usuarioId, YearMonth ym) {
+        return contrachequeImportProvider.getObject()
+            .obterLiquidoConfirmadoCompetencia(usuarioId, ym.getMonthValue(), ym.getYear())
+            .orElseGet(() -> cfg.getSalarioLiquido() != null ? cfg.getSalarioLiquido() : BigDecimal.ZERO);
     }
 
     private List<Transacao> buscarReceitasSalarioMes(Long usuarioId, LocalDate ref) {
