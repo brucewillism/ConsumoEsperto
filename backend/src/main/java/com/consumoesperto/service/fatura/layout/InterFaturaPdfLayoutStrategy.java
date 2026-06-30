@@ -51,6 +51,8 @@ public class InterFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
             + "(compras/parcelas do período até a data de corte). "
             + "NUNCA inclua «Próximas faturas» (parcelas futuras do mesmo plano) nem «Opções de pagamento» "
             + "(simulações tipo '1 + 5x R$ 71,81', CET, IOF rotativo, valor financiado). "
+            + "Ignore a linha-resumo «Despesas do mês» e comprovantes «Pagamento on line» — não são compras. "
+            + "Se a fatura já estiver paga (Valor da fatura R$ 0,00), extraia cada compra individual do detalhamento. "
             + "Parcela no texto: 'Parcela 04 de 06' = parcelaAtual 4, totalParcelas 6. "
             + "valorTotal = 'Valor da fatura' do resumo. PDF protegido: senha = 6 primeiros dígitos do CPF.";
     }

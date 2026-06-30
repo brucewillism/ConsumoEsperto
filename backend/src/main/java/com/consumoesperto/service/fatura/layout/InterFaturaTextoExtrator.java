@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -62,6 +63,10 @@ public final class InterFaturaTextoExtrator {
     );
     private static final Pattern DATA_VENCIMENTO = Pattern.compile(
         "(?i)data de vencimento:?\\s*(\\d{2})/(\\d{2})/(\\d{4})"
+    );
+    /** Subtotal «Despesas do mês» no resumo da fatura paga. */
+    private static final Pattern SUBTOTAL_DESPESAS_MES = Pattern.compile(
+        "(?is)despesas do m[eê]s[^\\d]{0,120}(?:R\\$\\s*)?(\\d{1,3}(?:[.\\s]\\d{3})*,\\d{2})"
     );
     private static final String[] MARCADORES_INICIO_TRANSACOES = {
         "detalhamento da fatura",
@@ -439,6 +444,7 @@ public final class InterFaturaTextoExtrator {
         }
         removerLinhasResumoFatura(out, totalPdf.orElse(null), vencimento);
         podarEspurios(out, textoOriginal);
+        aplicarFallbackFaturaPagaSemDetalhe(textoOriginal, norm, ano, vencimento, dataCorte, out);
     }
 
     /** PDF Inter criptografado costuma extrair caracteres em linhas verticais — remonta datas/valores. */
@@ -1581,7 +1587,95 @@ public final class InterFaturaTextoExtrator {
         if (texto == null || needle == null) {
             return -1;
         }
-        return texto.toLowerCase(Locale.ROOT).indexOf(needle.toLowerCase(Locale.ROOT));
+        return dobrarAcentos(texto).indexOf(dobrarAcentos(needle));
+    }
+
+    /** Igualar «mês»/«mes» sem alterar o tamanho do texto (índices para substring). */
+    private static String dobrarAcentos(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return Normalizer.normalize(raw, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Fatura paga no banco: quando o PDF só traz subtotal «Despesas do mês» (sem linhas dd/mm),
+     * registra um lançamento consolidado em vez de falhar com 0 itens.
+     */
+    private static void aplicarFallbackFaturaPagaSemDetalhe(
+        String textoOriginal,
+        String norm,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out
+    ) {
+        if (out != null && !out.isEmpty()) {
+            return;
+        }
+        if (!FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoOriginal)) {
+            return;
+        }
+        Optional<BigDecimal> subtotal = extrairSubtotalDespesasDoMes(textoOriginal);
+        if (subtotal.isEmpty()) {
+            subtotal = extrairSubtotalDespesasDoMes(norm);
+        }
+        if (subtotal.isEmpty()) {
+            subtotal = extrairSubtotalDespesasDoMes(reconstruirTextoPdfInter(textoOriginal));
+        }
+        if (subtotal.isEmpty() || subtotal.get().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        LocalDate data = dataCorte.orElse(vencimento.orElse(null));
+        if (data == null) {
+            data = LocalDate.of(ano > 0 ? ano : YearMonth.now().getYear(), 6, 1);
+        }
+        ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
+        item.setDescricao("Despesas do cartão no período");
+        item.setValor(subtotal.get());
+        item.setData(data);
+        out.add(item);
+        log.info("Inter fallback fatura paga: subtotal Despesas do mês R$ {} (detalhe indisponível no PDF).",
+            subtotal.get());
+    }
+
+    static Optional<BigDecimal> extrairSubtotalDespesasDoMes(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return Optional.empty();
+        }
+        Matcher inline = SUBTOTAL_DESPESAS_MES.matcher(texto);
+        if (inline.find()) {
+            return Optional.of(parseMoney(inline.group(1)));
+        }
+        String[] linhas = texto.replace('\r', '\n').split("\n", -1);
+        for (int i = 0; i < linhas.length; i++) {
+            String folded = dobrarAcentos(linhas[i]);
+            if (!folded.contains("despesas do mes")) {
+                continue;
+            }
+            for (int j = i; j < Math.min(i + 8, linhas.length); j++) {
+                String cand = linhas[j].trim();
+                Matcher valorLinha = LINHA_APENAS_VALOR.matcher(cand);
+                if (valorLinha.matches()) {
+                    BigDecimal v = parseMoney(valorLinha.group(1));
+                    if (v.compareTo(BigDecimal.ZERO) > 0) {
+                        return Optional.of(v);
+                    }
+                }
+                Matcher qualquerValor = Pattern.compile(
+                    "(?:R\\$\\s*)?(\\d{1,3}(?:[.\\s]\\d{3})*,\\d{2})"
+                ).matcher(cand);
+                while (qualquerValor.find()) {
+                    BigDecimal v = parseMoney(qualquerValor.group(1));
+                    if (v.compareTo(new BigDecimal("1.00")) >= 0) {
+                        return Optional.of(v);
+                    }
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     /** Trecho compacto para reprocessar lançamentos na confirmação. */
