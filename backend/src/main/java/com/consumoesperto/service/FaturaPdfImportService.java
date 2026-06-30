@@ -23,6 +23,7 @@ import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutDetector;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutSupport;
 import com.consumoesperto.service.fatura.layout.GenericoFaturaPdfLayoutStrategy;
+import com.consumoesperto.service.fatura.layout.InterFaturaTextoExtrator;
 import com.consumoesperto.service.fatura.layout.ItauFaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.ItauFaturaTextoExtrator;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
@@ -67,6 +68,7 @@ public class FaturaPdfImportService {
     static final String META_PROJECAO_FATURA_ITAU_PREFIX = "__PROJECAO_FATURA_ITAU__:";
     static final String META_TRECHO_PROXIMAS_ITAU_PREFIX = "__TRECHO_PROXIMAS_ITAU__:";
     static final String META_TEXTO_PDF_ITAU_PREFIX = "__TEXTO_PDF_ITAU__:";
+    static final String META_TEXTO_PDF_INTER_PREFIX = "__TEXTO_PDF_INTER__:";
     static final String META_SITUACAO_LEITURA_PREFIX = "__SITUACAO_LEITURA__:";
 
     public record ResultadoConfirmacaoFatura(int criadas, int conciliadas, int futuras) {
@@ -102,6 +104,7 @@ public class FaturaPdfImportService {
             && !linhaAuditoria.startsWith(META_PROJECAO_FATURA_ITAU_PREFIX)
             && !linhaAuditoria.startsWith(META_TRECHO_PROXIMAS_ITAU_PREFIX)
             && !linhaAuditoria.startsWith(META_TEXTO_PDF_ITAU_PREFIX)
+            && !linhaAuditoria.startsWith(META_TEXTO_PDF_INTER_PREFIX)
             && !linhaAuditoria.startsWith(META_SITUACAO_LEITURA_PREFIX)
             && !linhaAuditoria.startsWith(SaldoAnteriorFaturaBbSupport.META_SALDO_ANTERIOR_BB_PREFIX);
     }
@@ -253,6 +256,9 @@ public class FaturaPdfImportService {
         if (BancoBrasilCatalog.bancosCorrespondem(banco, "itau")) {
             registrarDiagnosticoEArmazenamentoItau(auditorias, textoPdf, anoReferencia, itens);
         }
+        if (BancoBrasilCatalog.bancosCorrespondem(banco, "inter")) {
+            registrarDiagnosticoEArmazenamentoInter(auditorias, textoPdf, itens);
+        }
         imp.setAuditoriaJson(writeJson(auditorias));
         imp.setNovosDetectados((int) itens.stream().filter(ImportacaoFaturaItemDTO::isNovo).count());
         ImportacaoFaturaCartao salvo = importacaoRepository.save(imp);
@@ -363,6 +369,9 @@ public class FaturaPdfImportService {
         List<ImportacaoFaturaItemDTO> itens = readItens(imp.getItensJson());
         if (BancoBrasilCatalog.bancosCorrespondem(imp.getBancoCartao(), "itau")) {
             reaplicarExtracaoItauAntesConfirmar(imp, itens);
+        }
+        if (BancoBrasilCatalog.bancosCorrespondem(imp.getBancoCartao(), "inter")) {
+            reaplicarExtracaoInterAntesConfirmar(imp, itens);
         }
         log.info("Confirmando importação fatura importacaoId={} userId={} itens={} novos={}",
             importacaoId, usuarioId, itens.size(), imp.getNovosDetectados());
@@ -651,6 +660,14 @@ public class FaturaPdfImportService {
         }
         boolean semItens = dto.getItens() == null || dto.getItens().isEmpty();
         boolean semTotal = dto.getValorTotal() == null || dto.getValorTotal().compareTo(BigDecimal.ZERO) <= 0;
+        boolean faturaPaga = "PAGA_NO_BANCO".equals(dto.getSituacaoLeituraPdf());
+        if (faturaPaga && semItens) {
+            throw new IllegalArgumentException(
+                "Identifiquei fatura Inter já paga no banco (total R$ 0,00 no PDF), "
+                    + "mas não extraí os lançamentos do período. "
+                    + "Confira a senha (6 primeiros dígitos do CPF, com zero à esquerda) e reenvie o PDF. "
+                    + "Se o erro persistir, baixe a fatura de novo pelo app do Inter.");
+        }
         if (semItens && semTotal && pdfTextExtractionService.pdfPareceCriptografado(pdfBytes)) {
             throw new IllegalArgumentException(PdfTextExtractionService.mensagemPdfProtegidoItau(senhaPdf));
         }
@@ -934,6 +951,56 @@ public class FaturaPdfImportService {
             textoPdf.length(), comParcela, itens.size(), proj.size()
         ));
         registrarProjecoesItauNasAuditorias(auditorias, textoPdf, anoReferencia);
+    }
+
+    private void registrarDiagnosticoEArmazenamentoInter(
+        List<String> auditorias,
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens
+    ) {
+        if (textoPdf == null || textoPdf.isBlank()) {
+            auditorias.add(
+                "Inter: texto do PDF vazio — confirme a senha (6 primeiros dígitos do CPF) e reenvie o PDF.");
+            return;
+        }
+        String recorte = InterFaturaTextoExtrator.recortarTextoParaAuditoria(textoPdf);
+        if (!recorte.isBlank()) {
+            auditorias.add(META_TEXTO_PDF_INTER_PREFIX + recorte);
+        }
+        auditorias.add(String.format(
+            "Inter: texto PDF %d caracteres; %d lançamento(s) extraído(s).",
+            textoPdf.length(),
+            itens.size()
+        ));
+    }
+
+    private void reaplicarExtracaoInterAntesConfirmar(ImportacaoFaturaCartao imp, List<ImportacaoFaturaItemDTO> itens) {
+        String texto = lerTextoPdfInterDaAuditoria(imp.getAuditoriaJson());
+        if (texto.isBlank()) {
+            log.warn("[FaturaPDF] Inter confirmar: sem texto PDF na auditoria (importacaoId={}).", imp.getId());
+            return;
+        }
+        int anoRef = imp.getDataVencimento() != null
+            ? imp.getDataVencimento().getYear()
+            : YearMonth.now().getYear();
+        int antes = itens.size();
+        BigDecimal total = imp.getValorTotal() != null ? imp.getValorTotal() : BigDecimal.ZERO;
+        InterFaturaTextoExtrator.complementar(itens, texto, anoRef);
+        InterFaturaTextoExtrator.finalizarListaInter(itens, texto, total, anoRef);
+        enriquecerParcelasNosItens(itens);
+        if (itens.size() > antes) {
+            log.info("[FaturaPDF] Inter confirmar: {} lançamento(s) reextraído(s) do texto (antes={}).",
+                itens.size() - antes, antes);
+        }
+    }
+
+    private String lerTextoPdfInterDaAuditoria(String auditoriaJson) {
+        for (String linha : readAuditorias(auditoriaJson)) {
+            if (linha != null && linha.startsWith(META_TEXTO_PDF_INTER_PREFIX)) {
+                return linha.substring(META_TEXTO_PDF_INTER_PREFIX.length());
+            }
+        }
+        return "";
     }
 
     private void reaplicarExtracaoItauAntesConfirmar(ImportacaoFaturaCartao imp, List<ImportacaoFaturaItemDTO> itens) {

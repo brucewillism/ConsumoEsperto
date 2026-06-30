@@ -78,12 +78,23 @@ public final class InterFaturaTextoExtrator {
         "histórico da fatura",
         "compras e lancamentos",
         "compras e lançamentos",
-        "fatura paga",
-        "pagamento efetuado",
-        "pagamento recebido",
-        "lancamentos desta fatura",
-        "lançamentos desta fatura"
+        "compras do periodo",
+        "compras do período",
+        "extrato do cartao",
+        "extrato do cartão"
     };
+    private static final Pattern LINHA_APENAS_DATA = Pattern.compile(
+        "^(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s*$",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern LINHA_APENAS_VALOR = Pattern.compile(
+        "^(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern LINHA_DATA_COM_DESC = Pattern.compile(
+        "^(\\d{2})/(\\d{2})(?:/(\\d{4}))?\\s+(.+)$",
+        Pattern.CASE_INSENSITIVE
+    );
     private static final String[] MARCADORES_FIM_TRANSACOES = {
         "proxima fatura",
         "próxima fatura",
@@ -379,8 +390,18 @@ public final class InterFaturaTextoExtrator {
         if (out.isEmpty()) {
             extrairLancamentosModoAmplo(norm, ano, vencimento, dataCorte, out, totalPdf);
         }
-        if (out.isEmpty() && FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
+        if (out.isEmpty() || FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
             extrairLancamentosFaturaPaga(norm, ano, vencimento, dataCorte, out, totalPdf);
+        }
+        if (out.isEmpty() || somaValores(out).compareTo(BigDecimal.ZERO) <= 0) {
+            String trechoColunas = recortarTrechoTransacoes(norm);
+            if (trechoColunas.isBlank()) {
+                int fim = localizarIndiceProximas(norm);
+                trechoColunas = substringSeguro(norm, 0, fim >= 0 ? fim : norm.length());
+            }
+            extrairLancamentosPorLinhasConsecutivas(
+                trechoColunas, ano, vencimento, dataCorte, out, totalPdf
+            );
         }
         removerLinhasResumoFatura(out, totalPdf.orElse(null), vencimento);
         podarEspurios(out, textoPdf);
@@ -410,7 +431,7 @@ public final class InterFaturaTextoExtrator {
         extrairBlocosMultilinha(trecho, ano, vencimento, dataCorte, out);
     }
 
-    /** Fatura paga: lançamentos costumam vir após «Valor da fatura R$ 0,00» / «Fatura paga». */
+    /** Fatura paga: lançamentos costumam vir após «Detalhamento da fatura» / «Fatura paga». */
     private static void extrairLancamentosFaturaPaga(
         String norm,
         int ano,
@@ -419,31 +440,157 @@ public final class InterFaturaTextoExtrator {
         List<ImportacaoFaturaItemDTO> out,
         Optional<BigDecimal> totalPdf
     ) {
-        int inicio = -1;
-        for (String marcador : new String[] {
-            "fatura paga", "pagamento efetuado", "pagamento recebido",
-            "valor da fatura", "detalhamento da fatura", "data de corte"
-        }) {
-            int idx = indexOfIgnoreCase(norm, marcador);
-            if (idx < 0) {
-                continue;
+        int inicio = indexOfIgnoreCase(norm, "detalhamento da fatura");
+        if (inicio < 0) {
+            inicio = indexOfIgnoreCase(norm, "detalhamento de transac");
+        }
+        if (inicio < 0) {
+            for (String marcador : new String[] {
+                "historico de transac", "histórico de transações", "compras e lancamentos",
+                "compras e lançamentos", "fatura paga", "pagamento efetuado"
+            }) {
+                int idx = indexOfIgnoreCase(norm, marcador);
+                if (idx < 0) {
+                    continue;
+                }
+                int nl = norm.indexOf('\n', idx);
+                inicio = Math.max(inicio, nl >= 0 ? nl + 1 : idx);
             }
-            int nl = norm.indexOf('\n', idx);
-            inicio = Math.max(inicio, nl >= 0 ? nl + 1 : idx);
+        }
+        if (inicio < 0) {
+            int valorFatura = indexOfIgnoreCase(norm, "valor da fatura");
+            if (valorFatura >= 0) {
+                int nl = norm.indexOf('\n', valorFatura);
+                inicio = nl >= 0 ? nl + 1 : valorFatura;
+            }
         }
         if (inicio < 0) {
             inicio = 0;
+        } else {
+            int nl = norm.indexOf('\n', inicio);
+            inicio = nl >= 0 ? nl + 1 : inicio;
         }
         int fim = localizarIndiceProximas(norm);
         if (fim < 0 || fim <= inicio) {
             fim = norm.length();
         }
         String trecho = substringSeguro(norm, inicio, fim);
+        int antes = out.size();
         extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO, true, totalPdf);
         extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO_SEM_RS, false, totalPdf);
         extrairBlocosMultilinha(trecho, ano, vencimento, dataCorte, out);
-        if (!out.isEmpty()) {
-            log.info("Inter fatura paga: {} lançamento(s) extraído(s) do trecho pós-resumo.", out.size());
+        extrairLancamentosPorLinhasConsecutivas(trecho, ano, vencimento, dataCorte, out, totalPdf);
+        if (out.size() > antes) {
+            log.info(
+                "Inter fatura paga: {} lançamento(s) extraído(s) do trecho pós-resumo (total {}).",
+                out.size() - antes,
+                out.size()
+            );
+        }
+    }
+
+    /**
+     * Layout em colunas do PDF Inter: data numa linha, descrição e/ou valor nas seguintes.
+     */
+    private static void extrairLancamentosPorLinhasConsecutivas(
+        String trecho,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out,
+        Optional<BigDecimal> totalFatura
+    ) {
+        if (trecho == null || trecho.isBlank()) {
+            return;
+        }
+        String[] linhas = trecho.split("\\r?\\n");
+        for (int i = 0; i < linhas.length; i++) {
+            String linha = linhas[i].trim();
+            if (linha.isEmpty()) {
+                continue;
+            }
+            Matcher dataSo = LINHA_APENAS_DATA.matcher(linha);
+            Matcher dataDesc = LINHA_DATA_COM_DESC.matcher(linha);
+            String dia;
+            String mes;
+            String anoTxt;
+            String descInicial = "";
+            if (dataSo.matches()) {
+                dia = dataSo.group(1);
+                mes = dataSo.group(2);
+                anoTxt = dataSo.group(3);
+            } else if (dataDesc.matches()) {
+                dia = dataDesc.group(1);
+                mes = dataDesc.group(2);
+                anoTxt = dataDesc.group(3);
+                descInicial = dataDesc.group(4).trim();
+            } else {
+                continue;
+            }
+            StringBuilder descricao = new StringBuilder(descInicial);
+            BigDecimal valor = null;
+            int parcelaLinha = -1;
+            for (int j = i + 1; j < Math.min(i + 6, linhas.length); j++) {
+                String prox = linhas[j].trim();
+                if (prox.isEmpty()) {
+                    continue;
+                }
+                if (LINHA_APENAS_DATA.matcher(prox).matches() || LINHA_DATA_COM_DESC.matcher(prox).matches()) {
+                    break;
+                }
+                Matcher valorLinha = LINHA_APENAS_VALOR.matcher(prox);
+                if (valorLinha.matches()) {
+                    if (valor == null) {
+                        valor = parseMoney(valorLinha.group(1));
+                    }
+                    continue;
+                }
+                Matcher valorInline = LINHA_LANCAMENTO.matcher(prox);
+                if (valorInline.find() && valorInline.start() == 0) {
+                    break;
+                }
+                if (deveIgnorarDescricao(prox) || pareceLinhaEncargoInter(prox)) {
+                    continue;
+                }
+                if (PARCELA_TEXTO.matcher(prox).find()) {
+                    parcelaLinha = j;
+                }
+                if (!descricao.isEmpty()) {
+                    descricao.append(' ');
+                }
+                descricao.append(prox);
+            }
+            if (valor == null && !descInicial.isEmpty()) {
+                Matcher inline = LINHA_LANCAMENTO.matcher(linha);
+                if (inline.find()) {
+                    continue;
+                }
+            }
+            if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            String desc = limparDescricao(descricao.toString());
+            if (desc.isBlank() || deveIgnorarDescricao(desc) || descricaoInvalida(desc)) {
+                continue;
+            }
+            LocalDate data = parseDataInter(dia, mes, anoTxt, ano, vencimento);
+            if (dataCorte.isPresent() && data != null && data.isAfter(dataCorte.get())) {
+                continue;
+            }
+            if (pareceDataVencimentoComTotal(data, valor, vencimento, totalFatura)) {
+                continue;
+            }
+            ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
+            item.setData(data);
+            item.setDescricao(desc);
+            item.setValor(valor);
+            aplicarParcelaDaDescricao(item, desc);
+            if (item.getParcelaAtual() == null && parcelaLinha >= 0) {
+                aplicarParcelaDaDescricao(item, linhas[parcelaLinha].trim());
+            }
+            if (!jaExiste(out, item)) {
+                out.add(item);
+            }
         }
     }
 
@@ -1157,5 +1304,22 @@ public final class InterFaturaTextoExtrator {
             return -1;
         }
         return texto.toLowerCase(Locale.ROOT).indexOf(needle.toLowerCase(Locale.ROOT));
+    }
+
+    /** Trecho compacto para reprocessar lançamentos na confirmação. */
+    public static String recortarTextoParaAuditoria(String textoPdf) {
+        if (textoPdf == null || textoPdf.isBlank()) {
+            return "";
+        }
+        String norm = textoPdf.replace('\r', '\n');
+        int fim = localizarIndiceProximas(norm);
+        if (fim < 0) {
+            fim = norm.length();
+        }
+        String trecho = norm.substring(0, Math.min(fim, norm.length()));
+        if (trecho.length() > 18_000) {
+            trecho = trecho.substring(0, 18_000);
+        }
+        return trecho.trim();
     }
 }

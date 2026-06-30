@@ -215,10 +215,65 @@ public class PdfTextExtractionService {
     }
 
     private static List<String> escolherMelhorPaginas(List<String> a, List<String> b) {
-        if (scoreTexto(a) >= scoreTexto(b)) {
-            return a == null || a.isEmpty() ? (b == null ? List.of() : b) : a;
+        if (a == null || a.isEmpty()) {
+            return b == null ? List.of() : b;
         }
-        return b == null ? List.of() : b;
+        if (b == null || b.isEmpty()) {
+            return a;
+        }
+        int maxPages = Math.max(a.size(), b.size());
+        List<String> merged = new ArrayList<>(maxPages);
+        for (int i = 0; i < maxPages; i++) {
+            String pa = i < a.size() ? a.get(i) : "";
+            String pb = i < b.size() ? b.get(i) : "";
+            merged.add(escolherMelhorPagina(pa, pb));
+        }
+        if (scoreTexto(merged) >= Math.max(scoreTexto(a), scoreTexto(b))) {
+            return merged;
+        }
+        return scoreTexto(a) >= scoreTexto(b) ? a : b;
+    }
+
+    /** Por página, combina PDFBox + OpenPDF quando os dois trazem pedaços diferentes do layout Inter. */
+    private static String escolherMelhorPagina(String a, String b) {
+        if (a == null || a.isBlank()) {
+            return b != null ? b : "";
+        }
+        if (b == null || b.isBlank()) {
+            return a;
+        }
+        int scoreA = scorePagina(a);
+        int scoreB = scorePagina(b);
+        String combinado = a.trim() + "\n" + b.trim();
+        int scoreCombinado = scorePagina(combinado);
+        if (scoreCombinado > Math.max(scoreA, scoreB) + 100) {
+            return combinado;
+        }
+        if (scoreA == scoreB) {
+            return a.length() >= b.length() ? a : b;
+        }
+        return scoreA > scoreB ? a : b;
+    }
+
+    private static int scorePagina(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return 0;
+        }
+        int score = texto.length();
+        if (DATA_BR.matcher(texto).find()) {
+            score += 400;
+        }
+        if (VALOR_BR.matcher(texto).find()) {
+            score += 400;
+        }
+        String n = texto.toLowerCase(Locale.ROOT);
+        if (n.contains("detalhamento") || n.contains("lancamento") || n.contains("transac")) {
+            score += 250;
+        }
+        if (n.contains("fatura") || n.contains("inter") || n.contains("vencimento")) {
+            score += 150;
+        }
+        return score;
     }
 
     private static int scoreTexto(List<String> paginas) {

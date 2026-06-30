@@ -169,6 +169,52 @@ class InterFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiFaturaPagaLayoutColunasValorNaLinhaSeguinte() {
+        String texto = """
+            Banco Inter
+            Valor da fatura R$ 0,00
+            Fatura paga
+            Data de vencimento 02/07/2026
+            Data de corte: 25/06/2026
+            Detalhamento da fatura
+            21/05
+            PARC SALDO TOT - R DO BRASIL TECNO
+            273,14
+            Parcela 05 de 06
+            28/04
+            APPLE.COM/BILL
+            11,50
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(2, itens.size());
+        assertTrue(itens.stream().anyMatch(i -> i.getDescricao().contains("PARC SALDO")));
+        assertEquals(5, itens.stream()
+            .filter(i -> i.getDescricao().contains("PARC"))
+            .findFirst()
+            .orElseThrow()
+            .getParcelaAtual());
+        assertTrue(itens.stream().anyMatch(i -> i.getDescricao().contains("APPLE")));
+    }
+
+    @Test
+    void extraiFaturaPagaDataDescricaoValorEmLinhasSeparadas() {
+        String texto = """
+            Banco Inter
+            Valor da fatura R$ 0,00
+            Fatura paga
+            Detalhamento da fatura
+            21/05
+            PARC SALDO TOT
+            273,14
+            Próximas faturas
+            """;
+        List<ImportacaoFaturaItemDTO> itens = InterFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+        assertEquals(1, itens.size());
+        assertEquals(new BigDecimal("273.14"), itens.get(0).getValor());
+    }
+
+    @Test
     void complementarSubstituiListaGenericaDaIaQuandoFaturaPaga() {
         String textoPago = """
             Banco Inter

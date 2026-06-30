@@ -20,6 +20,13 @@ class BancoBrasilCatalogTest {
     }
 
     @Test
+    void idCanonicoItauEInter() {
+        assertEquals("itau", BancoBrasilCatalog.idCanonicoDe("Itaú").orElseThrow());
+        assertEquals("itau", BancoBrasilCatalog.idCanonicoDe("itau azul").orElseThrow());
+        assertEquals("inter", BancoBrasilCatalog.idCanonicoDe("Banco Inter").orElseThrow());
+    }
+
+    @Test
     void bancosDiferentesNaoCorrespondem() {
         assertFalse(BancoBrasilCatalog.bancosCorrespondem("bb", "Nubank"));
         assertFalse(BancoBrasilCatalog.bancosCorrespondem("itau", "Bradesco"));

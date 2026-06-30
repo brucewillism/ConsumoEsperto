@@ -72,24 +72,24 @@ public final class BancoBrasilCatalog {
     }
 
     /** Resolve o id canônico do emissor (ex.: «Itaú» → {@code itau}). */
-    public static java.util.Optional<String> idCanonicoDe(String rotulo) {
+    public static Optional<String> idCanonicoDe(String rotulo) {
         if (rotulo == null || rotulo.isBlank()) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
         String n = ApelidoNormalizador.normalizar(rotulo);
         if (n.isBlank()) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
         String id = resolverIdCanonico(n);
         if (id != null) {
-            return java.util.Optional.of(id);
+            return Optional.of(id);
         }
         for (Map.Entry<String, List<String>> entry : CANONICAL_ALIASES.entrySet()) {
             if (aliasCanonicoContem(entry.getKey(), n)) {
-                return java.util.Optional.of(entry.getKey());
+                return Optional.of(entry.getKey());
             }
         }
-        return java.util.Optional.empty();
+        return Optional.empty();
     }
 
     private static String resolverIdCanonico(String normalizado) {
