@@ -421,6 +421,7 @@ public final class InterFaturaTextoExtrator {
         }
         if (out.isEmpty() || FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoOriginal)) {
             extrairLancamentosFaturaPaga(norm, ano, vencimento, dataCorte, out, totalPdf);
+            extrairLancamentosSecaoPreSubtotal(norm, ano, vencimento, dataCorte, out, totalPdf);
         }
         if (out.isEmpty() || somaValores(out).compareTo(BigDecimal.ZERO) <= 0) {
             String trechoColunas = recortarTrechoTransacoes(norm);
@@ -431,6 +432,7 @@ public final class InterFaturaTextoExtrator {
             extrairLancamentosPorLinhasConsecutivas(
                 trechoColunas, ano, vencimento, dataCorte, out, totalPdf
             );
+            extrairLancamentosSecaoPreSubtotal(norm, ano, vencimento, dataCorte, out, totalPdf);
         }
         if (out.isEmpty()) {
             extrairLancamentosScanAmplo(norm, ano, vencimento, dataCorte, out, totalPdf);
@@ -481,6 +483,133 @@ public final class InterFaturaTextoExtrator {
         }
         sb.append(run).append('\n');
         run.setLength(0);
+    }
+
+    /** Trecho entre «Detalhamento» e subtotal «Despesas do mês» / pagamento — compras individuais. */
+    private static void extrairLancamentosSecaoPreSubtotal(
+        String norm,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out,
+        Optional<BigDecimal> totalPdf
+    ) {
+        int inicio = resolverInicioSecaoDetalhamento(norm);
+        int fim = norm.length();
+        int subtotal = indexOfIgnoreCase(norm, "despesas do mes");
+        if (subtotal < 0) {
+            subtotal = indexOfIgnoreCase(norm, "despesas do m");
+        }
+        if (subtotal > inicio) {
+            fim = Math.min(fim, subtotal);
+        }
+        for (String marcador : new String[] {
+            "pagamento on line", "pagamento online", "pagamento efetuado",
+            "historico de pagamento", "comprovante de pagamento"
+        }) {
+            int idx = indexOfIgnoreCase(norm, marcador);
+            if (idx > inicio && idx < fim) {
+                fim = idx;
+            }
+        }
+        int proximas = localizarIndiceProximas(norm);
+        if (proximas > inicio && proximas < fim) {
+            fim = proximas;
+        }
+        if (inicio >= fim) {
+            return;
+        }
+        String trecho = substringSeguro(norm, inicio, fim);
+        int antes = out.size();
+        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO, true, totalPdf);
+        extrairLinhasDoTrecho(trecho, ano, vencimento, dataCorte, out, LINHA_LANCAMENTO_SEM_RS, false, totalPdf);
+        extrairBlocosMultilinha(trecho, ano, vencimento, dataCorte, out);
+        extrairLancamentosPorLinhasConsecutivas(trecho, ano, vencimento, dataCorte, out, totalPdf);
+        extrairParesDescricaoValor(trecho, ano, vencimento, dataCorte, out, totalPdf);
+        if (out.size() > antes) {
+            log.info("Inter pré-subtotal: {} lançamento(s) extraído(s) (total {}).", out.size() - antes, out.size());
+        }
+    }
+
+    /** Descrição numa linha e valor na seguinte, sem data explícita no início. */
+    private static void extrairParesDescricaoValor(
+        String trecho,
+        int ano,
+        Optional<LocalDate> vencimento,
+        Optional<LocalDate> dataCorte,
+        List<ImportacaoFaturaItemDTO> out,
+        Optional<BigDecimal> totalFatura
+    ) {
+        if (trecho == null || trecho.isBlank()) {
+            return;
+        }
+        String[] linhas = trecho.split("\\r?\\n");
+        for (int i = 0; i < linhas.length; i++) {
+            String linha = linhas[i].trim();
+            if (linha.isEmpty()) {
+                continue;
+            }
+            Matcher valorMatcher = LINHA_APENAS_VALOR.matcher(linha);
+            if (!valorMatcher.matches()) {
+                continue;
+            }
+            BigDecimal valor = parseMoney(valorMatcher.group(1));
+            if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            LocalDate data = null;
+            StringBuilder descricao = new StringBuilder();
+            for (int j = i - 1; j >= Math.max(0, i - 5); j--) {
+                String prev = linhas[j].trim();
+                if (prev.isEmpty()) {
+                    continue;
+                }
+                if (LINHA_APENAS_VALOR.matcher(prev).matches()) {
+                    break;
+                }
+                Matcher dataSo = LINHA_APENAS_DATA.matcher(prev);
+                if (dataSo.matches()) {
+                    data = parseDataInter(dataSo.group(1), dataSo.group(2), dataSo.group(3), ano, vencimento);
+                    continue;
+                }
+                Matcher dataDesc = LINHA_DATA_COM_DESC.matcher(prev);
+                if (dataDesc.matches()) {
+                    data = parseDataInter(
+                        dataDesc.group(1), dataDesc.group(2), dataDesc.group(3), ano, vencimento
+                    );
+                    String resto = dataDesc.group(4).trim();
+                    if (!resto.isBlank() && !deveIgnorarDescricao(resto)) {
+                        descricao.insert(0, resto);
+                    }
+                    break;
+                }
+                if (deveIgnorarDescricao(prev) || pareceLinhaEncargoInter(prev)) {
+                    break;
+                }
+                if (descricao.length() > 0) {
+                    descricao.insert(0, ' ');
+                }
+                descricao.insert(0, prev);
+            }
+            String desc = limparDescricao(descricao.toString());
+            if (desc.isBlank() || deveIgnorarDescricao(desc) || descricaoInvalida(desc)) {
+                continue;
+            }
+            if (dataCorte.isPresent() && data != null && data.isAfter(dataCorte.get())) {
+                continue;
+            }
+            if (pareceDataVencimentoComTotal(data, valor, vencimento, totalFatura)) {
+                continue;
+            }
+            ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
+            item.setData(data);
+            item.setDescricao(desc);
+            item.setValor(valor);
+            aplicarParcelaDaDescricao(item, desc);
+            if (!jaExiste(out, item)) {
+                out.add(item);
+            }
+        }
     }
 
     /** Varre todo o trecho até «Próximas faturas» com regex tolerante. */
@@ -1303,12 +1432,15 @@ public final class InterFaturaTextoExtrator {
         if (n.isBlank()) {
             return false;
         }
-        if (n.equals("despesas do mes")
-            || n.startsWith("despesas do mes ")
-            || n.contains("despesas do mes")) {
+        if (n.equals("despesas do mes") || n.startsWith("despesas do mes ")) {
             return true;
         }
-        if (n.contains("despesas da fatura") && n.contains("cartao")) {
+        if (pareceSubtotalDespesasDoMes(descricao)) {
+            return true;
+        }
+        if (n.contains("despesas da fatura") && n.contains("cartao")
+            && (n.contains("data movimentacao") || n.contains("beneficiario")
+                || n.contains("pagamento on line") || n.contains("pagamento online"))) {
             return true;
         }
         if (n.contains("pagamento on line") || n.contains("pagamento online")) {
@@ -1321,6 +1453,17 @@ public final class InterFaturaTextoExtrator {
             return true;
         }
         return n.contains("pagamento efetuado") && n.contains("cartao");
+    }
+
+    /** Linha-resumo «Despesas do mês R$ X» (subtotal), não compra individual. */
+    static boolean pareceSubtotalDespesasDoMes(String descricao) {
+        String n = FaturaPdfLayoutSupport.norm(descricao);
+        if (!n.contains("despesas do mes")) {
+            return false;
+        }
+        String semValor = n.replaceAll("r\\s*\\d[\\d\\s.,]*", "").trim();
+        return semValor.equals("despesas do mes")
+            || (semValor.startsWith("despesas do mes") && semValor.length() <= 35);
     }
 
     static boolean pareceLinhaEncargoInter(String descricao) {
