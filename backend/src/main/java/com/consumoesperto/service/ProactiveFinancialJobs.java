@@ -6,6 +6,7 @@ import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -51,7 +52,7 @@ public class ProactiveFinancialJobs {
     @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)
     public void alertarRecorrenciasComVencimentoProximo() {
-        LocalDate alvo = LocalDate.now().plusDays(2);
+        LocalDate alvo = AppTimeZone.hoje().plusDays(2);
         for (Usuario usuario : usuarioRepository.findAll()) {
             if (usuario.getWhatsappNumero() == null || usuario.getWhatsappNumero().isBlank()) {
                 continue;
@@ -79,7 +80,7 @@ public class ProactiveFinancialJobs {
                     );
                     whatsAppNotificationService.enviarParaUsuario(usuario.getId(), m);
                 });
-            if (!faturaRepository.findVencidasByUsuarioId(usuario.getId(), LocalDateTime.now()).isEmpty()) {
+            if (!faturaRepository.findVencidasByUsuarioId(usuario.getId(), AppTimeZone.agora()).isEmpty()) {
                 scoreService.registrarEvento(usuario.getId(), ScoreService.EventoScore.FATURA_VENCIDA,
                     "Fatura vencida detectada no monitoramento diário");
             }
@@ -106,7 +107,7 @@ public class ProactiveFinancialJobs {
     @Scheduled(cron = "0 0 18 ? * SUN", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)
     public void enviarResumoSemanal() {
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = AppTimeZone.hoje();
         LocalDate inicioSemana = hoje.with(DayOfWeek.MONDAY);
         LocalDateTime iniAtual = inicioSemana.atStartOfDay();
         LocalDateTime fimAtual = hoje.atTime(23, 59, 59);

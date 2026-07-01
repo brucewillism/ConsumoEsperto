@@ -530,6 +530,19 @@ public class SaldoService {
     }
 
     /**
+     * Saldo esperado pela fórmula (abertura + transações confirmadas + transferências) — somente leitura.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal calcularSaldoEsperadoPorMovimentos(Long contaId, Long usuarioId) {
+        ContaBancaria conta = contaBancariaService.buscarEntidade(contaId, usuarioId);
+        BigDecimal saldoInicial = conta.getSaldoInicial() != null ? conta.getSaldoInicial() : BigDecimal.ZERO;
+        return nz(saldoInicial)
+            .add(somaImpactosTransacoes(contaId))
+            .add(somaTransferenciasLiquido(contaId))
+            .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
      * Reparo automático pós-bug de reconciliação (jun/2026): transferências omitidas ou saldo além do cheque especial.
      */
     @Transactional

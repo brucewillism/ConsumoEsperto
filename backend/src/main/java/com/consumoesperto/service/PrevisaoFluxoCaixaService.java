@@ -9,6 +9,7 @@ import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,8 +47,8 @@ public class PrevisaoFluxoCaixaService {
     @Transactional(readOnly = true)
     public DisponibilidadeRealDTO calcularDisponibilidadeReal(Long usuarioId) {
         BigDecimal saldo = nz(saldoService.saldoContaCorrente(usuarioId));
-        BigDecimal fixas = somarContasFixasRestantesNoMes(usuarioId, LocalDate.now())
-            .add(despesaFixaService.somarValorRestanteNoMes(usuarioId, LocalDate.now()));
+        BigDecimal fixas = somarContasFixasRestantesNoMes(usuarioId, AppTimeZone.hoje())
+            .add(despesaFixaService.somarValorRestanteNoMes(usuarioId, AppTimeZone.hoje()));
         BigDecimal faturas = nz(faturaRepository.sumValorFaturasPendentesByUsuarioId(usuarioId));
         BigDecimal obrig = fixas.add(faturas);
         BigDecimal disponivel = saldo.subtract(obrig);
@@ -63,7 +64,7 @@ public class PrevisaoFluxoCaixaService {
         }
 
         YearMonth ym = YearMonth.now();
-        int diasRest = ym.lengthOfMonth() - LocalDate.now().getDayOfMonth() + 1;
+        int diasRest = ym.lengthOfMonth() - AppTimeZone.hoje().getDayOfMonth() + 1;
 
         String voc = jarvisProtocolService.resolveVocative(usuarioId, usuarioRepository);
         String msg = jarvisProtocolService.proativoDisponibilidadeReal(
@@ -89,7 +90,7 @@ public class PrevisaoFluxoCaixaService {
      */
     @Transactional(readOnly = true)
     public BigDecimal calcularBurnTotalDiario(Long usuarioId) {
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = AppTimeZone.hoje();
         YearMonth ym = YearMonth.from(hoje);
         int ultimo = ym.lengthOfMonth();
         int diaHoje = hoje.getDayOfMonth();
@@ -132,7 +133,7 @@ public class PrevisaoFluxoCaixaService {
     }
 
     private PrevisaoFuturoChartDTO buildPrevisaoFuturoChartInternal(Long usuarioId, BigDecimal reducaoBurnDiaria) {
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = AppTimeZone.hoje();
         YearMonth ym = YearMonth.from(hoje);
         int ultimo = ym.lengthOfMonth();
         int diaHoje = hoje.getDayOfMonth();

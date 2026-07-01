@@ -2,8 +2,10 @@ package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.ContaBancariaDTO;
 import com.consumoesperto.dto.ContaBancariaUpdateDTO;
+import com.consumoesperto.dto.DivergenciaSaldoDTO;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.ContaBancariaService;
+import com.consumoesperto.service.SaldoIntegridadeService;
 import com.consumoesperto.service.SaldoService;
 import com.consumoesperto.service.SalarioAutomaticoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,6 +29,14 @@ public class ContaBancariaController {
     private final ContaBancariaService contaBancariaService;
     private final SaldoService saldoService;
     private final SalarioAutomaticoService salarioAutomaticoService;
+    private final SaldoIntegridadeService saldoIntegridadeService;
+
+    @GetMapping("/integridade")
+    @Operation(summary = "Auditar divergências de saldo (persistido vs movimentos confirmados)")
+    public ResponseEntity<List<DivergenciaSaldoDTO>> auditarIntegridade(
+        @AuthenticationPrincipal UserPrincipal currentUser) {
+        return ResponseEntity.ok(saldoIntegridadeService.auditarUsuario(currentUser.getId()));
+    }
 
     @GetMapping
     @Operation(summary = "Listar contas do usuário")

@@ -15,6 +15,9 @@ public interface ContaBancariaRepository extends JpaRepository<ContaBancaria, Lo
 
     List<ContaBancaria> findByUsuarioIdOrderByPadraoDescNomeAsc(Long usuarioId);
 
+    @Query("SELECT c FROM ContaBancaria c JOIN FETCH c.usuario WHERE c.ativa = true")
+    List<ContaBancaria> findByAtivaTrue();
+
     Optional<ContaBancaria> findByIdAndUsuarioId(Long id, Long usuarioId);
 
     long countByUsuarioIdAndAtivaTrue(Long usuarioId);

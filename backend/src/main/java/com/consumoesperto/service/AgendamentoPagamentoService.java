@@ -6,12 +6,15 @@ import com.consumoesperto.model.AgendamentoPagamento;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.AgendamentoPagamentoRepository;
+import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -42,6 +45,7 @@ public class AgendamentoPagamentoService {
     private static final int SESSAO_TTL_MIN = 30;
 
     private final AgendamentoPagamentoRepository agendamentoRepository;
+    private final TransacaoRepository transacaoRepository;
     private final UsuarioRepository usuarioRepository;
     private final ContaBancariaService contaBancariaService;
     private final TransacaoService transacaoService;
@@ -74,7 +78,7 @@ public class AgendamentoPagamentoService {
             return false;
         }
         LocalDate venc = lerDataVencimento(node);
-        return venc != null && !venc.isBefore(LocalDate.now());
+        return venc != null && !venc.isBefore(AppTimeZone.hoje());
     }
 
     /** Salva proposta na sessão e retorna mensagem para o usuário confirmar (sim/não). */
@@ -182,15 +186,14 @@ public class AgendamentoPagamentoService {
             throw new IllegalStateException("Só é possível cancelar agendamentos com status AGENDADO.");
         }
         ag.setStatus(AgendamentoPagamento.StatusAgendamento.CANCELADO);
-        ag.setDataProcessamento(LocalDateTime.now());
+        ag.setDataProcessamento(AppTimeZone.agora());
         return toDto(agendamentoRepository.save(ag));
     }
 
     /** Job diário: executa agendamentos com vencimento hoje. */
     @Scheduled(cron = "0 0 6 * * *", zone = "America/Sao_Paulo")
-    @Transactional
     public void executarPagamentosDoDia() {
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = AppTimeZone.hoje();
         List<AgendamentoPagamento> pendentes = agendamentoRepository.findByStatusAndDataVencimento(
             AgendamentoPagamento.StatusAgendamento.AGENDADO, hoje);
         if (pendentes.isEmpty()) {
@@ -199,16 +202,25 @@ public class AgendamentoPagamentoService {
         log.info("[AGENDAMENTO] Processando {} pagamento(s) com vencimento {}", pendentes.size(), hoje);
         for (AgendamentoPagamento ag : pendentes) {
             try {
-                processarUm(ag);
+                processarUmComLock(ag.getId());
             } catch (Exception e) {
                 log.warn("[AGENDAMENTO] Falha id={}: {}", ag.getId(), e.getMessage());
             }
         }
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void processarUmComLock(Long agendamentoId) {
+        AgendamentoPagamento ag = agendamentoRepository.findByIdForUpdate(agendamentoId).orElse(null);
+        if (ag == null || ag.getStatus() != AgendamentoPagamento.StatusAgendamento.AGENDADO) {
+            return;
+        }
+        processarUm(ag);
+    }
+
     @Transactional(readOnly = true)
     public BigDecimal totalAgendadoFuturo(Long usuarioId) {
-        BigDecimal sum = agendamentoRepository.sumAgendadosFuturos(usuarioId, LocalDate.now());
+        BigDecimal sum = agendamentoRepository.sumAgendadosFuturos(usuarioId, AppTimeZone.hoje());
         return sum != null ? sum.setScale(SCALE, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 
@@ -216,9 +228,22 @@ public class AgendamentoPagamentoService {
         Long usuarioId = ag.getUsuario().getId();
         ContaBancaria conta = contaBancariaService.buscarEntidade(ag.getContaDebito().getId(), usuarioId);
 
+        String descricaoTx = "Pagamento agendado: " + ag.getBeneficiario();
+        LocalDateTime dataTx = ag.getDataVencimento().atStartOfDay();
+        boolean jaDebitado = !transacaoRepository.findByUsuarioIdAndDescricaoAndDataTransacaoAndValor(
+            usuarioId, descricaoTx, dataTx, ag.getValor()
+        ).isEmpty();
+        if (jaDebitado) {
+            log.info("[AGENDAMENTO] Idempotente: transação já existe id={} userId={}", ag.getId(), usuarioId);
+            ag.setStatus(AgendamentoPagamento.StatusAgendamento.PAGO);
+            ag.setDataProcessamento(AppTimeZone.agora());
+            agendamentoRepository.save(ag);
+            return;
+        }
+
         if (!conta.temSaldoSuficiente(ag.getValor())) {
             ag.setStatus(AgendamentoPagamento.StatusAgendamento.FALHOU);
-            ag.setDataProcessamento(LocalDateTime.now());
+            ag.setDataProcessamento(AppTimeZone.agora());
             ag.setMensagemErro("Saldo insuficiente (incl. cheque especial). Disponível: "
                 + conta.getSaldoDisponivel().setScale(SCALE, RoundingMode.HALF_UP));
             agendamentoRepository.save(ag);
@@ -227,16 +252,16 @@ public class AgendamentoPagamentoService {
         }
 
         TransacaoDTO tx = new TransacaoDTO();
-        tx.setDescricao("Pagamento agendado: " + ag.getBeneficiario());
+        tx.setDescricao(descricaoTx);
         tx.setValor(ag.getValor());
         tx.setTipoTransacao(TransacaoDTO.TipoTransacao.DESPESA);
-        tx.setDataTransacao(LocalDateTime.now());
+        tx.setDataTransacao(AppTimeZone.agora());
         tx.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
         tx.setContaBancariaId(conta.getId());
         transacaoService.criarTransacao(tx, usuarioId, false);
 
         ag.setStatus(AgendamentoPagamento.StatusAgendamento.PAGO);
-        ag.setDataProcessamento(LocalDateTime.now());
+        ag.setDataProcessamento(AppTimeZone.agora());
         agendamentoRepository.save(ag);
         log.info("[AGENDAMENTO] Pago id={} userId={} valor={}", ag.getId(), usuarioId, ag.getValor());
     }
@@ -317,7 +342,7 @@ public class AgendamentoPagamentoService {
         if (dados.dataVencimento() == null) {
             throw new IllegalArgumentException("Não identifiquei a data de vencimento.");
         }
-        if (dados.dataVencimento().isBefore(LocalDate.now())) {
+        if (dados.dataVencimento().isBefore(AppTimeZone.hoje())) {
             throw new IllegalArgumentException(
                 "A data de vencimento (" + dados.dataVencimento().format(FMT_BR)
                     + ") já passou. Não é possível agendar.");

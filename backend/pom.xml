@@ -29,6 +29,7 @@
         <resilience4j.version>1.7.0</resilience4j.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <flyway.version>9.22.3</flyway.version>
+        <testcontainers.version>1.19.8</testcontainers.version>
 
         <!-- plugins -->
         <maven.enforcer.version>1.4.1</maven.enforcer.version>
@@ -219,6 +220,18 @@
         </dependency>
 
         <!-- Testes -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

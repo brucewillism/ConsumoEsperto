@@ -3,6 +3,7 @@ package com.consumoesperto.controller;
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.service.AiProvidersConfigService;
+import com.consumoesperto.service.AiRateLimitService;
 import com.consumoesperto.service.EvolutionInstanceSettingsService;
 import com.consumoesperto.service.EvolutionPairingService;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
@@ -45,6 +46,7 @@ public class EvolutionWebhookController {
     private final EvolutionPairingService evolutionPairingService;
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
     private final EvolutionSessionWatchdogService evolutionSessionWatchdogService;
+    private final AiRateLimitService aiRateLimitService;
 
     /**
      * Evolution API v2.3+ também POSTa variantes como {@code /webhook/messages-upsert}; o destino nos logs
@@ -90,14 +92,14 @@ public class EvolutionWebhookController {
             data.path("instanceName").asText("")
         );
 
+        if (!evolutionWebhookDedupService.claimDelivery(instance, messageKeyId, effectiveRemote, fromMeFlag, dedupBodySnippet)) {
+            return ResponseEntity.ok(Map.of("status", "ignored", "reason", "duplicate-message-key"));
+        }
+
         if (effectiveRemote.endsWith("@g.us") || effectiveRemote.contains("@g.us")
             || effectiveRemote.endsWith("@broadcast") || "status@broadcast".equalsIgnoreCase(effectiveRemote)) {
             log.info("[WhatsAppFilter] Mensagem ignorada: grupo ou broadcast remoteJid={}", effectiveRemote);
             return ResponseEntity.ok(Map.of("status", "ignored", "reason", "group-or-broadcast"));
-        }
-
-        if (!evolutionWebhookDedupService.claimDelivery(instance, messageKeyId, effectiveRemote, fromMeFlag, dedupBodySnippet)) {
-            return ResponseEntity.ok(Map.of("status", "ignored", "reason", "duplicate-message-key"));
         }
 
         log.info("Evolution webhook messages.upsert: instance='{}' remoteJid='{}'", instance, effectiveRemote);
@@ -155,6 +157,7 @@ public class EvolutionWebhookController {
         }
         whatsAppUserMappingService.ensureLinkedIfEmpty(userId, incoming.getFromJid());
         evolutionSessionWatchdogService.touchWebhookActivity(instance);
+        aiRateLimitService.checkOrThrow(userId, "whatsapp-webhook", incoming.getFromJid());
         whatsAppCommandService.sendJarvisInstantAck(incoming, userId, instance);
         log.info("Evolution webhook enfileirado (async): userId={} remoteJid={} fromMe={} msgKey={}", userId, incoming.getFromJid(), incoming.isFromMe(), incoming.getMessageKeyId());
         evolutionWebhookAsyncProcessor.processEvolutionMessageAsync(incoming, userId, instance);

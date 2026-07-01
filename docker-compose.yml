@@ -168,7 +168,7 @@ services:
      - CACHE_REDIS_PREFIX_KEY=${EVOLUTION_CACHE_REDIS_PREFIX_KEY:-evolution-ce}
      - CACHE_LOCAL_ENABLED=true
      - WEBHOOK_GLOBAL_ENABLED=true
-     - WEBHOOK_GLOBAL_URL=http://backend:8087/api/public/evolution/webhook
+     - WEBHOOK_GLOBAL_URL=http://backend:8087/api/public/evolution/webhook?token=${EVOLUTION_WEBHOOK_SECRET:-${EVOLUTION_API_KEY:-changeme}}
      - WEBHOOK_GLOBAL_COLLECTION_ERRORS=false
      - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
      - WEBHOOK_EVENTS_CONNECTION_UPDATE=true

@@ -8,6 +8,7 @@ import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.dto.ImportacaoFaturaDTO;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
+import com.consumoesperto.util.UntrustedContentGuard;
 import com.consumoesperto.dto.OrcamentoRequest;
 import com.consumoesperto.dto.OrcamentoDTO;
 import com.consumoesperto.dto.MetaFinanceiraListResponse;
@@ -128,6 +129,7 @@ public class WhatsAppCommandService {
     private final SplitBillService splitBillService;
     private final AgendamentoPagamentoService agendamentoPagamentoService;
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
+    private final AiMediaLimitService aiMediaLimitService;
     private final ChequeEspecialConfirmacaoService chequeEspecialConfirmacaoService;
     private final TransferenciaContaService transferenciaContaService;
     private final SaudacaoService saudacaoService;
@@ -1982,6 +1984,7 @@ public class WhatsAppCommandService {
                 if (mediaBytes == null || mediaBytes.length == 0) {
                     response = msgInfo("Documento", jarvisProtocolService.documentoRecebidoSemConteudoBinario());
                 } else if (isPdfMime(incoming.getMediaMimeType()) || isPdfMagic(mediaBytes)) {
+                    aiMediaLimitService.checkPdf(mediaBytes);
                     if (!incoming.isJarvisInstantAckSent()) {
                         sendOutgoingMessage(from, jarvisProtocolService.statusLeituraPdfExtracaoFiscal(), userId, webhookEvolutionInstanceHint);
                     }
@@ -1995,6 +1998,9 @@ public class WhatsAppCommandService {
             } else if ("image".equalsIgnoreCase(mediaType) && mediaBytes != null && mediaBytes.length > 0) {
                 response = handleImageReceiptBytes(from, userId, mediaBytes, incoming.getMediaMimeType());
             } else {
+                if ("audio".equalsIgnoreCase(mediaType) && mediaBytes != null && mediaBytes.length > 0) {
+                    aiMediaLimitService.checkAudio(mediaBytes);
+                }
                 String sourceText = extractTextEvolution(incoming.getText(), mediaType, mediaBytes, incoming.getMediaMimeType(), userId);
                 if ("audio".equalsIgnoreCase(mediaType) && (sourceText == null || sourceText.isBlank())) {
                     log.warn("Audio Evolution sem bytes ou transcricao vazia: userId={} from={} bytes={} evolutionInstance={}",
@@ -2127,15 +2133,23 @@ public class WhatsAppCommandService {
 
     private String extractTextEvolution(String body, String mediaType, byte[] mediaBytes, String mediaContentType, Long userId) {
         if ("audio".equalsIgnoreCase(mediaType) && mediaBytes != null && mediaBytes.length > 0) {
+            aiMediaLimitService.checkAudio(mediaBytes);
             String mime = normalizeAudioMimeForTranscription(
                 mediaContentType != null ? mediaContentType : "audio/ogg"
             );
             String filename = filenameForTranscription(mime);
             String transcript = speechToTextService.transcrever(mediaBytes, filename, mime, userId);
             log.info("[JARVIS-LOG] Comando de voz Evolution transcrito: {}", transcript);
-            return transcript;
+            if (UntrustedContentGuard.containsSuspiciousInstruction(transcript)) {
+                log.warn("[PROMPT-INJECTION] Padrão suspeito em áudio userId={}", userId);
+            }
+            return UntrustedContentGuard.wrapForLlmContext(transcript);
         }
-        return body != null ? body : "";
+        String text = body != null ? body : "";
+        if (UntrustedContentGuard.containsSuspiciousInstruction(text)) {
+            log.warn("[PROMPT-INJECTION] Padrão suspeito em texto userId={}", userId);
+        }
+        return text;
     }
 
     private String handleImageReceipt(String from, Long userId, String mediaUrl, String mediaContentType) {

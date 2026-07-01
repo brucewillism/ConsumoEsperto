@@ -90,6 +90,7 @@ public class SchemaAutoPatchService {
         ensureJarvisFeedbackTable();
         ensureJarvisFeedbackDataExpiracaoColumn();
         ensureUsuarioSessoesContextoTable();
+        ensureEventoWebhookProcessadoTable();
         try {
             List<String> schemas = jdbcTemplate.queryForList(
                 "SELECT table_schema " +
@@ -1069,6 +1070,24 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: metas_financeiras — coluna valor_acumulado verificada.");
         } catch (Exception e) {
             log.warn("Falha ao aplicar valor_acumulado em metas_financeiras: {}", e.getMessage());
+        }
+    }
+
+    private void ensureEventoWebhookProcessadoTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.evento_webhook_processado ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "chave_dedup VARCHAR(512) NOT NULL,"
+                    + "processado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_evento_webhook_chave ON public.evento_webhook_processado(chave_dedup)"
+            );
+            log.info("Schema patch: evento_webhook_processado verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE evento_webhook_processado: {}", e.getMessage());
         }
     }
 

@@ -4,6 +4,7 @@ import com.consumoesperto.dto.ForecastFinanceiroDTO;
 import com.consumoesperto.dto.ProjecaoMesResumoDTO;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,7 +36,7 @@ public class ForecastFinanceiroService {
     public ForecastFinanceiroDTO calcular(Long usuarioId) {
         SaldoService.ProjecaoMesCaixa p = saldoService.calcularProjecaoMes(usuarioId);
         YearMonth ym = YearMonth.now();
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = AppTimeZone.hoje();
         LocalDateTime inicio = ym.atDay(1).atStartOfDay();
         LocalDateTime fimHoje = hoje.atTime(23, 59, 59);
 
