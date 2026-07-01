@@ -24,7 +24,7 @@ public class MetaFinanceiraDTO {
     private LocalDateTime dataCriacao;
     /** 1 (baixa) a 5 (máxima); listagem ordena por prioridade decrescente. */
     private Integer prioridade;
-    /** Progresso estimado pelo tempo desde a criação (0–100). */
+    /** Progresso pelo valor acumulado vs objetivo (0–100). */
     private Integer progressPercent;
     /** Preenchido em respostas de criação/atualização quando aplicável. */
     private BigDecimal totalPercentualComprometidoMetas;

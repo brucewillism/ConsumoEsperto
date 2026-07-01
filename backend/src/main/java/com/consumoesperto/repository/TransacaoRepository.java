@@ -64,13 +64,13 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("dataFim") LocalDateTime dataFim,
         Pageable pageable);
     
-    @Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
     BigDecimal sumByUsuarioIdAndTipoAndPeriodo(@Param("usuarioId") Long usuarioId, 
                                               @Param("tipoTransacao") TipoTransacao tipoTransacao,
                                               @Param("dataInicio") LocalDateTime dataInicio, 
                                               @Param("dataFim") LocalDateTime dataFim);
 
-    @Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
     BigDecimal sumConfirmadaByUsuarioIdAndTipoAndPeriodo(@Param("usuarioId") Long usuarioId,
                                                          @Param("tipoTransacao") TipoTransacao tipoTransacao,
                                                          @Param("dataInicio") LocalDateTime dataInicio,

@@ -66,6 +66,7 @@ public class JarvisContextoFinanceiroService {
         }
         try {
             BigDecimal patrimonio = nz(saldoService.patrimonioLiquido(userId));
+            BigDecimal liquidez = nz(saldoService.saldoLiquidezImediata(userId));
             BigDecimal renda = rendaConfigService.getRendaMensalEstimada(userId);
             if (renda == null || renda.compareTo(BigDecimal.ZERO) <= 0) {
                 renda = null;
@@ -82,11 +83,12 @@ public class JarvisContextoFinanceiroService {
             }
             return ContextoFinanceiro.builder()
                 .patrimonioLiquido(patrimonio)
+                .saldoLiquidezImediata(liquidez)
                 .rendaLiquidaMensal(renda)
                 .despesasFixas(fixas)
                 .assinaturas(assinaturas)
                 .parcelasEmprestimosAtivos(parcelasEmprestimo)
-                .reservaEmergencia(patrimonio)
+                .reservaEmergencia(liquidez)
                 .gastoMensalMedio(gastoMensal)
                 .mesesReservaAtual(mesesReserva)
                 .build();

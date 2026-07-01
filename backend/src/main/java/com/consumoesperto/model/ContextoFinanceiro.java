@@ -15,6 +15,12 @@ public class ContextoFinanceiro {
     /** Patrimônio líquido em contas (dinheiro disponível real). */
     private BigDecimal patrimonioLiquido;
 
+    /**
+     * Liquidez imediata: soma de contas correntes, poupança e dinheiro (resgate diário).
+     * {@code null} quando não calculável — use {@link #patrimonioLiquido} como fallback.
+     */
+    private BigDecimal saldoLiquidezImediata;
+
     /** Renda líquida mensal estimada; {@code null} quando não configurada (ZERO tratado como null). */
     private BigDecimal rendaLiquidaMensal;
 

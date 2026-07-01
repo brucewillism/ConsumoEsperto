@@ -82,6 +82,7 @@ public class SchemaAutoPatchService {
         ensureUsuarioFotoUrlTextColumn();
         ensureUsuarioGoogleCalendarColumns();
         ensureMetasFinanceirasCronosColumns();
+        ensureMetasFinanceirasValorAcumuladoColumn();
         ensureJarvisCronosEventLogTable();
         ensureAuditLogTable();
         ensurePgvectorExtensionAndMemoriaSemanticaJarvisTable();
@@ -1058,6 +1059,16 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: metas_financeiras — colunas Cronos verificadas.");
         } catch (Exception e) {
             log.warn("Falha ao aplicar colunas Cronos em metas_financeiras: {}", e.getMessage());
+        }
+    }
+
+    private void ensureMetasFinanceirasValorAcumuladoColumn() {
+        try {
+            executeDdlAutocommit(
+                "ALTER TABLE public.metas_financeiras ADD COLUMN IF NOT EXISTS valor_acumulado NUMERIC(19,2) NOT NULL DEFAULT 0");
+            log.info("Schema patch: metas_financeiras — coluna valor_acumulado verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao aplicar valor_acumulado em metas_financeiras: {}", e.getMessage());
         }
     }
 

@@ -136,6 +136,17 @@ public class SaldoService {
     }
 
     /**
+     * Liquidez imediata: contas correntes, poupança e dinheiro (proxy conservador — sem classificar investimentos).
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal saldoLiquidezImediata(Long usuarioId) {
+        if (usaMulticarteira(usuarioId)) {
+            return contaBancariaService.somarSaldosLiquidezImediata(usuarioId);
+        }
+        return saldoConfirmado(usuarioId);
+    }
+
+    /**
      * Projeção do mês corrente — delegação para {@link #calcularProjecaoMes(Long, YearMonth, BigDecimal)}.
      */
     @Transactional(readOnly = true)

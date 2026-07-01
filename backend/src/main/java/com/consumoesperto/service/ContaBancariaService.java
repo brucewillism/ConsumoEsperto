@@ -120,6 +120,12 @@ public class ContaBancariaService {
     }
 
     @Transactional(readOnly = true)
+    public BigDecimal somarSaldosLiquidezImediata(Long usuarioId) {
+        BigDecimal total = contaBancariaRepository.sumSaldoLiquidezImediataByUsuarioId(usuarioId);
+        return total != null ? total.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+    }
+
+    @Transactional(readOnly = true)
     public boolean possuiContasAtivas(Long usuarioId) {
         return contaBancariaRepository.countByUsuarioIdAndAtivaTrue(usuarioId) > 0;
     }

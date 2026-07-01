@@ -81,6 +81,9 @@ public class EmprestimoService {
                 && t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA) {
                 saldoMovimentacaoService.aplicarExclusao(t);
                 creditoEstornado = nz(t.getValor());
+            } else if (t.getTipoTransacao() == Transacao.TipoTransacao.DESPESA
+                && t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA) {
+                saldoMovimentacaoService.aplicarExclusao(t);
             }
             t.setExcluido(true);
             transacaoRepository.save(t);

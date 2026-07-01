@@ -23,10 +23,15 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.time.ZoneId;
+import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -184,6 +189,60 @@ public class CerebroSemanticoService {
             }
             throw dex;
         }
+    }
+
+    /**
+     * União sem duplicatas: memórias do mesmo mês no ano anterior + memórias do ano corrente
+     * que mencionam o mês-alvo (nome, «mês N», etc.).
+     */
+    public List<String> listarContextosMemoriaParaProvisaoMes(Long usuarioId, int mesAlvo, int anoAlvo) {
+        if (usuarioId == null || mesAlvo < 1 || mesAlvo > 12) {
+            return List.of();
+        }
+        LinkedHashSet<String> uniao = new LinkedHashSet<>();
+        uniao.addAll(listarContextosMemoriaNoMesCalendario(usuarioId, mesAlvo, anoAlvo - 1));
+        uniao.addAll(buscarMemoriasAnoCorrenteReferenciandoMes(usuarioId, mesAlvo, anoAlvo));
+        return new ArrayList<>(uniao);
+    }
+
+    private List<String> buscarMemoriasAnoCorrenteReferenciandoMes(Long usuarioId, int mesAlvo, int anoAlvo) {
+        List<String> termos = termosBuscaMesAlvo(mesAlvo);
+        if (termos.isEmpty()) {
+            return List.of();
+        }
+        StringBuilder sql = new StringBuilder(
+            "SELECT contexto FROM memoria_semantica_jarvis WHERE usuario_id = ? "
+                + "AND EXTRACT(YEAR FROM data_registro) = ? AND (");
+        List<Object> params = new ArrayList<>();
+        params.add(usuarioId);
+        params.add(anoAlvo);
+        for (int i = 0; i < termos.size(); i++) {
+            if (i > 0) {
+                sql.append(" OR ");
+            }
+            sql.append("LOWER(contexto) LIKE ?");
+            params.add("%" + termos.get(i).toLowerCase(Locale.ROOT) + "%");
+        }
+        sql.append(") ORDER BY data_registro DESC LIMIT 80");
+        try {
+            return jdbcTemplate.query(sql.toString(), (rs, rn) -> rs.getString(1), params.toArray());
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return List.of();
+            }
+            throw dex;
+        }
+    }
+
+    private static List<String> termosBuscaMesAlvo(int mes) {
+        Locale ptBr = new Locale("pt", "BR");
+        String nomeMes = Month.of(mes).getDisplayName(TextStyle.FULL, ptBr).toLowerCase(Locale.ROOT);
+        List<String> termos = new ArrayList<>();
+        termos.add(nomeMes);
+        termos.add("mes " + mes);
+        termos.add("mês " + mes);
+        return termos;
     }
 
     /**

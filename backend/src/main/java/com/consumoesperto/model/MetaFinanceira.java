@@ -65,6 +65,10 @@ public class MetaFinanceira {
     @Column(name = "google_calendar_event_id", length = 128)
     private String googleCalendarEventId;
 
+    /** Valor já acumulado em direção à meta (aportes registrados). */
+    @Column(name = "valor_acumulado", precision = 19, scale = 2)
+    private BigDecimal valorAcumulado = BigDecimal.ZERO;
+
     @PrePersist
     protected void onCreate() {
         if (dataCriacao == null) {
@@ -169,5 +173,13 @@ public class MetaFinanceira {
 
     public void setGoogleCalendarEventId(String googleCalendarEventId) {
         this.googleCalendarEventId = googleCalendarEventId;
+    }
+
+    public BigDecimal getValorAcumulado() {
+        return valorAcumulado;
+    }
+
+    public void setValorAcumulado(BigDecimal valorAcumulado) {
+        this.valorAcumulado = valorAcumulado;
     }
 }

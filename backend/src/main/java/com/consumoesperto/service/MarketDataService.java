@@ -1,9 +1,11 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.MarketIndicatorsDTO;
+import com.consumoesperto.model.TipoOperacaoFinanceira;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +16,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Oráculo externo — Selic/IPCA (BCB) e USD/BRL (AwesomeAPI), com timeout curto para não bloquear o Sentinela.
@@ -27,6 +30,30 @@ public class MarketDataService {
     private static final String SERIE_SELIC_BCB = "432";
     /** Spread estimado sobre Selic quando a série 25497 estiver indisponível. */
     private static final BigDecimal SPREAD_CONSIGNADO_FALLBACK_AA = new BigDecimal("8");
+
+    @Value("${consumoesperto.market.bcb.serie.cartao:25438}")
+    private String serieCartaoBcb;
+
+    @Value("${consumoesperto.market.bcb.serie.pessoal:25463}")
+    private String seriePessoalBcb;
+
+    @Value("${consumoesperto.market.bcb.serie.imobiliario:20743}")
+    private String serieImobiliarioBcb;
+
+    @Value("${consumoesperto.market.bcb.serie.veiculo:20746}")
+    private String serieVeiculoBcb;
+
+    @Value("${consumoesperto.market.fallback.taxa-cartao-aa:130}")
+    private BigDecimal fallbackCartaoAa;
+
+    @Value("${consumoesperto.market.fallback.taxa-pessoal-aa:55}")
+    private BigDecimal fallbackPessoalAa;
+
+    @Value("${consumoesperto.market.fallback.taxa-imobiliario-aa:12}")
+    private BigDecimal fallbackImobiliarioAa;
+
+    @Value("${consumoesperto.market.fallback.taxa-veiculo-aa:22}")
+    private BigDecimal fallbackVeiculoAa;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -117,6 +144,55 @@ public class MarketDataService {
             log.debug("BCB Selic fallback consignado: {}", e.getMessage());
         }
         return resolverTaxaConsignado(selic);
+    }
+
+    /**
+     * Taxa média de mercado (% a.a.) por tipo de operação — comparável a {@link com.consumoesperto.model.ResultadoConselho#getTaxaJurosAnual()}.
+     */
+    public BigDecimal getTaxaMediaPorOperacaoResiliente(TipoOperacaoFinanceira tipo, String descricaoItem) {
+        if (tipo == null) {
+            return null;
+        }
+        return switch (tipo) {
+            case CONSIGNADO -> getTaxaMediaConsignadoResiliente();
+            case COMPRA_PARCELADA -> taxaAnualDeSerieMensalBcb(serieCartaoBcb, fallbackCartaoAa);
+            case EMPRESTIMO -> taxaAnualDeSerieMensalBcb(seriePessoalBcb, fallbackPessoalAa);
+            case FINANCIAMENTO -> resolverTaxaFinanciamento(descricaoItem);
+            case COMPRA_AVISTA -> null;
+        };
+    }
+
+    private BigDecimal resolverTaxaFinanciamento(String descricaoItem) {
+        if (descricaoItem != null) {
+            String n = descricaoItem.toLowerCase(Locale.ROOT);
+            if (n.contains("imóvel") || n.contains("imovel") || n.contains("imobili")
+                || n.contains("casa") || n.contains("apart") || n.contains("habit")) {
+                return taxaAnualDeSerieMensalBcb(serieImobiliarioBcb, fallbackImobiliarioAa);
+            }
+        }
+        return taxaAnualDeSerieMensalBcb(serieVeiculoBcb, fallbackVeiculoAa);
+    }
+
+    private BigDecimal taxaAnualDeSerieMensalBcb(String codigoSerie, BigDecimal fallbackAa) {
+        try {
+            BigDecimal mensal = bcbUltimoValorNumerico(codigoSerie);
+            if (mensal != null && mensal.compareTo(BigDecimal.ZERO) > 0) {
+                return converterTaxaMensalParaAnual(mensal);
+            }
+        } catch (Exception e) {
+            log.debug("BCB série {} indisponível: {}", codigoSerie, e.getMessage());
+        }
+        return fallbackAa != null ? fallbackAa.setScale(2, RoundingMode.HALF_UP) : new BigDecimal("50.00");
+    }
+
+    /** Converte taxa mensal BCB (% a.m.) para anual equivalente (% a.a.). */
+    static BigDecimal converterTaxaMensalParaAnual(BigDecimal taxaMensalPercent) {
+        if (taxaMensalPercent == null || taxaMensalPercent.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        double i = taxaMensalPercent.doubleValue() / 100.0;
+        double aa = (Math.pow(1.0 + i, 12.0) - 1.0) * 100.0;
+        return BigDecimal.valueOf(aa).setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal resolverTaxaConsignado(BigDecimal selicCache) {

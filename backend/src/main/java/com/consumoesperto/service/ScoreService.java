@@ -2,9 +2,11 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.UsuarioScoreDTO;
 import com.consumoesperto.model.HistoricoScore;
+import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.UsuarioScore;
 import com.consumoesperto.repository.HistoricoScoreRepository;
+import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.repository.UsuarioScoreRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class ScoreService {
     private final HistoricoScoreRepository historicoScoreRepository;
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
+    private final TransacaoRepository transacaoRepository;
 
     @Transactional(readOnly = true)
     public UsuarioScoreDTO obter(Long usuarioId) {
@@ -71,10 +74,15 @@ public class ScoreService {
             .filter(h -> h.getDelta() != null && h.getDelta() > 0)
             .mapToInt(HistoricoScore::getDelta)
             .sum();
-        BigDecimal economiaEstimativa = BigDecimal.valueOf(pontosGanhos).multiply(BigDecimal.valueOf(2)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal receitas = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+            usuarioId, Transacao.TipoTransacao.RECEITA, ini, fim);
+        BigDecimal despesas = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+            usuarioId, Transacao.TipoTransacao.DESPESA, ini, fim);
+        BigDecimal resultadoLiquido = receitas.subtract(despesas).setScale(2, RoundingMode.HALF_UP);
         UsuarioScoreDTO score = obter(usuarioId);
         String v = jarvisProtocolService.resolveVocative(usuarioId, usuarioRepository);
-        return jarvisProtocolService.proativoRelatorioMensalEconomia(v, BRL_ECON.format(economiaEstimativa), score.getScore(), score.getNivel());
+        return jarvisProtocolService.proativoRelatorioMensalEconomia(
+            v, BRL_ECON.format(resultadoLiquido), score.getScore(), score.getNivel(), pontosGanhos);
     }
 
     @Transactional(readOnly = true)

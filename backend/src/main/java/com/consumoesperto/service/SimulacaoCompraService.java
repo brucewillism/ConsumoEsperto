@@ -65,10 +65,10 @@ public class SimulacaoCompraService {
         LocalDateTime seisMesesAtras = agora.minusMonths(6);
         
         // Buscar total de receitas e despesas do período de análise
-        BigDecimal totalReceitas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora);
-        BigDecimal totalDespesas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora);
+        BigDecimal totalReceitas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+                usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora));
+        BigDecimal totalDespesas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+                usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora));
         
         // Calcular médias mensais para análise de capacidade de pagamento
         BigDecimal mediaReceitasMensal = totalReceitas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
@@ -134,10 +134,10 @@ public class SimulacaoCompraService {
         LocalDateTime seisMesesAtras = agora.minusMonths(6);
         
         // Buscar total de receitas e despesas do período de análise
-        BigDecimal totalReceitas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora);
-        BigDecimal totalDespesas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora);
+        BigDecimal totalReceitas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+                usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora));
+        BigDecimal totalDespesas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+                usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora));
         
         // Calcular médias mensais para análise de capacidade de compra
         BigDecimal mediaReceitasMensal = totalReceitas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
@@ -199,10 +199,10 @@ public class SimulacaoCompraService {
         LocalDateTime seisMesesAtras = agora.minusMonths(6);
         
         // Buscar total de receitas e despesas do período de análise
-        BigDecimal totalReceitas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora);
-        BigDecimal totalDespesas = transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora);
+        BigDecimal totalReceitas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+                usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora));
+        BigDecimal totalDespesas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+                usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora));
         
         // Calcular médias mensais para análise de capacidade de economia
         BigDecimal mediaReceitasMensal = totalReceitas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
@@ -229,6 +229,10 @@ public class SimulacaoCompraService {
         resultado.put("recomendacao", gerarRecomendacaoEconomia(metaViavel, economiaAdicional, mesesDesejados));
         
         return resultado;
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
     }
 
     /**

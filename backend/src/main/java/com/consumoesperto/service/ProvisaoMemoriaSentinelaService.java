@@ -45,8 +45,8 @@ public class ProvisaoMemoriaSentinelaService {
         YearMonth passado = atual.minusYears(1);
         List<ProvisaoMemoriaDTO> raw = new ArrayList<>();
 
-        List<String> memorias = cerebroSemanticoService.listarContextosMemoriaNoMesCalendario(
-            usuarioId, passado.getMonthValue(), passado.getYear());
+        List<String> memorias = cerebroSemanticoService.listarContextosMemoriaParaProvisaoMes(
+            usuarioId, atual.getMonthValue(), atual.getYear());
         for (String ctx : memorias) {
             if (!pareceGastoExtraOuSazonal(ctx)) {
                 continue;
@@ -56,7 +56,7 @@ public class ProvisaoMemoriaSentinelaService {
                 continue;
             }
             raw.add(ProvisaoMemoriaDTO.builder()
-                .diaAlvo(diaAlvoHeuristica(passado.getMonthValue()))
+                .diaAlvo(diaAlvoHeuristica(atual.getMonthValue()))
                 .valor(v.setScale(2, RoundingMode.HALF_UP))
                 .rotulo(resumirRotulo(ctx))
                 .periodoHistorico(passado.atDay(1).format(MES_ANO))
@@ -66,13 +66,10 @@ public class ProvisaoMemoriaSentinelaService {
 
         LocalDateTime ini = passado.atDay(1).atStartOfDay();
         LocalDateTime fim = passado.atEndOfMonth().atTime(23, 59, 59);
-        List<Transacao> despesas = transacaoRepository.findByUsuarioIdAndTipoTransacaoOrderByDataTransacaoDesc(
-            usuarioId, Transacao.TipoTransacao.DESPESA);
+        List<Transacao> despesas = transacaoRepository.findByUsuarioIdAndTipoAndPeriodo(
+            usuarioId, Transacao.TipoTransacao.DESPESA, ini, fim);
         for (Transacao t : despesas) {
             if (t.getStatusConferencia() != Transacao.StatusConferencia.CONFIRMADA) {
-                continue;
-            }
-            if (t.getDataTransacao() == null || t.getDataTransacao().isBefore(ini) || t.getDataTransacao().isAfter(fim)) {
                 continue;
             }
             if (Boolean.TRUE.equals(t.isRecorrente())) {

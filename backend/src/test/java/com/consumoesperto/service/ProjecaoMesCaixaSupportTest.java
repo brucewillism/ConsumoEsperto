@@ -72,14 +72,15 @@ class ProjecaoMesCaixaSupportTest {
     }
 
     @Test
-    void antiSusto_somenteAposDia25() {
-        assertFalse(ProjecaoMesCaixaSupport.usarModoAntiSusto(24, 25));
-        assertTrue(ProjecaoMesCaixaSupport.usarModoAntiSusto(25, 25));
-        assertTrue(ProjecaoMesCaixaSupport.usarModoAntiSusto(26, 25));
+    void antiSusto_ateDia14_inclusive() {
+        assertTrue(ProjecaoMesCaixaSupport.usarModoAntiSusto(6, 15));
+        assertTrue(ProjecaoMesCaixaSupport.usarModoAntiSusto(14, 15));
+        assertFalse(ProjecaoMesCaixaSupport.usarModoAntiSusto(15, 15));
+        assertFalse(ProjecaoMesCaixaSupport.usarModoAntiSusto(26, 15));
     }
 
     @Test
-    void antiSusto_calculaFixasEmprestimoEMargem10Pct() {
+    void antiSusto_calculaFixasEmprestimoEGastoVariavelComMargem10Pct() {
         BigDecimal media = new BigDecimal("100.00");
         BigDecimal despesas = ProjecaoMesCaixaSupport.calcularDespesasPrevistasAntiSusto(
             media,
@@ -88,8 +89,8 @@ class ProjecaoMesCaixaSupportTest {
             new BigDecimal("500.00"),
             new BigDecimal("200.00"),
             new BigDecimal("10"));
-        // 4 dias restantes × 100 × 10% = 40 + 500 + 200 = 740
-        assertEquals(new BigDecimal("740.00"), despesas);
+        // 4 dias × 100 × 1,10 = 440 + 500 + 200 = 1140
+        assertEquals(new BigDecimal("1140.00"), despesas);
     }
 
     @Test

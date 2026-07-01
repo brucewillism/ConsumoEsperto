@@ -26,4 +26,11 @@ public interface ContaBancariaRepository extends JpaRepository<ContaBancaria, Lo
     @Query("SELECT COALESCE(SUM(c.saldoAtual), 0) FROM ContaBancaria c "
         + "WHERE c.usuario.id = :usuarioId AND c.ativa = true")
     BigDecimal sumSaldoAtualByUsuarioIdAndAtivaTrue(@Param("usuarioId") Long usuarioId);
+
+    @Query("SELECT COALESCE(SUM(c.saldoAtual), 0) FROM ContaBancaria c "
+        + "WHERE c.usuario.id = :usuarioId AND c.ativa = true "
+        + "AND c.tipo IN (com.consumoesperto.model.ContaBancaria$TipoConta.CORRENTE, "
+        + "com.consumoesperto.model.ContaBancaria$TipoConta.POUPANCA, "
+        + "com.consumoesperto.model.ContaBancaria$TipoConta.DINHEIRO)")
+    BigDecimal sumSaldoLiquidezImediataByUsuarioId(@Param("usuarioId") Long usuarioId);
 }

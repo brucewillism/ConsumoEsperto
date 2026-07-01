@@ -13,7 +13,7 @@ final class ProjecaoMesCaixaSupport {
     private ProjecaoMesCaixaSupport() {}
 
     static boolean usarModoAntiSusto(int diaAtual, int diaLiminar) {
-        return diaAtual >= diaLiminar;
+        return diaAtual < diaLiminar;
     }
 
     /**
@@ -68,13 +68,15 @@ final class ProjecaoMesCaixaSupport {
     ) {
         int diasRestantes = Math.max(0, diasNoMes - diaAtual);
         BigDecimal pct = margemVariavelPct != null ? margemVariavelPct : BigDecimal.TEN;
-        BigDecimal margemVariavel = nz(mediaDiaria)
+        BigDecimal fatorMargem = BigDecimal.ONE.add(
+            pct.divide(BigDecimal.valueOf(100), 8, ARRED));
+        BigDecimal gastoVariavelRestante = nz(mediaDiaria)
             .multiply(BigDecimal.valueOf(diasRestantes))
-            .multiply(pct)
-            .divide(BigDecimal.valueOf(100), 2, ARRED);
+            .multiply(fatorMargem)
+            .setScale(2, ARRED);
         return nz(despesasFixasRestantes)
             .add(nz(parcelasEmprestimoRestantes))
-            .add(margemVariavel)
+            .add(gastoVariavelRestante)
             .setScale(2, ARRED);
     }
 

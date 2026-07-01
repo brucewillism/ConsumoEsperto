@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @Component
 public class ForecastProjecaoConfig {
 
-    @Value("${consumoesperto.forecast.dia-liminar-anti-susto:25}")
+    @Value("${consumoesperto.forecast.dia-liminar-anti-susto:15}")
     private int diaLiminarAntiSusto;
 
     @Value("${consumoesperto.forecast.margem-variavel-pct:10}")

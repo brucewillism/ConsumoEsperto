@@ -33,6 +33,11 @@ public class AmortizacaoSazonalService {
     @Value("${consumoesperto.amortizacao.taxa-juros-mensal-padrao:0.0199}")
     private BigDecimal taxaJurosMensalPadrao;
 
+    @Value("${consumoesperto.amortizacao.taxa-desconto-sem-juros:0.005}")
+    private BigDecimal taxaDescontoSemJuros;
+
+    private static final BigDecimal TOLERANCIA_SEM_JUROS = new BigDecimal("0.05");
+
     private final CompraParceladaRepository compraParceladaRepository;
     private final PlanejamentoFiscalService planejamentoFiscalService;
     private final SaldoService saldoService;
@@ -101,7 +106,7 @@ public class AmortizacaoSazonalService {
                 continue;
             }
 
-            BigDecimal jurosEst = calcularJurosEconomizados(valorRestante, restantes);
+            BigDecimal jurosEst = calcularJurosEconomizados(valorRestante, restantes, cp);
             BigDecimal sugerido = valorRestante.min(melhorParcela.getValor());
             if (patrimonioDisponivel.compareTo(BigDecimal.ZERO) > 0) {
                 sugerido = sugerido.min(patrimonioDisponivel);
@@ -159,14 +164,19 @@ public class AmortizacaoSazonalService {
         return saldoService.patrimonioLiquido(usuarioId);
     }
 
-    private BigDecimal calcularJurosEconomizados(BigDecimal valorRestante, int parcelasRestantes) {
-        if (valorRestante.compareTo(BigDecimal.ZERO) <= 0 || parcelasRestantes <= 0) {
-            return BigDecimal.ZERO;
+    private BigDecimal calcularJurosEconomizados(BigDecimal valorRestante, int parcelasRestantes, CompraParcelada cp) {
+        BigDecimal taxa = parcelamentoSemJuros(cp)
+            ? (taxaDescontoSemJuros != null ? taxaDescontoSemJuros : new BigDecimal("0.005"))
+            : (taxaJurosMensalPadrao != null ? taxaJurosMensalPadrao : new BigDecimal("0.0199"));
+        return AmortizacaoVpCalculo.calcularJurosEconomizados(valorRestante, parcelasRestantes, taxa);
+    }
+
+    private static boolean parcelamentoSemJuros(CompraParcelada cp) {
+        if (cp.getValorTotal() == null || cp.getValorParcela() == null || cp.getNumeroParcelas() == null) {
+            return true;
         }
-        BigDecimal taxa = taxaJurosMensalPadrao != null ? taxaJurosMensalPadrao : new BigDecimal("0.0199");
-        BigDecimal fator = taxa.multiply(BigDecimal.valueOf(parcelasRestantes))
-            .multiply(new BigDecimal("0.5"));
-        return valorRestante.multiply(fator).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal esperado = cp.getValorParcela().multiply(BigDecimal.valueOf(cp.getNumeroParcelas()));
+        return cp.getValorTotal().subtract(esperado).abs().compareTo(TOLERANCIA_SEM_JUROS) <= 0;
     }
 
     private static int diasAteParcela(LocalDate hoje, int ano, ParcelaReceitaFiscalDTO p) {

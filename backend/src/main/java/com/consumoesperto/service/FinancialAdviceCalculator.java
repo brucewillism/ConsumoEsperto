@@ -41,7 +41,7 @@ public class FinancialAdviceCalculator {
             calcularCompraAvista(proposta, ctx, r);
         }
 
-        enriquecerBenchmark(r);
+        enriquecerBenchmark(proposta, r);
         r.setVeredito(determinarVeredito(r));
         return r;
     }
@@ -51,13 +51,18 @@ public class FinancialAdviceCalculator {
         if (valor.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-        BigDecimal saldoLivre = nz(ctx.getPatrimonioLiquido());
+        BigDecimal saldoLivre = ctx.getSaldoLiquidezImediata() != null
+            ? nz(ctx.getSaldoLiquidezImediata())
+            : nz(ctx.getPatrimonioLiquido());
         r.setCustoTotal(valor);
         r.setSaldoAposCompra(saldoLivre.subtract(valor).setScale(2, RoundingMode.HALF_UP));
 
         BigDecimal gasto = ctx.getGastoMensalMedio();
+        BigDecimal reservaBase = ctx.getSaldoLiquidezImediata() != null
+            ? nz(ctx.getSaldoLiquidezImediata())
+            : nz(ctx.getReservaEmergencia());
         if (gasto != null && gasto.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal reservaApos = nz(ctx.getReservaEmergencia()).subtract(valor);
+            BigDecimal reservaApos = reservaBase.subtract(valor);
             r.setReservaMesesApos(reservaApos.divide(gasto, 1, RoundingMode.HALF_UP));
         }
         r.setComprometeReserva(
@@ -155,11 +160,14 @@ public class FinancialAdviceCalculator {
         return (baixo + alto) / 2;
     }
 
-    private void enriquecerBenchmark(ResultadoConselho r) {
+    private void enriquecerBenchmark(PropostaFinanceira proposta, ResultadoConselho r) {
         if (r.getTaxaJurosAnual() == null) {
             return;
         }
-        BigDecimal mercado = marketDataService.getTaxaMediaConsignadoResiliente();
+        BigDecimal mercado = marketDataService.getTaxaMediaPorOperacaoResiliente(
+            proposta.getTipoOperacao(),
+            proposta.getDescricaoItem()
+        );
         if (mercado == null || mercado.compareTo(BigDecimal.ZERO) <= 0) {
             r.setComparacaoMercado("INDISPONIVEL");
             return;

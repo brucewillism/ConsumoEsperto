@@ -591,12 +591,19 @@ public class JarvisProtocolService {
         return sb.toString();
     }
 
-    /** Relatório mensal de economia / score (job do dia 1). */
-    public String proativoRelatorioMensalEconomia(String vocativo, String economiaFmt, int score, String nivel) {
+    /** Relatório mensal de resultado de caixa / score (job do dia 1). */
+    public String proativoRelatorioMensalEconomia(
+        String vocativo,
+        String resultadoFmt,
+        int score,
+        String nivel,
+        int pontosGanhos
+    ) {
         String v = blankToSenhor(vocativo);
-        return v + ", o encerramento do mês nos registros sugere economia estimada de *" + economiaFmt + "* "
-            + "à luz das escolhas alinhadas às recomendações. "
+        return v + ", o encerramento do mês nos registros indica *resultado líquido* de *" + resultadoFmt + "* "
+            + "(entradas confirmadas menos saídas confirmadas). "
             + "O *Score de Saúde Financeira* situa-se em *" + score + "* (*" + nivel + "*). "
+            + "Pontos de gamificação no período: *" + pontosGanhos + "*. "
             + "Os protocolos permanecem ativos.";
     }
 

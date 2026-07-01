@@ -187,6 +187,12 @@ public class MetaFinanceiraService {
                         prazoManual = true;
                     }
                 }
+                case "valoracumulado", "valor_acumulado", "poupado" -> {
+                    BigDecimal nv = readBigDecimalNode(v);
+                    if (nv != null && nv.compareTo(BigDecimal.ZERO) >= 0) {
+                        m.setValorAcumulado(nv);
+                    }
+                }
                 default -> {
                 }
             }
@@ -354,16 +360,13 @@ public class MetaFinanceiraService {
     }
 
     private int calcularProgressoPercentual(MetaFinanceira m) {
-        if (m.getPrazoMeses() == null || m.getPrazoMeses().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal objetivo = m.getValorTotal();
+        if (objetivo == null || objetivo.compareTo(BigDecimal.ZERO) <= 0) {
             return 0;
         }
-        long days = ChronoUnit.DAYS.between(m.getDataCriacao().toLocalDate(), java.time.LocalDate.now());
-        if (days <= 0) {
-            return 0;
-        }
-        BigDecimal mesesDecorridos = BigDecimal.valueOf(days).divide(BigDecimal.valueOf(30), 4, RoundingMode.HALF_UP);
-        BigDecimal raw = mesesDecorridos
-            .divide(m.getPrazoMeses(), 4, RoundingMode.HALF_UP)
+        BigDecimal acumulado = m.getValorAcumulado() != null ? m.getValorAcumulado() : BigDecimal.ZERO;
+        BigDecimal raw = acumulado
+            .divide(objetivo, 4, RoundingMode.HALF_UP)
             .multiply(BigDecimal.valueOf(100));
         if (raw.compareTo(BigDecimal.valueOf(100)) > 0) {
             raw = BigDecimal.valueOf(100);
