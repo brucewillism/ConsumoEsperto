@@ -262,6 +262,9 @@ public class PrevisaoFluxoCaixaService {
         LocalDate fimMes = ym.atEndOfMonth();
         BigDecimal somaDetectadas = recurringExpenseDetectionService.detectar(usuarioId).stream()
             .filter(r -> !r.proximaData().isBefore(referencia) && !r.proximaData().isAfter(fimMes))
+            // Dedup: recorrência detectada que já existe como DespesaFixa cadastrada entra na
+            // projeção pela DespesaFixa (somarValorRestanteNoMes/saltos), não duas vezes.
+            .filter(r -> despesaFixaService.encontrarSimilar(usuarioId, r.nome(), null).isEmpty())
             .map(RecurringExpenseDetectionService.RecurringExpense::valorMedio)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (somaDetectadas.compareTo(BigDecimal.ZERO) > 0) {

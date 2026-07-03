@@ -180,9 +180,9 @@ public class FaturaConciliacaoService {
         if (fatura.getId() == null) {
             return nz(fatura.getValorPago());
         }
-        BigDecimal viaTransacoes = transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(fatura.getId());
-        BigDecimal viaCampo = nz(fatura.getValorPago());
-        return viaTransacoes.max(viaCampo).setScale(2, RoundingMode.HALF_UP);
+        // Fonte única: transações PAGAMENTO_FATURA confirmadas. O campo valorPago pode ter sido
+        // preenchido manualmente via API sem débito real — usá-lo aqui mascarava fatura "paga" sem saída de caixa.
+        return nz(transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(fatura.getId()));
     }
 
     private static boolean quitacaoCompleta(BigDecimal totalPago, BigDecimal valorDevido) {

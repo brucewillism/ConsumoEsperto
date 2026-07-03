@@ -446,6 +446,8 @@ public class TransacaoService {
             if (t.getFatura() != null) {
                 faturas.add(t.getFatura().getId());
             }
+            // Estorna o impacto no saldo antes do soft delete (mesmo contrato de deletarTransacao)
+            saldoMovimentacaoService.aplicarExclusao(t);
             t.setExcluido(true);
             transacaoRepository.save(t);
         }
@@ -758,7 +760,8 @@ public class TransacaoService {
         if (dto.getCartaoCreditoId() != null) {
             CartaoCredito cartao = cartaoCreditoRepository.findByIdAndUsuarioId(dto.getCartaoCreditoId(), usuarioId)
                 .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
-            Fatura f = faturaService.resolverFaturaAbertaParaCartao(usuarioId, cartao);
+            // Competência pela data da compra: após o fechamento, o lançamento vai para o ciclo seguinte
+            Fatura f = faturaService.resolverFaturaParaCompra(usuarioId, cartao, transacao.getDataTransacao());
             transacao.setFatura(f);
             return;
         }

@@ -101,7 +101,7 @@ public class ParcelamentoService {
     ) {
         String grupo = UUID.randomUUID().toString();
         int n = valoresParcela.size();
-        Fatura faturaRef = faturaService.resolverFaturaAbertaParaCartao(usuarioId, cartao);
+        Fatura faturaRef = faturaService.resolverFaturaParaCompra(usuarioId, cartao, LocalDateTime.now());
         LocalDate vencPrimeira = faturaRef.getDataVencimento() != null
             ? faturaRef.getDataVencimento().toLocalDate()
             : LocalDate.now();

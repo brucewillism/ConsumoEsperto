@@ -39,6 +39,7 @@ public class SimulacaoCompraService {
 
     // Repositório para consulta de transações para análise financeira
     private final TransacaoRepository transacaoRepository;
+    private final SaldoService saldoService;
 
     /**
      * Simula uma compra parcelada analisando a viabilidade financeira
@@ -143,9 +144,10 @@ public class SimulacaoCompraService {
         BigDecimal mediaReceitasMensal = totalReceitas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
         BigDecimal mediaDespesasMensal = totalDespesas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
         BigDecimal mediaEconomiaMensal = mediaReceitasMensal.subtract(mediaDespesasMensal);
-        
-        // Verificar viabilidade: valor deve ser menor ou igual à economia mensal
-        boolean compraViavel = mediaEconomiaMensal.compareTo(valorCompra) >= 0;
+
+        // À vista o que decide é o dinheiro disponível hoje, não a economia de um único mês
+        BigDecimal saldoDisponivel = nz(saldoService.saldoContaCorrente(usuarioId));
+        boolean compraViavel = saldoDisponivel.compareTo(valorCompra) >= 0;
         
         // Calcular tempo necessário para economizar o valor total da compra
         int mesesParaEconomizar = 0;
@@ -166,6 +168,7 @@ public class SimulacaoCompraService {
         simulacao.put("mediaReceitasMensal", mediaReceitasMensal);
         simulacao.put("mediaDespesasMensal", mediaDespesasMensal);
         simulacao.put("mediaEconomiaMensal", mediaEconomiaMensal);
+        simulacao.put("saldoDisponivel", saldoDisponivel);
         simulacao.put("compraViavel", compraViavel);
         simulacao.put("mesesParaEconomizar", mesesParaEconomizar);
         simulacao.put("impactoPercentual", impactoPercentual);

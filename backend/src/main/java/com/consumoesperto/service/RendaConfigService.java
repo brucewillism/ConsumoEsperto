@@ -112,7 +112,8 @@ public class RendaConfigService {
     }
 
     /**
-     * Média móvel real de receitas confirmadas — janela em dias civis (ex.: 90 para feedback WhatsApp).
+     * Média móvel mensal real de receitas confirmadas — soma da janela normalizada para 30 dias.
+     * Com janela de 30 dias o resultado é a própria soma; com 90 dias, a soma ÷ 3.
      */
     @Transactional(readOnly = true)
     public BigDecimal calcularMediaMovelReal(Long usuarioId, int dias) {
@@ -126,7 +127,8 @@ public class RendaConfigService {
         if (totalReceitas == null || totalReceitas.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO;
         }
-        return totalReceitas.setScale(2, RoundingMode.HALF_UP);
+        return totalReceitas.multiply(BigDecimal.valueOf(30))
+            .divide(BigDecimal.valueOf(dias), 2, RoundingMode.HALF_UP);
     }
 
     @Transactional(readOnly = true)

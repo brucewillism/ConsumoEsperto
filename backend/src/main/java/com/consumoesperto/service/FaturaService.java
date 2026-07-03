@@ -234,12 +234,18 @@ public class FaturaService {
                 if (faturaExistente.getDataPagamento() == null) {
                     faturaExistente.setDataPagamento(LocalDateTime.now());
                 }
-                BigDecimal base = faturaExistente.getValorFatura() != null
-                    ? faturaExistente.getValorFatura()
-                    : BigDecimal.ZERO;
-                if (faturaExistente.getValorPago() == null
-                    || faturaExistente.getValorPago().compareTo(BigDecimal.ZERO) == 0) {
-                    faturaExistente.setValorPago(base);
+                // Não preencher valorPago sem pagamento real: o fluxo canônico é
+                // FaturaConciliacaoService.pagarFatura (cria PAGAMENTO_FATURA + debita conta).
+                BigDecimal pagamentosReais = transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(faturaExistente.getId());
+                pagamentosReais = pagamentosReais != null ? pagamentosReais : BigDecimal.ZERO;
+                if (pagamentosReais.compareTo(BigDecimal.ZERO) > 0) {
+                    if (faturaExistente.getValorPago() == null
+                        || faturaExistente.getValorPago().compareTo(BigDecimal.ZERO) == 0) {
+                        faturaExistente.setValorPago(pagamentosReais);
+                    }
+                } else {
+                    log.warn("[FATURA] Fatura id={} marcada PAGA via API sem PAGAMENTO_FATURA registrado — "
+                        + "sem débito em conta; use o fluxo de pagamento para conciliar o saldo.", faturaExistente.getId());
                 }
             }
         }
@@ -501,10 +507,13 @@ public class FaturaService {
     @Transactional
     public void removerPorBanco(Long usuarioId, String banco) {
         List<Fatura> faturas = faturaRepository.findByCartaoCreditoUsuarioId(usuarioId);
-        
+
         for (Fatura fatura : faturas) {
-            if (fatura.getCartaoCredito().getBanco().equals(banco)) {
-                faturaRepository.delete(fatura);
+            if (fatura.getCartaoCredito() != null
+                && fatura.getCartaoCredito().getBanco() != null
+                && fatura.getCartaoCredito().getBanco().equals(banco)) {
+                // Mesmo fluxo de deletarFatura: estorna pagamentos/saldo e remove transações vinculadas
+                deletarFatura(fatura.getId(), usuarioId);
             }
         }
     }
@@ -515,12 +524,21 @@ public class FaturaService {
      * e não numa ABERTA duplicada — o total é sempre recalculado via {@link #sincronizarValorFaturaComTransacoes}.
      */
     public Fatura resolverFaturaAbertaParaCartao(Long usuarioId, CartaoCredito cartao) {
+        return resolverFaturaParaCompra(usuarioId, cartao, LocalDateTime.now());
+    }
+
+    /**
+     * Resolve a fatura pela competência da compra: compra até a data de fechamento entra no ciclo;
+     * depois do fechamento vai para o ciclo seguinte (regra real dos emissores).
+     */
+    public Fatura resolverFaturaParaCompra(Long usuarioId, CartaoCredito cartao, LocalDateTime dataCompra) {
         if (cartao == null) {
             throw new RuntimeException("Cartão inválido");
         }
         if (!Objects.equals(cartao.getUsuario().getId(), usuarioId)) {
             throw new RuntimeException("Cartão não pertence ao usuário");
         }
+        LocalDateTime ref = dataCompra != null ? dataCompra : LocalDateTime.now();
         List<Fatura.StatusFatura> statusesCicloAberto = List.of(
             Fatura.StatusFatura.ABERTA,
             Fatura.StatusFatura.PARCIAL,
@@ -530,16 +548,24 @@ public class FaturaService {
             cartao.getId(),
             statusesCicloAberto
         );
-        LocalDateTime corteVencimento = LocalDateTime.now().minusDays(5);
         Fatura faturaAlvo = abertas.stream()
-            .filter(f -> f.getDataVencimento() != null && f.getDataVencimento().isAfter(corteVencimento))
+            .filter(f -> f.getDataVencimento() != null)
+            .filter(f -> !ref.isAfter(fechamentoEfetivo(f)))
             .min(Comparator.comparing(Fatura::getDataVencimento))
             .orElseGet(() -> obterOuCriarFaturaParaVencimentoAlvo(
-                usuarioId, cartao, calcularProximoVencimentoLocalDate(cartao)));
+                usuarioId, cartao, calcularProximoVencimentoAposFechamento(cartao, ref.toLocalDate())));
         if (faturaAlvo.getStatusFatura() == null || faturaAlvo.getStatusFatura() == Fatura.StatusFatura.CANCELADA) {
             faturaAlvo.setStatusFatura(Fatura.StatusFatura.ABERTA);
         }
         return faturaRepository.save(faturaAlvo);
+    }
+
+    /** Fechamento da fatura; quando ausente, estima por vencimento − N dias (config). */
+    private LocalDateTime fechamentoEfetivo(Fatura f) {
+        if (f.getDataFechamento() != null) {
+            return f.getDataFechamento();
+        }
+        return f.getDataVencimento().minusDays(Math.max(1, diasEntreFechamentoEVencimento));
     }
 
     /**
@@ -615,11 +641,17 @@ public class FaturaService {
             return;
         }
         if (sum.compareTo(BigDecimal.ZERO) == 0) {
-            BigDecimal mantido = f.getValorTotal() != null && f.getValorTotal().compareTo(BigDecimal.ZERO) > 0
-                ? f.getValorTotal()
-                : f.getValorFatura();
-            if (mantido != null && mantido.compareTo(BigDecimal.ZERO) > 0) {
-                return;
+            // ABERTA/PARCIAL são geridas pelas transações: soma zero (todos os lançamentos excluídos)
+            // deve zerar o total, senão o limite usado fica inflado para sempre.
+            boolean cicloGeridoPorTransacoes = f.getStatusFatura() == Fatura.StatusFatura.ABERTA
+                || f.getStatusFatura() == Fatura.StatusFatura.PARCIAL;
+            if (!cicloGeridoPorTransacoes) {
+                BigDecimal mantido = f.getValorTotal() != null && f.getValorTotal().compareTo(BigDecimal.ZERO) > 0
+                    ? f.getValorTotal()
+                    : f.getValorFatura();
+                if (mantido != null && mantido.compareTo(BigDecimal.ZERO) > 0) {
+                    return;
+                }
             }
         }
         f.setValorFatura(sum);
@@ -630,14 +662,24 @@ public class FaturaService {
         faturaRepository.save(f);
     }
 
-    private static LocalDate calcularProximoVencimentoLocalDate(CartaoCredito cartao) {
-        LocalDate proximoVencimentoBase = LocalDate.now();
-        int dia = Math.max(1, Math.min(28, cartao.getDiaVencimento() == null ? 10 : cartao.getDiaVencimento()));
-        LocalDate venc = LocalDate.of(proximoVencimentoBase.getYear(), proximoVencimentoBase.getMonth(), dia);
-        if (!venc.isAfter(LocalDate.now())) {
-            venc = venc.plusMonths(1);
+    /**
+     * Próximo vencimento cujo fechamento ainda não passou em relação à data da compra.
+     * Dia preferido clampado por {@code lengthOfMonth()} (cartões dia 29–31), como em
+     * {@link #proximoVencimentoEmCalendario}.
+     */
+    private LocalDate calcularProximoVencimentoAposFechamento(CartaoCredito cartao, LocalDate dataCompra) {
+        int diaPreferido = Math.max(1, cartao.getDiaVencimento() == null ? 10 : cartao.getDiaVencimento());
+        int folgaFechamento = Math.max(1, diasEntreFechamentoEVencimento);
+        YearMonth ym = YearMonth.from(dataCompra);
+        for (int i = 0; i < 4; i++) {
+            LocalDate venc = ym.atDay(Math.min(diaPreferido, ym.lengthOfMonth()));
+            LocalDate fechamento = venc.minusDays(folgaFechamento);
+            if (venc.isAfter(dataCompra) && !fechamento.isBefore(dataCompra)) {
+                return venc;
+            }
+            ym = ym.plusMonths(1);
         }
-        return venc;
+        return ym.atDay(Math.min(diaPreferido, ym.lengthOfMonth()));
     }
 
     /**

@@ -93,8 +93,10 @@ public class SentinelaBufferSazonalService {
             } catch (Exception e) {
                 continue;
             }
+            // Parcela anual já passou este ano → próxima ocorrência é no ano seguinte
+            // (ex.: IPVA de janeiro visto em dezembro).
             if (dataParcela.isBefore(hoje)) {
-                continue;
+                dataParcela = dataParcela.plusYears(1);
             }
             long dias = ChronoUnit.DAYS.between(hoje, dataParcela);
             if (dias > JANELA_DIAS) {

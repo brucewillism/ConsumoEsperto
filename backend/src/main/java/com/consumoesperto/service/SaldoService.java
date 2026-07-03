@@ -429,14 +429,18 @@ public class SaldoService {
     public BigDecimal saldoConfirmado(Long usuarioId) {
         BigDecimal r = transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(
             usuarioId, Transacao.TipoTransacao.RECEITA);
-        BigDecimal d = transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(
-            usuarioId, Transacao.TipoTransacao.DESPESA);
+        // Só despesas em caixa (fatura IS NULL): a despesa de cartão sai do caixa via PAGAMENTO_FATURA,
+        // que antes era ignorado aqui e inflava o saldo legado.
+        BigDecimal d = transacaoRepository.sumDespesaConfirmadaCaixaPorUsuarioId(usuarioId);
         BigDecimal i = transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(
             usuarioId, Transacao.TipoTransacao.INVESTIMENTO);
+        BigDecimal pf = transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(
+            usuarioId, Transacao.TipoTransacao.PAGAMENTO_FATURA);
         r = r != null ? r : BigDecimal.ZERO;
         d = d != null ? d : BigDecimal.ZERO;
         i = i != null ? i : BigDecimal.ZERO;
-        return r.subtract(d).subtract(i);
+        pf = pf != null ? pf : BigDecimal.ZERO;
+        return r.subtract(d).subtract(i).subtract(pf);
     }
 
     private static BigDecimal nz(BigDecimal v) {
@@ -591,19 +595,21 @@ public class SaldoService {
         BigDecimal liquidoTransferencias = somaTransferenciasLiquido(contaId);
         BigDecimal atual = nz(conta.getSaldoAtual());
         BigDecimal limite = nz(conta.getLimiteChequeEspecial());
-        BigDecimal ledgerAberturaZero = soma.add(liquidoTransferencias);
+        // Fórmula completa do ledger: abertura + movimentos — sem isso, contas com
+        // saldo_inicial legítimo eram "reparadas" perdendo o valor de abertura.
+        BigDecimal saldoEsperado = nz(conta.getSaldoInicial()).add(soma).add(liquidoTransferencias);
 
         BigDecimal entradas = nz(transferenciaContaRepository.sumValorEntradaPorConta(contaId));
         boolean saldoAlemCheque = limite.compareTo(BigDecimal.ZERO) > 0
             && atual.compareTo(limite.negate()) < 0;
         boolean ledgerRespeitaCheque = limite.compareTo(BigDecimal.ZERO) <= 0
-            || ledgerAberturaZero.compareTo(limite.negate()) >= 0;
+            || saldoEsperado.compareTo(limite.negate()) >= 0;
         boolean transferenciaNaoRefletida = entradas.compareTo(TOLERANCIA_RECONCILIACAO) > 0
-            && ledgerAberturaZero.subtract(atual).compareTo(new BigDecimal("1.00")) > 0;
+            && saldoEsperado.subtract(atual).compareTo(new BigDecimal("1.00")) > 0;
 
-        if ((saldoAlemCheque && ledgerRespeitaCheque && ledgerAberturaZero.subtract(atual).abs().compareTo(TOLERANCIA_RECONCILIACAO) > 0)
+        if ((saldoAlemCheque && ledgerRespeitaCheque && saldoEsperado.subtract(atual).abs().compareTo(TOLERANCIA_RECONCILIACAO) > 0)
             || transferenciaNaoRefletida) {
-            aplicarReparoSaldoConta(conta, ledgerAberturaZero, soma, liquidoTransferencias);
+            aplicarReparoSaldoConta(conta, saldoEsperado, soma, liquidoTransferencias);
             return true;
         }
         return false;

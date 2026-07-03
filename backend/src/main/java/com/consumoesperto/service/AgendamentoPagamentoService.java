@@ -255,7 +255,8 @@ public class AgendamentoPagamentoService {
         tx.setDescricao(descricaoTx);
         tx.setValor(ag.getValor());
         tx.setTipoTransacao(TransacaoDTO.TipoTransacao.DESPESA);
-        tx.setDataTransacao(AppTimeZone.agora());
+        // Mesma data usada na checagem de duplicata acima — se divergir, o reprocessamento debita 2x.
+        tx.setDataTransacao(dataTx);
         tx.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
         tx.setContaBancariaId(conta.getId());
         transacaoService.criarTransacao(tx, usuarioId, false);
