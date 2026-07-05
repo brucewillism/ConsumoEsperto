@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -29,6 +30,8 @@ public class UsuarioSessaoContextoService {
     public static final String CHAVE_ASSINATURA_CONFIRMACAO = "ASSINATURA_CONFIRMACAO";
     /** Débito em conta que usará cheque especial — aguarda sim/não. */
     public static final String CHAVE_CHEQUE_ESPECIAL_CONFIRMACAO = "CHEQUE_ESPECIAL_CONFIRMACAO";
+    /** Hábito inferido pela memória J.A.R.V.I.S. aguardando confirmação sim/não do usuário. */
+    public static final String CHAVE_HABITO_CONFIRMACAO = "HABITO_MEMORIA_CONFIRMACAO";
 
     private final UsuarioSessaoContextoRepository repository;
     private final ObjectMapper objectMapper;
@@ -49,6 +52,13 @@ public class UsuarioSessaoContextoService {
         } catch (Exception e) {
             log.warn("Falha ao salvar sessão contexto userId={} chave={}: {}", usuarioId, chaveSessao, e.getMessage());
         }
+    }
+
+    /** Variante para chamadores dentro de transação {@code readOnly} (ex.: jobs proativos). */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void salvarEmTransacaoPropria(Long usuarioId, String canal, String chaveSessao,
+                                         Map<String, Object> contexto, int minutosTtl) {
+        salvar(usuarioId, canal, chaveSessao, contexto, minutosTtl);
     }
 
     @Transactional(readOnly = true)

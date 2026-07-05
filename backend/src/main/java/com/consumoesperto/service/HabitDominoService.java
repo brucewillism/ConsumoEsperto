@@ -1,6 +1,9 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.config.MemoriaJarvisProperties;
 import com.consumoesperto.model.MemoriaCategoriaOrigem;
+import com.consumoesperto.model.MemoriaMetadados;
+import com.consumoesperto.model.MemoriaTipo;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
@@ -12,25 +15,30 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Efeito dominó: detecta sequências de despesas em até 24h (ex.: posto → conveniência) e grava memória de hábito.
+ * Higiene (Bloco 1): só CONFIRMADAS vivas, suporte mínimo configurável em dias distintos e
+ * descarte de sequências suspeitas de duplicata (mesma descrição em poucos minutos).
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class HabitDominoService {
 
-    private static final int LIMITE_OBSERVACOES = 3;
     private static final long COOLDOWN_MS = 6L * 60 * 60 * 1000;
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
@@ -39,6 +47,7 @@ public class HabitDominoService {
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final JarvisProtocolService jarvisProtocolService;
     private final UsuarioRepository usuarioRepository;
+    private final MemoriaJarvisProperties memoriaProps;
 
     private final Map<String, Long> cooldownMemoria = new ConcurrentHashMap<>();
     private final Map<String, Long> cooldownAlertaGatilho = new ConcurrentHashMap<>();
@@ -65,6 +74,8 @@ public class HabitDominoService {
         Map<String, Integer> pairCount = new HashMap<>();
         Map<String, BigDecimal> secondSum = new HashMap<>();
         Map<String, Integer> secondN = new HashMap<>();
+        Map<String, Set<LocalDate>> pairDias = new HashMap<>();
+        Map<String, Set<Long>> pairEvidencia = new HashMap<>();
 
         for (int i = 0; i < conf.size() - 1; i++) {
             Transacao a = conf.get(i);
@@ -78,11 +89,18 @@ public class HabitDominoService {
             if ("_vazio_".equals(ka) || "_vazio_".equals(kb)) {
                 continue;
             }
+            if (pareceDuplicataSuspeita(a, b, ka, kb)) {
+                continue;
+            }
             String pk = ka + "||" + kb;
             pairCount.merge(pk, 1, Integer::sum);
             BigDecimal vb = b.getValor() != null ? b.getValor() : BigDecimal.ZERO;
             secondSum.merge(pk, vb, BigDecimal::add);
             secondN.merge(pk, 1, Integer::sum);
+            pairDias.computeIfAbsent(pk, k -> new HashSet<>()).add(a.getDataTransacao().toLocalDate());
+            Set<Long> evid = pairEvidencia.computeIfAbsent(pk, k -> new LinkedHashSet<>());
+            evid.add(a.getId());
+            evid.add(b.getId());
         }
 
         String keyT = FinanceTextoUtil.chaveAgrupamento(t.getDescricao());
@@ -110,12 +128,16 @@ public class HabitDominoService {
             String ka = FinanceTextoUtil.chaveAgrupamento(prev.getDescricao());
             String pk = ka + "||" + keyT;
             int cnt = pairCount.getOrDefault(pk, 0);
-            if (cnt > LIMITE_OBSERVACOES && allowMemoryCooldown(userId, pk)) {
+            int diasDistintos = pairDias.getOrDefault(pk, Set.of()).size();
+            if (suporteSuficiente(cnt, diasDistintos) && allowMemoryCooldown(userId, pk)) {
                 String rotA = FinanceTextoUtil.rotuloAmigavel(prev.getDescricao());
                 String rotB = FinanceTextoUtil.rotuloAmigavel(t.getDescricao());
                 String ctx = "Hábito de sequência (efeito dominó): após gastos em «" + rotA
-                    + "» costuma ocorrer gasto em «" + rotB + "» em até 24h (observado " + cnt + " vezes no histórico).";
-                cerebroSemanticoService.gravarMemoria(userId, ctx, MemoriaCategoriaOrigem.HABITO);
+                    + "» costuma ocorrer gasto em «" + rotB + "» em até 24h (observado " + cnt
+                    + " vezes em " + diasDistintos + " dias distintos no histórico).";
+                MemoriaMetadados meta = MemoriaMetadados.inferido(MemoriaTipo.HABITO)
+                    .comEvidencia(new ArrayList<>(pairEvidencia.getOrDefault(pk, Set.of())));
+                cerebroSemanticoService.gravarMemoria(userId, ctx, MemoriaCategoriaOrigem.HABITO, meta);
             }
             return;
         }
@@ -123,7 +145,7 @@ public class HabitDominoService {
         List<String> alvos = new ArrayList<>();
         Map<String, BigDecimal> mediaSegundo = new HashMap<>();
         for (Map.Entry<String, Integer> e : pairCount.entrySet()) {
-            if (e.getValue() <= LIMITE_OBSERVACOES) {
+            if (!suporteSuficiente(e.getValue(), pairDias.getOrDefault(e.getKey(), Set.of()).size())) {
                 continue;
             }
             String[] parts = e.getKey().split("\\|\\|");
@@ -155,6 +177,24 @@ public class HabitDominoService {
         String rotX = FinanceTextoUtil.rotuloAmigavel(t.getDescricao());
         String msg = jarvisProtocolService.alertaGatilhoDominioHabito(voc, rotX, BRL.format(valY), rotY);
         whatsAppNotificationService.enviarParaUsuario(userId, msg);
+    }
+
+    /** Suporte mínimo (1.3): N ocorrências configurável E dias distintos suficientes. */
+    private boolean suporteSuficiente(int ocorrencias, int diasDistintos) {
+        return ocorrencias >= memoriaProps.getHabitoMinOcorrencias()
+            && diasDistintos >= memoriaProps.getHabitoMinDiasDistintos();
+    }
+
+    /**
+     * Sequência com a MESMA descrição em poucos minutos é assinatura de transação duplicada
+     * (bug de importação/lançamento), não de hábito real.
+     */
+    private boolean pareceDuplicataSuspeita(Transacao a, Transacao b, String ka, String kb) {
+        if (!ka.equals(kb)) {
+            return false;
+        }
+        long minutos = ChronoUnit.MINUTES.between(a.getDataTransacao(), b.getDataTransacao());
+        return minutos >= 0 && minutos <= memoriaProps.getHabitoJanelaMinutosDuplicata();
     }
 
     private static String rotuloSegundaPerna(List<Transacao> conf, String keyPrimeira, String keySegunda) {

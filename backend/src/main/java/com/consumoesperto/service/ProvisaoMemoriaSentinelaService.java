@@ -45,6 +45,23 @@ public class ProvisaoMemoriaSentinelaService {
         YearMonth passado = atual.minusYears(1);
         List<ProvisaoMemoriaDTO> raw = new ArrayList<>();
 
+        // Determinístico (2.2): PLANO_FUTURO com mes_alvo = mês corrente via metadado, sem depender de similaridade
+        for (CerebroSemanticoService.PlanoFuturoMemoria plano
+                : cerebroSemanticoService.listarPlanosFuturosParaMes(usuarioId, atual.getMonthValue(), atual.getYear())) {
+            BigDecimal v = plano.valor() != null ? plano.valor() : extrairValorReais(plano.contexto());
+            if (v == null || v.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            String ctx = plano.contexto() != null ? plano.contexto() : "";
+            raw.add(ProvisaoMemoriaDTO.builder()
+                .diaAlvo(diaAlvoHeuristica(atual.getMonthValue()))
+                .valor(v.setScale(2, RoundingMode.HALF_UP))
+                .rotulo(resumirRotulo(ctx.isBlank() ? "Plano futuro registrado" : ctx))
+                .periodoHistorico(atual.atDay(1).format(MES_ANO))
+                .contextoOrigem("Plano futuro: " + (ctx.length() > 185 ? ctx.substring(0, 182) + "…" : ctx))
+                .build());
+        }
+
         List<String> memorias = cerebroSemanticoService.listarContextosMemoriaParaProvisaoMes(
             usuarioId, atual.getMonthValue(), atual.getYear());
         for (String ctx : memorias) {

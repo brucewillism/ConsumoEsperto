@@ -48,6 +48,7 @@ public class ProactiveFinancialJobs {
     private final FinancialProactiveService financialProactiveService;
     private final ConciliacaoAuditoriaService conciliacaoAuditoriaService;
     private final UsuarioSessaoContextoService sessaoContextoService;
+    private final CerebroSemanticoService cerebroSemanticoService;
 
     @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)
@@ -146,7 +147,36 @@ public class ProactiveFinancialJobs {
                 linhaOrc,
                 dica,
                 feedbackFamiliar(usuario.getId()));
+            msg += blocoConfirmacaoHabitoInferido(usuario.getId());
             whatsAppNotificationService.enviarParaUsuario(usuario.getId(), msg);
+        }
+    }
+
+    /**
+     * Confirmação de padrões inferidos (6.2) dentro do resumo semanal já existente — sem mensagens avulsas.
+     * «Sim» eleva a confiança; «não» refuta. A pendência expira em 3 dias.
+     */
+    private String blocoConfirmacaoHabitoInferido(Long usuarioId) {
+        try {
+            var habito = cerebroSemanticoService.buscarHabitoNaoConfirmado(usuarioId);
+            if (habito.isEmpty()) {
+                return "";
+            }
+            String ctx = habito.get().getContexto() != null ? habito.get().getContexto() : "";
+            if (ctx.length() > 180) {
+                ctx = ctx.substring(0, 177) + "...";
+            }
+            sessaoContextoService.salvarEmTransacaoPropria(
+                usuarioId,
+                UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                UsuarioSessaoContextoService.CHAVE_HABITO_CONFIRMACAO,
+                Map.of("memoriaId", habito.get().getId()),
+                3 * 24 * 60);
+            return "\n\n🧠 *Padrão detectado:* _" + ctx + "_\n"
+                + "Confirmo isso como um padrão seu? Responda *sim* ou *não*.";
+        } catch (Exception e) {
+            log.debug("Bloco de confirmação de hábito indisponível userId={}: {}", usuarioId, e.getMessage());
+            return "";
         }
     }
 

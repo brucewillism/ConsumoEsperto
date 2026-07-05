@@ -163,7 +163,15 @@ public class OpenAiService {
             "legado cartão: newLimit, newAvailableLimit, newCardName — use UPDATE_ACCOUNT_CONFIG ou UPDATE_ENTITY_CONFIG com updates.\n" +
             "nome_normalizado (nome corrigido da entidade identificada), entidade_ambigua (true se abreviação dupla), " +
             "entidade_desconhecida (true se não reconhecer), opcoes_entidade (array de nomes quando ambíguo), " +
-            "confianca (0-1), errorMessage. " +
+            "confianca (0-1), errorMessage, " +
+            "memoriasSugeridas (array OPCIONAL de memórias de longo prazo dignas de registro que o usuário declarou " +
+            "na mensagem: planos de gasto futuro, preferências duradouras ou fatos pessoais-financeiros relevantes. " +
+            "Cada item: {texto (frase curta e autocontida em 3ª pessoa), tipo (PLANO_FUTURO|PREFERENCIA|FATO), " +
+            "valor (número em reais se citado), mesAlvo (1-12 se citado), anoAlvo (ex.: 2026 se citado)}. " +
+            "Ex.: 'mês que vem vou viajar e gastar uns 1500' → [{\"texto\":\"Planeja viajar e gastar cerca de R$ 1500\"," +
+            "\"tipo\":\"PLANO_FUTURO\",\"valor\":1500,\"mesAlvo\":<mês seguinte>}]. " +
+            "NÃO inclua comandos operacionais (registrar despesa, consultar saldo), pedidos pontuais nem dados sensíveis; " +
+            "na dúvida, devolva array vazio. " +
             "Se a frase citar cartão/banco (ex: 'paguei 20 no Nubank'), preencha cardName e/ou bank.";
 
         String userPrompt = "Texto do usuário: " + inputText + "\n" +

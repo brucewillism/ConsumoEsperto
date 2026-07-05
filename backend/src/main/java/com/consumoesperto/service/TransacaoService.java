@@ -74,6 +74,8 @@ public class TransacaoService {
 
     private final SaldoMovimentacaoService saldoMovimentacaoService;
 
+    private final CerebroSemanticoService cerebroSemanticoService;
+
     /**
      * Cria uma nova transação financeira no sistema
      * 
@@ -411,6 +413,7 @@ public class TransacaoService {
             faturaService.sincronizarValorFaturaComTransacoes(faturaId);
         }
         saldoService.notificarAlteracaoSaldo(usuarioId);
+        revalidarMemoriasAposExclusao(usuarioId, List.of(id));
     }
 
     /**
@@ -455,6 +458,20 @@ public class TransacaoService {
             faturaService.sincronizarValorFaturaComTransacoes(fid);
         }
         saldoService.notificarAlteracaoSaldo(usuarioId);
+        revalidarMemoriasAposExclusao(
+            usuarioId, alvo.stream().map(Transacao::getId).collect(Collectors.toList()));
+    }
+
+    /**
+     * Invalidação retroativa (memória J.A.R.V.I.S.): hábitos cuja evidência foi excluída
+     * são re-validados na hora. Falha aqui nunca pode quebrar a exclusão.
+     */
+    private void revalidarMemoriasAposExclusao(Long usuarioId, List<Long> idsExcluidos) {
+        try {
+            cerebroSemanticoService.invalidarPorEvidencia(usuarioId, idsExcluidos);
+        } catch (Exception e) {
+            log.warn("Revalidação de memórias pós-exclusão falhou userId={}: {}", usuarioId, e.getMessage());
+        }
     }
 
     /**

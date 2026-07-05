@@ -313,6 +313,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   memoriaCarregando = false;
   itensMemoria: JarvisMemoriaTimelineItem[] = [];
 
+  /** Card compacto de insights da memória — carregado junto do dashboard, dispensável. */
+  insightsMemoria: JarvisMemoriaTimelineItem[] = [];
+  insightsMemoriaDispensado = false;
+  memoriaRefutandoId: number | null = null;
+  private static readonly INSIGHTS_DISPENSA_KEY = 'jarvisInsightsMemoriaDispensadoEm';
+
   /** Segmentos para marquee com classes por indicador (Selic / IPCA / USD). */
   tickerMercadoSegmentos: TickerMercadoSegmento[] = [];
   /** Radar HUD — mesma flag que o gráfico Sentinela (emitida em um único tick pelo {@link DashboardService}). */
@@ -375,6 +381,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
     });
     this.carregarInsightsFeed();
+    this.carregarInsightsMemoria();
 
     this.dashboardService.estadoDashboardCompleto$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -1681,6 +1688,61 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.snackBar.open('Não foi possível carregar a memória tática.', 'Fechar', { duration: 3500 });
       }
     });
+  }
+
+  /** Card compacto de insights (2–3 memórias mais relevantes) — sem clique, dispensável por dia. */
+  private carregarInsightsMemoria(): void {
+    const dispensadoEm = localStorage.getItem(DashboardComponent.INSIGHTS_DISPENSA_KEY);
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (dispensadoEm === hoje) {
+      this.insightsMemoriaDispensado = true;
+      return;
+    }
+    this.jarvisMemoriaService.insights(3).subscribe({
+      next: (rows) => {
+        this.insightsMemoria = rows ?? [];
+      },
+      error: () => {
+        this.insightsMemoria = [];
+      }
+    });
+  }
+
+  dispensarInsightsMemoria(): void {
+    this.insightsMemoriaDispensado = true;
+    localStorage.setItem(DashboardComponent.INSIGHTS_DISPENSA_KEY, new Date().toISOString().slice(0, 10));
+  }
+
+  /** Refuta uma memória (6.1): sai do RAG, do painel e do card imediatamente. */
+  refutarMemoria(m: JarvisMemoriaTimelineItem): void {
+    if (!m?.id || this.memoriaRefutandoId != null) {
+      return;
+    }
+    this.memoriaRefutandoId = m.id;
+    this.jarvisMemoriaService.refutar(m.id).subscribe({
+      next: () => {
+        this.itensMemoria = this.itensMemoria.filter((x) => x.id !== m.id);
+        this.insightsMemoria = this.insightsMemoria.filter((x) => x.id !== m.id);
+        this.memoriaRefutandoId = null;
+        this.snackBar.open('Memória descartada — o J.A.R.V.I.S. não vai mais usá-la.', 'Fechar', { duration: 3500 });
+      },
+      error: () => {
+        this.memoriaRefutandoId = null;
+        this.snackBar.open('Não foi possível descartar a memória.', 'Fechar', { duration: 3500 });
+      }
+    });
+  }
+
+  rotuloTipoMemoria(tipo?: string): string {
+    switch (tipo) {
+      case 'HABITO': return 'Hábito';
+      case 'PREFERENCIA': return 'Preferência';
+      case 'PLANO_FUTURO': return 'Plano futuro';
+      case 'RESUMO_MENSAL': return 'Resumo mensal';
+      case 'EVENTO_SAZONAL': return 'Evento sazonal';
+      case 'CORRECAO': return 'Correção';
+      default: return 'Fato';
+    }
   }
 
   get scoreGaugePct(): number {

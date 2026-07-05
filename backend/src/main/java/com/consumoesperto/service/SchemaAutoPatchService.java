@@ -1252,6 +1252,7 @@ public class SchemaAutoPatchService {
                         "CREATE INDEX IF NOT EXISTS idx_mem_sem_jarvis_usuario_registro ON "
                             + qualified + " (usuario_id, data_registro DESC)"
                     );
+                    aplicarColunasMetadadosMemoria(qualified);
                 } catch (Exception e) {
                     log.warn("Schema patch memoria_semantica_jarvis [{}] em {} falhou: {}", schema, qualified, e.getMessage());
                 }
@@ -1265,6 +1266,44 @@ public class SchemaAutoPatchService {
                 "Schema patch memória semântica (liste schemas / extensões): {}",
                 e.getMessage());
         }
+    }
+
+    /**
+     * Metadados estruturados da memória J.A.R.V.I.S. (tipo, status, confiança, validade, evidência).
+     * Aditivo e retrocompatível: registros antigos ganham defaults e continuam funcionando.
+     */
+    private void aplicarColunasMetadadosMemoria(String qualified) {
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS tipo VARCHAR(24) NOT NULL DEFAULT 'FATO'");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'ATIVA'");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS origem VARCHAR(24) NOT NULL DEFAULT 'SISTEMA'");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS confianca NUMERIC(3,2) NOT NULL DEFAULT 0.50");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS validade DATE");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS valor NUMERIC(19,2)");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS categoria VARCHAR(120)");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS mes_alvo INTEGER");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS ano_alvo INTEGER");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS contador_reforco INTEGER NOT NULL DEFAULT 1");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS ultimo_reforco_em TIMESTAMP WITHOUT TIME ZONE");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS transacoes_evidencia TEXT");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS confirmada_usuario BOOLEAN");
+        // Backfill idempotente: hábitos antigos ganham tipo HABITO e origem INFERIDO
+        executeDdlAutocommit("UPDATE " + qualified
+            + " SET tipo = 'HABITO', origem = 'INFERIDO' WHERE categoria_origem = 'HABITO' AND tipo = 'FATO'");
+        executeDdlAutocommit("CREATE INDEX IF NOT EXISTS idx_mem_sem_jarvis_usuario_status ON "
+            + qualified + " (usuario_id, status, tipo)");
     }
 
     /**

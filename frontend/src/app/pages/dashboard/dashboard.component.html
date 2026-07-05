@@ -99,8 +99,18 @@
           <span class="memoria-node-dot" [class.sem-embedding]="m.temEmbedding === false"></span>
           <div class="memoria-node-body">
             <div class="memoria-node-meta">
-              <span class="memoria-cat" *ngIf="m.categoriaOrigem">{{ m.categoriaOrigem }}</span>
+              <span class="memoria-cat" *ngIf="m.tipo">{{ rotuloTipoMemoria(m.tipo) }}</span>
+              <span class="memoria-cat" *ngIf="!m.tipo && m.categoriaOrigem">{{ m.categoriaOrigem }}</span>
               <time class="memoria-data" *ngIf="m.dataRegistro">{{ m.dataRegistro | date : 'short' }}</time>
+              <button
+                type="button"
+                class="btn btn-hud btn-hud-ghost btn-icon-only memoria-refutar-btn"
+                (click)="refutarMemoria(m)"
+                [disabled]="memoriaRefutandoId != null"
+                title="Isso está errado — descartar memória"
+                aria-label="Descartar memória">
+                <i class="fas fa-ban"></i>
+              </button>
             </div>
             <p class="memoria-contexto">{{ m.contexto }}</p>
           </div>
@@ -108,6 +118,39 @@
       </ul>
       <p class="memoria-tatica-empty" *ngIf="!memoriaCarregando && !itensMemoria.length">Nenhuma recordação indexada ainda. Use o WhatsApp — <em>Jarvis, anote isso: …</em> — ou aguarde sumários de insights.</p>
     </div>
+  </section>
+
+  <!-- Insights automáticos da memória J.A.R.V.I.S. — sem clique, dispensável (painel completo continua no botão Memória) -->
+  <section
+    class="memoria-insights-card hud-animate"
+    *ngIf="!conteudoBloqueado && !insightsMemoriaDispensado && insightsMemoria.length"
+    [style.--stagger]="1">
+    <div class="memoria-insights-head">
+      <h3 class="memoria-insights-title"><i class="fas fa-brain" aria-hidden="true"></i> Insights do J.A.R.V.I.S.</h3>
+      <button
+        type="button"
+        class="btn btn-hud btn-hud-ghost btn-icon-only"
+        (click)="dispensarInsightsMemoria()"
+        aria-label="Dispensar insights por hoje"
+        title="Dispensar por hoje">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <ul class="memoria-insights-list">
+      <li *ngFor="let m of insightsMemoria" class="memoria-insights-item">
+        <span class="memoria-cat">{{ rotuloTipoMemoria(m.tipo) }}</span>
+        <span class="memoria-insights-texto">{{ m.contexto }}</span>
+        <button
+          type="button"
+          class="btn btn-hud btn-hud-ghost btn-icon-only memoria-refutar-btn"
+          (click)="refutarMemoria(m)"
+          [disabled]="memoriaRefutandoId != null"
+          title="Isso está errado — descartar memória"
+          aria-label="Descartar memória">
+          <i class="fas fa-ban"></i>
+        </button>
+      </li>
+    </ul>
   </section>
 
   <!-- Conteúdo oculto só na primeira visita sem cache; revisita mostra snapshot enquanto sincroniza. -->

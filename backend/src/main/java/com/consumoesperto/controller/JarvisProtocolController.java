@@ -14,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -56,6 +57,34 @@ public class JarvisProtocolController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         return ResponseEntity.ok(cerebroSemanticoService.listarRecentesParaUsuario(user.getId(), limite));
+    }
+
+    /** Insights compactos para o card do dashboard (2–3 memórias mais relevantes, sem clique). */
+    @GetMapping("/memoria/insights")
+    public ResponseEntity<List<MemoriaSemanticaTimelineItemDTO>> memoriaInsights(
+        @AuthenticationPrincipal UserPrincipal user,
+        @RequestParam(name = "limite", defaultValue = "3") int limite
+    ) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(cerebroSemanticoService.listarInsightsRelevantes(user.getId(), limite));
+    }
+
+    /** Refutação (6.1): marca a memória como REFUTADA — sai do RAG e do painel. Checa posse. */
+    @PatchMapping("/memoria/{id}/refutar")
+    public ResponseEntity<Void> refutarMemoria(
+        @AuthenticationPrincipal UserPrincipal user,
+        @PathVariable("id") Long id
+    ) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        boolean ok = cerebroSemanticoService.refutarMemoria(user.getId(), id);
+        if (!ok) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Memória não encontrada ou já inativa.");
+        }
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/otimizar-metas")

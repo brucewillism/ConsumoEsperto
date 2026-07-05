@@ -11,6 +11,7 @@ import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.util.UntrustedContentGuard;
 import com.consumoesperto.dto.OrcamentoRequest;
 import com.consumoesperto.dto.OrcamentoDTO;
+import com.consumoesperto.dto.MemoriaSemanticaSimilaridadeDTO;
 import com.consumoesperto.dto.MetaFinanceiraListResponse;
 import com.consumoesperto.dto.SugestaoContencaoJarvisDTO;
 import com.consumoesperto.dto.MetaFinanceiraDTO;
@@ -136,6 +137,7 @@ public class WhatsAppCommandService {
     private final JarvisContextoFinanceiroService jarvisContextoFinanceiroService;
     private final FinancialAdviceCalculator financialAdviceCalculator;
     private final EmprestimoService emprestimoService;
+    private final MemoriaCapturaAutomaticaService memoriaCapturaAutomaticaService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -176,6 +178,11 @@ public class WhatsAppCommandService {
     /** “Jarvis, anote isso: …” — grava memória semântica financeira. */
     private static final Pattern JARVIS_ANOTE_ISSO = Pattern.compile(
         "(?i)\\bjarvis\\b\\s*,?\\s*anote\\s+isso\\s*[:\\-–]\\s*(.+)$");
+
+    /** Refutação de memória (6.1): «Jarvis, esquece isso», «Jarvis, isso está errado». */
+    private static final Pattern JARVIS_ESQUECE_ISSO = Pattern.compile(
+        "(?i)^\\s*jarvis\\b\\s*,?\\s*(esquece|esque[cç]a)\\s+isso\\s*\\.?$"
+            + "|(?i)^\\s*jarvis\\b\\s*,?\\s*isso\\s+(est[aá]|t[aá])\\s+errado\\s*\\.?$");
 
     private static final Pattern CREATE_META_INTENT = Pattern.compile(
         "(?is)\\b(?:cadastr(?:ar|a)|cri(?:ar|e)|registr(?:ar|a)|adicion(?:ar|a))\\b.*\\b(?:uma\\s+)?(?:nova\\s+)?meta\\b|\\bnova\\s+meta\\b");
@@ -262,6 +269,9 @@ public class WhatsAppCommandService {
         }
 
         JsonNode parsed = parseCommandComFallback(userId, text);
+        // Captura automática de memórias (Bloco 3.1): só texto digitado/falado pelo usuário chega
+        // a este pipeline — documentos (PDF/OCR) seguem outros fluxos e nunca geram memória aqui.
+        memoriaCapturaAutomaticaService.capturarDeConversaAsync(userId, text, parsed);
         String act = parsed.path("action").asText("");
         if ("GENERATE_REPORT".equals(act) || "GERAR_RELATORIO".equals(act)) {
             return handleGenerateReport(parsed, userId, whatsappFrom, text, evolutionInstanceHint);
@@ -403,6 +413,14 @@ public class WhatsAppCommandService {
         Optional<String> jarvisNota = tryJarvisAnoteIsso(userId, text);
         if (jarvisNota.isPresent()) {
             return jarvisNota;
+        }
+        Optional<String> jarvisEsquece = tryJarvisEsqueceIsso(userId, text);
+        if (jarvisEsquece.isPresent()) {
+            return jarvisEsquece;
+        }
+        Optional<String> habitoConfirm = tryResolveHabitoConfirmacao(userId, text);
+        if (habitoConfirm.isPresent()) {
+            return habitoConfirm;
         }
         return Optional.empty();
     }
@@ -2727,7 +2745,49 @@ public class WhatsAppCommandService {
 
         var resultado = financialAdviceCalculator.calcular(proposta, ctx);
         String narrativa = openAiService.narrarConselho(userId, resultado);
-        return msgOk("Conselho — J.A.R.V.I.S.", narrativa);
+        return msgOk("Conselho — J.A.R.V.I.S.", narrativa + blocoPlanosFuturosParaConselho(userId));
+    }
+
+    /**
+     * Recall proativo (3.2): o conselho de compra considera PLANO_FUTURO de gasto no mês
+     * corrente ou seguinte registrado na memória J.A.R.V.I.S.
+     */
+    private String blocoPlanosFuturosParaConselho(Long userId) {
+        try {
+            YearMonth atual = YearMonth.now();
+            YearMonth proximo = atual.plusMonths(1);
+            List<CerebroSemanticoService.PlanoFuturoMemoria> planos = new ArrayList<>();
+            planos.addAll(cerebroSemanticoService.listarPlanosFuturosParaMes(
+                userId, atual.getMonthValue(), atual.getYear()));
+            planos.addAll(cerebroSemanticoService.listarPlanosFuturosParaMes(
+                userId, proximo.getMonthValue(), proximo.getYear()));
+            if (planos.isEmpty()) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder("\n\n⚠️ _Registro da memória: há plano(s) de gasto no período — ");
+            int n = 0;
+            for (CerebroSemanticoService.PlanoFuturoMemoria p : planos) {
+                if (n >= 2) {
+                    break;
+                }
+                if (n > 0) {
+                    sb.append("; ");
+                }
+                String rot = p.contexto() != null && p.contexto().length() > 90
+                    ? p.contexto().substring(0, 87) + "..."
+                    : String.valueOf(p.contexto());
+                sb.append(rot);
+                if (p.valor() != null) {
+                    sb.append(" (").append(BRL.format(p.valor())).append(')');
+                }
+                n++;
+            }
+            sb.append(". Considere essa reserva antes de assumir novo compromisso._");
+            return sb.toString();
+        } catch (Exception e) {
+            log.debug("Bloco de planos futuros indisponível no conselho userId={}: {}", userId, e.getMessage());
+            return "";
+        }
     }
 
     /**
@@ -3057,6 +3117,7 @@ public class WhatsAppCommandService {
             log.info("[JARVIS-LOG] RAG: contexto vazio userId={}", userId);
             return Optional.empty();
         }
+        ctx += blocoMemoriasParaRag(userId, text);
         try {
             String ans = openAiService.gerarRespostaAnaliticaRag(userId, text, ctx);
             if (ans == null || ans.isBlank()) {
@@ -3067,6 +3128,35 @@ public class WhatsAppCommandService {
         } catch (RuntimeException e) {
             log.warn("RAG analítico indisponível userId={}: {}", userId, e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Recall automático (3.2): memórias ATIVAS relevantes entram no contexto RAG do chat,
+     * limitadas a K pelo score híbrido (similaridade × recência × reforço).
+     */
+    private String blocoMemoriasParaRag(Long userId, String pergunta) {
+        try {
+            List<MemoriaSemanticaSimilaridadeDTO> memorias =
+                cerebroSemanticoService.buscarSimilaresAtivas(userId, pergunta, Integer.MAX_VALUE);
+            if (memorias.isEmpty()) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder("\n\nMemórias do usuário (registros de longo prazo):\n");
+            for (MemoriaSemanticaSimilaridadeDTO m : memorias) {
+                String c = m.getContexto() != null ? m.getContexto().replace('\n', ' ').trim() : "";
+                if (c.isBlank()) {
+                    continue;
+                }
+                if (c.length() > 220) {
+                    c = c.substring(0, 217) + "...";
+                }
+                sb.append("- ").append(c).append('\n');
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            log.debug("Memórias indisponíveis para RAG userId={}: {}", userId, e.getMessage());
+            return "";
         }
     }
 
@@ -5407,9 +5497,74 @@ public class WhatsAppCommandService {
             String v = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
             return Optional.of(msgInfo("Memória", v + ", indique o texto a gravar após *anote isso*."));
         }
-        cerebroSemanticoService.gravarMemoria(userId, note, MemoriaCategoriaOrigem.FINANCAS);
+        // Anotação explícita: confiança alta + metadados extraídos por heurística (tipo/valor/mês-alvo)
+        java.time.LocalDate hoje = com.consumoesperto.util.AppTimeZone.hoje();
+        com.consumoesperto.model.MemoriaTipo tipoNota =
+            com.consumoesperto.util.MemoriaTextoHeuristica.detectarTipo(note, hoje);
+        com.consumoesperto.model.MemoriaMetadados metaNota = com.consumoesperto.util.MemoriaTextoHeuristica.enriquecer(
+            new com.consumoesperto.model.MemoriaMetadados(
+                tipoNota, com.consumoesperto.model.MemoriaOrigem.USUARIO_WHATSAPP,
+                new BigDecimal("0.90"), null, null, null, null, null, null),
+            note, hoje);
+        cerebroSemanticoService.gravarMemoria(userId, note, MemoriaCategoriaOrigem.FINANCAS, metaNota);
         String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
         return Optional.of(jarvisProtocolService.confirmacaoMemoriaNucleo(voc));
+    }
+
+    /** «Jarvis, esquece isso» — refuta a memória mais recente (sai do RAG e do painel). */
+    private Optional<String> tryJarvisEsqueceIsso(Long userId, String raw) {
+        if (userId == null || raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        if (!JARVIS_ESQUECE_ISSO.matcher(raw.trim()).matches()) {
+            return Optional.empty();
+        }
+        String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+        Optional<String> refutada = cerebroSemanticoService.refutarMaisRecente(userId);
+        if (refutada.isEmpty()) {
+            return Optional.of(msgInfo("Memória", voc + ", não há memória ativa para descartar."));
+        }
+        String trecho = refutada.get();
+        if (trecho.length() > 140) {
+            trecho = trecho.substring(0, 137) + "...";
+        }
+        return Optional.of(msgOk("Memória",
+            voc + ", registro descartado dos meus bancos de memória: _" + trecho + "_. "
+                + "Não voltarei a usá-lo nas análises."));
+    }
+
+    /** Confirmação sim/não de hábito inferido pendente (6.2 — pergunta feita no resumo semanal). */
+    private Optional<String> tryResolveHabitoConfirmacao(Long userId, String text) {
+        Optional<Map<String, Object>> ctx = sessaoContextoService.buscarAtiva(
+            userId, UsuarioSessaoContextoService.CANAL_WHATSAPP,
+            UsuarioSessaoContextoService.CHAVE_HABITO_CONFIRMACAO);
+        if (ctx.isEmpty()) {
+            return Optional.empty();
+        }
+        Long memoriaId;
+        try {
+            memoriaId = Long.valueOf(String.valueOf(ctx.get().get("memoriaId")));
+        } catch (Exception e) {
+            sessaoContextoService.remover(userId, UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                UsuarioSessaoContextoService.CHAVE_HABITO_CONFIRMACAO);
+            return Optional.empty();
+        }
+        if (isAffirmativeSaveReply(text)) {
+            sessaoContextoService.remover(userId, UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                UsuarioSessaoContextoService.CHAVE_HABITO_CONFIRMACAO);
+            cerebroSemanticoService.confirmarHabito(userId, memoriaId, true);
+            return Optional.of(msgOk("Memória",
+                "Padrão confirmado, chefe. Vou tratá-lo como comportamento estabelecido nas próximas análises."));
+        }
+        if (isNegativeReply(text)) {
+            sessaoContextoService.remover(userId, UsuarioSessaoContextoService.CANAL_WHATSAPP,
+                UsuarioSessaoContextoService.CHAVE_HABITO_CONFIRMACAO);
+            cerebroSemanticoService.confirmarHabito(userId, memoriaId, false);
+            return Optional.of(msgOk("Memória",
+                "Entendido — descartei esse padrão dos meus bancos de memória."));
+        }
+        // Não é sim/não: deixa o fluxo normal seguir (a pendência continua até expirar)
+        return Optional.empty();
     }
 
     private Optional<String> tryIniciarDespesaFixaPorTextoLivre(Long userId, String raw) {

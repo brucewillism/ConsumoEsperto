@@ -64,6 +64,9 @@ class TransacaoServiceTest {
     @Mock
     private SaldoMovimentacaoService saldoMovimentacaoService;
 
+    @Mock
+    private CerebroSemanticoService cerebroSemanticoService;
+
     @InjectMocks
     private TransacaoService transacaoService;
 

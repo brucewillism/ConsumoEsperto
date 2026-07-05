@@ -1,9 +1,14 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.config.MemoriaJarvisProperties;
 import com.consumoesperto.dto.GatilhoHabitoDeteccaoDTO;
 import com.consumoesperto.dto.MemoriaSemanticaSimilaridadeDTO;
 import com.consumoesperto.dto.MemoriaSemanticaTimelineItemDTO;
 import com.consumoesperto.model.MemoriaCategoriaOrigem;
+import com.consumoesperto.model.MemoriaMetadados;
+import com.consumoesperto.model.MemoriaOrigem;
+import com.consumoesperto.model.MemoriaStatus;
+import com.consumoesperto.model.MemoriaTipo;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.util.FinanceTextoUtil;
@@ -52,6 +57,7 @@ public class CerebroSemanticoService {
     private final JdbcTemplate jdbcTemplate;
     private final OpenAiService openAiService;
     private final TransacaoRepository transacaoRepository;
+    private final MemoriaJarvisProperties memoriaProps;
 
     private volatile boolean loggedMemoriaUnavailable;
     /** {@code null} = ainda não lido {@code information_schema}; depois memoiza se existe coluna {@code embedding vector}. */
@@ -98,9 +104,19 @@ public class CerebroSemanticoService {
             e.getMessage() != null ? e.getMessage() : e.toString());
     }
 
+    /** Compatibilidade: gravação sem metadados vira FATO/SISTEMA com defaults. */
     @Transactional
     public void gravarMemoria(Long usuarioId, String contexto, MemoriaCategoriaOrigem categoria) {
-        if (usuarioId == null || contexto == null || contexto.isBlank() || categoria == null) {
+        gravarMemoria(usuarioId, contexto, categoria, MemoriaMetadados.sistema(MemoriaTipo.FATO));
+    }
+
+    /**
+     * Gravação estruturada com higiene: dedupe semântico (reforça em vez de duplicar) e
+     * superação de contradições (PREFERENCIA/PLANO_FUTURO mais recente vence a antiga).
+     */
+    @Transactional
+    public void gravarMemoria(Long usuarioId, String contexto, MemoriaCategoriaOrigem categoria, MemoriaMetadados meta) {
+        if (usuarioId == null || contexto == null || contexto.isBlank() || categoria == null || meta == null) {
             return;
         }
         String ctx = contexto.trim();
@@ -118,12 +134,29 @@ public class CerebroSemanticoService {
             }
         }
         try {
+            if (reforcarSeQuaseIdentica(usuarioId, ctx, vec, meta)) {
+                return;
+            }
+            superarContradicoes(usuarioId, vec, meta);
             jdbcTemplate.update(
-                "INSERT INTO memoria_semantica_jarvis (usuario_id, contexto, embedding, categoria_origem) VALUES (?,?,?,?)",
+                "INSERT INTO memoria_semantica_jarvis "
+                    + "(usuario_id, contexto, embedding, categoria_origem, tipo, status, origem, confianca, validade, "
+                    + "valor, categoria, mes_alvo, ano_alvo, contador_reforco, ultimo_reforco_em, transacoes_evidencia) "
+                    + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,NOW(),?)",
                 usuarioId,
                 ctx,
                 vec,
-                categoria.name());
+                categoria.name(),
+                nomeTipo(meta),
+                MemoriaStatus.ATIVA.name(),
+                meta.origem() != null ? meta.origem().name() : MemoriaOrigem.SISTEMA.name(),
+                meta.confianca() != null ? meta.confianca().setScale(2, RoundingMode.HALF_UP) : new BigDecimal("0.50"),
+                meta.validade(),
+                meta.valor() != null ? meta.valor().setScale(2, RoundingMode.HALF_UP) : null,
+                meta.categoria(),
+                meta.mesAlvo(),
+                meta.anoAlvo(),
+                evidenciaCsv(meta.transacoesEvidencia()));
         } catch (DataAccessException dex) {
             if (isMemoriaSemanticsUnavailable(dex)) {
                 logMemoriaUnavailableOnce(dex);
@@ -133,8 +166,120 @@ public class CerebroSemanticoService {
         }
     }
 
+    private static String nomeTipo(MemoriaMetadados meta) {
+        return meta.tipo() != null ? meta.tipo().name() : MemoriaTipo.FATO.name();
+    }
+
+    private static String evidenciaCsv(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Long id : ids) {
+            if (id == null) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(',');
+            }
+            sb.append(id);
+        }
+        return sb.length() > 0 ? sb.toString() : null;
+    }
+
+    /**
+     * Dedupe (1.2): memória quase idêntica ATIVA existente → reforço (contador+confiança+evidência), sem nova linha.
+     * Com vetor usa similaridade; sem vetor cai no match textual exato.
+     */
+    private boolean reforcarSeQuaseIdentica(Long usuarioId, String ctx, PGobject vec, MemoriaMetadados meta) {
+        Long idExistente = null;
+        if (vec != null) {
+            double distMax = 1.0 - memoriaProps.getDedupeSimilaridadeMinima();
+            List<Long> ids = jdbcTemplate.query(
+                con -> {
+                    var ps = con.prepareStatement(
+                        "SELECT id FROM memoria_semantica_jarvis "
+                            + "WHERE usuario_id = ? AND status = 'ATIVA' AND tipo = ? AND embedding IS NOT NULL "
+                            + "AND (embedding <=> (?::vector)) <= ? "
+                            + "ORDER BY embedding <=> (?::vector) LIMIT 1");
+                    ps.setLong(1, usuarioId);
+                    ps.setString(2, nomeTipo(meta));
+                    ps.setObject(3, vec);
+                    ps.setDouble(4, distMax);
+                    ps.setObject(5, vec);
+                    return ps;
+                },
+                (rs, rn) -> rs.getLong(1));
+            idExistente = ids.isEmpty() ? null : ids.get(0);
+        }
+        if (idExistente == null) {
+            List<Long> ids = jdbcTemplate.query(
+                "SELECT id FROM memoria_semantica_jarvis WHERE usuario_id = ? AND status = 'ATIVA' AND contexto = ? LIMIT 1",
+                (rs, rn) -> rs.getLong(1), usuarioId, ctx);
+            idExistente = ids.isEmpty() ? null : ids.get(0);
+        }
+        if (idExistente == null) {
+            return false;
+        }
+        String evid = evidenciaCsv(meta.transacoesEvidencia());
+        jdbcTemplate.update(
+            "UPDATE memoria_semantica_jarvis SET "
+                + "contador_reforco = contador_reforco + 1, "
+                + "ultimo_reforco_em = NOW(), "
+                + "confianca = LEAST(0.95, confianca + 0.05), "
+                + "transacoes_evidencia = CASE WHEN ? IS NULL THEN transacoes_evidencia "
+                + "  WHEN transacoes_evidencia IS NULL THEN ? ELSE transacoes_evidencia || ',' || ? END "
+                + "WHERE id = ? AND usuario_id = ?",
+            evid, evid, evid, idExistente, usuarioId);
+        log.debug("[MEMORIA] Reforço em vez de duplicata id={} userId={}", idExistente, usuarioId);
+        return true;
+    }
+
+    /**
+     * Contradições (4.2): PREFERENCIA/PLANO_FUTURO novo com alta similaridade a um antigo do mesmo tipo
+     * marca o antigo como SUPERADA (a mais recente prevalece; histórico preservado fora do RAG).
+     */
+    private void superarContradicoes(Long usuarioId, PGobject vec, MemoriaMetadados meta) {
+        MemoriaTipo tipo = meta.tipo();
+        if (vec == null || tipo == null
+            || (tipo != MemoriaTipo.PREFERENCIA && tipo != MemoriaTipo.PLANO_FUTURO)) {
+            return;
+        }
+        double distMax = 1.0 - memoriaProps.getSuperacaoSimilaridadeMinima();
+        List<Long> superadas = jdbcTemplate.query(
+            con -> {
+                var ps = con.prepareStatement(
+                    "SELECT id FROM memoria_semantica_jarvis "
+                        + "WHERE usuario_id = ? AND status = 'ATIVA' AND tipo = ? AND embedding IS NOT NULL "
+                        + "AND (embedding <=> (?::vector)) <= ?");
+                ps.setLong(1, usuarioId);
+                ps.setString(2, tipo.name());
+                ps.setObject(3, vec);
+                ps.setDouble(4, distMax);
+                return ps;
+            },
+            (rs, rn) -> rs.getLong(1));
+        for (Long id : superadas) {
+            jdbcTemplate.update(
+                "UPDATE memoria_semantica_jarvis SET status = 'SUPERADA' WHERE id = ? AND usuario_id = ?",
+                id, usuarioId);
+        }
+        if (!superadas.isEmpty()) {
+            log.info("[MEMORIA] {} memória(s) {} superada(s) por versão mais recente userId={}",
+                superadas.size(), tipo, usuarioId);
+        }
+    }
+
     public List<MemoriaSemanticaSimilaridadeDTO> buscarTop3Similares(Long usuarioId, String textoConsulta) {
-        if (usuarioId == null || textoConsulta == null || textoConsulta.isBlank()) {
+        return buscarSimilaresAtivas(usuarioId, textoConsulta, TOP_K);
+    }
+
+    /**
+     * Busca híbrida (4.1): score = similaridade × recência (meia-vida configurável) × reforço,
+     * filtrando {@code status = ATIVA} e limitando a K memórias (4.3).
+     */
+    public List<MemoriaSemanticaSimilaridadeDTO> buscarSimilaresAtivas(Long usuarioId, String textoConsulta, int k) {
+        if (usuarioId == null || textoConsulta == null || textoConsulta.isBlank() || k <= 0) {
             return List.of();
         }
         Optional<float[]> query = openAiService.tryCreateEmbedding(textoConsulta.trim(), usuarioId);
@@ -148,19 +293,26 @@ public class CerebroSemanticoService {
         if (!memoriaEmbeddingSupportsPgvectorOperators()) {
             return List.of();
         }
+        int limite = Math.min(k, Math.max(1, memoriaProps.getRagLimiteContexto()));
+        // decaimento exponencial: peso 0.5 quando a idade = meia-vida
+        double lambdaPorDia = Math.log(2) / Math.max(1, memoriaProps.getRagMeiaVidaDias());
         PGobject probe = pgVector(q);
-        String sql = "SELECT contexto, data_registro, (embedding <=> (?::vector)) AS dist "
+        String sql = "SELECT contexto, data_registro, (embedding <=> (?::vector)) AS dist, "
+            + "(1 - (embedding <=> (?::vector))) "
+            + " * exp(-GREATEST(0, EXTRACT(EPOCH FROM (NOW() - COALESCE(ultimo_reforco_em, data_registro)))) / 86400.0 * ?) "
+            + " * (1 + LEAST(contador_reforco, 10) * 0.05) AS score "
             + "FROM memoria_semantica_jarvis "
-            + "WHERE usuario_id = ? AND embedding IS NOT NULL "
-            + "ORDER BY embedding <=> (?::vector) "
-            + "LIMIT " + TOP_K;
+            + "WHERE usuario_id = ? AND embedding IS NOT NULL AND status = 'ATIVA' "
+            + "ORDER BY score DESC "
+            + "LIMIT " + limite;
         try {
             return jdbcTemplate.query(
                 connection -> {
                     var ps = connection.prepareStatement(sql);
                     ps.setObject(1, probe);
-                    ps.setLong(2, usuarioId);
-                    ps.setObject(3, probe);
+                    ps.setObject(2, probe);
+                    ps.setDouble(3, lambdaPorDia);
+                    ps.setLong(4, usuarioId);
                     return ps;
                 },
                 (rs, rowNum) -> mapSimilarRow(rs));
@@ -177,7 +329,7 @@ public class CerebroSemanticoService {
         if (usuarioId == null || mes < 1 || mes > 12) {
             return List.of();
         }
-        String sql = "SELECT contexto FROM memoria_semantica_jarvis WHERE usuario_id = ? "
+        String sql = "SELECT contexto FROM memoria_semantica_jarvis WHERE usuario_id = ? AND status = 'ATIVA' "
             + "AND EXTRACT(MONTH FROM data_registro) = ? AND EXTRACT(YEAR FROM data_registro) = ? "
             + "ORDER BY data_registro DESC LIMIT 80";
         try {
@@ -211,7 +363,7 @@ public class CerebroSemanticoService {
             return List.of();
         }
         StringBuilder sql = new StringBuilder(
-            "SELECT contexto FROM memoria_semantica_jarvis WHERE usuario_id = ? "
+            "SELECT contexto FROM memoria_semantica_jarvis WHERE usuario_id = ? AND status = 'ATIVA' "
                 + "AND EXTRACT(YEAR FROM data_registro) = ? AND (");
         List<Object> params = new ArrayList<>();
         params.add(usuarioId);
@@ -258,7 +410,7 @@ public class CerebroSemanticoService {
             return Optional.empty();
         }
         String sql = "SELECT contexto FROM memoria_semantica_jarvis WHERE usuario_id = ? AND categoria_origem = 'HABITO' "
-            + "ORDER BY data_registro DESC LIMIT 80";
+            + "AND status = 'ATIVA' ORDER BY data_registro DESC LIMIT 80";
         List<String> ctxs;
         try {
             ctxs = jdbcTemplate.query(sql, (rs, i) -> rs.getString(1), usuarioId);
@@ -336,20 +488,12 @@ public class CerebroSemanticoService {
             return List.of();
         }
         int cap = Math.min(limite, 120);
-        String sql = "SELECT id, contexto, categoria_origem, data_registro, (embedding IS NOT NULL) AS tem_emb "
-            + "FROM memoria_semantica_jarvis WHERE usuario_id = ? ORDER BY data_registro DESC LIMIT ?";
+        String sql = "SELECT id, contexto, categoria_origem, data_registro, (embedding IS NOT NULL) AS tem_emb, "
+            + "tipo, status, confianca, contador_reforco "
+            + "FROM memoria_semantica_jarvis WHERE usuario_id = ? AND status = 'ATIVA' "
+            + "ORDER BY data_registro DESC LIMIT ?";
         try {
-            return jdbcTemplate.query(sql, (rs, rowNum) -> {
-                Timestamp ts = rs.getTimestamp("data_registro");
-                Instant inst = ts != null ? ts.toInstant() : Instant.EPOCH;
-                return MemoriaSemanticaTimelineItemDTO.builder()
-                    .id(rs.getLong("id"))
-                    .contexto(rs.getString("contexto"))
-                    .categoriaOrigem(rs.getString("categoria_origem"))
-                    .dataRegistro(inst)
-                    .temEmbedding(rs.getBoolean("tem_emb"))
-                    .build();
-            }, usuarioId, cap);
+            return jdbcTemplate.query(sql, (rs, rowNum) -> mapTimelineRow(rs), usuarioId, cap);
         } catch (DataAccessException dex) {
             if (isMemoriaSemanticsUnavailable(dex)) {
                 logMemoriaUnavailableOnce(dex);
@@ -357,6 +501,244 @@ public class CerebroSemanticoService {
             }
             throw dex;
         }
+    }
+
+    /**
+     * Provisão determinística (2.2): PLANO_FUTURO com mês-alvo = mês pedido, por metadado (não similaridade).
+     * Devolve linhas (contexto, valor, categoria).
+     */
+    public List<PlanoFuturoMemoria> listarPlanosFuturosParaMes(Long usuarioId, int mes, int ano) {
+        if (usuarioId == null || mes < 1 || mes > 12) {
+            return List.of();
+        }
+        String sql = "SELECT id, contexto, valor, categoria FROM memoria_semantica_jarvis "
+            + "WHERE usuario_id = ? AND tipo = 'PLANO_FUTURO' AND status = 'ATIVA' "
+            + "AND mes_alvo = ? AND (ano_alvo IS NULL OR ano_alvo = ?) "
+            + "ORDER BY data_registro DESC LIMIT 20";
+        try {
+            return jdbcTemplate.query(sql, (rs, rn) -> new PlanoFuturoMemoria(
+                rs.getLong("id"),
+                rs.getString("contexto"),
+                rs.getBigDecimal("valor"),
+                rs.getString("categoria")), usuarioId, mes, ano);
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return List.of();
+            }
+            throw dex;
+        }
+    }
+
+    public record PlanoFuturoMemoria(Long id, String contexto, BigDecimal valor, String categoria) { }
+
+    /** Refutação (6.1): usuário marca a memória como errada — sai do RAG e do painel. Checa posse. */
+    @Transactional
+    public boolean refutarMemoria(Long usuarioId, Long memoriaId) {
+        if (usuarioId == null || memoriaId == null) {
+            return false;
+        }
+        try {
+            return jdbcTemplate.update(
+                "UPDATE memoria_semantica_jarvis SET status = 'REFUTADA', confirmada_usuario = FALSE "
+                    + "WHERE id = ? AND usuario_id = ? AND status = 'ATIVA'",
+                memoriaId, usuarioId) > 0;
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return false;
+            }
+            throw dex;
+        }
+    }
+
+    /** «Jarvis, esquece isso» — refuta a memória ATIVA mais recente e devolve o contexto refutado. */
+    @Transactional
+    public Optional<String> refutarMaisRecente(Long usuarioId) {
+        if (usuarioId == null) {
+            return Optional.empty();
+        }
+        try {
+            List<String> out = jdbcTemplate.query(
+                "UPDATE memoria_semantica_jarvis SET status = 'REFUTADA', confirmada_usuario = FALSE "
+                    + "WHERE id = (SELECT id FROM memoria_semantica_jarvis WHERE usuario_id = ? AND status = 'ATIVA' "
+                    + "ORDER BY GREATEST(data_registro, COALESCE(ultimo_reforco_em, data_registro)) DESC LIMIT 1) "
+                    + "AND usuario_id = ? RETURNING contexto",
+                (rs, rn) -> rs.getString(1), usuarioId, usuarioId);
+            return out.isEmpty() ? Optional.empty() : Optional.ofNullable(out.get(0));
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return Optional.empty();
+            }
+            throw dex;
+        }
+    }
+
+    /**
+     * Invalidação retroativa (1.1): transações-evidência foram excluídas/estornadas →
+     * re-valida as memórias que as citam; se o suporte vivo caiu abaixo do mínimo, INVALIDADA na hora.
+     */
+    @Transactional
+    public int invalidarPorEvidencia(Long usuarioId, List<Long> transacoesExcluidas) {
+        if (usuarioId == null || transacoesExcluidas == null || transacoesExcluidas.isEmpty()) {
+            return 0;
+        }
+        List<Object[]> candidatas;
+        try {
+            candidatas = jdbcTemplate.query(
+                "SELECT id, transacoes_evidencia FROM memoria_semantica_jarvis "
+                    + "WHERE usuario_id = ? AND status = 'ATIVA' AND transacoes_evidencia IS NOT NULL",
+                (rs, rn) -> new Object[] {rs.getLong(1), rs.getString(2)}, usuarioId);
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return 0;
+            }
+            throw dex;
+        }
+        java.util.Set<Long> excluidas = new java.util.HashSet<>(transacoesExcluidas);
+        int invalidadas = 0;
+        for (Object[] row : candidatas) {
+            Long memId = (Long) row[0];
+            List<Long> evidencia = parseEvidencia((String) row[1]);
+            if (evidencia.isEmpty() || evidencia.stream().noneMatch(excluidas::contains)) {
+                continue;
+            }
+            int vivas = contarEvidenciaViva(evidencia);
+            if (vivas < memoriaProps.getHabitoMinOcorrencias()) {
+                jdbcTemplate.update(
+                    "UPDATE memoria_semantica_jarvis SET status = 'INVALIDADA' WHERE id = ? AND usuario_id = ?",
+                    memId, usuarioId);
+                invalidadas++;
+                log.info("[MEMORIA] Memória id={} invalidada retroativamente (evidência viva={} < mínimo={}) userId={}",
+                    memId, vivas, memoriaProps.getHabitoMinOcorrencias(), usuarioId);
+            }
+        }
+        return invalidadas;
+    }
+
+    private static List<Long> parseEvidencia(String csv) {
+        if (csv == null || csv.isBlank()) {
+            return List.of();
+        }
+        List<Long> out = new ArrayList<>();
+        for (String p : csv.split(",")) {
+            try {
+                out.add(Long.parseLong(p.trim()));
+            } catch (NumberFormatException ignore) {
+                // token corrompido no CSV — ignora
+            }
+        }
+        return out;
+    }
+
+    private int contarEvidenciaViva(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        StringBuilder in = new StringBuilder();
+        for (int i = 0; i < ids.size(); i++) {
+            if (i > 0) {
+                in.append(',');
+            }
+            in.append('?');
+        }
+        Integer n = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM transacoes WHERE id IN (" + in + ") "
+                + "AND excluido = FALSE AND status_conferencia = 'CONFIRMADA'",
+            Integer.class, ids.toArray());
+        return n != null ? n : 0;
+    }
+
+    /** Insights para o card do dashboard (3.3): top-K ATIVA por confiança × recência × reforço, sem embedding. */
+    public List<MemoriaSemanticaTimelineItemDTO> listarInsightsRelevantes(Long usuarioId, int k) {
+        if (usuarioId == null || k <= 0) {
+            return List.of();
+        }
+        double lambdaPorDia = Math.log(2) / Math.max(1, memoriaProps.getRagMeiaVidaDias());
+        String sql = "SELECT id, contexto, categoria_origem, data_registro, (embedding IS NOT NULL) AS tem_emb, "
+            + "tipo, status, confianca, contador_reforco "
+            + "FROM memoria_semantica_jarvis WHERE usuario_id = ? AND status = 'ATIVA' "
+            + "ORDER BY confianca "
+            + " * exp(-GREATEST(0, EXTRACT(EPOCH FROM (NOW() - COALESCE(ultimo_reforco_em, data_registro)))) / 86400.0 * ?) "
+            + " * (1 + LEAST(contador_reforco, 10) * 0.05) DESC "
+            + "LIMIT ?";
+        try {
+            return jdbcTemplate.query(sql, (rs, rn) -> mapTimelineRow(rs), usuarioId, lambdaPorDia, Math.min(k, 10));
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return List.of();
+            }
+            throw dex;
+        }
+    }
+
+    /** Hábito inferido ainda não confirmado pelo usuário (6.2) — o mais recente, se houver. */
+    public Optional<MemoriaSemanticaTimelineItemDTO> buscarHabitoNaoConfirmado(Long usuarioId) {
+        if (usuarioId == null) {
+            return Optional.empty();
+        }
+        String sql = "SELECT id, contexto, categoria_origem, data_registro, (embedding IS NOT NULL) AS tem_emb, "
+            + "tipo, status, confianca, contador_reforco "
+            + "FROM memoria_semantica_jarvis "
+            + "WHERE usuario_id = ? AND status = 'ATIVA' AND tipo = 'HABITO' AND origem = 'INFERIDO' "
+            + "AND confirmada_usuario IS NULL ORDER BY data_registro DESC LIMIT 1";
+        try {
+            List<MemoriaSemanticaTimelineItemDTO> out =
+                jdbcTemplate.query(sql, (rs, rn) -> mapTimelineRow(rs), usuarioId);
+            return out.isEmpty() ? Optional.empty() : Optional.of(out.get(0));
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return Optional.empty();
+            }
+            throw dex;
+        }
+    }
+
+    /** Resposta do usuário à pergunta de padrão (6.2): sim → confiança alta; não → REFUTADA. */
+    @Transactional
+    public void confirmarHabito(Long usuarioId, Long memoriaId, boolean confirmado) {
+        if (usuarioId == null || memoriaId == null) {
+            return;
+        }
+        try {
+            if (confirmado) {
+                jdbcTemplate.update(
+                    "UPDATE memoria_semantica_jarvis SET confianca = 0.90, confirmada_usuario = TRUE "
+                        + "WHERE id = ? AND usuario_id = ?",
+                    memoriaId, usuarioId);
+            } else {
+                jdbcTemplate.update(
+                    "UPDATE memoria_semantica_jarvis SET status = 'REFUTADA', confirmada_usuario = FALSE "
+                        + "WHERE id = ? AND usuario_id = ?",
+                    memoriaId, usuarioId);
+            }
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return;
+            }
+            throw dex;
+        }
+    }
+
+    private static MemoriaSemanticaTimelineItemDTO mapTimelineRow(ResultSet rs) throws SQLException {
+        Timestamp ts = rs.getTimestamp("data_registro");
+        Instant inst = ts != null ? ts.toInstant() : Instant.EPOCH;
+        return MemoriaSemanticaTimelineItemDTO.builder()
+            .id(rs.getLong("id"))
+            .contexto(rs.getString("contexto"))
+            .categoriaOrigem(rs.getString("categoria_origem"))
+            .dataRegistro(inst)
+            .temEmbedding(rs.getBoolean("tem_emb"))
+            .tipo(rs.getString("tipo"))
+            .status(rs.getString("status"))
+            .confianca(rs.getBigDecimal("confianca"))
+            .contadorReforco(rs.getInt("contador_reforco"))
+            .build();
     }
 
     private static MemoriaSemanticaSimilaridadeDTO mapSimilarRow(ResultSet rs) throws SQLException {
