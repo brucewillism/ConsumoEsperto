@@ -18,4 +18,7 @@ public class DespesaFixaDTO {
     private BigDecimal valor;
     private Integer diaVencimento;
     private String categoria;
+    private Boolean debitoAutomatico;
+    private Long contaBancariaId;
+    private String contaBancariaNome;
 }

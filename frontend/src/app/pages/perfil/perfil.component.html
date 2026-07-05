@@ -63,7 +63,11 @@
             <span class="fixa-nome">{{ f.descricao }}</span>
             <span class="fixa-meta"
               >Dia {{ f.diaVencimento }} ·
-              {{ f.valor | currency : 'BRL' }}</span
+              {{ f.valor | currency : 'BRL' }}
+              <ng-container *ngIf="f.debitoAutomatico"
+                >· <i class="fas fa-bolt" title="Débito automático"></i>
+                {{ f.contaBancariaNome || 'Conta padrão' }}</ng-container
+              ></span
             >
           </li>
         </ul>
@@ -101,7 +105,22 @@
         <span>Vencimento (dia)</span>
         <input type="number" [(ngModel)]="formFixa.diaVencimento" name="fxDia" min="1" max="31" />
       </label>
+      <label class="fld">
+        <span>Conta a debitar</span>
+        <select [(ngModel)]="formFixa.contaBancariaId" name="fxConta">
+          <option [ngValue]="null">Conta padrão</option>
+          <option *ngFor="let c of contas" [ngValue]="c.id">{{ c.nome }}</option>
+        </select>
+      </label>
+      <label class="fld fld-check">
+        <input type="checkbox" [(ngModel)]="formFixa.debitoAutomatico" name="fxDebAuto" />
+        <span>Débito automático — descontar da conta no dia do vencimento</span>
+      </label>
     </div>
+    <p class="hint" *ngIf="formFixa.debitoAutomatico">
+      No dia do vencimento o sistema lança a despesa e desconta o saldo da conta escolhida (com aviso no WhatsApp).
+      Sem esta opção, o valor só entra na projeção <em>Futuro provável</em>.
+    </p>
     <div class="actions">
       <button type="button" class="btn ghost" (click)="fecharModalFixas()" [disabled]="carregandoFixas">
         Fechar
@@ -117,12 +136,19 @@
         <span>Descrição</span>
         <span>Valor</span>
         <span>Dia</span>
+        <span>Débito</span>
         <span></span>
       </div>
       <div class="fixas-row" *ngFor="let f of fixas">
         <span>{{ f.descricao }}</span>
         <span>{{ f.valor | currency : 'BRL' }}</span>
         <span>{{ f.diaVencimento }}</span>
+        <span class="fixa-debito">
+          <ng-container *ngIf="f.debitoAutomatico; else semDebito">
+            <i class="fas fa-bolt"></i> {{ f.contaBancariaNome || 'Conta padrão' }}
+          </ng-container>
+          <ng-template #semDebito>—</ng-template>
+        </span>
         <span class="row-actions">
           <button type="button" class="linkish" (click)="editarFixa(f)">Editar</button>
           <button type="button" class="linkish danger" (click)="excluirFixa(f)">Excluir</button>

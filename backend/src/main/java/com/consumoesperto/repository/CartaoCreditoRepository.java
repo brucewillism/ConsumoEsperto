@@ -29,10 +29,10 @@ public interface CartaoCreditoRepository extends JpaRepository<CartaoCredito, Lo
     List<CartaoCredito> findActiveCardsByUsuarioId(@Param("usuarioId") Long usuarioId);
 
     @Query("SELECT SUM(c.limiteCredito) FROM CartaoCredito c WHERE c.usuario.id = :usuarioId AND c.ativo = true")
-    Double getTotalCreditLimitByUsuarioId(@Param("usuarioId") Long usuarioId);
+    java.math.BigDecimal getTotalCreditLimitByUsuarioId(@Param("usuarioId") Long usuarioId);
 
     @Query("SELECT SUM(c.limiteDisponivel) FROM CartaoCredito c WHERE c.usuario.id = :usuarioId AND c.ativo = true")
-    Double getTotalAvailableLimitByUsuarioId(@Param("usuarioId") Long usuarioId);
+    java.math.BigDecimal getTotalAvailableLimitByUsuarioId(@Param("usuarioId") Long usuarioId);
     
     /**
      * Busca cartão por usuário e nome

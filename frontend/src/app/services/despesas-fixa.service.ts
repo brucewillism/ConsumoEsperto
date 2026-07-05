@@ -9,6 +9,11 @@ export interface DespesaFixa {
   valor: number;
   diaVencimento: number;
   categoria?: string | null;
+  /** Quando true, o sistema debita a conta vinculada automaticamente no dia do vencimento. */
+  debitoAutomatico?: boolean;
+  /** Conta debitada; null/undefined = conta padrão. */
+  contaBancariaId?: number | null;
+  contaBancariaNome?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })

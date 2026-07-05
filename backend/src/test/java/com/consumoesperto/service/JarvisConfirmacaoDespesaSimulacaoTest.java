@@ -42,7 +42,8 @@ class JarvisConfirmacaoDespesaSimulacaoTest {
 
         assertFalse(mensagem.contains("{{"), "Não pode sobrar placeholder literal");
         assertFalse(mensagem.contains("null"), "Não pode aparecer 'null' no texto");
-        assertTrue(mensagem.contains("Feito, chefe."), "Vocativo configurado deve aparecer");
+        // Vocativo configurado = tratamento + primeiro nome ("chefe Ana")
+        assertTrue(mensagem.contains("Feito, chefe Ana."), "Vocativo configurado deve aparecer");
         assertTrue(mensagem.contains("Já lancei *R$ 45,90* para você."), "Tom em 2ª pessoa na confirmação");
         assertTrue(mensagem.contains("*Mercado* já está em 84% do orçamento mensal"), "Bloco de orçamento crítico");
         assertTrue(mensagem.contains("perto do limite"), "Aviso de proximidade do teto");

@@ -9,6 +9,8 @@ import { ToastService } from '../../services/toast.service';
 import { PreferenciaTratamentoJarvis, Usuario } from '../../models/usuario.model';
 import { GoogleCalendarLinkService } from '../../services/google-calendar-link.service';
 import { DespesaFixa, DespesasFixaService } from '../../services/despesas-fixa.service';
+import { ContaBancariaService } from '../../services/conta-bancaria.service';
+import { ContaBancaria } from '../../models/conta-bancaria.model';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 
@@ -31,6 +33,7 @@ export class PerfilComponent implements OnInit {
   editandoFixa: DespesaFixa | null = null;
   formFixa: DespesaFixa = this.novaFixaVazia();
   fixaErro = '';
+  contas: ContaBancaria[] = [];
 
   readonly opcoes: { value: PreferenciaTratamentoJarvis; label: string; hint?: string }[] = [
     {
@@ -53,7 +56,8 @@ export class PerfilComponent implements OnInit {
     private toastService: ToastService,
     private confirmDialog: ConfirmDialogService,
     private googleCalendarLink: GoogleCalendarLinkService,
-    private despesasFixaService: DespesasFixaService
+    private despesasFixaService: DespesasFixaService,
+    private contaBancariaService: ContaBancariaService
   ) {}
 
   ngOnInit(): void {
@@ -114,7 +118,21 @@ export class PerfilComponent implements OnInit {
   }
 
   private novaFixaVazia(): DespesaFixa {
-    return { descricao: '', valor: 0, diaVencimento: 1, categoria: 'Obrigações fixas' };
+    return {
+      descricao: '',
+      valor: 0,
+      diaVencimento: 1,
+      categoria: 'Obrigações fixas',
+      debitoAutomatico: false,
+      contaBancariaId: null,
+    };
+  }
+
+  private carregarContas(): void {
+    this.contaBancariaService.listarContasAtivas().subscribe({
+      next: (list) => (this.contas = list),
+      error: () => (this.contas = []),
+    });
   }
 
   carregarFixas(): void {
@@ -136,6 +154,7 @@ export class PerfilComponent implements OnInit {
     this.formFixa = this.novaFixaVazia();
     this.fixaErro = '';
     this.modalFixasAberto = true;
+    this.carregarContas();
   }
 
   fecharModalFixas(): void {
@@ -152,8 +171,11 @@ export class PerfilComponent implements OnInit {
       valor: f.valor,
       diaVencimento: f.diaVencimento,
       categoria: f.categoria || 'Obrigações fixas',
+      debitoAutomatico: !!f.debitoAutomatico,
+      contaBancariaId: f.contaBancariaId ?? null,
     };
     this.modalFixasAberto = true;
+    this.carregarContas();
   }
 
   salvarFixa(): void {

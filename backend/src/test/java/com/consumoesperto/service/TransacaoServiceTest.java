@@ -47,6 +47,23 @@ class TransacaoServiceTest {
     @Mock
     private FaturaService faturaService;
 
+    // Dependências adicionadas ao TransacaoService após a criação deste teste —
+    // sem estes mocks o @InjectMocks deixava campos null e os testes quebravam com NPE.
+    @Mock
+    private FinancialProactiveService financialProactiveService;
+
+    @Mock
+    private ScoreService scoreService;
+
+    @Mock
+    private TransacaoSemanticaIndexService transacaoSemanticaIndexService;
+
+    @Mock
+    private ContaBancariaService contaBancariaService;
+
+    @Mock
+    private SaldoMovimentacaoService saldoMovimentacaoService;
+
     @InjectMocks
     private TransacaoService transacaoService;
 

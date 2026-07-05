@@ -3,8 +3,10 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.DespesaFixaDTO;
 import com.consumoesperto.dto.DespesaFixaRequest;
 import com.consumoesperto.dto.MatchResult;
+import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.DespesaFixaRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class DespesaFixaService {
 
     private final DespesaFixaRepository despesaFixaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ContaBancariaRepository contaBancariaRepository;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final JarvisProtocolService jarvisProtocolService;
     private final TextMatcherService textMatcherService;
@@ -161,7 +164,7 @@ public class DespesaFixaService {
             .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
         DespesaFixa e = new DespesaFixa();
         e.setUsuario(u);
-        aplicar(e, req);
+        aplicar(e, req, usuarioId);
         return toDto(despesaFixaRepository.save(e));
     }
 
@@ -175,7 +178,7 @@ public class DespesaFixaService {
         if (e.getUsuario() == null || !usuarioId.equals(e.getUsuario().getId())) {
             throw new IllegalArgumentException("Despesa fixa não encontrada.");
         }
-        aplicar(e, req);
+        aplicar(e, req, usuarioId);
         return toDto(despesaFixaRepository.save(e));
     }
 
@@ -243,21 +246,34 @@ public class DespesaFixaService {
         return VencimentoMensalUtil.venceEmDias(d.getDiaVencimento(), hoje, diasAntecedencia);
     }
 
-    private static void aplicar(DespesaFixa e, DespesaFixaRequest req) {
+    private void aplicar(DespesaFixa e, DespesaFixaRequest req, Long usuarioId) {
         e.setDescricao(req.getDescricao().trim());
         e.setValor(req.getValor().setScale(2, RoundingMode.HALF_UP));
         e.setDiaVencimento(req.getDiaVencimento());
         String cat = req.getCategoria();
         e.setCategoria(cat == null || cat.isBlank() ? null : cat.trim());
+        e.setDebitoAutomatico(Boolean.TRUE.equals(req.getDebitoAutomatico()));
+        if (req.getContaBancariaId() != null) {
+            ContaBancaria conta = contaBancariaRepository
+                .findByIdAndUsuarioId(req.getContaBancariaId(), usuarioId)
+                .orElseThrow(() -> new IllegalArgumentException("Conta bancária não encontrada."));
+            e.setContaBancaria(conta);
+        } else {
+            e.setContaBancaria(null);
+        }
     }
 
     private static DespesaFixaDTO toDto(DespesaFixa d) {
+        ContaBancaria conta = d.getContaBancaria();
         return new DespesaFixaDTO(
             d.getId(),
             d.getDescricao(),
             d.getValor(),
             d.getDiaVencimento(),
-            d.getCategoria()
+            d.getCategoria(),
+            d.isDebitoAutomatico(),
+            conta != null ? conta.getId() : null,
+            conta != null ? conta.getNome() : null
         );
     }
 

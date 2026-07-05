@@ -1,6 +1,7 @@
 package com.consumoesperto.security;
 
 import com.consumoesperto.config.EvolutionWebhookAuthProperties;
+import com.consumoesperto.service.AlertaOperacionalService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,9 +27,13 @@ import java.io.IOException;
 public class EvolutionWebhookApiKeyFilter extends OncePerRequestFilter {
 
     private final EvolutionWebhookAuthProperties authProperties;
+    private final AlertaOperacionalService alertaOperacionalService;
 
     @Value("${evolution.apikey:}")
     private String evolutionApiKey;
+
+    /** Rejeições acumuladas desde o boot — visível no alerta para dimensionar o problema. */
+    private final java.util.concurrent.atomic.AtomicLong rejeicoes = new java.util.concurrent.atomic.AtomicLong();
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -60,6 +65,7 @@ public class EvolutionWebhookApiKeyFilter extends OncePerRequestFilter {
         if (expected == null || expected.isBlank()) {
             log.warn("[WEBHOOK-AUTH] REJEITADO: auth-required=true mas segredo vazio (defina evolution.webhook.secret ou evolution.apikey) path={} ip={}",
                 request.getRequestURI(), request.getRemoteAddr());
+            sinalizarRejeicao("segredo não configurado no backend (webhook mudo)");
             reject(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "webhook-secret-not-configured");
             return;
         }
@@ -73,6 +79,7 @@ public class EvolutionWebhookApiKeyFilter extends OncePerRequestFilter {
                 request.getRemoteAddr(),
                 authProperties.getHeaderName(),
                 authProperties.getQueryParam());
+            sinalizarRejeicao(motivo + " ip=" + request.getRemoteAddr());
             reject(response, HttpServletResponse.SC_UNAUTHORIZED, motivo);
             return;
         }
@@ -123,6 +130,16 @@ public class EvolutionWebhookApiKeyFilter extends OncePerRequestFilter {
             return value.substring(7).trim();
         }
         return value != null ? value.trim() : null;
+    }
+
+    /** Alerta (com cooldown interno do serviço) — evita webhook mudo sem ninguém saber. */
+    private void sinalizarRejeicao(String detalhe) {
+        long total = rejeicoes.incrementAndGet();
+        alertaOperacionalService.alertar(
+            AlertaOperacionalService.TIPO_WEBHOOK_AUTH_FALHA,
+            "Webhook Evolution rejeitado (" + detalhe + "); total desde o boot: " + total
+                + ". Se persistir, o WhatsApp está mudo — confira evolution.webhook.secret e a config da Evolution."
+        );
     }
 
     private static void reject(HttpServletResponse response, int status, String reason) throws IOException {

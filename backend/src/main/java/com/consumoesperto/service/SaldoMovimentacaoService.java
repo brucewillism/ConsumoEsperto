@@ -1,8 +1,12 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.model.ContaBancaria;
+import com.consumoesperto.model.MovimentacaoSaldoLog;
+import com.consumoesperto.model.MovimentacaoSaldoLog.TipoOperacaoSaldo;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.ContaBancariaRepository;
+import com.consumoesperto.repository.MovimentacaoSaldoLogRepository;
+import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
 /**
@@ -26,6 +31,7 @@ public class SaldoMovimentacaoService {
     private static final ZoneId ZONA_BR = ZoneId.of("America/Sao_Paulo");
 
     private final ContaBancariaRepository contaBancariaRepository;
+    private final MovimentacaoSaldoLogRepository movimentacaoSaldoLogRepository;
 
     /** Snapshot imutável para estorno/recálculo em edições. */
     public record MovimentacaoSnapshot(
@@ -106,7 +112,7 @@ public class SaldoMovimentacaoService {
         if (delta.compareTo(BigDecimal.ZERO) == 0 || transacao.getContaBancaria() == null) {
             return;
         }
-        aplicarDelta(transacao.getContaBancaria().getId(), delta);
+        aplicarDelta(transacao.getContaBancaria().getId(), delta, TipoOperacaoSaldo.CRIACAO, transacao.getId());
     }
 
     @Transactional
@@ -114,7 +120,8 @@ public class SaldoMovimentacaoService {
         if (antes != null && impactaSaldo(antes)) {
             BigDecimal impactoAnterior = deltaSaldo(antes);
             if (impactoAnterior.compareTo(BigDecimal.ZERO) != 0 && antes.contaBancariaId() != null) {
-                aplicarDelta(antes.contaBancariaId(), impactoAnterior.negate());
+                aplicarDelta(antes.contaBancariaId(), impactoAnterior.negate(), TipoOperacaoSaldo.EDICAO,
+                    depois != null ? depois.getId() : null);
             }
         }
         aplicarCriacao(depois);
@@ -126,7 +133,7 @@ public class SaldoMovimentacaoService {
         if (impacto.compareTo(BigDecimal.ZERO) == 0 || transacao.getContaBancaria() == null) {
             return;
         }
-        aplicarDelta(transacao.getContaBancaria().getId(), impacto.negate());
+        aplicarDelta(transacao.getContaBancaria().getId(), impacto.negate(), TipoOperacaoSaldo.EXCLUSAO, transacao.getId());
     }
 
     /** Crédito direto na conta (ex.: estorno de pagamento de fatura quando o JOIN JPA não carrega a carteira). */
@@ -135,7 +142,7 @@ public class SaldoMovimentacaoService {
         if (contaBancariaId == null || valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-        aplicarDelta(contaBancariaId, scale(valor));
+        aplicarDelta(contaBancariaId, scale(valor), TipoOperacaoSaldo.CREDITO_DIRETO, null);
     }
 
     /**
@@ -150,27 +157,33 @@ public class SaldoMovimentacaoService {
         if (v.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Valor da transferência deve ser positivo.");
         }
-        aplicarDelta(contaOrigemId, v.negate());
-        aplicarDelta(contaDestinoId, v);
+        // Trava as duas contas em ordem de id para evitar deadlock entre transferências cruzadas
+        Long primeiro = Math.min(contaOrigemId, contaDestinoId);
+        Long segundo = Math.max(contaOrigemId, contaDestinoId);
+        travarConta(primeiro);
+        travarConta(segundo);
+        aplicarDelta(contaOrigemId, v.negate(), TipoOperacaoSaldo.TRANSFERENCIA_SAIDA, null);
+        aplicarDelta(contaDestinoId, v, TipoOperacaoSaldo.TRANSFERENCIA_ENTRADA, null);
         log.info("[MULTICARTEIRA] Transferência {} → {} valor {}", contaOrigemId, contaDestinoId, v);
     }
 
     /** Define saldo nominal após reconciliação idempotente (não valida cheque especial). */
     @Transactional
     public BigDecimal definirSaldoReconciliado(Long contaId, BigDecimal saldoCalculado) {
-        ContaBancaria conta = contaBancariaRepository.findById(contaId)
-            .orElseThrow(() -> new RuntimeException("Conta bancária não encontrada: " + contaId));
+        ContaBancaria conta = travarConta(contaId);
+        BigDecimal antes = scale(conta.getSaldoAtual());
         BigDecimal saldo = scale(saldoCalculado);
         conta.setSaldoAtual(saldo);
         contaBancariaRepository.save(conta);
+        registrarAuditoria(conta, saldo.subtract(antes), antes, saldo, TipoOperacaoSaldo.RECONCILIACAO, null);
         log.info("[MULTICARTEIRA] Conta {} saldo reconciliado → {}", contaId, saldo);
         return saldo;
     }
 
-    private void aplicarDelta(Long contaId, BigDecimal delta) {
-        ContaBancaria conta = contaBancariaRepository.findById(contaId)
-            .orElseThrow(() -> new RuntimeException("Conta bancária não encontrada: " + contaId));
-        BigDecimal saldo = scale(conta.getSaldoAtual()).add(scale(delta));
+    private void aplicarDelta(Long contaId, BigDecimal delta, TipoOperacaoSaldo tipoOperacao, Long transacaoId) {
+        ContaBancaria conta = travarConta(contaId);
+        BigDecimal antes = scale(conta.getSaldoAtual());
+        BigDecimal saldo = antes.add(scale(delta));
         if (delta.compareTo(BigDecimal.ZERO) < 0) {
             BigDecimal debito = delta.negate();
             if (!conta.temSaldoSuficiente(debito)) {
@@ -181,7 +194,42 @@ public class SaldoMovimentacaoService {
         }
         conta.setSaldoAtual(saldo);
         contaBancariaRepository.save(conta);
+        registrarAuditoria(conta, scale(delta), antes, saldo, tipoOperacao, transacaoId);
         log.debug("[MULTICARTEIRA] Conta {} saldo → {} (delta {})", contaId, saldo, delta);
+    }
+
+    /** SELECT ... FOR UPDATE — mutações concorrentes na mesma conta serializam aqui. */
+    private ContaBancaria travarConta(Long contaId) {
+        return contaBancariaRepository.findByIdForUpdate(contaId)
+            .orElseThrow(() -> new RuntimeException("Conta bancária não encontrada: " + contaId));
+    }
+
+    /** Uma linha append-only por mutação de saldo — nunca atualizada/removida. */
+    private void registrarAuditoria(
+        ContaBancaria conta,
+        BigDecimal delta,
+        BigDecimal saldoAntes,
+        BigDecimal saldoDepois,
+        TipoOperacaoSaldo tipoOperacao,
+        Long transacaoId
+    ) {
+        try {
+            MovimentacaoSaldoLog linha = new MovimentacaoSaldoLog();
+            linha.setContaId(conta.getId());
+            linha.setTransacaoId(transacaoId);
+            linha.setUsuarioId(conta.getUsuario() != null ? conta.getUsuario().getId() : null);
+            linha.setDelta(delta);
+            linha.setSaldoAntes(saldoAntes);
+            linha.setSaldoDepois(saldoDepois);
+            linha.setOrigem(SaldoMovimentacaoContexto.origemAtual());
+            linha.setTipoOperacao(tipoOperacao);
+            linha.setCriadoEm(OffsetDateTime.now(AppTimeZone.BR));
+            movimentacaoSaldoLogRepository.save(linha);
+        } catch (Exception e) {
+            // Auditoria nunca pode derrubar a operação financeira; a falha fica visível no log
+            log.error("[AUDIT-SALDO] Falha ao gravar trilha contaId={} delta={}: {}",
+                conta.getId(), delta, e.getMessage());
+        }
     }
 
     private static BigDecimal scale(BigDecimal valor) {

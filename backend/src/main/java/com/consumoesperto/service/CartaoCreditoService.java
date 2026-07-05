@@ -567,10 +567,8 @@ public class CartaoCreditoService {
      */
     public BigDecimal getTotalLimiteCredito(Long usuarioId) {
         // Busca o total do limite de crédito de todos os cartões ativos do usuário
-        Double total = cartaoCreditoRepository.getTotalCreditLimitByUsuarioId(usuarioId);
-        
-        // Converte para BigDecimal ou retorna zero se não houver cartões
-        return total != null ? BigDecimal.valueOf(total) : BigDecimal.ZERO;
+        BigDecimal total = cartaoCreditoRepository.getTotalCreditLimitByUsuarioId(usuarioId);
+        return total != null ? total : BigDecimal.ZERO;
     }
 
     /**

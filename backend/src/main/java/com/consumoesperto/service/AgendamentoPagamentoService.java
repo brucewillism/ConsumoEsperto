@@ -200,12 +200,17 @@ public class AgendamentoPagamentoService {
             return;
         }
         log.info("[AGENDAMENTO] Processando {} pagamento(s) com vencimento {}", pendentes.size(), hoje);
-        for (AgendamentoPagamento ag : pendentes) {
-            try {
-                processarUmComLock(ag.getId());
-            } catch (Exception e) {
-                log.warn("[AGENDAMENTO] Falha id={}: {}", ag.getId(), e.getMessage());
+        SaldoMovimentacaoContexto.definirOrigem(com.consumoesperto.model.MovimentacaoSaldoLog.OrigemMovimentacaoSaldo.JOB);
+        try {
+            for (AgendamentoPagamento ag : pendentes) {
+                try {
+                    processarUmComLock(ag.getId());
+                } catch (Exception e) {
+                    log.warn("[AGENDAMENTO] Falha id={}: {}", ag.getId(), e.getMessage());
+                }
             }
+        } finally {
+            SaldoMovimentacaoContexto.limpar();
         }
     }
 

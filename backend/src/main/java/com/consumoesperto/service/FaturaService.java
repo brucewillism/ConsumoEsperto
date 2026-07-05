@@ -475,10 +475,8 @@ public class FaturaService {
      */
     public BigDecimal getTotalFaturasPorStatus(Long usuarioId, Fatura.StatusFatura status) {
         // Busca o total das faturas do usuário com o status especificado
-        Double total = faturaRepository.getTotalFaturaByUsuarioIdAndStatus(usuarioId, status);
-        
-        // Converte para BigDecimal ou retorna zero se não houver faturas
-        return total != null ? BigDecimal.valueOf(total) : BigDecimal.ZERO;
+        BigDecimal total = faturaRepository.getTotalFaturaByUsuarioIdAndStatus(usuarioId, status);
+        return total != null ? total : BigDecimal.ZERO;
     }
 
     /**

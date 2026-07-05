@@ -91,6 +91,7 @@ public class SchemaAutoPatchService {
         ensureJarvisFeedbackDataExpiracaoColumn();
         ensureUsuarioSessoesContextoTable();
         ensureEventoWebhookProcessadoTable();
+        ensureMovimentacaoSaldoLogTable();
         try {
             List<String> schemas = jdbcTemplate.queryForList(
                 "SELECT table_schema " +
@@ -793,6 +794,12 @@ public class SchemaAutoPatchService {
             executeDdlAutocommit(
                 "CREATE INDEX IF NOT EXISTS idx_despesas_fixas_usuario ON public.despesas_fixas(usuario_id)"
             );
+            executeDdlAutocommit(
+                "ALTER TABLE public.despesas_fixas ADD COLUMN IF NOT EXISTS debito_automatico BOOLEAN NOT NULL DEFAULT FALSE"
+            );
+            executeDdlAutocommit(
+                "ALTER TABLE public.despesas_fixas ADD COLUMN IF NOT EXISTS conta_bancaria_id BIGINT REFERENCES public.contas_bancarias(id) ON DELETE SET NULL"
+            );
             log.info("Schema patch: tabela public.despesas_fixas verificada.");
         } catch (Exception e) {
             log.warn("Falha ao CREATE despesas_fixas: {}", e.getMessage());
@@ -1088,6 +1095,33 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: evento_webhook_processado verificada.");
         } catch (Exception e) {
             log.warn("Falha ao CREATE evento_webhook_processado: {}", e.getMessage());
+        }
+    }
+
+    /** Trilha append-only de mutações de saldo (auditoria financeira). */
+    private void ensureMovimentacaoSaldoLogTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.movimentacao_saldo_log ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "conta_id BIGINT NOT NULL,"
+                    + "transacao_id BIGINT,"
+                    + "usuario_id BIGINT,"
+                    + "delta NUMERIC(19,2) NOT NULL,"
+                    + "saldo_antes NUMERIC(19,2) NOT NULL,"
+                    + "saldo_depois NUMERIC(19,2) NOT NULL,"
+                    + "origem VARCHAR(20) NOT NULL,"
+                    + "tipo_operacao VARCHAR(32) NOT NULL,"
+                    + "criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_mov_saldo_log_conta ON public.movimentacao_saldo_log(conta_id, id DESC)");
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_mov_saldo_log_criado ON public.movimentacao_saldo_log(criado_em)");
+            log.info("Schema patch: movimentacao_saldo_log verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE movimentacao_saldo_log: {}", e.getMessage());
         }
     }
 

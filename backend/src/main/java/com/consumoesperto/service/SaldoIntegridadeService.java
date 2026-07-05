@@ -3,6 +3,7 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.DivergenciaSaldoDTO;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.repository.ContaBancariaRepository;
+import com.consumoesperto.repository.MovimentacaoSaldoLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +30,8 @@ public class SaldoIntegridadeService {
 
     private final ContaBancariaRepository contaBancariaRepository;
     private final SaldoService saldoService;
+    private final MovimentacaoSaldoLogRepository movimentacaoSaldoLogRepository;
+    private final AlertaOperacionalService alertaOperacionalService;
 
     @Value("${consumoesperto.saldo.integridade.auto-corrigir:false}")
     private boolean autoCorrigir;
@@ -54,14 +57,21 @@ public class SaldoIntegridadeService {
         if (delta.abs().compareTo(TOLERANCIA) <= 0) {
             return Optional.empty();
         }
-        return Optional.of(DivergenciaSaldoDTO.builder()
+        DivergenciaSaldoDTO.DivergenciaSaldoDTOBuilder builder = DivergenciaSaldoDTO.builder()
             .contaId(conta.getId())
             .usuarioId(usuarioId)
             .nomeConta(conta.getNome())
             .saldoPersistido(persistido)
             .saldoCalculado(calculado)
-            .delta(delta)
-            .build());
+            .delta(delta);
+        // Referencia o audit trail: onde o saldo mudou pela última vez, não só que divergiu
+        movimentacaoSaldoLogRepository.findTopByContaIdOrderByIdDesc(conta.getId())
+            .ifPresent(m -> builder
+                .ultimaMovimentacaoEm(m.getCriadoEm())
+                .saldoAposUltimaMovimentacao(m.getSaldoDepois())
+                .origemUltimaMovimentacao(m.getOrigem() != null ? m.getOrigem().name() : null)
+                .tipoUltimaMovimentacao(m.getTipoOperacao() != null ? m.getTipoOperacao().name() : null));
+        return Optional.of(builder.build());
     }
 
     @Transactional
@@ -84,13 +94,22 @@ public class SaldoIntegridadeService {
     @Transactional(readOnly = true)
     public void jobDiarioDeteccao() {
         int divergentes = 0;
+        StringBuilder detalhe = new StringBuilder();
         for (ContaBancaria conta : contaBancariaRepository.findByAtivaTrue()) {
-            if (auditarConta(conta).isPresent()) {
+            Optional<DivergenciaSaldoDTO> d = auditarConta(conta);
+            if (d.isPresent()) {
                 divergentes++;
+                DivergenciaSaldoDTO div = d.get();
+                detalhe.append(String.format("contaId=%d delta=%s ultimaMov=%s(%s); ",
+                    div.getContaId(), div.getDelta(),
+                    div.getUltimaMovimentacaoEm(), div.getOrigemUltimaMovimentacao()));
             }
         }
         if (divergentes > 0) {
-            log.warn("[INTEGRIDADE-SALDO] Job diário: {} conta(s) com divergência detectada", divergentes);
+            alertaOperacionalService.alertar(
+                AlertaOperacionalService.TIPO_DIVERGENCIA_SALDO,
+                divergentes + " conta(s) com saldo divergente da fórmula (abertura + movimentos): " + detalhe
+            );
         }
     }
 

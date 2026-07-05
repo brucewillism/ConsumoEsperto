@@ -18,6 +18,14 @@ public final class WhatsappPaymentMethodHeuristics {
                 || "CARD".equalsIgnoreCase(pm) || "CREDIT_CARD".equalsIgnoreCase(pm)) {
                 return true;
             }
+            // paymentMethod explícito da IA prevalece: meio não-cartão bloqueia a heurística de texto
+            String pmNorm = normalize(pm);
+            if (pmNorm.equals("conta") || pmNorm.equals("pix") || pmNorm.equals("debito")
+                || pmNorm.equals("debit") || pmNorm.equals("transferencia") || pmNorm.equals("ted")
+                || pmNorm.equals("dinheiro") || pmNorm.equals("cash") || pmNorm.equals("boleto")
+                || pmNorm.equals("bank account") || pmNorm.equals("bank_account")) {
+                return false;
+            }
         }
         if (sourceText == null || sourceText.isBlank()) {
             return false;

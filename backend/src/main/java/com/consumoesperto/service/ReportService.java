@@ -76,8 +76,8 @@ public class ReportService {
 
         Map<String, Object> resumoMes = transacaoService.resumoFinanceiroMes(userId, ym);
         long totalLinhas = ((Number) resumoMes.get("totalTransacoes")).longValue();
-        BigDecimal totalDespesa = BigDecimal.valueOf((Double) resumoMes.get("totalDespesas"));
-        BigDecimal fluxoTotal = BigDecimal.valueOf((Double) resumoMes.get("fluxoMes"));
+        BigDecimal totalDespesa = (BigDecimal) resumoMes.get("totalDespesas");
+        BigDecimal fluxoTotal = (BigDecimal) resumoMes.get("fluxoMes");
         Optional<RendaConfigDTO> rendaOpt = rendaConfigService.obterDto(userId);
         boolean temRenda = rendaOpt.isPresent()
             && rendaOpt.get().getRendaMensalEstimada() != null

@@ -54,6 +54,16 @@ public class EvolutionWebhookController {
      */
     @PostMapping({"/webhook", "/webhook/**"})
     public ResponseEntity<Map<String, String>> receiveEvolutionWebhook(@RequestBody(required = false) JsonNode payload) {
+        com.consumoesperto.service.SaldoMovimentacaoContexto.definirOrigem(
+            com.consumoesperto.model.MovimentacaoSaldoLog.OrigemMovimentacaoSaldo.WHATSAPP);
+        try {
+            return processarWebhookEvolution(payload);
+        } finally {
+            com.consumoesperto.service.SaldoMovimentacaoContexto.limpar();
+        }
+    }
+
+    private ResponseEntity<Map<String, String>> processarWebhookEvolution(JsonNode payload) {
         if (payload == null || payload.isNull()) {
             log.debug("Evolution webhook POST sem corpo JSON — ignorado (path evento apenas).");
             return ResponseEntity.ok(Map.of("status", "ignored", "reason", "empty-body"));

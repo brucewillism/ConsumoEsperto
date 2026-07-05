@@ -559,15 +559,14 @@ public class TransacaoService {
         // Receitas e despesas confirmadas (saldo dinâmico ao longo do tempo)
         BigDecimal totalReceitas = transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(
             usuarioId, Transacao.TipoTransacao.RECEITA);
-        resumo.put("totalReceitas", totalReceitas != null ? totalReceitas.doubleValue() : 0.0);
+        resumo.put("totalReceitas", totalReceitas != null ? totalReceitas : BigDecimal.ZERO);
 
         BigDecimal totalDespesas = transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(
             usuarioId, Transacao.TipoTransacao.DESPESA);
-        resumo.put("totalDespesas", totalDespesas != null ? totalDespesas.doubleValue() : 0.0);
-        
-        double saldo = saldoService.saldoContaCorrente(usuarioId).doubleValue();
-        resumo.put("saldo", saldo);
-        
+        resumo.put("totalDespesas", totalDespesas != null ? totalDespesas : BigDecimal.ZERO);
+
+        resumo.put("saldo", saldoService.saldoContaCorrente(usuarioId));
+
         return resumo;
     }
 
@@ -640,17 +639,18 @@ public class TransacaoService {
         long totalLinhas = transacaoRepository.countTransacoesUsuarioNoPeriodo(usuarioId, inicio, fim);
         Map<String, Object> resumo = new HashMap<>();
         resumo.put("totalTransacoes", totalLinhas);
-        resumo.put("totalReceitas", totalReceitas.doubleValue());
-        resumo.put("totalDespesas", totalDespesas.doubleValue());
-        resumo.put("totalInvestimentos", totalInvestimentos.doubleValue());
-        resumo.put("fluxoMes", fluxoMes.doubleValue());
-        resumo.put("saldo", saldoAtual.doubleValue());
+        // BigDecimal direto no map: mesma serialização JSON, sem ponto flutuante intermediário
+        resumo.put("totalReceitas", totalReceitas);
+        resumo.put("totalDespesas", totalDespesas);
+        resumo.put("totalInvestimentos", totalInvestimentos);
+        resumo.put("fluxoMes", fluxoMes);
+        resumo.put("saldo", saldoAtual);
         if (incluirProjecao && yearMonth.equals(YearMonth.now())) {
             SaldoService.ProjecaoMesCaixa projecao = saldoService.calcularProjecaoMes(usuarioId);
-            resumo.put("patrimonioLiquido", projecao.patrimonioLiquido().doubleValue());
-            resumo.put("receitasPrevistas", projecao.receitasPrevistas().doubleValue());
-            resumo.put("receitasFiscaisPrevistas", projecao.receitasFiscaisPrevistas().doubleValue());
-            resumo.put("saldoProjetadoFimMes", projecao.saldoProjetadoFimMes().doubleValue());
+            resumo.put("patrimonioLiquido", projecao.patrimonioLiquido());
+            resumo.put("receitasPrevistas", projecao.receitasPrevistas());
+            resumo.put("receitasFiscaisPrevistas", projecao.receitasFiscaisPrevistas());
+            resumo.put("saldoProjetadoFimMes", projecao.saldoProjetadoFimMes());
         }
         return resumo;
     }

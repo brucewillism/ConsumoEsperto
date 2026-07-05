@@ -113,8 +113,12 @@ public class PdfTextExtractionService {
     }
 
     public boolean pdfPareceCriptografado(byte[] pdfBytes) {
-        if (pdfBytes == null || pdfBytes.length < 32) {
+        if (pdfBytes == null || pdfBytes.length == 0) {
             return false;
+        }
+        if (pdfBytes.length < 32) {
+            // Pequeno demais para o parser — decide pelo marcador /Encrypt no conteúdo bruto
+            return contemEncryptNoTrailer(pdfBytes);
         }
         try (PDDocument doc = PDDocument.load(pdfBytes)) {
             return doc.isEncrypted();
@@ -171,6 +175,13 @@ public class PdfTextExtractionService {
                 senhas.add(cpf11);
                 senhas.add(cpf11.substring(0, 5));
                 senhas.add(cpf11.substring(0, 6));
+            }
+            if (digitos.length() <= 10) {
+                // CPFs digitados sem os zeros à esquerda (10 dígitos) — variante Itaú/Inter
+                String cpf10 = ("0000000000" + digitos).substring(("0000000000" + digitos).length() - 10);
+                senhas.add(cpf10);
+                senhas.add(cpf10.substring(0, 5));
+                senhas.add(cpf10.substring(0, 6));
             }
             if (digitos.length() == 6) {
                 senhas.add("0" + digitos.substring(0, 5));

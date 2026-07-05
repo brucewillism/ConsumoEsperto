@@ -245,7 +245,8 @@ h1 {
   color: #94a3b8;
 }
 
-.fld input {
+.fld input,
+.fld select {
   background: #0f172a;
   border: 1px solid #475569;
   border-radius: 8px;
@@ -254,7 +255,6 @@ h1 {
 }
 
 .fld-dia {
-  grid-column: 1 / -1;
   max-width: 120px;
 }
 
@@ -271,11 +271,37 @@ h1 {
 
 .fixas-row {
   display: grid;
-  grid-template-columns: 1fr 100px 48px 140px;
+  grid-template-columns: 1fr 100px 48px 130px 140px;
   gap: 8px;
   padding: 10px 12px;
   font-size: 0.85rem;
   align-items: center;
+}
+
+.fixa-debito {
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  .fa-bolt {
+    color: #facc15;
+    margin-right: 4px;
+  }
+}
+
+.fld-check {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+
+  input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: #38bdf8;
+  }
 }
 
 .fixas-row.head {

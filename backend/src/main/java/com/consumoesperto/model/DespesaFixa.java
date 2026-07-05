@@ -28,6 +28,15 @@ public class DespesaFixa {
     @Column(name = "categoria", length = 120)
     private String categoria;
 
+    /** Quando true, o job diário lança a despesa na conta no dia do vencimento (débito real, não só projeção). */
+    @Column(name = "debito_automatico", nullable = false)
+    private boolean debitoAutomatico = false;
+
+    /** Conta debitada pelo débito automático; null = conta padrão do usuário no momento do débito. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conta_bancaria_id")
+    private ContaBancaria contaBancaria;
+
     @Column(name = "data_criacao", nullable = false)
     private LocalDateTime dataCriacao;
 
@@ -63,6 +72,12 @@ public class DespesaFixa {
 
     public String getCategoria() { return categoria; }
     public void setCategoria(String categoria) { this.categoria = categoria; }
+
+    public boolean isDebitoAutomatico() { return debitoAutomatico; }
+    public void setDebitoAutomatico(boolean debitoAutomatico) { this.debitoAutomatico = debitoAutomatico; }
+
+    public ContaBancaria getContaBancaria() { return contaBancaria; }
+    public void setContaBancaria(ContaBancaria contaBancaria) { this.contaBancaria = contaBancaria; }
 
     public LocalDateTime getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }

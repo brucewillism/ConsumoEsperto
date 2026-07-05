@@ -346,14 +346,15 @@ public class NotificacaoPushService {
      */
     private String calcularPercentual(String valor1, String valor2) {
         try {
-            double v1 = Double.parseDouble(valor1.replace("R$", "").replace(",", ".").trim());
-            double v2 = Double.parseDouble(valor2.replace("R$", "").replace(",", ".").trim());
-            
-            if (v2 == 0) return "0";
-            
-            double percentual = (v1 / v2) * 100;
-            return String.format("%.1f", percentual);
-            
+            java.math.BigDecimal v1 = new java.math.BigDecimal(valor1.replace("R$", "").replace(",", ".").trim());
+            java.math.BigDecimal v2 = new java.math.BigDecimal(valor2.replace("R$", "").replace(",", ".").trim());
+
+            if (v2.compareTo(java.math.BigDecimal.ZERO) == 0) return "0";
+
+            return v1.multiply(java.math.BigDecimal.valueOf(100))
+                .divide(v2, 1, java.math.RoundingMode.HALF_UP)
+                .toPlainString();
+
         } catch (Exception e) {
             log.warn("⚠️ Erro ao calcular percentual: {}", e.getMessage());
             return "0";

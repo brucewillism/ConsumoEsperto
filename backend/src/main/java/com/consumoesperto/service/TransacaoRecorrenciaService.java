@@ -27,12 +27,17 @@ public class TransacaoRecorrenciaService {
         List<Transacao> transacoesRecorrentes =
             transacaoRepository.findByRecorrenteTrueAndProximaExecucaoLessThanEqual(hoje);
 
-        for (Transacao original : transacoesRecorrentes) {
-            try {
-                processarUma(original.getId(), hoje);
-            } catch (Exception e) {
-                log.warn("Recorrência falhou transacaoId={}: {}", original.getId(), e.getMessage());
+        SaldoMovimentacaoContexto.definirOrigem(com.consumoesperto.model.MovimentacaoSaldoLog.OrigemMovimentacaoSaldo.JOB);
+        try {
+            for (Transacao original : transacoesRecorrentes) {
+                try {
+                    processarUma(original.getId(), hoje);
+                } catch (Exception e) {
+                    log.warn("Recorrência falhou transacaoId={}: {}", original.getId(), e.getMessage());
+                }
             }
+        } finally {
+            SaldoMovimentacaoContexto.limpar();
         }
     }
 

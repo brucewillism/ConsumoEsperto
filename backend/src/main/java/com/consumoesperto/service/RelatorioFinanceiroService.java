@@ -89,11 +89,11 @@ public class RelatorioFinanceiroService {
         LocalDateTime fim = yearMonth.atEndOfMonth().atTime(23, 59, 59);
 
         Map<String, Object> nucleo = transacaoService.resumoFinanceiroMes(usuarioId, yearMonth);
-        BigDecimal totalReceitas = BigDecimal.valueOf((Double) nucleo.get("totalReceitas"));
-        BigDecimal totalDespesas = BigDecimal.valueOf((Double) nucleo.get("totalDespesas"));
-        BigDecimal fluxoMes = BigDecimal.valueOf((Double) nucleo.get("fluxoMes"));
+        BigDecimal totalReceitas = (BigDecimal) nucleo.get("totalReceitas");
+        BigDecimal totalDespesas = (BigDecimal) nucleo.get("totalDespesas");
+        BigDecimal fluxoMes = (BigDecimal) nucleo.get("fluxoMes");
         // Mês corrente: saldo = patrimônio em contas (igual ao card do dashboard); histórico: fluxo do mês.
-        BigDecimal saldo = BigDecimal.valueOf((Double) nucleo.get("saldo"));
+        BigDecimal saldo = (BigDecimal) nucleo.get("saldo");
 
         // Buscar faturas vencendo no mês especificado
         List<Fatura> faturasVencendo = faturaRepository.findByUsuarioIdAndDataVencimentoBetween(

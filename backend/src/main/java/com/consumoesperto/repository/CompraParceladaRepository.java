@@ -28,7 +28,7 @@ public interface CompraParceladaRepository extends JpaRepository<CompraParcelada
                                                              @Param("dataFim") LocalDateTime dataFim);
 
     @Query("SELECT SUM(cp.valorTotal) FROM CompraParcelada cp WHERE cp.cartaoCredito.usuario.id = :usuarioId AND cp.statusCompra = :status")
-    Double getTotalCompraByUsuarioIdAndStatus(@Param("usuarioId") Long usuarioId, @Param("status") CompraParcelada.StatusCompra status);
+    java.math.BigDecimal getTotalCompraByUsuarioIdAndStatus(@Param("usuarioId") Long usuarioId, @Param("status") CompraParcelada.StatusCompra status);
 
     @Query("SELECT cp FROM CompraParcelada cp WHERE cp.cartaoCredito.usuario.id = :usuarioId AND cp.parcelaAtual < cp.numeroParcelas AND cp.statusCompra = 'ATIVA'")
     List<CompraParcelada> findActiveInstallmentsByUsuarioId(@Param("usuarioId") Long usuarioId);

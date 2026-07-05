@@ -259,10 +259,8 @@ public class CompraParceladaService {
      */
     public BigDecimal getTotalComprasPorStatus(Long usuarioId, CompraParcelada.StatusCompra status) {
         // Busca o total das compras do usuário com o status especificado
-        Double total = compraParceladaRepository.getTotalCompraByUsuarioIdAndStatus(usuarioId, status);
-        
-        // Converte para BigDecimal ou retorna zero se não houver compras
-        return total != null ? BigDecimal.valueOf(total) : BigDecimal.ZERO;
+        BigDecimal total = compraParceladaRepository.getTotalCompraByUsuarioIdAndStatus(usuarioId, status);
+        return total != null ? total : BigDecimal.ZERO;
     }
 
     /**

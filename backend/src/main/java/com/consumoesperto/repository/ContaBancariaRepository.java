@@ -2,14 +2,24 @@ package com.consumoesperto.repository;
 
 import com.consumoesperto.model.ContaBancaria;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import javax.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
 public interface ContaBancariaRepository extends JpaRepository<ContaBancaria, Long> {
+
+    /**
+     * SELECT ... FOR UPDATE — serializa mutações concorrentes de saldo na mesma conta
+     * (app + WhatsApp + jobs), eliminando lost updates do read-modify-write.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM ContaBancaria c WHERE c.id = :id")
+    Optional<ContaBancaria> findByIdForUpdate(@Param("id") Long id);
 
     List<ContaBancaria> findByUsuarioIdAndAtivaTrueOrderByPadraoDescNomeAsc(Long usuarioId);
 

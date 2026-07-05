@@ -124,23 +124,26 @@ public class FinancialAdviceCalculator {
     }
 
     /**
-     * Parcela Price: PMT = PV × i / (1 − (1+i)^−n).
+     * Parcela Price: PMT = PV × i × (1+i)^n / ((1+i)^n − 1).
+     * Dinheiro (PV, PMT) inteiramente em BigDecimal; só a taxa entra como double.
      */
     public BigDecimal calcularParcelaPrice(BigDecimal valorTomado, double taxaMensal, int parcelas) {
         if (valorTomado == null || valorTomado.compareTo(BigDecimal.ZERO) <= 0 || parcelas <= 0) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
-        double pv = valorTomado.doubleValue();
-        double i = taxaMensal;
-        if (i <= 0.0) {
+        if (taxaMensal <= 0.0) {
             return valorTomado.divide(BigDecimal.valueOf(parcelas), 2, RoundingMode.HALF_UP);
         }
-        double pmt = pv * i / (1.0 - Math.pow(1.0 + i, -parcelas));
-        return BigDecimal.valueOf(pmt).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal i = BigDecimal.valueOf(taxaMensal).setScale(10, RoundingMode.HALF_UP);
+        BigDecimal fator = BigDecimal.ONE.add(i).pow(parcelas);
+        return valorTomado.multiply(i).multiply(fator)
+            .divide(fator.subtract(BigDecimal.ONE), 2, RoundingMode.HALF_UP);
     }
 
     /**
-     * Resolve taxa mensal por bisseção: PV = PMT × (1 − (1+i)^−n) / i
+     * Resolve taxa mensal por bisseção: PV = PMT × (1 − (1+i)^−n) / i.
+     * Exceção deliberada ao "sem double": o alvo é uma TAXA (não dinheiro) e a bisseção
+     * numérica em double tem precisão de sobra para 2 casas percentuais.
      */
     public double resolverTaxaMensal(double pv, double pmt, int n) {
         if (pv <= 0 || pmt <= 0 || n <= 0 || pmt * n <= pv) {

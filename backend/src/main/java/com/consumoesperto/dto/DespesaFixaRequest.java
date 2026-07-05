@@ -28,4 +28,10 @@ public class DespesaFixaRequest {
 
     @Size(max = 120)
     private String categoria;
+
+    /** Liga o débito automático na conta no dia do vencimento (default false). */
+    private Boolean debitoAutomatico;
+
+    /** Conta a debitar; null = conta padrão do usuário. */
+    private Long contaBancariaId;
 }

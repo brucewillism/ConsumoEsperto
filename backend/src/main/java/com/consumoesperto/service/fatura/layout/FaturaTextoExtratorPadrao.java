@@ -373,7 +373,7 @@ final class FaturaTextoExtratorPadrao {
         Matcher m = LINHA_LANCAMENTO.matcher(trecho);
         while (m.find()) {
             String descricao = limparDescricao(m.group(4));
-            if (descricao.isBlank() || deveIgnorar(descricao, cfg)) {
+            if (descricao.isBlank() || deveIgnorar(descricao, cfg) || cfg.ignorarLancamento().test(descricao)) {
                 continue;
             }
             BigDecimal valor = parseMoney(m.group(5));
@@ -634,11 +634,37 @@ final class FaturaTextoExtratorPadrao {
         return texto.substring(inicio, fimSeguro);
     }
 
+    /**
+     * Índice do marcador NO TEXTO ORIGINAL, ignorando caixa/acentos/pontuação.
+     * A versão antiga procurava em {@link FaturaPdfLayoutSupport#norm} (que colapsa espaços
+     * e remove pontuação) e devolvia um índice deslocado — os recortes de seção cortavam
+     * lançamentos válidos (ex.: Mercado Pago perdia linhas).
+     */
     private static int indexOfIgnoreCase(String texto, String busca) {
         if (texto == null || busca == null) {
             return -1;
         }
-        return FaturaPdfLayoutSupport.norm(texto).indexOf(FaturaPdfLayoutSupport.norm(busca));
+        String alvo = normPreservandoIndices(texto);
+        String alvoBusca = normPreservandoIndices(busca).trim().replaceAll("\\s+", " ");
+        if (alvoBusca.isEmpty()) {
+            return -1;
+        }
+        Pattern p = Pattern.compile(Pattern.quote(alvoBusca).replace(" ", "\\E\\s+\\Q"));
+        Matcher m = p.matcher(alvo);
+        return m.find() ? m.start() : -1;
+    }
+
+    /** Normalização 1:1 (mesmo comprimento do original): minúsculas, sem acento, pontuação vira espaço. */
+    private static String normPreservandoIndices(String raw) {
+        StringBuilder sb = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); i++) {
+            String d = java.text.Normalizer.normalize(String.valueOf(raw.charAt(i)), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+            char base = d.isEmpty() ? ' ' : Character.toLowerCase(d.charAt(0));
+            boolean alfanumerico = (base >= 'a' && base <= 'z') || (base >= '0' && base <= '9');
+            sb.append(alfanumerico ? base : ' ');
+        }
+        return sb.toString();
     }
 
     private static String formatarValorBr(BigDecimal valor) {

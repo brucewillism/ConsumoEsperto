@@ -35,7 +35,7 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
                                                         @Param("dataFim") LocalDateTime dataFim);
 
     @Query("SELECT SUM(f.valorTotal) FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.status = :status")
-    Double getTotalFaturaByUsuarioIdAndStatus(@Param("usuarioId") Long usuarioId, @Param("status") Fatura.StatusFatura status);
+    java.math.BigDecimal getTotalFaturaByUsuarioIdAndStatus(@Param("usuarioId") Long usuarioId, @Param("status") Fatura.StatusFatura status);
 
     @Query("SELECT f FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId AND f.dataVencimento <= :dataLimite AND f.status = 'VENCIDA'")
     List<Fatura> findVencidasByUsuarioId(@Param("usuarioId") Long usuarioId, @Param("dataLimite") LocalDateTime dataLimite);

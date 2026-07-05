@@ -62,7 +62,6 @@ export class ContasBancariasComponent implements OnInit {
   loading = false;
   loadingHistorico = false;
   salvando = false;
-  reconciliandoId: number | null = null;
   salvandoCorrecao = false;
   correcaoSaldos: { id: number; nome: string; saldoAtual: number; saldoApp: string }[] = [];
   tipos = TIPOS_CONTA;
@@ -172,7 +171,7 @@ export class ContasBancariasComponent implements OnInit {
         saldoAtual: conta.saldoAtual,
         limiteChequeEspecial: conta.limiteChequeEspecial ?? 0,
         padrao: !!conta.padrao,
-        saldoReferenciaApp: '',
+        saldoReferenciaApp: this.formatarValorInput(conta.saldoAtual),
       });
       this.form.get('saldoAtual')?.disable();
     } else {
@@ -214,9 +213,11 @@ export class ContasBancariasComponent implements OnInit {
       : this.contaService.criar(payload);
 
     const saldoApp = parseValorBrasileiro(raw.saldoReferenciaApp);
+    const saldoMudou =
+      saldoApp != null && Math.abs(saldoApp - (Number(this.editando?.saldoAtual) || 0)) > 0.004;
     const syncSaldo$: Observable<unknown> =
-      this.editando?.id && saldoApp != null
-        ? this.contaService.sincronizarSaldo(this.editando.id, saldoApp)
+      this.editando?.id && saldoMudou
+        ? this.contaService.sincronizarSaldo(this.editando.id, saldoApp!)
         : of(null);
 
     syncSaldo$.pipe(switchMap(() => req$)).subscribe({
@@ -256,29 +257,6 @@ export class ContasBancariasComponent implements OnInit {
           error: () => this.snackBar.open('Erro ao inativar', 'Fechar', { duration: 3000 }),
         });
       });
-  }
-
-  reconciliarSaldo(conta: ContaBancaria): void {
-    if (!conta.id) {
-      return;
-    }
-    this.reconciliandoId = conta.id;
-    this.contaService.reconciliarSaldo(conta.id).subscribe({
-      next: (r) => {
-        this.reconciliandoId = null;
-        this.financaAlteracao.notificar('contas');
-        this.carregar({ silent: true });
-        const msg =
-          r.saldoAnterior !== r.saldoCalculado
-            ? `Saldo recalculado: ${this.brl(r.saldoAnterior)} → ${this.brl(r.saldoCalculado)}`
-            : 'Saldo já estava consistente com as transações';
-        this.snackBar.open(msg, 'Fechar', { duration: 4500 });
-      },
-      error: (err) => {
-        this.reconciliandoId = null;
-        this.snackBar.open(resolveHttpError(err, 'Erro ao recalcular saldo'), 'Fechar', { duration: 4000 });
-      },
-    });
   }
 
   temSaldoAnomalo(): boolean {
@@ -350,6 +328,12 @@ export class ContasBancariasComponent implements OnInit {
 
   brl(v: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
+  }
+
+  /** Valor numérico no formato de digitação pt-BR (sem R$), para prefixar inputs com máscara decimal. */
+  private formatarValorInput(v: number | undefined | null): string {
+    const n = Number(v) || 0;
+    return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   labelTipo(tipo: string): string {
