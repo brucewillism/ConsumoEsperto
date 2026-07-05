@@ -58,6 +58,10 @@ curl -X POST "https://SUA-EVOLUTION/event/webhook/set/ce-u123" \
   }'
 ```
 
+## Alerta em rejeições
+
+Rejeições do webhook geram, além do log `[WEBHOOK-AUTH] REJEITADO`, um **alerta operacional** (`WEBHOOK_AUTH_FALHA`) via `AlertaOperacionalService` — log `ERROR [ALERTA-OP]` e, se configurado, POST no webhook de alertas (`ALERTAS_WEBHOOK_ENABLED` / `ALERTAS_WEBHOOK_URL`), com cooldown. Assim o WhatsApp não fica mudo em silêncio. Detalhes: [`INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md) (secção alertas).
+
 ## Rollback de emergência
 
 Se o WhatsApp ficar **mudo** após deploy:

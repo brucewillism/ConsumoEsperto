@@ -12,6 +12,8 @@ Mapa de todos os ficheiros de referência do repositório.
 | [`FRONTEND_OVERLAY_MODAIS.md`](FRONTEND_OVERLAY_MODAIS.md) | Modais Angular Material: overlay CDK, scroll, z-index |
 | [`WHATSAPP_EVOLUTION.md`](WHATSAPP_EVOLUTION.md) | Evolution API: QR, webhook, privacidade, sessão |
 | [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) | Advisor, empréstimo consignado, Sentinela, fiscal, áudio, cron jobs |
+| [`INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md) | Lock de saldo, audit trail, reconciliação, reparo financeiro, alertas, débito automático de fixas |
+| [`WEBHOOK_AUTH_EVOLUTION.md`](WEBHOOK_AUTH_EVOLUTION.md) | Autenticação do webhook Evolution: secret, rollback, testes |
 
 ## Ambiente e deploy
 
@@ -47,6 +49,10 @@ Mapa de todos os ficheiros de referência do repositório.
 | Catálogo app ↔ WhatsApp | `backend/.../WhatsAppAppParityService.java` |
 | Empréstimo consignado | `backend/.../EmprestimoService.java` |
 | Sentinela / disponibilidade | `backend/.../PrevisaoFluxoCaixaService.java`, `SentinelaProtocolService.java` |
+| Movimentação de saldo (ponto único, lock + audit) | `backend/.../SaldoMovimentacaoService.java` |
+| Reparo financeiro (dry-run/aplicar) | `backend/.../ReparoFinanceiroController.java`, `SaldoReparoService.java` |
+| Alertas operacionais | `backend/.../AlertaOperacionalService.java` |
+| Débito automático de despesas fixas | `backend/.../DespesaFixaDebitoAutomaticoService.java` |
 
 ## Agentes Cursor
 
@@ -63,4 +69,4 @@ Ao alterar funcionalidades visíveis ao utilizador:
 3. Se mudarem portas ou serviços Docker → `docker/README.md` e `stack-ports.ps1`.
 4. Schema BD → `SchemaAutoPatchService.java` (não há Flyway SQL neste repo).
 
-**Última revisão:** junho/2026
+**Última revisão:** julho/2026

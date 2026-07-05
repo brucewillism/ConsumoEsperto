@@ -108,6 +108,13 @@ services:
       TOKEN_SUPPRESSOR_API_KEY: ${TOKEN_SUPPRESSOR_API_KEY:-}
       TOKEN_SUPPRESSOR_STRATEGY: ${TOKEN_SUPPRESSOR_STRATEGY:-balanced}
       TOKEN_SUPPRESSOR_MIN_CHARS: ${TOKEN_SUPPRESSOR_MIN_CHARS:-0}
+      # Integridade de saldo — reparo fail-closed (só ligar após backup, aplicar e desligar) e audit trail
+      SALDO_REPARO_ENABLED: ${SALDO_REPARO_ENABLED:-false}
+      SALDO_AUDIT_RETENTION_DAYS: ${SALDO_AUDIT_RETENTION_DAYS:-730}
+      # Alertas operacionais (divergência de saldo / auth do webhook) — baseline log ERROR; webhook externo opcional
+      ALERTAS_WEBHOOK_ENABLED: ${ALERTAS_WEBHOOK_ENABLED:-false}
+      ALERTAS_WEBHOOK_URL: ${ALERTAS_WEBHOOK_URL:-}
+      ALERTAS_COOLDOWN_MINUTES: ${ALERTAS_COOLDOWN_MINUTES:-15}
     depends_on:
       postgres:
         condition: service_healthy

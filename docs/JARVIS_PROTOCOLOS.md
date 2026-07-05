@@ -2,7 +2,7 @@
 
 Referência dos protocolos financeiros além do CRUD básico (despesas, metas, faturas): **Advisor**, **empréstimo consignado**, **Sentinela**, **planejamento fiscal**, **áudio** e jobs proactivos.
 
-**Última revisão:** junho/2026 · **Código:** `backend/src/main/java/com/consumoesperto/service/`
+**Última revisão:** julho/2026 · **Código:** `backend/src/main/java/com/consumoesperto/service/`
 
 ---
 
@@ -161,7 +161,11 @@ Horário: **America/Sao_Paulo** (salvo indicação contrária).
 
 | Horário | Job | Serviço |
 |---------|-----|---------|
+| 03:30 | Reconciliação de saldo (detecção de divergências + alerta) | `SaldoIntegridadeService` |
+| 04:15 | Expurgo dedup de webhook | `EvolutionWebhookDedupPurgeService` |
+| 04:45 | Expurgo audit trail de saldo (`movimentacao_saldo_log`) | `MovimentacaoSaldoLogPurgeService` |
 | 06:00 | Agendamentos de pagamento | `AgendamentoPagamentoService` |
+| **06:30** | **Débito automático de obrigações fixas** (idempotente; avisa no WhatsApp) | `DespesaFixaDebitoAutomaticoService` |
 | 07:15 | Auditoria provisões «fantasma» | `ProactiveFinancialJobs` |
 | 08:00 | Despesas fixas, assinaturas, recorrências | vários |
 | 09:00 | Salário automático, watcher fechamento fatura | `SalarioAutomaticoScheduler`, `FaturaFechamentoWatcherService` |
@@ -172,7 +176,8 @@ Horário: **America/Sao_Paulo** (salvo indicação contrária).
 | cada hora | Limpar sessões de contexto | `UsuarioSessaoContextoService` |
 | 02:00 | Backup, transações recorrentes | `BackupAutomaticoService`, `TransacaoRecorrenciaService` |
 
-Watcher fechamento fatura: `consumoesperto.watcher.fechamento.cron=0 0 9 * * *` (09:00 diário).
+Watcher fechamento fatura: `consumoesperto.watcher.fechamento.cron=0 0 9 * * *` (09:00 diário).  
+Reconciliação de saldo: `consumoesperto.saldo.integridade.cron=0 30 3 * * *` — detalhes em [`INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md).
 
 ---
 
@@ -200,6 +205,8 @@ Tabelas/colunas relevantes para estes protocolos:
 - `sugestoes_contencao_jarvis`
 - `memoria_semantica_jarvis` (+ pgvector ou BYTEA fallback)
 - `transacao_semantica_index` (RAG por transacções)
+- `movimentacao_saldo_log` — audit trail append-only de mudanças de saldo ([`INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md))
+- `despesas_fixas.debito_automatico` + `despesas_fixas.conta_bancaria_id` — débito automático de obrigações fixas
 
 Ver também [`CONFIGURACAO_AMBIENTE.md`](../CONFIGURACAO_AMBIENTE.md) (secção pgvector).
 

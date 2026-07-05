@@ -122,6 +122,17 @@ Timeout de transacção Spring: `spring.transaction.default-timeout=30s` — ope
 
 Protocolos Advisor, consignado e Sentinela: [`docs/JARVIS_PROTOCOLOS.md`](docs/JARVIS_PROTOCOLOS.md).
 
+## Variáveis de integridade de saldo (opcionais)
+
+| Variável | Efeito |
+|----------|--------|
+| `SALDO_REPARO_ENABLED` | `false` (default) = `/api/reparo-financeiro` só devolve dry-run; `true` permite aplicar reparo (ligar só após backup) |
+| `SALDO_AUDIT_RETENTION_DAYS` | Retenção do audit trail `movimentacao_saldo_log` (default 730 dias) |
+| `ALERTAS_WEBHOOK_ENABLED` / `ALERTAS_WEBHOOK_URL` | Webhook opcional para alertas operacionais (divergência de saldo, auth do webhook rejeitada) |
+| `ALERTAS_COOLDOWN_MINUTES` | Intervalo mínimo entre alertas repetidos (default 15) |
+
+Guia completo: [`docs/INTEGRIDADE_SALDO.md`](docs/INTEGRIDADE_SALDO.md).
+
 ## Como Subir
 
 ### Opcao A — tres terminais (recomendado)

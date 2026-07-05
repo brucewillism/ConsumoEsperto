@@ -14,6 +14,7 @@ Aplicação de finanças pessoais com **app web** (Angular), assistente **J.A.R.
 | [`docs/FRONTEND_OVERLAY_MODAIS.md`](docs/FRONTEND_OVERLAY_MODAIS.md) | Modais Material/CDK, scroll e cliques |
 | [`docs/WHATSAPP_EVOLUTION.md`](docs/WHATSAPP_EVOLUTION.md) | Pareamento QR, privacidade, sessão estável |
 | [`docs/JARVIS_PROTOCOLOS.md`](docs/JARVIS_PROTOCOLOS.md) | Advisor, consignado, Sentinela, fiscal, áudio, jobs |
+| [`docs/INTEGRIDADE_SALDO.md`](docs/INTEGRIDADE_SALDO.md) | Lock de saldo, audit trail, reparo financeiro, alertas, débito automático de fixas |
 | [`.env.example`](.env.example) | Variáveis de ambiente comentadas |
 | [`.cursor/rules/stack-local.mdc`](.cursor/rules/stack-local.mdc) | Regra para agentes: stack local |
 
@@ -76,4 +77,4 @@ scripts/          PowerShell: stack, backend, parar serviços
 tools/            JDK, Maven, Node (opcional), evolution-api (clone local)
 ```
 
-**Última revisão da documentação:** junho/2026
+**Última revisão da documentação:** julho/2026

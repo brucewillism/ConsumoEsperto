@@ -3133,6 +3133,9 @@ public class WhatsAppCommandService {
             if (nParcelas <= 0) {
                 nParcelas = readOptionalPositiveInt(cmd, "installments");
             }
+            if (nParcelas <= 0) {
+                nParcelas = extrairNumeroParcelasDoTexto(sourceText);
+            }
             BigDecimal installmentAmount = readOptionalBigDecimal(cmd, "installmentAmount");
             if (installmentAmount == null) {
                 installmentAmount = readOptionalBigDecimal(cmd, "valorParcela");
@@ -3172,13 +3175,6 @@ public class WhatsAppCommandService {
             }
 
             if (nParcelas >= 2 && matchResult.card != null) {
-                if (interestFree) {
-                    List<TransacaoDTO> criadas = parcelamentoService.criarParcelamentoSemJuros(
-                        userId, matchResult.card, sanitizeDescription(description), amount, nParcelas, status);
-                    return msgOk("Parcelamento sem juros",
-                        "Criei *" + criadas.size() + "* parcelas de *"
-                            + BRL.format(criadas.get(0).getValor()) + "* no *" + matchResult.card.getNome() + "*.");
-                }
                 if (withInterest && installmentAmount != null && installmentAmount.compareTo(BigDecimal.ZERO) > 0) {
                     BigDecimal aVista = purchasePrice != null && purchasePrice.compareTo(BigDecimal.ZERO) > 0
                         ? purchasePrice
@@ -3189,6 +3185,22 @@ public class WhatsAppCommandService {
                         "Criei *" + criadas.size() + "* parcelas de *" + BRL.format(installmentAmount) + "* no *"
                             + matchResult.card.getNome() + "*.");
                 }
+                if (withInterest) {
+                    return msgErro(userId, "Parcelamento",
+                        "Para parcelar *com juros* preciso do valor de cada parcela (ex.: *em 10x de 289,90 com juros*).");
+                }
+                // «em N vezes» sem citar juros nem valor de parcela: divide o total sem juros.
+                // Antes caía no lançamento único (todo o valor numa fatura só) — bug reportado em produção.
+                List<TransacaoDTO> criadas = parcelamentoService.criarParcelamentoSemJuros(
+                    userId, matchResult.card, sanitizeDescription(description), amount, nParcelas, status);
+                String avisoJuros = interestFree
+                    ? ""
+                    : "\n\nAssumi *sem juros*. Se houver juros, me diz o valor da parcela (ex.: *em "
+                        + nParcelas + "x de 289,90 com juros*) que eu corrijo.";
+                return msgOk("Parcelamento sem juros",
+                    "Criei *" + criadas.size() + "* parcelas de *"
+                        + BRL.format(criadas.get(0).getValor()) + "* no *" + matchResult.card.getNome() + "*."
+                        + avisoJuros);
             }
 
             TransacaoDTO dto = new TransacaoDTO();
@@ -3403,6 +3415,24 @@ public class WhatsAppCommandService {
             log.debug("Status de orçamento pós-despesa indisponível userId={}: {}", userId, e.getMessage());
             return "";
         }
+    }
+
+    /**
+     * Fallback quando a IA não devolve {@code installmentCount}: «em 10 vezes», «10x», «em 3 parcelas».
+     * Sem isto, «gasto de 2599 em 10 vezes» era lançado inteiro numa única fatura.
+     */
+    static int extrairNumeroParcelasDoTexto(String sourceText) {
+        if (sourceText == null) {
+            return 0;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("\\b(\\d{1,2})\\s*(?:x|vezes|parcelas)\\b")
+            .matcher(normalize(sourceText));
+        if (!m.find()) {
+            return 0;
+        }
+        int n = Integer.parseInt(m.group(1));
+        return (n >= 2 && n <= 48) ? n : 0;
     }
 
     private boolean textoIndicaSemJuros(String sourceText) {

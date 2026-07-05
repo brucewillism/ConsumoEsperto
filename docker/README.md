@@ -55,6 +55,17 @@ Imagem Postgres: **`pgvector/pgvector:pg15`** (suporte a `CREATE EXTENSION vecto
 
 Ver comentários completos em [`docker/env.docker.example`](env.docker.example) e [`.env.example`](../.env.example).
 
+## Variáveis de integridade de saldo (.env)
+
+| Variável | Uso |
+|----------|-----|
+| `SALDO_REPARO_ENABLED` | `false` (padrão) = reparo financeiro só em dry-run; ligar apenas após backup, aplicar e desligar |
+| `SALDO_AUDIT_RETENTION_DAYS` | Retenção do audit trail `movimentacao_saldo_log` (padrão 730 dias) |
+| `ALERTAS_WEBHOOK_ENABLED` / `ALERTAS_WEBHOOK_URL` | Webhook opcional para alertas de divergência de saldo e falha de auth do webhook Evolution |
+| `ALERTAS_COOLDOWN_MINUTES` | Anti-tempestade dos alertas (padrão 15) |
+
+Detalhes: [`docs/INTEGRIDADE_SALDO.md`](../docs/INTEGRIDADE_SALDO.md).
+
 ## Ollama
 
 URL **interna** para o backend: `http://ollama:11434`. No host: porta **11999**.

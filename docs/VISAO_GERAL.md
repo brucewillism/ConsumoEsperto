@@ -2,7 +2,7 @@
 
 Documento de referência do que o produto faz hoje: arquitetura, telas, APIs, WhatsApp (J.A.R.V.I.S.) e deploy.
 
-**Última revisão:** junho/2026 · **Fonte viva do catálogo de funcionalidades:** `WhatsAppAppParityService.java` e `GET /api/whatsapp/paridade`.
+**Última revisão:** julho/2026 · **Fonte viva do catálogo de funcionalidades:** `WhatsAppAppParityService.java` e `GET /api/whatsapp/paridade`.
 
 ---
 
@@ -94,7 +94,7 @@ Definidas em `frontend/src/app/app.routes.ts`.
 |------|----------------|
 | `/dashboard` | Resumo financeiro, gráficos, chat IA, protocolos JARVIS (contenção, Modo Viagem), score |
 | `/transacoes` | Despesas e receitas |
-| `/contas` | Contas bancárias e transferências |
+| `/contas` | Contas bancárias e transferências; edição direta do saldo em «Editar» (sincroniza e realinha histórico) |
 | `/cartoes` | Cartões de crédito |
 | `/faturas` | Faturas abertas/fechadas e lançamentos |
 | `/categorias` | Categorias de classificação |
@@ -105,7 +105,7 @@ Definidas em `frontend/src/app/app.routes.ts`.
 | `/relatorios` | Relatórios e exportação PDF |
 | `/simulacoes` | Simulação de compras / prazo |
 | `/investimentos` | Sugestões de investimento (Selic, IPCA, etc.) |
-| `/perfil` | Dados pessoais, despesas fixas, Google Calendar, tratamento J.A.R.V.I.S. |
+| `/perfil` | Dados pessoais, obrigações fixas (com **débito automático** por conta), Google Calendar, tratamento J.A.R.V.I.S. |
 | `/whatsapp-config` | Vincular número, QR Evolution, **catálogo app ↔ WhatsApp** |
 | `/familia` | Grupo familiar, convites, orçamentos partilhados, balanço racha-contas — ver [`MODULO_FAMILIA.md`](MODULO_FAMILIA.md) |
 | `/assinaturas` | Assinaturas e despesas recorrentes (Netflix, Spotify, etc.) |
@@ -178,7 +178,7 @@ Legenda de canais no catálogo:
 | Orçamentos | `/orcamentos` | «orçamento 800 em Alimentação» |
 | Metas | `/metas` | «cadastra meta viagem 8000 15%» |
 | Renda | `/renda` | PDF contracheque ou texto de salário |
-| Despesas fixas | `/perfil` | «salve essa despesa fixa de 250…» |
+| Despesas fixas | `/perfil` (com débito automático opcional por conta) | «salve essa despesa fixa de 250…» |
 | Relatórios | `/relatorios` | «gera PDF de maio» |
 | Simulações / Advisor | `/simulacoes` | «quero comprar notebook 4500…» · «vale a pena consignado?» |
 | Investimentos | `/investimentos` | «onde investir o saldo?» |
@@ -262,6 +262,11 @@ API app: `/api/planejamento-fiscal` · Serviço: `PlanejamentoFiscalService`.
 Foto no WhatsApp → leitura → confirmação `sim`/`não` → despesa.  
 No app: lançamento manual em `/transacoes`.
 
+### Débito automático de obrigações fixas
+
+Despesa fixa com **débito automático** ligado (Perfil → Obrigações Fixas) vira gasto real no vencimento: job diário **06:30** debita a conta vinculada (ou a padrão), idempotente, com aviso no WhatsApp (sucesso ou saldo insuficiente). Sem a opção, o valor só entra na projeção *Futuro provável*.  
+Serviço: `DespesaFixaDebitoAutomaticoService` · Guia: [`INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md).
+
 ### Estados pendentes (`sim`/`não`)
 
 O bot mantém conversas em memória por utilizador, por exemplo:
@@ -319,6 +324,7 @@ Base: `/api` (autenticado com JWT, exceto rotas `/api/public/*` e `/api/auth/*`)
 | `/api/integracoes/google-calendar` | OAuth calendário |
 | `/api/extrator` | Webhook comprovante PIX |
 | `/api/public/evolution/webhook` | Webhook Evolution (mensagens WA) |
+| `/api/reparo-financeiro` | Diagnóstico e reparo de saldos/faturas (dry-run por padrão, flag + backup para aplicar) — [`INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md) |
 | `/api/backup`, `/api/exportacao` | Backup e exportação de dados |
 
 Controllers em: `backend/src/main/java/com/consumoesperto/controller/`.
@@ -372,7 +378,20 @@ Visível em `/score` e no dashboard. **Não** exposto no WhatsApp.
 
 ---
 
-## 12. Deploy na VPS
+## 12. Integridade e auditoria de saldo
+
+Guia completo: [`INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md). Resumo:
+
+- **Escrita atômica** — toda mutação de saldo passa por `SaldoMovimentacaoService` com lock pessimista (`SELECT ... FOR UPDATE`); sem lost updates entre app, WhatsApp e jobs.
+- **Audit trail** — tabela append-only `movimentacao_saldo_log` (delta, saldo antes/depois, origem `APP`/`WHATSAPP`/`JOB`/`REPARO`, tipo de operação); expurgo diário configurável.
+- **Reconciliação diária** (03:30) — `SaldoIntegridadeService` compara saldo persistido com a fórmula da fonte da verdade e dispara alerta em divergência.
+- **Reparo fail-closed** — `/api/reparo-financeiro`: dry-run por padrão; aplicar exige `SALDO_REPARO_ENABLED=true` + confirmação + backup confirmado; idempotente.
+- **Alertas operacionais** — `AlertaOperacionalService`: log `ERROR [ALERTA-OP]` + webhook opcional (divergência de saldo, falha de auth do webhook Evolution), com cooldown.
+- **Regressão P0** — testes em `backend/src/test/java/com/consumoesperto/regressao/` + integração Testcontainers (concorrência, audit, dedup).
+
+---
+
+## 13. Deploy na VPS
 
 ```bash
 cd /opt/consumoesperto
@@ -395,7 +414,7 @@ Mais detalhes e troubleshooting: [`docker/README.md`](../docker/README.md), [`do
 
 ---
 
-## 13. Outros documentos do repositório
+## 14. Outros documentos do repositório
 
 | Ficheiro | Conteúdo |
 |----------|----------|
@@ -407,13 +426,14 @@ Mais detalhes e troubleshooting: [`docker/README.md`](../docker/README.md), [`do
 | [`docs/FRONTEND_OVERLAY_MODAIS.md`](FRONTEND_OVERLAY_MODAIS.md) | Modais e overlay CDK |
 | [`docs/WHATSAPP_EVOLUTION.md`](WHATSAPP_EVOLUTION.md) | Evolution: QR, privacidade, sessão |
 | [`docs/JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) | Advisor, consignado, Sentinela, fiscal, áudio, jobs |
+| [`docs/INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md) | Lock de saldo, audit trail, reparo financeiro, alertas, débito automático |
 | [`.env.example`](../.env.example) | Variáveis de ambiente comentadas |
 | [`.cursor/rules/stack-local.mdc`](../.cursor/rules/stack-local.mdc) | Regra para agentes: stack local |
 | **`docs/VISAO_GERAL.md`** (este ficheiro) | Visão de produto e arquitetura |
 
 ---
 
-## 14. Como manter este documento
+## 15. Como manter este documento
 
 1. **Novas funcionalidades visíveis ao utilizador** → atualizar `WhatsAppAppParityService.CATALOGO` (fonte da verdade) e, se relevante, esta secção 6 ou 7.
 2. **Novas rotas Angular** → secção 4 (`app.routes.ts`).
