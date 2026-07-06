@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -868,6 +869,76 @@ public class FaturaService {
         );
     }
 
+    private static final List<Fatura.StatusFatura> STATUS_FATURA_PENDENTE = List.of(
+        Fatura.StatusFatura.ABERTA,
+        Fatura.StatusFatura.PARCIAL,
+        Fatura.StatusFatura.PREVISTA,
+        Fatura.StatusFatura.VENCIDA
+    );
+
+    /**
+     * Resumo WhatsApp com o valor de cada fatura pendente por cartão ativo (não só o total consolidado).
+     */
+    public String montarResumoFaturasTodosCartoesWhatsapp(Long usuarioId) {
+        List<CartaoCredito> cartoes = cartaoCreditoRepository.findByUsuarioIdAndAtivoTrue(usuarioId);
+        if (cartoes.isEmpty()) {
+            return "Não tens cartões *ativos*. Cria em *Cartões* no app ou envia: *cartão Nubank final 1234 vence dia 10*.";
+        }
+        StringBuilder sb = new StringBuilder();
+        BigDecimal totalPendente = BigDecimal.ZERO;
+        int idx = 1;
+        for (CartaoCredito cartao : cartoes) {
+            List<Fatura> pendentes = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
+                cartao.getId(), STATUS_FATURA_PENDENTE);
+            sb.append("*").append(idx++).append(". ").append(cartao.getNome()).append("*");
+            String fin = ultimos4DigitosCartao(cartao.getNumeroCartao());
+            if (!"????".equals(fin)) {
+                sb.append(" — final *").append(fin).append("*");
+            }
+            sb.append("\n");
+            if (pendentes.isEmpty()) {
+                sb.append("   • Sem fatura pendente — *R$ 0,00*\n");
+                continue;
+            }
+            for (Fatura f : pendentes) {
+                BigDecimal valor = faturaConciliacaoService.resolverValorDevido(f);
+                if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+                    continue;
+                }
+                totalPendente = totalPendente.add(valor);
+                String venc = f.getDataVencimento() != null
+                    ? f.getDataVencimento().toLocalDate().format(DDMMAAAA)
+                    : "—";
+                String status = rotuloStatusFatura(f.getStatusFatura());
+                sb.append("   • *").append(BRL.format(valor)).append("* — vence *").append(venc)
+                    .append("* — _").append(status).append("_\n");
+            }
+        }
+        sb.append("\n*Total pendente (todos os cartões):* *")
+            .append(BRL.format(totalPendente.setScale(2, RoundingMode.HALF_UP))).append("*");
+        return sb.toString().trim();
+    }
+
+    private static String rotuloStatusFatura(Fatura.StatusFatura status) {
+        if (status == null) {
+            return "pendente";
+        }
+        return switch (status) {
+            case ABERTA -> "aberta";
+            case PARCIAL -> "parcial";
+            case PREVISTA -> "prevista";
+            case VENCIDA -> "vencida";
+            default -> status.name().toLowerCase(Locale.ROOT);
+        };
+    }
+
+    private static String ultimos4DigitosCartao(String numero) {
+        if (numero == null || numero.length() < 4) {
+            return "????";
+        }
+        return numero.substring(numero.length() - 4);
+    }
+
     /**
      * Resumo Markdown (WhatsApp) do cartão: soma das faturas ABERTA/PARCIAL e limite estimado a partir do limite total.
      * O gasto reflete o que o app acumulou na fatura aberta deste cartão (inclui lançamentos via WhatsApp vinculados à fatura).
@@ -878,14 +949,7 @@ public class FaturaService {
             throw new RuntimeException("Cartão não pertence ao usuário");
         }
         List<Fatura> pendentes = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
-            cartao.getId(),
-            List.of(
-                Fatura.StatusFatura.ABERTA,
-                Fatura.StatusFatura.PARCIAL,
-                Fatura.StatusFatura.PREVISTA,
-                Fatura.StatusFatura.VENCIDA
-            )
-        );
+            cartao.getId(), STATUS_FATURA_PENDENTE);
         BigDecimal gastoTrans = transacaoRepository.sumDespesaConfirmadaFaturaAbertaPorCartaoId(cartao.getId());
         if (gastoTrans == null || gastoTrans.compareTo(BigDecimal.ZERO) <= 0) {
             gastoTrans = faturaRepository.sumValorFaturasPendentesPorCartaoId(cartao.getId());

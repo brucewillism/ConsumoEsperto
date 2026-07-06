@@ -129,8 +129,8 @@ public class SaldoService {
     }
 
     /**
-     * Patrimônio líquido = ativos em conta − passivo de empréstimos que debitam conta
-     * (parcelas PREVISTO; consignado com desconto em folha já sai do salário líquido e não entra aqui).
+     * Patrimônio líquido = ativos em conta − passivo de empréstimos (parcelas PREVISTO de todo empréstimo ativo).
+     * {@code descontoEmFolha} controla apenas se a parcela debita conta no fluxo de caixa — não exclui do passivo.
      */
     @Transactional(readOnly = true)
     public BigDecimal patrimonioLiquido(Long usuarioId) {

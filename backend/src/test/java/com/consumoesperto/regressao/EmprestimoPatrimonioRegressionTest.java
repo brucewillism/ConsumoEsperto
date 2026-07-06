@@ -99,4 +99,18 @@ class EmprestimoPatrimonioRegressionTest {
         assertEquals(0, patrimonio.compareTo(new BigDecimal("4200.00")),
             "passivo inclui parcelas vencidas PREVISTO, não só vincendas");
     }
+
+    @Test
+    void patrimonioLiquido_consignadoFolha_naoInflaPatrimonio() {
+        // Crédito 10k na conta; 12k de parcelas PREVISTO (descontoEmFolha=true no registo real).
+        when(contaBancariaService.possuiContasAtivas(4L)).thenReturn(true);
+        when(contaBancariaService.somarSaldosAtivos(4L)).thenReturn(new BigDecimal("10000.00"));
+        when(transacaoRepository.sumPassivoEmprestimoAtivo(4L))
+            .thenReturn(new BigDecimal("12000.00"));
+
+        BigDecimal patrimonio = saldoService.patrimonioLiquido(4L);
+
+        assertEquals(0, patrimonio.compareTo(new BigDecimal("-2000.00")),
+            "consignado em folha: crédito na conta menos passivo total — não fica +10k");
+    }
 }

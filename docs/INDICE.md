@@ -8,7 +8,15 @@ Mapa de todos os ficheiros de referência do repositório.
 |----------|-----------|
 | [`README.md`](../README.md) | Entrada do repositório e início rápido |
 | [`VISAO_GERAL.md`](VISAO_GERAL.md) | O que o sistema faz: telas, APIs, JARVIS, deploy |
-| [`MODULO_FAMILIA.md`](MODULO_FAMILIA.md) | Grupo familiar, convites, partilha de orçamentos, racha-contas |
+| [`FUNCIONALIDADES.md`](FUNCIONALIDADES.md) | **Guia completo** de módulos e como cada um funciona |
+| [`CALCULOS_FINANCEIROS.md`](CALCULOS_FINANCEIROS.md) | Patrimônio, projeções, consignado, faturas, provisões |
+| [`AVISO_MUDANCAS_CALCULOS.md`](AVISO_MUDANCAS_CALCULOS.md) | Texto para o utilizador antes de deploy com mudanças numéricas |
+| [`POLITICA_STATUS_TRANSACAO.md`](POLITICA_STATUS_TRANSACAO.md) | CONFIRMADA vs PREVISTO (T1) |
+| [`POLITICA_PROVISAO.md`](POLITICA_PROVISAO.md) | Dedup percentual e precedência de provisões |
+| [`POLITICA_STATUS_FATURA_PREVISTA.md`](POLITICA_STATUS_FATURA_PREVISTA.md) | Faturas PREVISTA e sync de totais |
+| [`PLANO_CONVERSAO_COMPRA_PARCELADA.md`](PLANO_CONVERSAO_COMPRA_PARCELADA.md) | Convergência CompraParcelada → fluxo principal |
+| [`BACKLOG_FISCAL_ESTIMATIVA.md`](BACKLOG_FISCAL_ESTIMATIVA.md) | Fiscal simplificado — evolução futura |
+| [`MODULO_FAMILIA.md`](MODULO_FAMILIA.md) | Grupo familiar, convites, orçamentos partilhados, racha-contas |
 | [`FRONTEND_OVERLAY_MODAIS.md`](FRONTEND_OVERLAY_MODAIS.md) | Modais Angular Material: overlay CDK, scroll, z-index |
 | [`WHATSAPP_EVOLUTION.md`](WHATSAPP_EVOLUTION.md) | Evolution API: QR, webhook, privacidade, sessão |
 | [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) | Advisor, empréstimo consignado, Sentinela, fiscal, áudio, cron jobs |
@@ -48,7 +56,7 @@ Mapa de todos os ficheiros de referência do repositório.
 | Schema BD (patches runtime) | `backend/.../SchemaAutoPatchService.java` |
 | Catálogo app ↔ WhatsApp | `backend/.../WhatsAppAppParityService.java` |
 | Empréstimo consignado | `backend/.../EmprestimoService.java` |
-| Sentinela / disponibilidade | `backend/.../PrevisaoFluxoCaixaService.java`, `SentinelaProtocolService.java` |
+| Sentinela / patrimônio | `backend/.../PrevisaoFluxoCaixaService.java`, `SaldoService.java` |
 | Movimentação de saldo (ponto único, lock + audit) | `backend/.../SaldoMovimentacaoService.java` |
 | Reparo financeiro (dry-run/aplicar) | `backend/.../ReparoFinanceiroController.java`, `SaldoReparoService.java` |
 | Alertas operacionais | `backend/.../AlertaOperacionalService.java` |
@@ -65,8 +73,9 @@ Mapa de todos os ficheiros de referência do repositório.
 Ao alterar funcionalidades visíveis ao utilizador:
 
 1. Atualizar `WhatsAppAppParityService.CATALOGO` (fonte da verdade do catálogo).
-2. Atualizar [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) e secções relevantes em `VISAO_GERAL.md`.
-3. Se mudarem portas ou serviços Docker → `docker/README.md` e `stack-ports.ps1`.
-4. Schema BD → `SchemaAutoPatchService.java` (não há Flyway SQL neste repo).
+2. Atualizar [`FUNCIONALIDADES.md`](FUNCIONALIDADES.md), [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) e secções relevantes em `VISAO_GERAL.md`.
+3. Se mudarem **cálculos visíveis** → [`CALCULOS_FINANCEIROS.md`](CALCULOS_FINANCEIROS.md) e [`AVISO_MUDANCAS_CALCULOS.md`](AVISO_MUDANCAS_CALCULOS.md).
+4. Se mudarem portas ou serviços Docker → `docker/README.md` e `stack-ports.ps1`.
+5. Schema BD → `SchemaAutoPatchService.java` (não há Flyway SQL neste repo).
 
 **Última revisão:** julho/2026

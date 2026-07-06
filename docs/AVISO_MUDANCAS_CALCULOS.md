@@ -24,6 +24,6 @@ Nenhuma transação foi apagada — só a forma de somar mudou. Se algo parecer 
 - Burn Sentinela: divisor = dias reais da janela.
 - Metas: renda de `RendaConfig`; aviso se soma >100% (sem bloqueio).
 - Fiscal: estimativa simplificada; obrigações vencidas → ano+1.
-- Empréstimo: `descontoEmFolha` default true (consignado). **Patrimônio líquido** não desconta parcelas em folha — já refletidas no salário líquido.
+- Empréstimo: `descontoEmFolha` default true (consignado). **Patrimônio líquido** desconta **todas** as parcelas `PREVISTO`; a flag só define se a parcela debita conta no fluxo.
 
 ---

@@ -92,14 +92,14 @@ Definidas em `frontend/src/app/app.routes.ts`.
 
 | Rota | Menu / função |
 |------|----------------|
-| `/dashboard` | Resumo financeiro, gráficos, chat IA, protocolos JARVIS (contenção, Modo Viagem), score |
+| `/dashboard` | Patrimônio líquido, score, escudo, gráfico Sentinela, chat IA, protocolos, **memória J.A.R.V.I.S.** (insights + painel refutar/restaurar) |
 | `/transacoes` | Despesas e receitas |
-| `/contas` | Contas bancárias e transferências; edição direta do saldo em «Editar» (sincroniza e realinha histórico) |
+| `/contas` | Contas bancárias e transferências; edição de saldo via ledger |
 | `/cartoes` | Cartões de crédito |
-| `/faturas` | Faturas abertas/fechadas e lançamentos |
+| `/faturas` | Linha do tempo: mês atual expandido; meses só pagos condensados (clique expande) |
 | `/categorias` | Categorias de classificação |
 | `/orcamentos` | Limites mensais por categoria |
-| `/metas` | Metas financeiras e simulador |
+| `/metas` | Metas financeiras e simulador; progresso por **valor acumulado** (não por tempo) |
 | `/renda` | Contracheques PDF e histórico de renda |
 | `/importacoes-pendentes` | Confirmar PDFs de fatura importados |
 | `/relatorios` | Relatórios e exportação PDF |
@@ -125,6 +125,18 @@ Definidas em `frontend/src/app/app.routes.ts`.
    - **NLP** (`OpenAiService.parseCommand`) com fallback entre provedores de IA;
    - execução do comando (`CREATE_EXPENSE`, `CREATE_META`, etc.).
 4. Resposta formatada por **`JarvisProtocolService`**, assinada: `J.A.R.V.I.S. | ConsumoEsperto 🚀`.
+
+### Memória semântica (app + WhatsApp)
+
+A memória J.A.R.V.I.S. vive na mesma base PostgreSQL (pgvector) e alimenta a Sentinela, o Advisor e o RAG analítico.
+
+| Canal | Como funciona |
+|-------|----------------|
+| **WhatsApp / chat IA** | Captura automática em cada mensagem (`MemoriaCapturaAutomaticaService`); comandos explícitos «*Jarvis, anote isso*» / «*esquece isso*» |
+| **App (dashboard)** | Card de **insights** da memória (carregado ao abrir); painel **Memória tática** com timeline, **refutar** e **restaurar** entradas |
+| **Projeções** | `PLANO_FUTURO` com `mes_alvo` entra como provisão na Sentinela (precedência: fixa real → memória → sazonal) |
+
+API: `GET/PATCH /api/jarvis/memoria/*` · Serviços: `CerebroSemanticoService`, `MemoriaCicloVidaService`.
 
 ### O mesmo motor no app
 
@@ -163,7 +175,7 @@ Legenda de canais no catálogo:
 | Canal | Significado |
 |-------|-------------|
 | **BOTH** | Disponível no app e no WhatsApp (ou chat IA) |
-| **WHATSAPP_ONLY** | Só no bot (ex.: OCR cupom, áudio, memória «anote isso») |
+| **WHATSAPP_ONLY** | Só no bot (ex.: OCR cupom, áudio, comandos explícitos de memória «anote isso») |
 | **APP_ONLY** | Só no app (ex.: vínculo QR, score, família) |
 
 ### Funcionalidades BOTH (resumo)
@@ -246,11 +258,14 @@ App: `/renda` · API: `/api/renda-config/contracheques/*`
 
 ### Protocolo Sentinela e Advisor
 
-- **Sentinela:** disponibilidade real após obrigações; consulta por texto ou relatório automático dia 5; alerta reactivo pós-despesa.
+- **Patrimônio líquido (dashboard):** contas − passivo de **todo** empréstimo ativo (parcelas `PREVISTO`); `descontoEmFolha` controla só o débito em conta — ver [`CALCULOS_FINANCEIROS.md`](CALCULOS_FINANCEIROS.md).
+- **Disponibilidade real (WhatsApp / job dia 5):** patrimônio líquido − fixas do mês − faturas pendentes; parcelas de empréstimo **não** entram nas fixas (evita dupla contagem com o passivo já na base).
+- **Trajetória de caixa:** projeção diária até fim do mês (burn + obrigações).
 - **Advisor:** conselho determinístico sobre consignado, parcelamento e grandes compras.
-- **Empréstimo consignado:** registo atómico via WhatsApp (crédito + parcelas PREVISTO).
+- **Empréstimo consignado:** registo atómico via WhatsApp (crédito + parcelas PREVISTO; `descontoEmFolha` default true — folha, sem débito em conta).
+- **Metas:** barra de progresso por **valor acumulado** depositado na meta, não por meses decorridos.
 
-Guia completo: [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md).
+Guia completo: [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) · [`FUNCIONALIDADES.md`](FUNCIONALIDADES.md).
 
 ### Planejamento fiscal (13º / IR)
 
@@ -355,8 +370,9 @@ Configuração: `.env` / variáveis no `docker-compose.yml` · por utilizador: `
 | OCR cupom / visão | Serviços de visão + Groq |
 | Transcrição áudio | `SpeechToTextService` (Whisper/Groq/OpenAI) |
 | Resposta voz WhatsApp (opcional) | `TextToSpeechService` (ElevenLabs) |
-| RAG / memória / insights | `CerebroSemanticoService`, pgvector |
-| Sentinela / disponibilidade real | `PrevisaoFluxoCaixaService`, `SentinelaProtocolService` |
+| RAG / memória / insights | `CerebroSemanticoService`, `MemoriaCapturaAutomaticaService`, pgvector |
+| Sentinela / disponibilidade | `PrevisaoFluxoCaixaService`, `JarvisProtocolService` |
+| Patrimônio líquido | `SaldoService.patrimonioLiquido` |
 | Respostas analíticas | `tryRespostaRagAnalitico` |
 
 ---
@@ -429,6 +445,8 @@ Mais detalhes e troubleshooting: [`docker/README.md`](../docker/README.md), [`do
 | [`docs/INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md) | Lock de saldo, audit trail, reparo financeiro, alertas, débito automático |
 | [`.env.example`](../.env.example) | Variáveis de ambiente comentadas |
 | [`.cursor/rules/stack-local.mdc`](../.cursor/rules/stack-local.mdc) | Regra para agentes: stack local |
+| [`docs/FUNCIONALIDADES.md`](FUNCIONALIDADES.md) | Guia completo de módulos e comportamento |
+| [`docs/CALCULOS_FINANCEIROS.md`](CALCULOS_FINANCEIROS.md) | Fórmulas: patrimônio, projeções, consignado |
 | **`docs/VISAO_GERAL.md`** (este ficheiro) | Visão de produto e arquitetura |
 
 ---

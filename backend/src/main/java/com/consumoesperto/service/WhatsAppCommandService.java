@@ -338,6 +338,10 @@ public class WhatsAppCommandService {
         if (ajuda.isPresent()) {
             return ajuda;
         }
+        Optional<String> valoresFaturas = tryConsultaValoresFaturasCartoes(userId, text);
+        if (valoresFaturas.isPresent()) {
+            return valoresFaturas;
+        }
         Optional<String> listaCartoes = tryConsultaListaCartoes(userId, text);
         if (listaCartoes.isPresent()) {
             return listaCartoes;
@@ -454,7 +458,11 @@ public class WhatsAppCommandService {
             fallback.put("errorMessage",
                 "Motor de IA temporariamente indisponível. Use comandos diretos: *lista os meus cartões*, "
                     + "*despesa 50 mercado*, *pix 80 da conta Nubank*, *ajuda*.");
-            if (textoPedeListaCartoes(text)) {
+            if (textoPedeValoresFaturasTodosCartoes(text)) {
+                fallback.put("action", "LIST_FATURAS");
+                fallback.put("confianca", 1);
+                fallback.remove("errorMessage");
+            } else if (textoPedeListaCartoes(text)) {
                 fallback.put("action", "LIST_CARDS");
                 fallback.put("confianca", 1);
                 fallback.remove("errorMessage");
@@ -510,6 +518,9 @@ public class WhatsAppCommandService {
         if (text == null || text.isBlank()) {
             return false;
         }
+        if (textoPedeValoresFaturasTodosCartoes(text)) {
+            return false;
+        }
         String n = normalize(text);
         if (n.contains("atualiz") || n.contains("altera") || n.contains("muda") || n.contains("troca")) {
             return false;
@@ -555,6 +566,37 @@ public class WhatsAppCommandService {
                 .append(", final *").append(fin).append("*, venc. dia *").append(c.getDiaVencimento()).append("*\n");
         }
         return Optional.of(msgOk("Os teus cartões", sb.toString().trim()));
+    }
+
+    /**
+     * Perguntas como «em quanto tá as faturas dos meus cartões?» — valor por fatura, não só lista de cartões.
+     */
+    static boolean textoPedeValoresFaturasTodosCartoes(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String n = normalize(text);
+        if (!n.contains("fatura")) {
+            return false;
+        }
+        if (n.contains("import") || n.contains("pdf") || n.contains("fecha") || n.contains("fechamento")
+            || n.contains("melhor dia") || n.contains("vira")) {
+            return false;
+        }
+        boolean pedeValor = n.contains("quanto") || n.contains("em quanto") || n.contains("valor")
+            || n.contains("resumo") || n.contains("situacao");
+        if (!pedeValor) {
+            return false;
+        }
+        return n.contains("cartoes") || n.contains("meus cart") || n.contains("dos cart")
+            || n.contains("todos") || n.contains("cada cart") || n.contains("quais cart");
+    }
+
+    private Optional<String> tryConsultaValoresFaturasCartoes(Long userId, String text) {
+        if (!textoPedeValoresFaturasTodosCartoes(text)) {
+            return Optional.empty();
+        }
+        return Optional.of(msgOk("Faturas dos cartões", faturaService.montarResumoFaturasTodosCartoesWhatsapp(userId)));
     }
 
     private boolean textoPedeListaContas(String text) {
@@ -2236,7 +2278,7 @@ public class WhatsAppCommandService {
         String action = cmd.path("action").asText("UNKNOWN");
         double confianca = readConfianca(cmd);
         if (!"GET_INSIGHTS".equals(action) && !"CHECK_CARD_STATUS".equals(action) && !"LIST_CARDS".equals(action)
-            && !"LIST_ACCOUNTS".equals(action) && !"TRANSFER_BETWEEN_ACCOUNTS".equals(action)
+            && !"LIST_FATURAS".equals(action) && !"LIST_ACCOUNTS".equals(action) && !"TRANSFER_BETWEEN_ACCOUNTS".equals(action)
             && !"LIST_TRANSACTIONS".equals(action) && !"LIST_CATEGORIES".equals(action)
             && !"LIST_METAS".equals(action) && !"GET_REPORT_SUMMARY".equals(action)
             && !"FORECAST_MONTH".equals(action) && !"SUGERIR_INVESTIMENTO".equals(action) && !"GENERATE_REPORT".equals(action)
@@ -2287,6 +2329,9 @@ public class WhatsAppCommandService {
             case "SUGERIR_INVESTIMENTO" -> respostaInvestimento(userId);
             case "LIST_CARDS" -> tryConsultaListaCartoes(userId, sourceText)
                 .orElseGet(() -> msgErro(userId, "Cartões", "Não consegui listar os cartões."));
+            case "LIST_FATURAS" -> tryConsultaValoresFaturasCartoes(userId, sourceText)
+                .orElseGet(() -> msgOk("Faturas dos cartões",
+                    faturaService.montarResumoFaturasTodosCartoesWhatsapp(userId)));
             case "LIST_ACCOUNTS" -> handleListAccounts(userId, cmd, sourceText);
             case "TRANSFER_BETWEEN_ACCOUNTS" -> handleTransferBetweenAccounts(cmd, userId, sourceText);
             case "LIST_TRANSACTIONS" -> handleListTransactions(cmd, userId, sourceText);
@@ -2961,6 +3006,9 @@ public class WhatsAppCommandService {
             token = resolveCardToken(cmd, sourceText);
         }
         if (token.isBlank()) {
+            if (textoPedeValoresFaturasTodosCartoes(sourceText)) {
+                return msgOk("Faturas dos cartões", faturaService.montarResumoFaturasTodosCartoesWhatsapp(userId));
+            }
             return msgErro(userId, "Resumo de cartão / fatura",
                 "Indica qual cartão (apelido ou banco). Ex.: *Quanto gastei no Nubank?* ou *resumo da fatura do Inter*.");
         }

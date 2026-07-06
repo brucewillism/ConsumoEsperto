@@ -23,7 +23,7 @@ Tabela **append-only** gravada a cada mutação de saldo (criada via `SchemaAuto
 | `conta_id`, `usuario_id`, `transacao_id` (nullable) | Quem/onde |
 | `delta`, `saldo_antes`, `saldo_depois` | Quanto (encadeado) |
 | `origem` | `APP` / `WHATSAPP` / `JOB` / `REPARO` / `IMPORTACAO` / `SISTEMA` |
-| `tipo_operacao` | `CRIACAO`, `EDICAO`, `EXCLUSAO`, `CREDITO_DIRETO`, `TRANSFERENCIA_SAIDA/ENTRADA`, `RECONCILIACAO` |
+| `tipo_operacao` | `CRIACAO`, `EDICAO`, `EXCLUSAO`, `CREDITO_DIRETO`, `AJUSTE_MANUAL`, `TRANSFERENCIA_SAIDA/ENTRADA`, `RECONCILIACAO` |
 | `criado_em` | `TIMESTAMPTZ` (America/Sao_Paulo) |
 
 - A origem é propagada por `SaldoMovimentacaoContexto` (ThreadLocal) — webhook Evolution marca `WHATSAPP`, jobs marcam `JOB`, reparo marca `REPARO`.
@@ -109,5 +109,18 @@ Testes que travam os bugs financeiros críticos (P0) em `backend/src/test/java/c
 | `FaturaPagaSemCaixaRegressionTest` | Fatura PAGA via API não inventa `valorPago` |
 | `CompetenciaCompraCartaoRegressionTest` | Compra pós-fechamento vai para o ciclo seguinte |
 | `RendaMediaMovel90DiasRegressionTest` | Janela de 90 dias normalizada para 30 |
+| `EmprestimoPatrimonioRegressionTest` | Passivo empréstimo no patrimônio (inclui consignado em folha) |
+| `PagamentoFaturaCrudBloqueadoRegressionTest` | PAGAMENTO_FATURA bloqueado no CRUD |
+| `FaturaQuitadaExternaRegressionTest` | Quitação EXTERNA sem caixa |
 
-Integração com Postgres real (Testcontainers; requer Docker/Podman): `backend/src/test/java/com/consumoesperto/integration/` — concorrência de saldo, encadeamento do audit log e dedup de webhook. Sem Docker os testes se auto-desabilitam (`@EnabledIf`).
+Guia de fórmulas: [`CALCULOS_FINANCEIROS.md`](CALCULOS_FINANCEIROS.md).
+
+Integração com Postgres real (Testcontainers; requer Docker/Podman): `backend/src/test/java/com/consumoesperto/integration/` — concorrência de saldo, encadeamento do audit log, memória pgvector e dedup de webhook.
+
+## 9. Patrimônio líquido vs saldo em conta
+
+- **Saldo em conta:** valor nas contas bancárias.
+- **Patrimônio líquido:** saldo − parcelas de empréstimo `PREVISTO` ativas (inclui consignado em folha; `descontoEmFolha` controla só débito em conta).
+- **Disponibilidade real (Sentinela):** patrimônio − fixas restantes − faturas pendentes.
+
+Detalhe: [`CALCULOS_FINANCEIROS.md`](CALCULOS_FINANCEIROS.md).

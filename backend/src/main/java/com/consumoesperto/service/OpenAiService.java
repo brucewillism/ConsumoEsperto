@@ -136,7 +136,7 @@ public class OpenAiService {
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(uEnt, contextoFinanceiro);
         String systemPrompt = persona + "Você converte comandos financeiros em JSON estrito. " +
             "Retorne apenas JSON sem markdown. Campos: " +
-            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_FINANCIAL_ADVICE|RECORD_CONSIGNMENT_LOAN|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|CONFIRM_FISCAL_PROVISION|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|START_TUTORIAL|STOP_TUTORIAL|TUTORIAL_STEP|GREETING|UNKNOWN), " +
+            "action (CREATE_EXPENSE|CREATE_INCOME|CREATE_CARD|CREATE_BANK_ACCOUNT|CREATE_CATEGORY|CREATE_BUDGET|CREATE_META|CREATE_FIXED_EXPENSE|CREATE_SUBSCRIPTION|UPDATE_ENTITY_CONFIG|UPDATE_ACCOUNT_CONFIG|SIMULATE_PURCHASE_GOAL|GET_FINANCIAL_ADVICE|RECORD_CONSIGNMENT_LOAN|GET_INSIGHTS|CHECK_CARD_STATUS|LIST_CARDS|LIST_FATURAS|LIST_ACCOUNTS|TRANSFER_BETWEEN_ACCOUNTS|LIST_TRANSACTIONS|LIST_CATEGORIES|LIST_METAS|GET_REPORT_SUMMARY|FORECAST_MONTH|GENERATE_REPORT|GERAR_RELATORIO|SET_SALARY_CONFIG|SET_INCOME_PROFILE|CONFIRM_FISCAL_PROVISION|MANAGE_ENTITY|SPLIT_BILL|LIST_DEBTS|SETTLE_DEBT|LIST_SUBSCRIPTIONS|TOGGLE_SUBSCRIPTION|START_TUTORIAL|STOP_TUTORIAL|TUTORIAL_STEP|GREETING|UNKNOWN), " +
             "valorTomado (valor recebido do empréstimo consignado), nomeConta (apelido da conta que recebeu), " +
             "contaOrigem (apelido/nome da conta de origem na transferência), contaDestino (apelido/nome da conta de destino na transferência), " +
             "mes (1-12, opcional — consultas de extrato/orçamento), ano (ex.: 2026, opcional), tipo (DESPESA|RECEITA, opcional — filtro de extrato), " +
@@ -233,6 +233,10 @@ public class OpenAiService {
             "- Se perguntar SE VALE A PENA / opinião sobre empréstimo futuro: GET_FINANCIAL_ADVICE.\n" +
             "- Se perguntar sobre recorrência, assinaturas repetidas, gastos fixos mensais (ex: 'tenho recorrência?', 'o que repete?'): action GET_INSIGHTS.\n" +
             "- Se pedir listar/quantos cartões tem (ex.: 'lista meus cartões', 'quantos cartões eu tenho?'): action LIST_CARDS.\n" +
+            "- Se perguntar valor/total das faturas de todos os cartões (ex.: 'em quanto tá as faturas dos meus cartões?', " +
+            "'quanto estão as faturas?', 'valor de cada fatura dos cartões'): action LIST_FATURAS.\n" +
+            "- Se perguntar quanto gastou no cartão, resumo de fatura de um cartão específico, limite disponível (ex: 'quanto gastei no Nubank?', 'resumo da fatura do Inter'): " +
+            "action CHECK_CARD_STATUS e preencher cardName e/ou bank com o cartão citado.\n" +
             "- Se pedir saldos das contas, patrimônio em contas ou quanto tem nas contas (ex.: 'quanto eu tenho nas contas?', " +
             "'saldos das contas', 'meu patrimônio', 'lista minhas contas', 'saldo do nu', 'saldo da conta Nubank'): " +
             "action LIST_ACCOUNTS; preencher accountName ou bank com o apelido citado; nome_normalizado com o nome corrigido.\n" +
@@ -246,8 +250,6 @@ public class OpenAiService {
             "- Se pedir estado das metas/objetivos (ex.: 'como estão minhas metas?', 'quais são os meus objetivos de economia?'): action LIST_METAS.\n" +
             "- Se pedir resumo de orçamento, limites por categoria ou gasto vs limite (ex.: 'quanto gastei do meu orçamento?', " +
             "'resumo de gastos do orçamento', 'meus limites de categoria'): action GET_REPORT_SUMMARY; mes/ano se citar mês.\n" +
-            "- Se perguntar quanto gastou no cartão, resumo de fatura, limite disponível (ex: 'quanto gastei no Nubank?', 'resumo da fatura do Inter'): " +
-            "action CHECK_CARD_STATUS e preencher cardName e/ou bank com o cartão citado.\n" +
             "- Se perguntar como vai fechar o mês, se vai ficar no vermelho, previsão/projeção do mês ou saldo no fim do mês: action FORECAST_MONTH.\n" +
             "- Se perguntar onde investir o saldo, saldo parado rendendo, poupança vs CDB vs Tesouro Selic: action SUGERIR_INVESTIMENTO.\n" +
             "- Se perguntar se vale a pena comprar agora no cartão, quando a fatura fecha/vira, melhor dia para comprar, " +

@@ -7,6 +7,9 @@ Aplicação de finanças pessoais com **app web** (Angular), assistente **J.A.R.
 | Documento | Conteúdo |
 |-----------|----------|
 | [`docs/VISAO_GERAL.md`](docs/VISAO_GERAL.md) | Arquitetura, telas, APIs, JARVIS, deploy |
+| [`docs/FUNCIONALIDADES.md`](docs/FUNCIONALIDADES.md) | **Todas as funcionalidades e como funcionam** |
+| [`docs/CALCULOS_FINANCEIROS.md`](docs/CALCULOS_FINANCEIROS.md) | Fórmulas: patrimônio, projeções, consignado, provisões |
+| [`docs/AVISO_MUDANCAS_CALCULOS.md`](docs/AVISO_MUDANCAS_CALCULOS.md) | Aviso ao utilizador antes de deploy |
 | [`docs/INDICE.md`](docs/INDICE.md) | Índice completo da documentação |
 | [`CONFIGURACAO_AMBIENTE.md`](CONFIGURACAO_AMBIENTE.md) | Setup local Windows (Evolution Node, Spring, Angular) |
 | [`docker/README.md`](docker/README.md) | Docker Compose na VPS (produção) |

@@ -100,13 +100,12 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("dataFim") LocalDateTime dataFim
     );
 
-    /** Passivo de empréstimos: parcelas PREVISTO que debitam conta (exclui consignado com desconto em folha). */
+    /** Passivo de empréstimos: soma de todas as parcelas PREVISTO ativas (inclui consignado em folha). */
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.excluido = false "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
         + "AND t.emprestimoId IS NOT NULL "
-        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
-        + "AND (t.descontoEmFolha IS NULL OR t.descontoEmFolha = false)")
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA")
     BigDecimal sumPassivoEmprestimoAtivo(@Param("usuarioId") Long usuarioId);
 
     /** @deprecated use {@link #sumPassivoEmprestimoAtivo} — inclui vencidas, não só vincendas. */
