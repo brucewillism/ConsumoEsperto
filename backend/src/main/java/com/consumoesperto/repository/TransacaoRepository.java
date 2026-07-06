@@ -100,12 +100,13 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("dataFim") LocalDateTime dataFim
     );
 
-    /** Passivo de empréstimos: todas as parcelas PREVISTO ativas (vincendas + vencidas não pagas). */
+    /** Passivo de empréstimos: parcelas PREVISTO que debitam conta (exclui consignado com desconto em folha). */
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.excluido = false "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
         + "AND t.emprestimoId IS NOT NULL "
-        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA")
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND (t.descontoEmFolha IS NULL OR t.descontoEmFolha = false)")
     BigDecimal sumPassivoEmprestimoAtivo(@Param("usuarioId") Long usuarioId);
 
     /** @deprecated use {@link #sumPassivoEmprestimoAtivo} — inclui vencidas, não só vincendas. */
@@ -484,21 +485,23 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         + "ORDER BY t.dataTransacao DESC")
     List<Transacao> findProvisoesFiscaisPrevistasByUsuario(@Param("usuarioId") Long usuarioId);
 
-    /** Parcelas de empréstimo PREVISTO ativas (compromisso mensal recorrente por empréstimo). */
+    /** Parcelas de empréstimo PREVISTO ativas que debitam conta (exclui desconto em folha). */
     @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.excluido = false "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
         + "AND t.emprestimoId IS NOT NULL "
         + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND (t.descontoEmFolha IS NULL OR t.descontoEmFolha = false) "
         + "ORDER BY t.emprestimoId ASC, t.parcelaAtual ASC")
     List<Transacao> findParcelasEmprestimoPrevistasAtivas(@Param("usuarioId") Long usuarioId);
 
-    /** Parcelas de empréstimo PREVISTO que vencem no mês — projeção de caixa do mês. */
+    /** Parcelas de empréstimo PREVISTO que vencem no mês — projeção de caixa (exclui desconto em folha). */
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.excluido = false "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
         + "AND t.emprestimoId IS NOT NULL "
         + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND (t.descontoEmFolha IS NULL OR t.descontoEmFolha = false) "
         + "AND t.dataTransacao BETWEEN :inicio AND :fim")
     BigDecimal sumParcelasEmprestimoPrevistasNoMes(
         @Param("usuarioId") Long usuarioId,

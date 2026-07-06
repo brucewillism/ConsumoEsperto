@@ -155,15 +155,42 @@
       </div>
 
       <div *ngIf="gruposTimeline.length > 0" class="timeline-faturas">
-        <section *ngFor="let grupo of gruposTimeline; trackBy: trackByGrupo" class="timeline-mes-bloco">
-          <header class="timeline-mes-header">
-            <h2 class="timeline-mes-titulo">{{ grupo.rotuloMes }}</h2>
-            <p *ngIf="totalComprometidoPrevistoNoMes(grupo) > 0" class="timeline-mes-previsto-sum">
-              <mat-icon class="timeline-mes-previsto-ico">event_available</mat-icon>
-              Previsto neste mês: <strong>{{ formatarMoeda(totalComprometidoPrevistoNoMes(grupo)) }}</strong>
-            </p>
+        <section *ngFor="let grupo of gruposTimeline; trackBy: trackByGrupo" class="timeline-mes-bloco"
+                 [class.timeline-mes-atual]="grupo.mesAtual"
+                 [class.timeline-mes-colapsado]="grupoColapsavel(grupo) && !grupoExpandido(grupo)">
+          <header class="timeline-mes-header"
+                  [class.timeline-mes-header--clicavel]="grupoColapsavel(grupo)"
+                  (click)="alternarExpansaoMes(grupo)"
+                  (keydown.enter)="alternarExpansaoMes(grupo)"
+                  (keydown.space)="$event.preventDefault(); alternarExpansaoMes(grupo)"
+                  [attr.role]="grupoColapsavel(grupo) ? 'button' : null"
+                  [attr.tabindex]="grupoColapsavel(grupo) ? 0 : null"
+                  [attr.aria-expanded]="grupoColapsavel(grupo) ? grupoExpandido(grupo) : null">
+            <div class="timeline-mes-header-main">
+              <h2 class="timeline-mes-titulo">
+                {{ grupo.rotuloMes }}
+                <span *ngIf="grupo.mesAtual" class="timeline-mes-badge-atual">Mês atual</span>
+              </h2>
+              <p *ngIf="grupoColapsavel(grupo) && !grupoExpandido(grupo)" class="timeline-mes-condensado">
+                <mat-icon class="timeline-mes-previsto-ico">check_circle</mat-icon>
+                {{ resumoMesCondensado(grupo) }}
+                <mat-icon class="timeline-mes-chevron">{{ grupoExpandido(grupo) ? 'expand_less' : 'expand_more' }}</mat-icon>
+              </p>
+              <p *ngIf="totalComprometidoPrevistoNoMes(grupo) > 0" class="timeline-mes-previsto-sum">
+                <mat-icon class="timeline-mes-previsto-ico">event_available</mat-icon>
+                Previsto neste mês: <strong>{{ formatarMoeda(totalComprometidoPrevistoNoMes(grupo)) }}</strong>
+              </p>
+            </div>
+            <button *ngIf="grupoColapsavel(grupo) && grupoExpandido(grupo)"
+                    type="button"
+                    mat-icon-button
+                    class="timeline-mes-recolher"
+                    (click)="$event.stopPropagation(); alternarExpansaoMes(grupo)"
+                    aria-label="Recolher faturas pagas do mês">
+              <mat-icon>expand_less</mat-icon>
+            </button>
           </header>
-          <div class="fatura-mes-grid">
+          <div class="fatura-mes-grid" *ngIf="grupoExpandido(grupo)">
         <mat-card *ngFor="let fatura of grupo.faturas; trackBy: trackByFaturaId"
                   class="fatura-item"
                   [class.fatura-prevista]="fatura.status === 'PREVISTA'"

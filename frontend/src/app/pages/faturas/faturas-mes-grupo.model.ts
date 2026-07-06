@@ -7,4 +7,10 @@ export interface FaturaMesGrupo {
   mes: number;
   rotuloMes: string;
   faturas: CreditCardInvoice[];
+  /** Todas as faturas do grupo estão pagas. */
+  somentePagas: boolean;
+  /** Mês de referência = mês civil corrente. */
+  mesAtual: boolean;
+  qtdPagas: number;
+  totalPagas: number;
 }

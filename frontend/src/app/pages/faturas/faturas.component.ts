@@ -65,6 +65,8 @@ export class FaturasComponent implements OnInit, OnDestroy {
   faturasFiltradas: CreditCardInvoice[] = [];
   /** Linha do tempo: mês/ano ascendente (atual → futuro). */
   gruposTimeline: FaturaMesGrupo[] = [];
+  /** Meses com faturas pagas expandidos manualmente (chave YYYY-MM). */
+  mesesExpandidos = new Set<string>();
   cartoes: CartaoCredito[] = [];
   /** '' = todos os cartões; senão id do cartão como string. */
   filtroCartaoId = '';
@@ -428,6 +430,8 @@ export class FaturasComponent implements OnInit, OnDestroy {
       'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
       'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
     ];
+    const hoje = new Date();
+    const chaveMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
     const mapa = new Map<string, CreditCardInvoice[]>();
     for (const f of this.faturasFiltradas) {
       const ref = this.dataMesReferencia(f);
@@ -446,14 +450,53 @@ export class FaturasComponent implements OnInit, OnDestroy {
       const ano = Number(ys);
       const mes = Number(ms);
       const rotuloMes = `${nomesMes[mes - 1] ?? 'MÊS'} ${ano}`;
+      const faturas = mapa.get(chave)!;
+      const pagas = faturas.filter((f) => f.status === 'PAID');
+      const somentePagas = faturas.length > 0 && pagas.length === faturas.length;
+      const totalPagas = pagas.reduce((s, f) => s + (Number(f.amount) || 0), 0);
       return {
         chave,
         ano,
         mes,
         rotuloMes,
-        faturas: mapa.get(chave)!
+        faturas,
+        somentePagas,
+        mesAtual: chave === chaveMesAtual,
+        qtdPagas: pagas.length,
+        totalPagas,
       };
     });
+  }
+
+  /** Mês corrente e meses com pendências ficam abertos; histórico só pago inicia recolhido. */
+  grupoExpandido(grupo: FaturaMesGrupo): boolean {
+    if (this.filtroMes || this.filtroStatus) {
+      return true;
+    }
+    if (grupo.mesAtual || !grupo.somentePagas) {
+      return true;
+    }
+    return this.mesesExpandidos.has(grupo.chave);
+  }
+
+  grupoColapsavel(grupo: FaturaMesGrupo): boolean {
+    return grupo.somentePagas && !grupo.mesAtual && !this.filtroMes && !this.filtroStatus;
+  }
+
+  alternarExpansaoMes(grupo: FaturaMesGrupo): void {
+    if (!this.grupoColapsavel(grupo)) {
+      return;
+    }
+    if (this.mesesExpandidos.has(grupo.chave)) {
+      this.mesesExpandidos.delete(grupo.chave);
+    } else {
+      this.mesesExpandidos.add(grupo.chave);
+    }
+  }
+
+  resumoMesCondensado(grupo: FaturaMesGrupo): string {
+    const n = grupo.faturas.length;
+    return `${n} fatura${n !== 1 ? 's' : ''} paga${n !== 1 ? 's' : ''} · ${this.formatarMoeda(grupo.totalPagas)}`;
   }
 
   trackByGrupo(_index: number, g: FaturaMesGrupo): string {

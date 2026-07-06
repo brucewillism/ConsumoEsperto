@@ -217,7 +217,7 @@
         <p
           class="hud-sentinela-value"
           *ngIf="previsaoFuturoChart != null; else semSentinela"
-          matTooltip="Saldo em contas menos parcelas de empréstimo ainda previstas (vincendas e vencidas não pagas). Não desconta faturas de cartão nem fixas do mês."
+          matTooltip="Saldo em contas menos parcelas de empréstimo que debitam a conta (consignado em folha já sai do salário e não entra aqui)."
           matTooltipPosition="below">
           {{ formatCurrency(previsaoFuturoChart.saldoAtual) }}
         </p>
@@ -229,7 +229,7 @@
           Patrimônio ou projeção do mês em risco — protocolo de cautela ativo.
         </p>
         <p class="hud-subline" *ngIf="!protocoloCautelaAtivo">
-          Contas menos parcelas de empréstimo ainda previstas.
+          Contas menos parcelas de empréstimo que debitam a conta (consignado em folha não entra).
         </p>
       </article>
 

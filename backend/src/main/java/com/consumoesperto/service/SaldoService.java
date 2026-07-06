@@ -129,8 +129,8 @@ public class SaldoService {
     }
 
     /**
-     * Patrimônio líquido = ativos em conta − passivo de empréstimos (parcelas PREVISTO ativas, inclusive vencidas).
-     * A liquidez imediata ({@link #saldoLiquidezImediata}) não desconta esse passivo.
+     * Patrimônio líquido = ativos em conta − passivo de empréstimos que debitam conta
+     * (parcelas PREVISTO; consignado com desconto em folha já sai do salário líquido e não entra aqui).
      */
     @Transactional(readOnly = true)
     public BigDecimal patrimonioLiquido(Long usuarioId) {
