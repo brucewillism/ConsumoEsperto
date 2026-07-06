@@ -194,7 +194,7 @@ export class PrevisaoFuturoChartComponent implements OnInit, OnChanges {
       labels,
       datasets: [
         {
-          label: 'Real (conta)',
+          label: 'Patrimônio líquido (hoje)',
           data: real,
           borderColor: '#00e5ff',
           backgroundColor: 'rgba(0, 229, 255, 0.08)',

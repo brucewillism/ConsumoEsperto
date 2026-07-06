@@ -30,8 +30,8 @@ export const CHART_METODOLOGIAS: Record<ChartMetodologiaId, ChartMetodologia> = 
   PREVISAO_FUTURO: {
     titulo: 'Trajetória de caixa',
     itens: [
-      'Linha sólida (Real): saldo em contas bancárias dia a dia, ancorado nas transações confirmadas do mês corrente.',
-      'Linha tracejada (Projeção): estende o ritmo médio de gastos até o último dia do mês, somando receitas previstas (salário configurado menos o já recebido) e descontando despesas fixas conhecidas.',
+      'Linha sólida (Patrimônio líquido): saldo em contas menos parcelas de empréstimo ainda previstas, ancorado no dia corrente.',
+      'Linha tracejada (Projeção): estende o ritmo médio de gastos até o último dia do mês, somando receitas previstas e descontando faturas pendentes, despesas fixas e provisões.',
       'Losangos âmbar: dias de vencimento de despesas fixas cadastradas (Sentinela).',
       'Triângulos: provisões futuras registradas pela memória semântica do J.A.R.V.I.S.',
       'Área vermelha/âmbar: trecho em que a projeção indica saldo negativo (risco de descoberto).',

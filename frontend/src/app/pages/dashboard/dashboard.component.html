@@ -211,10 +211,14 @@
     <section class="hud-command-strip dashboard-cards-grid" *ngIf="!errorMessage">
       <article class="hud-card hud-glass hud-animate" [style.--stagger]="1">
         <header class="hud-card-head">
-          <span class="hud-chip">Sentinela</span>
-          <span class="hud-card-title">Disponibilidade real</span>
+          <span class="hud-chip">Patrimônio</span>
+          <span class="hud-card-title">Patrimônio líquido</span>
         </header>
-        <p class="hud-sentinela-value" *ngIf="previsaoFuturoChart != null; else semSentinela">
+        <p
+          class="hud-sentinela-value"
+          *ngIf="previsaoFuturoChart != null; else semSentinela"
+          matTooltip="Saldo em contas menos parcelas de empréstimo ainda previstas (vincendas e vencidas não pagas). Não desconta faturas de cartão nem fixas do mês."
+          matTooltipPosition="below">
           {{ formatCurrency(previsaoFuturoChart.saldoAtual) }}
         </p>
         <ng-template #semSentinela>
@@ -222,9 +226,11 @@
         </ng-template>
         <p class="hud-cautela" *ngIf="protocoloCautelaAtivo">
           <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
-          Protocolo de cautela ativo — monitorar fluxo.
+          Patrimônio ou projeção do mês em risco — protocolo de cautela ativo.
         </p>
-        <p class="hud-subline" *ngIf="!protocoloCautelaAtivo">Linha de base operacional dentro do esperado.</p>
+        <p class="hud-subline" *ngIf="!protocoloCautelaAtivo">
+          Contas menos parcelas de empréstimo ainda previstas.
+        </p>
       </article>
 
       <article class="hud-card hud-glass hud-animate" [style.--stagger]="2">
