@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import com.consumoesperto.util.AppTimeZone;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -522,7 +523,7 @@ public class FaturaService {
      * e não numa ABERTA duplicada — o total é sempre recalculado via {@link #sincronizarValorFaturaComTransacoes}.
      */
     public Fatura resolverFaturaAbertaParaCartao(Long usuarioId, CartaoCredito cartao) {
-        return resolverFaturaParaCompra(usuarioId, cartao, LocalDateTime.now());
+        return resolverFaturaParaCompra(usuarioId, cartao, AppTimeZone.agora());
     }
 
     /**
@@ -536,7 +537,7 @@ public class FaturaService {
         if (!Objects.equals(cartao.getUsuario().getId(), usuarioId)) {
             throw new RuntimeException("Cartão não pertence ao usuário");
         }
-        LocalDateTime ref = dataCompra != null ? dataCompra : LocalDateTime.now();
+        LocalDateTime ref = dataCompra != null ? dataCompra : AppTimeZone.agora();
         List<Fatura.StatusFatura> statusesCicloAberto = List.of(
             Fatura.StatusFatura.ABERTA,
             Fatura.StatusFatura.PARCIAL,

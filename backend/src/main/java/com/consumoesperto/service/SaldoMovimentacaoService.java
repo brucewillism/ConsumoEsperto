@@ -180,6 +180,23 @@ public class SaldoMovimentacaoService {
         return saldo;
     }
 
+    /** Ajuste manual de saldo (WhatsApp/reconciliação) — lock + linha no ledger. */
+    @Transactional
+    public BigDecimal ajustarSaldoManual(Long contaId, BigDecimal novoSaldo) {
+        ContaBancaria conta = travarConta(contaId);
+        BigDecimal antes = scale(conta.getSaldoAtual());
+        BigDecimal alvo = scale(novoSaldo);
+        BigDecimal delta = alvo.subtract(antes);
+        if (delta.compareTo(BigDecimal.ZERO) == 0) {
+            return alvo;
+        }
+        conta.setSaldoAtual(alvo);
+        contaBancariaRepository.save(conta);
+        registrarAuditoria(conta, delta, antes, alvo, TipoOperacaoSaldo.AJUSTE_MANUAL, null);
+        log.info("[MULTICARTEIRA] Conta {} ajuste manual → {} (delta {})", contaId, alvo, delta);
+        return alvo;
+    }
+
     private void aplicarDelta(Long contaId, BigDecimal delta, TipoOperacaoSaldo tipoOperacao, Long transacaoId) {
         ContaBancaria conta = travarConta(contaId);
         BigDecimal antes = scale(conta.getSaldoAtual());

@@ -29,6 +29,7 @@ public class ContaBancariaService {
     private final ContaBancariaRepository contaBancariaRepository;
     private final UsuarioRepository usuarioRepository;
     private final TextMatcherService textMatcherService;
+    private final SaldoMovimentacaoService saldoMovimentacaoService;
 
     public ContaBancariaDTO criar(ContaBancariaDTO dto) {
         Usuario usuario = usuarioRepository.findById(dto.getUsuarioId())
@@ -174,12 +175,12 @@ public class ContaBancariaService {
     /** Ajuste manual de saldo via WhatsApp (reconciliação). */
     public ContaBancariaDTO ajustarSaldo(Long id, Long usuarioId, BigDecimal novoSaldo) {
         ContaBancaria conta = buscarEntidadeInterno(id, usuarioId);
-        conta.setSaldoAtual(escala(novoSaldo));
-        return converterParaDTO(contaBancariaRepository.save(conta));
+        saldoMovimentacaoService.ajustarSaldoManual(conta.getId(), escala(novoSaldo));
+        return converterParaDTO(contaBancariaRepository.findById(conta.getId()).orElse(conta));
     }
 
     /**
-     * Credita valor na conta (entrada de renda/salário) — atualiza {@code saldoAtual} diretamente.
+     * Credita valor na conta (entrada de renda/salário) — roteado pelo ledger.
      */
     public ContaBancaria creditarValor(Long contaId, Long usuarioId, BigDecimal valor) {
         if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
@@ -189,8 +190,8 @@ public class ContaBancariaService {
         if (!conta.isAtiva()) {
             throw new IllegalStateException("Conta bancária inativa não pode receber crédito.");
         }
-        conta.setSaldoAtual(escala(conta.getSaldoAtual()).add(escala(valor)));
-        return contaBancariaRepository.save(conta);
+        saldoMovimentacaoService.creditarConta(contaId, escala(valor));
+        return contaBancariaRepository.findById(contaId).orElse(conta);
     }
 
     /** Entidade para serviços internos (transferência, conciliação). */

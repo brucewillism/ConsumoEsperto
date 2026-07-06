@@ -1,12 +1,15 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.DashboardProjectionDTO;
+import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.SimulacaoImpactoDTO;
 import com.consumoesperto.dto.TimelineImpactoDTO;
 import com.consumoesperto.model.MetaFinanceira;
+import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.MetaFinanceiraRepository;
 import com.consumoesperto.repository.TransacaoRepository;
+import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,9 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -26,15 +32,17 @@ public class DashboardProjectionService {
     private final SimulacaoImpactoService simulacaoImpactoService;
     private final MetaFinanceiraRepository metaFinanceiraRepository;
     private final SaldoService saldoService;
+    private final RendaConfigService rendaConfigService;
 
     @Transactional(readOnly = true)
     public DashboardProjectionDTO projetar(Long usuarioId) {
-        YearMonth ym = YearMonth.now();
-        LocalDate hoje = LocalDate.now();
+        YearMonth ym = YearMonth.from(AppTimeZone.hoje());
+        LocalDate hoje = AppTimeZone.hoje();
+        LocalDateTime inicioMes = ym.atDay(1).atStartOfDay();
+        LocalDateTime fimMes = ym.atEndOfMonth().atTime(23, 59, 59);
+
         List<Transacao> transacoes = transacaoRepository.findByUsuarioIdAndDataTransacaoBetween(
-            usuarioId,
-            ym.atDay(1).atStartOfDay(),
-            ym.atEndOfMonth().atTime(23, 59, 59)
+            usuarioId, inicioMes, fimMes
         );
         List<String> labels = new ArrayList<>();
         List<BigDecimal> real = new ArrayList<>();
@@ -65,7 +73,6 @@ public class DashboardProjectionService {
         BigDecimal impactoSimuladoDiario = simulacaoImpactoService.impactoMensalAtivo(usuarioId)
             .divide(BigDecimal.valueOf(ym.lengthOfMonth()), 2, RoundingMode.HALF_UP);
 
-        // Ancora a série "real" ao patrimônio líquido multicarteira (ou legado) na data de hoje
         BigDecimal patrimonioHoje = saldoService.patrimonioLiquido(usuarioId);
         int idxHoje = Math.min(hoje.getDayOfMonth(), real.size()) - 1;
         BigDecimal acumuladoMesAteHoje = idxHoje >= 0 && real.get(idxHoje) != null
@@ -80,11 +87,15 @@ public class DashboardProjectionService {
             }
         }
 
+        Map<Integer, BigDecimal> receitasPorDia = mapaReceitasEsperadas(usuarioId, ym, hoje, inicioMes, fimMes);
+
         BigDecimal saldoProjetado = projetado.get(Math.min(hoje.getDayOfMonth(), projetado.size()) - 1);
         BigDecimal saldoSimulado = simulado.get(Math.min(hoje.getDayOfMonth(), simulado.size()) - 1);
         for (int i = hoje.getDayOfMonth(); i < ym.lengthOfMonth(); i++) {
-            saldoProjetado = saldoProjetado.subtract(gastoMedioDiario);
-            saldoSimulado = saldoSimulado.subtract(gastoMedioDiario).subtract(impactoSimuladoDiario);
+            int dia = i + 1;
+            BigDecimal receitaDia = receitasPorDia.getOrDefault(dia, BigDecimal.ZERO);
+            saldoProjetado = saldoProjetado.subtract(gastoMedioDiario).add(receitaDia);
+            saldoSimulado = saldoSimulado.subtract(gastoMedioDiario).subtract(impactoSimuladoDiario).add(receitaDia);
             projetado.set(i, saldoProjetado.setScale(2, RoundingMode.HALF_UP));
             simulado.set(i, saldoSimulado.setScale(2, RoundingMode.HALF_UP));
         }
@@ -98,6 +109,77 @@ public class DashboardProjectionService {
         dto.setTimelineImpacto(timeline(usuarioId));
         dto.setSafraPatrimonio(saldoService.calcularProjecaoSafraDto(usuarioId, 2));
         return dto;
+    }
+
+    /** Receitas esperadas no restante do mês: gap salarial + recorrentes vincendas. */
+    private Map<Integer, BigDecimal> mapaReceitasEsperadas(
+        Long usuarioId,
+        YearMonth ym,
+        LocalDate hoje,
+        LocalDateTime inicioMes,
+        LocalDateTime fimMes
+    ) {
+        Map<Integer, BigDecimal> map = new HashMap<>();
+        BigDecimal rendaLiquida = rendaConfigService.getRendaMensalEstimada(usuarioId);
+        if (rendaLiquida == null || rendaLiquida.compareTo(BigDecimal.ZERO) <= 0) {
+            rendaLiquida = nz(transacaoRepository.sumReceitasConfirmadasPeriodo(usuarioId, inicioMes, fimMes));
+        }
+        BigDecimal receitasSalariaisConfirmadas = nz(
+            transacaoRepository.sumReceitaSalarialConfirmadaPeriodo(usuarioId, inicioMes, fimMes));
+
+        TipoConfiguracaoRenda tipo = rendaConfigService.obterDto(usuarioId)
+            .map(RendaConfigDTO::getTipoConfiguracaoRenda)
+            .orElse(TipoConfiguracaoRenda.CONTRACHEQUE);
+        if (tipo == TipoConfiguracaoRenda.FLUXO_DIARIO) {
+            int diasRestantes = Math.max(0, ym.lengthOfMonth() - hoje.getDayOfMonth());
+            if (diasRestantes > 0) {
+                BigDecimal diaria = rendaLiquida.divide(
+                    BigDecimal.valueOf(ym.lengthOfMonth()), 2, RoundingMode.HALF_UP);
+                for (int d = hoje.getDayOfMonth() + 1; d <= ym.lengthOfMonth(); d++) {
+                    map.merge(d, diaria, BigDecimal::add);
+                }
+            }
+        } else {
+            Integer diaPagamentoCfg = rendaConfigService.obterDto(usuarioId)
+                .map(RendaConfigDTO::getDiaPagamento)
+                .orElse(null);
+            int diaPagamento = (diaPagamentoCfg != null && diaPagamentoCfg >= 1)
+                ? diaPagamentoCfg
+                : SalarioAutomaticoService.DIA_PAGAMENTO_PADRAO;
+            int diaEfetivo = Math.min(diaPagamento, ym.lengthOfMonth());
+            if (diaEfetivo > hoje.getDayOfMonth()) {
+                BigDecimal gap = ProjecaoMesCaixaSupport.calcularGapSalarial(
+                    rendaLiquida,
+                    receitasSalariaisConfirmadas,
+                    hoje.getDayOfMonth(),
+                    ym.lengthOfMonth(),
+                    diaPagamento
+                );
+                if (gap.compareTo(BigDecimal.ZERO) > 0) {
+                    map.merge(diaEfetivo, gap, BigDecimal::add);
+                }
+            }
+        }
+
+        LocalDate fimMesDate = ym.atEndOfMonth();
+        transacaoRepository.findByUsuarioIdAndRecorrenteIsTrueAndTipoTransacao(
+                usuarioId, Transacao.TipoTransacao.RECEITA).stream()
+            .filter(t -> t.getProximaExecucao() != null
+                && !t.getProximaExecucao().isBefore(hoje.plusDays(1))
+                && !t.getProximaExecucao().isAfter(fimMesDate))
+            .forEach(t -> {
+                int dia = t.getProximaExecucao().getDayOfMonth();
+                map.merge(dia, nz(t.getValor()), BigDecimal::add);
+            });
+
+        for (Map.Entry<Integer, BigDecimal> e : map.entrySet()) {
+            e.setValue(e.getValue().setScale(2, RoundingMode.HALF_UP));
+        }
+        return map;
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     }
 
     private List<TimelineImpactoDTO> timeline(Long usuarioId) {
@@ -124,6 +206,7 @@ public class DashboardProjectionService {
     private static BigDecimal deltaDoDia(List<Transacao> transacoes, LocalDate dia) {
         return transacoes.stream()
             .filter(t -> t.getDataTransacao() != null && t.getDataTransacao().toLocalDate().equals(dia))
+            .filter(t -> t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA)
             .map(t -> t.getTipoTransacao() == Transacao.TipoTransacao.RECEITA ? t.getValor() : t.getValor().negate())
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
@@ -131,6 +214,7 @@ public class DashboardProjectionService {
     private static BigDecimal gastoDoDia(List<Transacao> transacoes, LocalDate dia) {
         return transacoes.stream()
             .filter(t -> t.getDataTransacao() != null && t.getDataTransacao().toLocalDate().equals(dia))
+            .filter(t -> t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA)
             .filter(t -> t.getTipoTransacao() == Transacao.TipoTransacao.DESPESA)
             .map(Transacao::getValor)
             .reduce(BigDecimal.ZERO, BigDecimal::add);

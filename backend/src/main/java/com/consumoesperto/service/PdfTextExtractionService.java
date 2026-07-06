@@ -376,11 +376,11 @@ public class PdfTextExtractionService {
             return ResultadoExtracao.falha();
         } finally {
             if (reader != null) {
-                try {
+            try {
                     reader.getClass().getMethod("close").invoke(reader);
-                } catch (Exception ignored) {
-                    // close best effort
-                }
+            } catch (Exception ignored) {
+                // close best effort
+            }
             }
         }
         return new ResultadoExtracao(paginas, desbloqueado);
@@ -395,7 +395,7 @@ public class PdfTextExtractionService {
             try {
                 return readerClass.getConstructor(byte[].class, byte[].class)
                     .newInstance(pdfBytes, pwdBytes);
-            } catch (Exception e) {
+        } catch (Exception e) {
                 last = e;
             }
         }

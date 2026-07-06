@@ -63,7 +63,7 @@ public class PrevisaoFluxoCaixaService {
                 .setScale(1, RoundingMode.HALF_UP);
         }
 
-        YearMonth ym = YearMonth.now();
+        YearMonth ym = AppTimeZone.mesAtual();
         int diasRest = ym.lengthOfMonth() - AppTimeZone.hoje().getDayOfMonth() + 1;
 
         String voc = jarvisProtocolService.resolveVocative(usuarioId, usuarioRepository);
@@ -149,9 +149,10 @@ public class PrevisaoFluxoCaixaService {
         BigDecimal fixasRest = somarContasFixasRestantesNoMes(usuarioId, hoje);
         BigDecimal faturas = nz(faturaRepository.sumValorFaturasPendentesByUsuarioId(usuarioId));
         int diasParaFim = ultimo - diaHoje + 1;
+        // Fixas cadastradas entram só nos saltos por dia de vencimento — não ratear de novo no burn diário.
         BigDecimal obrigDiaria = diasParaFim > 0
-            ? fixasRest.add(faturas).divide(BigDecimal.valueOf(diasParaFim), 4, RoundingMode.HALF_UP)
-            : fixasRest.add(faturas);
+            ? faturas.divide(BigDecimal.valueOf(diasParaFim), 4, RoundingMode.HALF_UP)
+            : faturas;
 
         Map<Integer, BigDecimal> saltosDespesasFixas = despesaFixaService.mapaSaltosProjetadosAposDia(usuarioId, hoje);
         List<Integer> marcos = new ArrayList<>(saltosDespesasFixas.keySet());
@@ -229,7 +230,7 @@ public class PrevisaoFluxoCaixaService {
     }
 
     private void enrichProtocoloDiagnostics(PrevisaoFuturoChartDTO dto, Long usuarioId) {
-        YearMonth ym = YearMonth.now();
+        YearMonth ym = AppTimeZone.mesAtual();
         LocalDateTime ini = ym.atDay(1).atStartOfDay();
         LocalDateTime fim = ym.atEndOfMonth().atTime(23, 59, 59);
         BigDecimal despesasMes = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(

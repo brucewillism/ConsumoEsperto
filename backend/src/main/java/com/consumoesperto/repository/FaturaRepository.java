@@ -66,4 +66,14 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
     @Query("SELECT COALESCE(SUM(f.valorFatura), 0) FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId "
         + "AND f.status NOT IN (com.consumoesperto.model.Fatura$StatusFatura.PAGA, com.consumoesperto.model.Fatura$StatusFatura.CANCELADA)")
     BigDecimal sumValorFaturasPendentesByUsuarioId(@Param("usuarioId") Long usuarioId);
+
+    /** Faturas não quitadas com vencimento no mês — obrigação bottom-up da projeção. */
+    @Query("SELECT COALESCE(SUM(f.valorFatura), 0) FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId "
+        + "AND f.status NOT IN (com.consumoesperto.model.Fatura$StatusFatura.PAGA, com.consumoesperto.model.Fatura$StatusFatura.CANCELADA) "
+        + "AND f.dataVencimento >= :inicio AND f.dataVencimento <= :fim")
+    BigDecimal sumValorFaturasPendentesNoMes(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
 }

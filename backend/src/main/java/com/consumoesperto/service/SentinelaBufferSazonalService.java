@@ -10,7 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import com.consumoesperto.util.AppTimeZone;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -76,7 +78,7 @@ public class SentinelaBufferSazonalService {
                 new ColchaoSazonal(BigDecimal.ZERO, -1, null), patrimonio, saldoConta);
         }
 
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = AppTimeZone.hoje();
         int ano = hoje.getYear();
         BigDecimal colchao = BigDecimal.ZERO;
         int menorDias = Integer.MAX_VALUE;

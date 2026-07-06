@@ -4,7 +4,9 @@ import com.consumoesperto.dto.ProvisaoMemoriaDTO;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.util.FinanceTextoUtil;
+import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,13 +37,17 @@ public class ProvisaoMemoriaSentinelaService {
 
     private final CerebroSemanticoService cerebroSemanticoService;
     private final TransacaoRepository transacaoRepository;
+    private final DespesaFixaService despesaFixaService;
+
+    @Value("${consumoesperto.provisao.tolerancia-dedup:2.00}")
+    private BigDecimal toleranciaDedup;
 
     @Transactional(readOnly = true)
     public List<ProvisaoMemoriaDTO> calcularProvisoesParaMesAtual(Long usuarioId) {
         if (usuarioId == null) {
             return List.of();
         }
-        YearMonth atual = YearMonth.now();
+        YearMonth atual = AppTimeZone.mesAtual();
         YearMonth passado = atual.minusYears(1);
         List<ProvisaoMemoriaDTO> raw = new ArrayList<>();
 
@@ -111,12 +117,55 @@ public class ProvisaoMemoriaSentinelaService {
 
         Map<String, ProvisaoMemoriaDTO> dedup = new LinkedHashMap<>();
         for (ProvisaoMemoriaDTO p : raw) {
-            String k = p.getRotulo() + "|" + p.getValor();
-            dedup.putIfAbsent(k, p);
+            if (jaProvisionadoPorDespesaFixa(usuarioId, p)) {
+                continue;
+            }
+            String k = chaveDedup(p);
+            dedup.merge(k, p, (a, b) -> prioridadeMaior(a, b));
         }
         List<ProvisaoMemoriaDTO> out = new ArrayList<>(dedup.values());
         out.sort(Comparator.comparing(ProvisaoMemoriaDTO::getValor).reversed());
         return out.size() > 3 ? out.subList(0, 3) : out;
+    }
+
+    private boolean jaProvisionadoPorDespesaFixa(Long usuarioId, ProvisaoMemoriaDTO p) {
+        if (p.getValor() == null || p.getRotulo() == null) {
+            return false;
+        }
+        return despesaFixaService.encontrarSimilar(usuarioId, p.getRotulo(), null)
+            .filter(d -> valoresProximos(d.getValor(), p.getValor()))
+            .isPresent();
+    }
+
+    private boolean valoresProximos(BigDecimal a, BigDecimal b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        BigDecimal tol = toleranciaDedup != null ? toleranciaDedup : new BigDecimal("2.00");
+        return a.subtract(b).abs().compareTo(tol) <= 0;
+    }
+
+    private static String chaveDedup(ProvisaoMemoriaDTO p) {
+        String rotulo = p.getRotulo() != null ? p.getRotulo().toLowerCase(Locale.ROOT) : "";
+        BigDecimal v = p.getValor() != null ? p.getValor().setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+        return rotulo + "|" + v;
+    }
+
+    /** PLANO_FUTURO (explícito) vence inferência sazonal quando colidem. */
+    private static ProvisaoMemoriaDTO prioridadeMaior(ProvisaoMemoriaDTO a, ProvisaoMemoriaDTO b) {
+        int pa = prioridade(a);
+        int pb = prioridade(b);
+        return pa >= pb ? a : b;
+    }
+
+    private static int prioridade(ProvisaoMemoriaDTO p) {
+        if (p.getContextoOrigem() != null && p.getContextoOrigem().startsWith("Plano futuro")) {
+            return 3;
+        }
+        if (p.getContextoOrigem() != null && p.getContextoOrigem().startsWith("Histórico")) {
+            return 2;
+        }
+        return 1;
     }
 
     private static int diaAlvoHeuristica(int mes) {

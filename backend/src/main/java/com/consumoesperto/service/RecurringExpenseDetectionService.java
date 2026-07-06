@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.Normalizer;
+import com.consumoesperto.util.AppTimeZone;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -28,10 +29,13 @@ public class RecurringExpenseDetectionService {
 
     @Transactional(readOnly = true)
     public List<RecurringExpense> detectar(Long usuarioId) {
-        LocalDateTime inicio = YearMonth.now().minusMonths(5).atDay(1).atStartOfDay();
-        LocalDateTime fim = LocalDateTime.now();
+        LocalDateTime inicio = AppTimeZone.mesAtual().minusMonths(5).atDay(1).atStartOfDay();
+        LocalDateTime fim = AppTimeZone.agora();
         List<Transacao> despesas = transacaoRepository.findByUsuarioIdAndTipoAndPeriodo(
-            usuarioId, Transacao.TipoTransacao.DESPESA, inicio, fim);
+            usuarioId, Transacao.TipoTransacao.DESPESA, inicio, fim).stream()
+            .filter(t -> !t.isExcluido())
+            .filter(t -> t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA)
+            .toList();
         Map<String, List<Transacao>> grupos = despesas.stream()
             .filter(t -> t.getDescricao() != null && t.getValor() != null)
             .collect(Collectors.groupingBy(t -> chave(t), LinkedHashMap::new, Collectors.toList()));
@@ -61,9 +65,9 @@ public class RecurringExpenseDetectionService {
     }
 
     private static LocalDate proximaData(int dia) {
-        YearMonth ym = YearMonth.now();
+        YearMonth ym = AppTimeZone.mesAtual();
         LocalDate candidate = ym.atDay(Math.min(dia, ym.lengthOfMonth()));
-        if (!candidate.isAfter(LocalDate.now())) {
+        if (!candidate.isAfter(AppTimeZone.hoje())) {
             YearMonth next = ym.plusMonths(1);
             return next.atDay(Math.min(dia, next.lengthOfMonth()));
         }

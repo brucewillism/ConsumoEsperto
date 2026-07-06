@@ -87,11 +87,25 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.excluido = false "
+        + "AND t.emprestimoId IS NULL "
         + "AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
     BigDecimal sumReceitasConfirmadasPeriodo(
         @Param("usuarioId") Long usuarioId,
         @Param("dataInicio") LocalDateTime dataInicio,
         @Param("dataFim") LocalDateTime dataFim
+    );
+
+    /** Passivo de empréstimos: parcelas PREVISTO vincendas (compromisso futuro por empréstimo ativo). */
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.dataTransacao >= :desde")
+    BigDecimal sumPassivoEmprestimoVincendas(
+        @Param("usuarioId") Long usuarioId,
+        @Param("desde") LocalDateTime desde
     );
     
     @Query("SELECT t.categoria.nome, SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.dataTransacao BETWEEN :dataInicio AND :dataFim GROUP BY t.categoria.nome")

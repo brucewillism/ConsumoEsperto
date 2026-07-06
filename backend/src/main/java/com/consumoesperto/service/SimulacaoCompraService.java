@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import com.consumoesperto.util.AppTimeZone;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -62,13 +63,13 @@ public class SimulacaoCompraService {
      */
     public Map<String, Object> simularCompra(Long usuarioId, BigDecimal valorCompra, int numeroParcelas) {
         // Calcular média de receitas e despesas dos últimos 6 meses para análise de estabilidade
-        LocalDateTime agora = LocalDateTime.now();
+        LocalDateTime agora = AppTimeZone.agora();
         LocalDateTime seisMesesAtras = agora.minusMonths(6);
         
         // Buscar total de receitas e despesas do período de análise
-        BigDecimal totalReceitas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal totalReceitas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora));
-        BigDecimal totalDespesas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal totalDespesas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora));
         
         // Calcular médias mensais para análise de capacidade de pagamento
@@ -131,13 +132,13 @@ public class SimulacaoCompraService {
      */
     public Map<String, Object> simularCompraAVista(Long usuarioId, BigDecimal valorCompra) {
         // Calcular média de receitas e despesas dos últimos 6 meses para análise de estabilidade
-        LocalDateTime agora = LocalDateTime.now();
+        LocalDateTime agora = AppTimeZone.agora();
         LocalDateTime seisMesesAtras = agora.minusMonths(6);
         
         // Buscar total de receitas e despesas do período de análise
-        BigDecimal totalReceitas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal totalReceitas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora));
-        BigDecimal totalDespesas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal totalDespesas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora));
         
         // Calcular médias mensais para análise de capacidade de compra
@@ -198,13 +199,13 @@ public class SimulacaoCompraService {
      */
     public Map<String, Object> calcularEconomiaNecessaria(Long usuarioId, BigDecimal valorCompra, int mesesDesejados) {
         // Calcular média de receitas e despesas dos últimos 6 meses para análise de estabilidade
-        LocalDateTime agora = LocalDateTime.now();
+        LocalDateTime agora = AppTimeZone.agora();
         LocalDateTime seisMesesAtras = agora.minusMonths(6);
         
         // Buscar total de receitas e despesas do período de análise
-        BigDecimal totalReceitas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal totalReceitas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora));
-        BigDecimal totalDespesas = nz(transacaoRepository.sumByUsuarioIdAndTipoAndPeriodo(
+        BigDecimal totalDespesas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
                 usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora));
         
         // Calcular médias mensais para análise de capacidade de economia
@@ -300,10 +301,8 @@ public class SimulacaoCompraService {
     }
 
     public Map<String, Object> simularInvestimento(BigDecimal valorInicial, BigDecimal aporteMensal, BigDecimal taxaRetornoAnual, int periodoAnos) {
-        BigDecimal taxaMensal = BigDecimal.valueOf(Math.pow(
-            BigDecimal.ONE.add(taxaRetornoAnual.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)).doubleValue(),
-            1.0 / 12.0
-        ) - 1.0);
+        BigDecimal taxaMensal = AmortizacaoVpCalculo.taxaMensalDeAnualDecimal(
+            taxaRetornoAnual.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
 
         BigDecimal valorFinal = valorInicial;
         List<Map<String, Object>> projecaoAnual = new ArrayList<>();
@@ -344,9 +343,7 @@ public class SimulacaoCompraService {
         if (i.compareTo(BigDecimal.ZERO) == 0) {
             valorParcela = valorFinanciado.divide(BigDecimal.valueOf(prazoMeses), 2, RoundingMode.HALF_UP);
         } else {
-            double fator = Math.pow(BigDecimal.ONE.add(i).doubleValue(), prazoMeses);
-            double parcela = valorFinanciado.doubleValue() * ((i.doubleValue() * fator) / (fator - 1));
-            valorParcela = BigDecimal.valueOf(parcela).setScale(2, RoundingMode.HALF_UP);
+            valorParcela = AmortizacaoVpCalculo.calcularParcelaPrice(valorFinanciado, i, prazoMeses);
         }
 
         BigDecimal totalPagar = valorParcela.multiply(BigDecimal.valueOf(prazoMeses)).setScale(2, RoundingMode.HALF_UP);

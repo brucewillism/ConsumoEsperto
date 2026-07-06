@@ -18,6 +18,7 @@ import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.exception.AiUnavailableException;
 import com.consumoesperto.util.AiErroHumanizer;
 import com.consumoesperto.util.BancoBrasilCatalog;
+import com.consumoesperto.util.MoedaUtil;
 import com.consumoesperto.service.fatura.layout.BancoFaturaLayout;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutDetector;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
@@ -2038,7 +2039,7 @@ public class FaturaPdfImportService {
         }
         try {
             if (n.isNumber()) {
-                return BigDecimal.valueOf(n.asDouble()).setScale(2, RoundingMode.HALF_UP);
+                return MoedaUtil.fromJson(n);
             }
             String t = n.asText("").replace("R$", "").trim();
             if (t.contains(",")) {

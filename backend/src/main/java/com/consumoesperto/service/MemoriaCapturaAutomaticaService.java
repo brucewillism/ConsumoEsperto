@@ -8,6 +8,7 @@ import com.consumoesperto.model.OrigemConteudo;
 import com.consumoesperto.util.AppTimeZone;
 import com.consumoesperto.util.MemoriaTextoHeuristica;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.consumoesperto.util.MoedaUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -112,7 +113,7 @@ public class MemoriaCapturaAutomaticaService {
             MemoriaTipo tipo = tipoDeString(item.path("tipo").asText(""), texto, hoje);
             MemoriaMetadados meta = MemoriaMetadados.inferido(tipo);
             if (item.hasNonNull("valor") && item.path("valor").isNumber()) {
-                meta = meta.comValor(BigDecimal.valueOf(item.path("valor").asDouble()));
+                meta = meta.comValor(MoedaUtil.fromJson(item.path("valor")));
             }
             int mesAlvo = item.path("mesAlvo").asInt(0);
             if (mesAlvo >= 1 && mesAlvo <= 12) {

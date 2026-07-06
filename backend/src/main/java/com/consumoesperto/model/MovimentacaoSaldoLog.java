@@ -71,6 +71,7 @@ public class MovimentacaoSaldoLog {
         EDICAO,
         EXCLUSAO,
         CREDITO_DIRETO,
+        AJUSTE_MANUAL,
         TRANSFERENCIA_SAIDA,
         TRANSFERENCIA_ENTRADA,
         RECONCILIACAO

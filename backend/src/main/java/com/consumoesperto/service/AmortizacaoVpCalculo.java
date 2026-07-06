@@ -12,9 +12,6 @@ final class AmortizacaoVpCalculo {
 
     private AmortizacaoVpCalculo() {}
 
-    /**
-     * PMT = valorRestante / n; VP = PMT × (1 − (1+i)^−n) / i; economia = valorRestante − VP.
-     */
     static BigDecimal calcularJurosEconomizados(
         BigDecimal valorRestante,
         int parcelasRestantes,
@@ -35,5 +32,39 @@ final class AmortizacaoVpCalculo {
         );
         BigDecimal vp = pmt.multiply(fatorDesconto, MC).divide(taxa, MC);
         return valorRestante.subtract(vp).max(BigDecimal.ZERO).setScale(2, ARRED);
+    }
+
+    /** PMT = PV × i × (1+i)^n / ((1+i)^n − 1) — tabela Price em BigDecimal. */
+    static BigDecimal calcularParcelaPrice(BigDecimal valorTomado, BigDecimal taxaMensal, int parcelas) {
+        if (valorTomado == null || valorTomado.compareTo(BigDecimal.ZERO) <= 0 || parcelas <= 0) {
+            return BigDecimal.ZERO.setScale(2, ARRED);
+        }
+        if (taxaMensal == null || taxaMensal.compareTo(BigDecimal.ZERO) <= 0) {
+            return valorTomado.divide(BigDecimal.valueOf(parcelas), 2, ARRED);
+        }
+        BigDecimal fator = BigDecimal.ONE.add(taxaMensal, MC).pow(parcelas, MC);
+        return valorTomado.multiply(taxaMensal, MC).multiply(fator, MC)
+            .divide(fator.subtract(BigDecimal.ONE, MC), 2, ARRED);
+    }
+
+    /** Converte taxa anual decimal (ex. 0,12) em taxa mensal equivalente. */
+    static BigDecimal taxaMensalDeAnualDecimal(BigDecimal taxaAnualDecimal) {
+        if (taxaAnualDecimal == null || taxaAnualDecimal.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(8, ARRED);
+        }
+        BigDecimal umMaisAa = BigDecimal.ONE.add(taxaAnualDecimal, MC);
+        double mensal = Math.pow(umMaisAa.doubleValue(), 1.0 / 12.0) - 1.0;
+        return BigDecimal.valueOf(mensal).setScale(8, ARRED);
+    }
+
+    /** Converte taxa mensal decimal (ex. 0.0188) para % a.a. */
+    static BigDecimal taxaAnualPercentDeMensal(BigDecimal taxaMensal) {
+        if (taxaMensal == null || taxaMensal.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, ARRED);
+        }
+        BigDecimal umMaisI = BigDecimal.ONE.add(taxaMensal, MC);
+        return umMaisI.pow(12, MC).subtract(BigDecimal.ONE, MC)
+            .multiply(BigDecimal.valueOf(100), MC)
+            .setScale(2, ARRED);
     }
 }

@@ -18,7 +18,6 @@ import com.consumoesperto.service.SaldoMovimentacaoService;
 import com.consumoesperto.service.SaldoService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,21 +25,20 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Regressão P0-2: o reparo pós-bug ({@code tentarRepararContaPosBug}) deve usar a fórmula
- * completa do ledger (abertura + movimentos). Na lógica antiga a abertura era descartada
- * (ledger "abertura zero") e uma conta com saldo inicial de R$ 2.000 perdia esse valor.
+ * Regressão EM-01: tomar empréstimo não infla patrimônio líquido — crédito em conta menos parcelas PREVISTO vincendas.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class ReparoPosBugPreservaAberturaRegressionTest {
+class EmprestimoPatrimonioRegressionTest {
 
     @Mock private TransacaoRepository transacaoRepository;
     @Mock private FaturaRepository faturaRepository;
@@ -59,31 +57,35 @@ class ReparoPosBugPreservaAberturaRegressionTest {
     @InjectMocks private SaldoService saldoService;
 
     @Test
-    void reparoPosBug_preservaSaldoInicialDe2000() {
+    void patrimonioLiquido_descontaPassivoEmprestimoVincendas() {
         Usuario usuario = new Usuario();
         usuario.setId(1L);
         ContaBancaria conta = new ContaBancaria();
-        conta.setId(7L);
+        conta.setId(10L);
         conta.setUsuario(usuario);
-        conta.setSaldoInicial(new BigDecimal("2000.00"));
-        // Corrompido por bug antigo: saldo além do piso do cheque especial
-        conta.setSaldoAtual(new BigDecimal("-3000.00"));
-        conta.setLimiteChequeEspecial(new BigDecimal("1000.00"));
+        conta.setAtiva(true);
+        conta.setSaldoAtual(new BigDecimal("10000.00"));
 
-        when(contaBancariaRepository.findByUsuarioIdAndAtivaTrueOrderByPadraoDescNomeAsc(1L))
-            .thenReturn(List.of(conta));
-        // Sem transações nem transferências: ledger = abertura
-        when(transacaoRepository.findEfetivadasPorConta(7L)).thenReturn(List.of());
-        when(transferenciaContaRepository.sumValorEntradaPorConta(7L)).thenReturn(null);
-        when(transferenciaContaRepository.sumValorSaidaPorConta(7L)).thenReturn(null);
+        when(contaBancariaService.possuiContasAtivas(1L)).thenReturn(true);
+        when(contaBancariaService.somarSaldosAtivos(1L)).thenReturn(new BigDecimal("10000.00"));
+        when(transacaoRepository.sumPassivoEmprestimoVincendas(eq(1L), any(LocalDateTime.class)))
+            .thenReturn(new BigDecimal("12000.00"));
 
-        int reparadas = saldoService.repararSaldosPosBugReconciliacao(1L);
+        BigDecimal patrimonio = saldoService.patrimonioLiquido(1L);
 
-        assertEquals(1, reparadas);
-        // Abertura de R$ 2.000 mantida (lógica antiga zerava para 0.00)
-        assertEquals(0, conta.getSaldoInicial().compareTo(new BigDecimal("2000.00")));
-        ArgumentCaptor<BigDecimal> saldoCaptor = ArgumentCaptor.forClass(BigDecimal.class);
-        verify(saldoMovimentacaoService).definirSaldoReconciliado(eq(7L), saldoCaptor.capture());
-        assertEquals(0, saldoCaptor.getValue().compareTo(new BigDecimal("2000.00")));
+        assertEquals(0, patrimonio.compareTo(new BigDecimal("-2000.00")),
+            "crédito do empréstimo (10k) menos parcelas vincendas (12k) = -2k, não +10k");
+    }
+
+    @Test
+    void patrimonioLiquido_semEmprestimo_igualAtivos() {
+        when(contaBancariaService.possuiContasAtivas(2L)).thenReturn(false);
+        when(transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(any(), any()))
+            .thenReturn(BigDecimal.ZERO);
+        when(transacaoRepository.sumDespesaConfirmadaCaixaPorUsuarioId(2L)).thenReturn(BigDecimal.ZERO);
+        when(transacaoRepository.sumPassivoEmprestimoVincendas(eq(2L), any(LocalDateTime.class)))
+            .thenReturn(BigDecimal.ZERO);
+
+        assertEquals(0, saldoService.patrimonioLiquido(2L).compareTo(BigDecimal.ZERO.setScale(2)));
     }
 }

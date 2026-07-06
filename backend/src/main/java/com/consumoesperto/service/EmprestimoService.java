@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import com.consumoesperto.util.AppTimeZone;
+import com.consumoesperto.util.MoedaUtil;
 import java.util.stream.Collectors;
 
 /**
@@ -114,7 +116,7 @@ public class EmprestimoService {
         CalculoEmprestimo calc = calcularParcelaETaxa(proposta);
         ContaBancaria conta = resolverContaObrigatoria(usuarioId, proposta);
 
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = AppTimeZone.hoje();
         LocalDate primeira = hoje.plusMonths(1);
         LocalDate ultima = hoje.plusMonths(proposta.getQuantidadeParcelas());
 
@@ -129,13 +131,14 @@ public class EmprestimoService {
         transacaoService.criarTransacao(credito, usuarioId, false);
 
         int nParcelas = proposta.getQuantidadeParcelas();
+        List<BigDecimal> valoresParcelas = MoedaUtil.distribuirParcelas(calc.totalAPagar(), nParcelas);
         List<Transacao> parcelas = new ArrayList<>(nParcelas);
         Usuario usuarioRef = new Usuario();
         usuarioRef.setId(usuarioId);
         for (int i = 1; i <= nParcelas; i++) {
             Transacao parc = new Transacao();
             parc.setDescricao("Parcela consignado (" + i + "/" + nParcelas + ")");
-            parc.setValor(calc.parcela());
+            parc.setValor(valoresParcelas.get(i - 1));
             parc.setTipoTransacao(Transacao.TipoTransacao.DESPESA);
             parc.setStatusConferencia(Transacao.StatusConferencia.PREVISTO);
             parc.setDataTransacao(hoje.plusMonths(i).atTime(12, 0));
@@ -185,7 +188,7 @@ public class EmprestimoService {
         CalculoEmprestimo calc = calcularParcelaETaxa(proposta);
         ResolucaoConta contaRes = resolverConta(usuarioId, proposta);
 
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = AppTimeZone.hoje();
         LocalDate primeira = hoje.plusMonths(1);
         LocalDate ultima = hoje.plusMonths(proposta.getQuantidadeParcelas());
 
@@ -289,30 +292,36 @@ public class EmprestimoService {
     private CalculoEmprestimo calcularParcelaETaxa(PropostaEmprestimoConsignado proposta) {
         BigDecimal valorTomado = proposta.getValorTomado().setScale(SCALE, RoundingMode.HALF_UP);
         int n = proposta.getQuantidadeParcelas();
-        double taxaMensal;
+        BigDecimal taxaMensalBd;
         BigDecimal parcela;
         boolean estimada;
 
         if (proposta.getValorParcela() != null && proposta.getValorParcela().compareTo(BigDecimal.ZERO) > 0) {
             parcela = proposta.getValorParcela().setScale(SCALE, RoundingMode.HALF_UP);
-            taxaMensal = financialAdviceCalculator.resolverTaxaMensal(
+            double taxaMensal = financialAdviceCalculator.resolverTaxaMensal(
                 valorTomado.doubleValue(), parcela.doubleValue(), n);
+            taxaMensalBd = BigDecimal.valueOf(taxaMensal).setScale(8, RoundingMode.HALF_UP);
             estimada = false;
         } else {
             BigDecimal taxaAa = marketDataService.getTaxaMediaConsignadoResiliente();
-            taxaMensal = financialAdviceCalculator.taxaAnualParaMensal(taxaAa);
-            parcela = financialAdviceCalculator.calcularParcelaPrice(valorTomado, taxaMensal, n);
+            taxaMensalBd = BigDecimal.valueOf(financialAdviceCalculator.taxaAnualParaMensal(taxaAa))
+                .setScale(8, RoundingMode.HALF_UP);
+            parcela = AmortizacaoVpCalculo.calcularParcelaPrice(valorTomado, taxaMensalBd, n);
             estimada = true;
         }
 
-        double taxaAnual = Math.pow(1.0 + taxaMensal, 12.0) - 1.0;
-        BigDecimal totalAPagar = parcela.multiply(BigDecimal.valueOf(n)).setScale(SCALE, RoundingMode.HALF_UP);
+        BigDecimal taxaAnualPct = AmortizacaoVpCalculo.taxaAnualPercentDeMensal(taxaMensalBd);
+        BigDecimal totalAPagar = MoedaUtil.distribuirParcelas(parcela.multiply(BigDecimal.valueOf(n)), n)
+            .stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalAPagar.compareTo(BigDecimal.ZERO) == 0) {
+            totalAPagar = parcela.multiply(BigDecimal.valueOf(n)).setScale(SCALE, RoundingMode.HALF_UP);
+        }
         BigDecimal juros = totalAPagar.subtract(valorTomado).max(BigDecimal.ZERO).setScale(SCALE, RoundingMode.HALF_UP);
 
         return new CalculoEmprestimo(
             parcela,
-            BigDecimal.valueOf(taxaMensal * 100.0).setScale(2, RoundingMode.HALF_UP),
-            BigDecimal.valueOf(taxaAnual * 100.0).setScale(2, RoundingMode.HALF_UP),
+            taxaMensalBd.multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP),
+            taxaAnualPct,
             totalAPagar,
             juros,
             estimada

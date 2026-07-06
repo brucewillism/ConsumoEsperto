@@ -14,6 +14,7 @@ import com.consumoesperto.repository.UsuarioRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.consumoesperto.util.MoedaUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import com.consumoesperto.util.AppTimeZone;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -120,7 +122,7 @@ public class RendaConfigService {
         if (usuarioId == null || dias <= 0) {
             return BigDecimal.ZERO;
         }
-        LocalDate hoje = LocalDate.now();
+        LocalDate hoje = AppTimeZone.hoje();
         LocalDateTime inicio = hoje.minusDays(dias).atStartOfDay();
         LocalDateTime fim = hoje.atTime(23, 59, 59);
         BigDecimal totalReceitas = transacaoRepository.sumReceitasConfirmadasPeriodo(usuarioId, inicio, fim);
@@ -581,7 +583,7 @@ public class RendaConfigService {
         }
         try {
             if (n.isNumber()) {
-                return BigDecimal.valueOf(n.asDouble()).setScale(2, RoundingMode.HALF_UP);
+                return MoedaUtil.fromJson(n);
             }
             String t = n.asText("").replace("R$", "").trim();
             if (t.isEmpty()) {
