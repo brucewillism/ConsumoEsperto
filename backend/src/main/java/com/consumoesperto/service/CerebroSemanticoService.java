@@ -137,12 +137,12 @@ public class CerebroSemanticoService {
             if (reforcarSeQuaseIdentica(usuarioId, ctx, vec, meta)) {
                 return;
             }
-            superarContradicoes(usuarioId, vec, meta);
-            jdbcTemplate.update(
+            Long novoId = jdbcTemplate.queryForObject(
                 "INSERT INTO memoria_semantica_jarvis "
                     + "(usuario_id, contexto, embedding, categoria_origem, tipo, status, origem, confianca, validade, "
                     + "valor, categoria, mes_alvo, ano_alvo, contador_reforco, ultimo_reforco_em, transacoes_evidencia) "
-                    + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,NOW(),?)",
+                    + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,NOW(),?) RETURNING id",
+                Long.class,
                 usuarioId,
                 ctx,
                 vec,
@@ -157,6 +157,7 @@ public class CerebroSemanticoService {
                 meta.mesAlvo(),
                 meta.anoAlvo(),
                 evidenciaCsv(meta.transacoesEvidencia()));
+            superarContradicoes(usuarioId, vec, meta, novoId);
         } catch (DataAccessException dex) {
             if (isMemoriaSemanticsUnavailable(dex)) {
                 logMemoriaUnavailableOnce(dex);
@@ -227,8 +228,9 @@ public class CerebroSemanticoService {
                 + "contador_reforco = contador_reforco + 1, "
                 + "ultimo_reforco_em = NOW(), "
                 + "confianca = LEAST(0.95, confianca + 0.05), "
-                + "transacoes_evidencia = CASE WHEN ? IS NULL THEN transacoes_evidencia "
-                + "  WHEN transacoes_evidencia IS NULL THEN ? ELSE transacoes_evidencia || ',' || ? END "
+                // ?::text — sem o cast o Postgres não infere o tipo do parâmetro dentro do CASE
+                + "transacoes_evidencia = CASE WHEN ?::text IS NULL THEN transacoes_evidencia "
+                + "  WHEN transacoes_evidencia IS NULL THEN ?::text ELSE transacoes_evidencia || ',' || ?::text END "
                 + "WHERE id = ? AND usuario_id = ?",
             evid, evid, evid, idExistente, usuarioId);
         log.debug("[MEMORIA] Reforço em vez de duplicata id={} userId={}", idExistente, usuarioId);
@@ -239,30 +241,45 @@ public class CerebroSemanticoService {
      * Contradições (4.2): PREFERENCIA/PLANO_FUTURO novo com alta similaridade a um antigo do mesmo tipo
      * marca o antigo como SUPERADA (a mais recente prevalece; histórico preservado fora do RAG).
      */
-    private void superarContradicoes(Long usuarioId, PGobject vec, MemoriaMetadados meta) {
+    private void superarContradicoes(Long usuarioId, PGobject vec, MemoriaMetadados meta, Long novaMemoriaId) {
         MemoriaTipo tipo = meta.tipo();
-        if (vec == null || tipo == null
+        if (vec == null || tipo == null || novaMemoriaId == null
             || (tipo != MemoriaTipo.PREFERENCIA && tipo != MemoriaTipo.PLANO_FUTURO)) {
             return;
         }
-        double distMax = 1.0 - memoriaProps.getSuperacaoSimilaridadeMinima();
+        // Compatibilidade de metadados: mesma categoria (ambas preenchidas) usa o limiar normal;
+        // se qualquer uma não tiver categoria, exige limiar mais alto; categorias diferentes nunca superam.
+        double distMesmaCategoria = 1.0 - memoriaProps.getSuperacaoSimilaridadeMinima();
+        double distSemCategoria = 1.0 - memoriaProps.getSuperacaoSimilaridadeSemCategoria();
+        String categoriaNova = meta.categoria();
         List<Long> superadas = jdbcTemplate.query(
             con -> {
                 var ps = con.prepareStatement(
                     "SELECT id FROM memoria_semantica_jarvis "
                         + "WHERE usuario_id = ? AND status = 'ATIVA' AND tipo = ? AND embedding IS NOT NULL "
-                        + "AND (embedding <=> (?::vector)) <= ?");
+                        + "AND id <> ? AND restaurada_em IS NULL "
+                        + "AND ((categoria IS NOT NULL AND ?::varchar IS NOT NULL AND categoria = ?::varchar "
+                        + "      AND (embedding <=> (?::vector)) <= ?) "
+                        + "  OR ((categoria IS NULL OR ?::varchar IS NULL) "
+                        + "      AND (embedding <=> (?::vector)) <= ?))");
                 ps.setLong(1, usuarioId);
                 ps.setString(2, tipo.name());
-                ps.setObject(3, vec);
-                ps.setDouble(4, distMax);
+                ps.setLong(3, novaMemoriaId);
+                ps.setString(4, categoriaNova);
+                ps.setString(5, categoriaNova);
+                ps.setObject(6, vec);
+                ps.setDouble(7, distMesmaCategoria);
+                ps.setString(8, categoriaNova);
+                ps.setObject(9, vec);
+                ps.setDouble(10, distSemCategoria);
                 return ps;
             },
             (rs, rn) -> rs.getLong(1));
         for (Long id : superadas) {
             jdbcTemplate.update(
-                "UPDATE memoria_semantica_jarvis SET status = 'SUPERADA' WHERE id = ? AND usuario_id = ?",
-                id, usuarioId);
+                "UPDATE memoria_semantica_jarvis SET status = 'SUPERADA', superada_por_id = ? "
+                    + "WHERE id = ? AND usuario_id = ?",
+                novaMemoriaId, id, usuarioId);
         }
         if (!superadas.isEmpty()) {
             log.info("[MEMORIA] {} memória(s) {} superada(s) por versão mais recente userId={}",
@@ -720,6 +737,49 @@ public class CerebroSemanticoService {
             if (isMemoriaSemanticsUnavailable(dex)) {
                 logMemoriaUnavailableOnce(dex);
                 return;
+            }
+            throw dex;
+        }
+    }
+
+    /** SUPERADA recentes para auditoria no painel (item 4): rastreáveis via superada_por_id. */
+    public List<MemoriaSemanticaTimelineItemDTO> listarSuperadasRecentes(Long usuarioId, int limite) {
+        if (usuarioId == null || limite <= 0) {
+            return List.of();
+        }
+        String sql = "SELECT id, contexto, categoria_origem, data_registro, (embedding IS NOT NULL) AS tem_emb, "
+            + "tipo, status, confianca, contador_reforco "
+            + "FROM memoria_semantica_jarvis WHERE usuario_id = ? AND status = 'SUPERADA' "
+            + "ORDER BY data_registro DESC LIMIT ?";
+        try {
+            return jdbcTemplate.query(sql, (rs, rn) -> mapTimelineRow(rs), usuarioId, Math.min(limite, 30));
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return List.of();
+            }
+            throw dex;
+        }
+    }
+
+    /**
+     * Reverte uma superação errada: volta a ATIVA e marca {@code restaurada_em} — a partir daí a
+     * memória fica fora do mecanismo de contradição (não re-supera em loop).
+     */
+    @Transactional
+    public boolean restaurarMemoria(Long usuarioId, Long memoriaId) {
+        if (usuarioId == null || memoriaId == null) {
+            return false;
+        }
+        try {
+            return jdbcTemplate.update(
+                "UPDATE memoria_semantica_jarvis SET status = 'ATIVA', superada_por_id = NULL, restaurada_em = NOW() "
+                    + "WHERE id = ? AND usuario_id = ? AND status = 'SUPERADA'",
+                memoriaId, usuarioId) > 0;
+        } catch (DataAccessException dex) {
+            if (isMemoriaSemanticsUnavailable(dex)) {
+                logMemoriaUnavailableOnce(dex);
+                return false;
             }
             throw dex;
         }

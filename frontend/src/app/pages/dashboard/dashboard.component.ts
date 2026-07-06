@@ -317,6 +317,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   insightsMemoria: JarvisMemoriaTimelineItem[] = [];
   insightsMemoriaDispensado = false;
   memoriaRefutandoId: number | null = null;
+  memoriasSuperadas: JarvisMemoriaTimelineItem[] = [];
+  superadasExpandido = false;
+  memoriaRestaurandoId: number | null = null;
   private static readonly INSIGHTS_DISPENSA_KEY = 'jarvisInsightsMemoriaDispensadoEm';
 
   /** Segmentos para marquee com classes por indicador (Selic / IPCA / USD). */
@@ -1686,6 +1689,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.itensMemoria = [];
         this.memoriaCarregando = false;
         this.snackBar.open('Não foi possível carregar a memória tática.', 'Fechar', { duration: 3500 });
+      }
+    });
+    this.jarvisMemoriaService.superadas(10).subscribe({
+      next: (rows) => {
+        this.memoriasSuperadas = rows ?? [];
+      },
+      error: () => {
+        this.memoriasSuperadas = [];
+      }
+    });
+  }
+
+  /** Restaura uma memória SUPERADA (item 4): volta a ATIVA e não é re-superada em loop. */
+  restaurarMemoria(m: JarvisMemoriaTimelineItem): void {
+    if (!m?.id || this.memoriaRestaurandoId != null) {
+      return;
+    }
+    this.memoriaRestaurandoId = m.id;
+    this.jarvisMemoriaService.restaurar(m.id).subscribe({
+      next: () => {
+        this.memoriasSuperadas = this.memoriasSuperadas.filter((x) => x.id !== m.id);
+        this.itensMemoria = [{ ...m, status: 'ATIVA' }, ...this.itensMemoria];
+        this.memoriaRestaurandoId = null;
+        this.snackBar.open('Memória restaurada — voltou ao contexto do J.A.R.V.I.S.', 'Fechar', { duration: 3500 });
+      },
+      error: () => {
+        this.memoriaRestaurandoId = null;
+        this.snackBar.open('Não foi possível restaurar a memória.', 'Fechar', { duration: 3500 });
       }
     });
   }

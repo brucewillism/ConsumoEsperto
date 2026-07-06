@@ -1299,6 +1299,10 @@ public class SchemaAutoPatchService {
             + " ADD COLUMN IF NOT EXISTS transacoes_evidencia TEXT");
         executeDdlAutocommit("ALTER TABLE " + qualified
             + " ADD COLUMN IF NOT EXISTS confirmada_usuario BOOLEAN");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS superada_por_id BIGINT");
+        executeDdlAutocommit("ALTER TABLE " + qualified
+            + " ADD COLUMN IF NOT EXISTS restaurada_em TIMESTAMP WITHOUT TIME ZONE");
         // Backfill idempotente: hábitos antigos ganham tipo HABITO e origem INFERIDO
         executeDdlAutocommit("UPDATE " + qualified
             + " SET tipo = 'HABITO', origem = 'INFERIDO' WHERE categoria_origem = 'HABITO' AND tipo = 'FATO'");

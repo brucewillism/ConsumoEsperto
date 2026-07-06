@@ -36,4 +36,15 @@ export class JarvisMemoriaService {
   refutar(id: number): Observable<void> {
     return this.http.patch<void>(`${this.base}/${id}/refutar`, {});
   }
+
+  /** Memórias SUPERADA recentemente (auditoria da superação por contradição). */
+  superadas(limite = 10): Observable<JarvisMemoriaTimelineItem[]> {
+    const p = new HttpParams().set('limite', String(limite));
+    return this.http.get<JarvisMemoriaTimelineItem[]>(`${this.base}/superadas`, { params: p });
+  }
+
+  /** Reverte uma superação errada: a memória volta a ATIVA e não é re-superada em loop. */
+  restaurar(id: number): Observable<void> {
+    return this.http.patch<void>(`${this.base}/${id}/restaurar`, {});
+  }
 }

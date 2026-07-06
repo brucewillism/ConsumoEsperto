@@ -46,9 +46,15 @@ public class MemoriaCicloVidaService {
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
     private static final int MAX_CLUSTERS_POR_USUARIO = 3;
 
+    /** Mesmo padrão do contexto gravado pelo HabitDominoService: «gatilho» … «alvo» … observado N vezes. */
+    private static final java.util.regex.Pattern HABITO_SEQUENCIA = java.util.regex.Pattern.compile(
+        "«([^»]+)».*?«([^»]+)».*?observado\\s+(\\d+)\\s*vezes",
+        java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.DOTALL);
+
     private final JdbcTemplate jdbcTemplate;
     private final MemoriaJarvisProperties memoriaProps;
     private final CerebroSemanticoService cerebroSemanticoService;
+    private final HabitDominoService habitDominoService;
     private final OpenAiService openAiService;
     private final UsuarioRepository usuarioRepository;
     private final TransacaoRepository transacaoRepository;
@@ -100,6 +106,78 @@ public class MemoriaCicloVidaService {
         } catch (Exception e) {
             log.warn("Decaimento de memórias falhou: {}", e.getMessage());
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Re-validação de hábitos antigos sem evidência (rodada de ajustes finos, item 1)
+    // ------------------------------------------------------------------
+
+    /**
+     * Hábitos criados ANTES da coluna {@code transacoes_evidencia} não têm caminho de invalidação
+     * retroativa. Este job re-deriva a evidência re-rodando a mesma detecção do efeito dominó
+     * contra as transações vivas e confirmadas atuais:
+     * suporte suficiente → backfill da evidência; sem suporte → INVALIDADA.
+     * Idempotente: na 2ª execução nenhum HABITO ATIVA fica sem evidência, então nada muda.
+     */
+    @Scheduled(cron = "0 50 4 * * *", zone = "America/Sao_Paulo")
+    @Transactional
+    public void revalidarHabitosSemEvidencia() {
+        List<Map<String, Object>> habitos;
+        try {
+            habitos = jdbcTemplate.queryForList(
+                "SELECT id, usuario_id, contexto FROM memoria_semantica_jarvis "
+                    + "WHERE tipo = 'HABITO' AND status = 'ATIVA' "
+                    + "AND (transacoes_evidencia IS NULL OR transacoes_evidencia = '')");
+        } catch (Exception e) {
+            log.warn("Re-validação de hábitos sem evidência falhou na leitura: {}", e.getMessage());
+            return;
+        }
+        if (habitos.isEmpty()) {
+            return;
+        }
+        int backfilled = 0;
+        int invalidados = 0;
+        for (Map<String, Object> row : habitos) {
+            long memId = ((Number) row.get("id")).longValue();
+            long userId = ((Number) row.get("usuario_id")).longValue();
+            String contexto = (String) row.get("contexto");
+            try {
+                if (revalidarHabito(memId, userId, contexto)) {
+                    backfilled++;
+                } else {
+                    invalidados++;
+                }
+            } catch (Exception e) {
+                log.warn("Re-validação do hábito memId={} userId={} falhou: {}", memId, userId, e.getMessage());
+            }
+        }
+        log.info("[MEMORIA] Re-validação de hábitos sem evidência: {} backfilled, {} invalidado(s).",
+            backfilled, invalidados);
+    }
+
+    /** @return {@code true} se a evidência foi re-derivada (backfill); {@code false} se INVALIDADA. */
+    private boolean revalidarHabito(long memId, long userId, String contexto) {
+        HabitDominoService.SuporteDerivado suporte = null;
+        var m = contexto != null ? HABITO_SEQUENCIA.matcher(contexto) : null;
+        if (m != null && m.find()) {
+            String keyGatilho = FinanceTextoUtil.chaveAgrupamento(m.group(1).trim());
+            String keyAlvo = FinanceTextoUtil.chaveAgrupamento(m.group(2).trim());
+            suporte = habitDominoService.derivarSuporte(userId, keyGatilho, keyAlvo);
+        }
+        if (suporte != null
+            && habitDominoService.suporteSuficiente(suporte.ocorrencias(), suporte.diasDistintos())) {
+            String csv = suporte.evidencia().stream().map(String::valueOf)
+                .reduce((a, b) -> a + "," + b).orElse(null);
+            jdbcTemplate.update(
+                "UPDATE memoria_semantica_jarvis SET transacoes_evidencia = ? WHERE id = ?",
+                csv, memId);
+            return true;
+        }
+        // Contexto irreconhecível ou evidência inexistente/insuficiente nas transações vivas:
+        // o hábito nunca atingiu o critério novo ou perdeu o lastro — sai do RAG.
+        jdbcTemplate.update(
+            "UPDATE memoria_semantica_jarvis SET status = 'INVALIDADA' WHERE id = ?", memId);
+        return false;
     }
 
     // ------------------------------------------------------------------

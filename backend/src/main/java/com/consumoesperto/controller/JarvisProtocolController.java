@@ -87,6 +87,34 @@ public class JarvisProtocolController {
         return ResponseEntity.noContent().build();
     }
 
+    /** SUPERADA recentes (item 4): auditoria da superação por contradição, com opção de restaurar. */
+    @GetMapping("/memoria/superadas")
+    public ResponseEntity<List<MemoriaSemanticaTimelineItemDTO>> memoriaSuperadas(
+        @AuthenticationPrincipal UserPrincipal user,
+        @RequestParam(name = "limite", defaultValue = "10") int limite
+    ) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(cerebroSemanticoService.listarSuperadasRecentes(user.getId(), limite));
+    }
+
+    /** Reverte uma superação errada: volta a ATIVA e não volta a ser superada em loop. */
+    @PatchMapping("/memoria/{id}/restaurar")
+    public ResponseEntity<Void> restaurarMemoria(
+        @AuthenticationPrincipal UserPrincipal user,
+        @PathVariable("id") Long id
+    ) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        boolean ok = cerebroSemanticoService.restaurarMemoria(user.getId(), id);
+        if (!ok) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Memória não encontrada ou não está SUPERADA.");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/otimizar-metas")
     public ResponseEntity<ProtocoloOtimizacaoResponseDTO> otimizarMetas(@AuthenticationPrincipal UserPrincipal user) {
         if (user == null) {

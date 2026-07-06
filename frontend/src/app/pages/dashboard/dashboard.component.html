@@ -117,6 +117,35 @@
         </li>
       </ul>
       <p class="memoria-tatica-empty" *ngIf="!memoriaCarregando && !itensMemoria.length">Nenhuma recordação indexada ainda. Use o WhatsApp — <em>Jarvis, anote isso: …</em> — ou aguarde sumários de insights.</p>
+
+      <!-- Superadas recentemente (item 4): auditoria da superação por contradição, com restauração -->
+      <div class="memoria-superadas" *ngIf="!memoriaCarregando && memoriasSuperadas.length">
+        <button type="button" class="memoria-superadas-toggle" (click)="superadasExpandido = !superadasExpandido">
+          <i class="fas" [class.fa-chevron-right]="!superadasExpandido" [class.fa-chevron-down]="superadasExpandido" aria-hidden="true"></i>
+          Superadas recentemente ({{ memoriasSuperadas.length }})
+        </button>
+        <ul class="memoria-tatica-timeline memoria-superadas-lista" *ngIf="superadasExpandido">
+          <li *ngFor="let m of memoriasSuperadas; let i = index" class="memoria-tatica-node memoria-node-superada" [style.--i]="i">
+            <span class="memoria-node-dot sem-embedding"></span>
+            <div class="memoria-node-body">
+              <div class="memoria-node-meta">
+                <span class="memoria-cat" *ngIf="m.tipo">{{ rotuloTipoMemoria(m.tipo) }}</span>
+                <time class="memoria-data" *ngIf="m.dataRegistro">{{ m.dataRegistro | date : 'short' }}</time>
+                <button
+                  type="button"
+                  class="btn btn-hud btn-hud-ghost btn-icon-only memoria-restaurar-btn"
+                  (click)="restaurarMemoria(m)"
+                  [disabled]="memoriaRestaurandoId != null"
+                  title="Superada por engano — restaurar memória"
+                  aria-label="Restaurar memória">
+                  <i class="fas fa-rotate-left"></i>
+                </button>
+              </div>
+              <p class="memoria-contexto">{{ m.contexto }}</p>
+            </div>
+          </li>
+        </ul>
+      </div>
     </div>
   </section>
 

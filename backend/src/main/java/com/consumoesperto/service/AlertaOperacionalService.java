@@ -26,6 +26,7 @@ public class AlertaOperacionalService {
 
     public static final String TIPO_DIVERGENCIA_SALDO = "DIVERGENCIA_SALDO";
     public static final String TIPO_WEBHOOK_AUTH_FALHA = "WEBHOOK_AUTH_FALHA";
+    public static final String TIPO_MEMORIA_CAPTURA_FALHA = "MEMORIA_CAPTURA_FALHA";
 
     private final AlertasOperacionaisProperties properties;
     private final RestTemplate restTemplate;

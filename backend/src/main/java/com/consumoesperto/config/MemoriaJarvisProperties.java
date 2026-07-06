@@ -17,8 +17,11 @@ public class MemoriaJarvisProperties {
     /** Similaridade mínima (0–1) para considerar duas memórias «quase idênticas» e reforçar em vez de duplicar. */
     private double dedupeSimilaridadeMinima = 0.90;
 
-    /** Similaridade mínima (0–1) para memória nova SUPERAR uma antiga do mesmo tipo (contradição; a recente vence). */
+    /** Similaridade mínima (0–1) para memória nova SUPERAR uma antiga do mesmo tipo E mesma categoria. */
     private double superacaoSimilaridadeMinima = 0.78;
+
+    /** Limiar mais alto exigido quando uma das memórias não tem categoria (reduz falso positivo de SUPERADA). */
+    private double superacaoSimilaridadeSemCategoria = 0.88;
 
     /** Máximo de memórias injetadas por conversa/consulta RAG. */
     private int ragLimiteContexto = 5;

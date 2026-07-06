@@ -180,9 +180,49 @@ public class HabitDominoService {
     }
 
     /** Suporte mínimo (1.3): N ocorrências configurável E dias distintos suficientes. */
-    private boolean suporteSuficiente(int ocorrencias, int diasDistintos) {
+    public boolean suporteSuficiente(int ocorrencias, int diasDistintos) {
         return ocorrencias >= memoriaProps.getHabitoMinOcorrencias()
             && diasDistintos >= memoriaProps.getHabitoMinDiasDistintos();
+    }
+
+    /** Resultado da re-derivação de evidência de um par gatilho→alvo contra as transações vivas. */
+    public record SuporteDerivado(int ocorrencias, int diasDistintos, List<Long> evidencia) {
+    }
+
+    /**
+     * Re-deriva a evidência de um hábito (mesma detecção do efeito dominó: pares consecutivos em
+     * até 24h, sem duplicata suspeita) contra as transações CONFIRMADAS vivas atuais.
+     * Usado pelo job de re-validação de hábitos antigos sem {@code transacoes_evidencia}.
+     */
+    public SuporteDerivado derivarSuporte(Long userId, String keyGatilho, String keyAlvo) {
+        LocalDateTime iniHist = LocalDateTime.now().minusDays(400);
+        List<Transacao> conf = transacaoRepository.findByUsuarioIdAndTipoTransacaoOrderByDataTransacaoDesc(
+                userId, Transacao.TipoTransacao.DESPESA).stream()
+            .filter(x -> x.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA)
+            .filter(x -> x.getDataTransacao() != null && !x.getDataTransacao().isBefore(iniHist))
+            .sorted(Comparator.comparing(Transacao::getDataTransacao))
+            .toList();
+        int ocorrencias = 0;
+        Set<LocalDate> dias = new HashSet<>();
+        Set<Long> evidencia = new LinkedHashSet<>();
+        for (int i = 0; i < conf.size() - 1; i++) {
+            Transacao a = conf.get(i);
+            Transacao b = conf.get(i + 1);
+            long h = ChronoUnit.HOURS.between(a.getDataTransacao(), b.getDataTransacao());
+            if (h < 0 || h > 24) {
+                continue;
+            }
+            String ka = FinanceTextoUtil.chaveAgrupamento(a.getDescricao());
+            String kb = FinanceTextoUtil.chaveAgrupamento(b.getDescricao());
+            if (!keyGatilho.equals(ka) || !keyAlvo.equals(kb) || pareceDuplicataSuspeita(a, b, ka, kb)) {
+                continue;
+            }
+            ocorrencias++;
+            dias.add(a.getDataTransacao().toLocalDate());
+            evidencia.add(a.getId());
+            evidencia.add(b.getId());
+        }
+        return new SuporteDerivado(ocorrencias, dias.size(), new ArrayList<>(evidencia));
     }
 
     /**

@@ -28,6 +28,7 @@ import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.Fatura;
 import com.consumoesperto.model.MemoriaCategoriaOrigem;
+import com.consumoesperto.model.OrigemConteudo;
 import com.consumoesperto.model.TipoConfiguracaoRenda;
 import com.consumoesperto.model.PropostaFinanceira;
 import com.consumoesperto.model.PropostaEmprestimoConsignado;
@@ -269,9 +270,10 @@ public class WhatsAppCommandService {
         }
 
         JsonNode parsed = parseCommandComFallback(userId, text);
-        // Captura automática de memórias (Bloco 3.1): só texto digitado/falado pelo usuário chega
-        // a este pipeline — documentos (PDF/OCR) seguem outros fluxos e nunca geram memória aqui.
-        memoriaCapturaAutomaticaService.capturarDeConversaAsync(userId, text, parsed);
+        // Captura automática de memórias (Bloco 3.1): este pipeline recebe texto digitado ou áudio
+        // já transcrito do usuário; o guardrail anti-documento vive DENTRO do serviço (item 2).
+        memoriaCapturaAutomaticaService.capturarDeConversaAsync(
+            userId, text, parsed, OrigemConteudo.TEXTO_USUARIO);
         String act = parsed.path("action").asText("");
         if ("GENERATE_REPORT".equals(act) || "GERAR_RELATORIO".equals(act)) {
             return handleGenerateReport(parsed, userId, whatsappFrom, text, evolutionInstanceHint);

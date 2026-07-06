@@ -4,6 +4,7 @@ import com.consumoesperto.config.MemoriaJarvisProperties;
 import com.consumoesperto.model.MemoriaCategoriaOrigem;
 import com.consumoesperto.model.MemoriaMetadados;
 import com.consumoesperto.model.MemoriaTipo;
+import com.consumoesperto.model.OrigemConteudo;
 import com.consumoesperto.util.AppTimeZone;
 import com.consumoesperto.util.MemoriaTextoHeuristica;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -13,15 +14,19 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
  * Captura automática de memórias (Bloco 3.1): extrai fatos/planos/preferências do que o usuário
  * DIGITOU ou FALOU nas conversas, sem exigir «Jarvis, anote isso».
  *
  * <p>Fontes: campo {@code memoriasSugeridas[]} devolvido pela MESMA chamada de LLM do parse de
- * comando (sem chamada extra) + heurística local de fallback. Conteúdo de documentos (PDF/OCR)
- * nunca passa por aqui — guardrail anti-injection garantido no ponto de chamada.</p>
+ * comando (sem chamada extra) + heurística local de fallback. O guardrail anti-injection é
+ * estrutural: a {@link OrigemConteudo} é obrigatória e qualquer origem que não seja texto/áudio
+ * do usuário (ex.: DOCUMENTO) é recusada AQUI DENTRO, independentemente do chamador.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -30,17 +35,28 @@ public class MemoriaCapturaAutomaticaService {
 
     private static final int MAX_MEMORIAS_POR_MENSAGEM = 3;
     private static final int MAX_TAMANHO_TEXTO = 500;
+    /** N falhas na última hora → alerta operacional (o cooldown fica no AlertaOperacionalService). */
+    private static final int FALHAS_POR_HORA_PARA_ALERTA = 3;
 
     private final CerebroSemanticoService cerebroSemanticoService;
     private final MemoriaJarvisProperties memoriaProps;
+    private final AlertaOperacionalService alertaOperacionalService;
+
+    private final ConcurrentLinkedDeque<Instant> falhasRecentes = new ConcurrentLinkedDeque<>();
 
     /**
      * Processa a conversa fora do thread de resposta. {@code parsed} é o JSON já devolvido pelo
      * parse do comando (pode conter {@code memoriasSugeridas}); {@code textoUsuario} é o texto
-     * digitado/falado pelo usuário (nunca conteúdo de documento).
+     * digitado/falado pelo usuário. A {@code origem} é obrigatória — origens que não sejam
+     * texto/áudio do usuário são recusadas (guardrail anti-injection estrutural).
      */
     @Async("cerebroExecutor")
-    public void capturarDeConversaAsync(Long userId, String textoUsuario, JsonNode parsed) {
+    public void capturarDeConversaAsync(Long userId, String textoUsuario, JsonNode parsed, OrigemConteudo origem) {
+        if (origem == null || !origem.podeGerarMemoriaAutomatica()) {
+            log.warn("[MEMORIA] Captura automática RECUSADA por origem não permitida userId={} origem={}",
+                userId, origem);
+            return;
+        }
         if (!memoriaProps.isCapturaAutomaticaEnabled() || userId == null
             || textoUsuario == null || textoUsuario.isBlank()) {
             return;
@@ -51,7 +67,27 @@ public class MemoriaCapturaAutomaticaService {
                 capturarPorHeuristica(userId, textoUsuario);
             }
         } catch (Exception e) {
-            log.warn("Captura automática de memória falhou userId={}: {}", userId, e.getMessage());
+            registrarFalhaCaptura(userId, origem, e);
+        }
+    }
+
+    /**
+     * Falha no caminho async não pode ser engolida (item 3): log ERROR estruturado (sem o conteúdo
+     * da mensagem, que pode ser sensível) e alerta operacional quando há falhas repetidas na hora.
+     */
+    private void registrarFalhaCaptura(Long userId, OrigemConteudo origem, Exception e) {
+        log.error("[MEMORIA] Captura automática FALHOU userId={} origem={} causa={}: {}",
+            userId, origem, e.getClass().getSimpleName(), e.getMessage(), e);
+        Instant agora = Instant.now();
+        falhasRecentes.addLast(agora);
+        Instant corte = agora.minus(1, ChronoUnit.HOURS);
+        falhasRecentes.removeIf(t -> t.isBefore(corte));
+        if (falhasRecentes.size() >= FALHAS_POR_HORA_PARA_ALERTA) {
+            alertaOperacionalService.alertar(
+                AlertaOperacionalService.TIPO_MEMORIA_CAPTURA_FALHA,
+                String.format("Captura automática de memória falhou %d vez(es) na última hora. "
+                    + "Última falha: userId=%d causa=%s", falhasRecentes.size(), userId,
+                    e.getClass().getSimpleName()));
         }
     }
 

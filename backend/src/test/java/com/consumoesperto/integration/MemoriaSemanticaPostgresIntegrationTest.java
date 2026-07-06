@@ -6,13 +6,19 @@ import com.consumoesperto.model.MemoriaCategoriaOrigem;
 import com.consumoesperto.model.MemoriaMetadados;
 import com.consumoesperto.model.MemoriaOrigem;
 import com.consumoesperto.model.MemoriaTipo;
+import com.consumoesperto.model.OrigemConteudo;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.AlertaOperacionalService;
 import com.consumoesperto.service.CerebroSemanticoService;
+import com.consumoesperto.service.HabitDominoService;
+import com.consumoesperto.service.JarvisProtocolService;
+import com.consumoesperto.service.MemoriaCapturaAutomaticaService;
 import com.consumoesperto.service.MemoriaCicloVidaService;
 import com.consumoesperto.service.OpenAiService;
+import com.consumoesperto.service.WhatsAppNotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
@@ -87,8 +93,17 @@ class MemoriaSemanticaPostgresIntegrationTest {
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
+        // O application.properties principal desliga o auto-commit do Hikari (com a otimização
+        // provider_disables_autocommit); sem transação declarativa (serviços instanciados na mão),
+        // cada statement do JdbcTemplate era descartado em rollback silencioso ao devolver a
+        // conexão ao pool. Aqui cada statement deve valer — e o Hibernate volta a gerir o autocommit.
+        registry.add("spring.datasource.hikari.auto-commit", () -> "true");
+        registry.add("spring.jpa.properties.hibernate.connection.provider_disables_autocommit", () -> "false");
         registry.add("spring.flyway.enabled", () -> "false");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        // O application.properties principal fixa hibernate.hbm2ddl.auto=none via spring.jpa.properties.*,
+        // que tem precedência sobre spring.jpa.hibernate.ddl-auto — sem isto o schema JPA não é criado.
+        registry.add("spring.jpa.properties.hibernate.hbm2ddl.auto", () -> "create-drop");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
         registry.add("spring.jpa.show-sql", () -> "false");
     }
@@ -104,7 +119,10 @@ class MemoriaSemanticaPostgresIntegrationTest {
     private OpenAiService openAi;
     private MemoriaJarvisProperties props;
     private CerebroSemanticoService cerebro;
+    private HabitDominoService habitDomino;
     private MemoriaCicloVidaService cicloVida;
+    private AlertaOperacionalService alertaOperacional;
+    private MemoriaCapturaAutomaticaService captura;
     private Long userA;
     private Long userB;
 
@@ -137,7 +155,9 @@ class MemoriaSemanticaPostgresIntegrationTest {
                 + "contador_reforco INTEGER NOT NULL DEFAULT 1,"
                 + "ultimo_reforco_em TIMESTAMP WITHOUT TIME ZONE,"
                 + "transacoes_evidencia TEXT,"
-                + "confirmada_usuario BOOLEAN)");
+                + "confirmada_usuario BOOLEAN,"
+                + "superada_por_id BIGINT,"
+                + "restaurada_em TIMESTAMP WITHOUT TIME ZONE)");
 
         openAi = mock(OpenAiService.class);
         lenient().when(openAi.tryCreateEmbedding(anyString(), any()))
@@ -146,8 +166,13 @@ class MemoriaSemanticaPostgresIntegrationTest {
 
         props = new MemoriaJarvisProperties();
         cerebro = new CerebroSemanticoService(jdbc, openAi, transacaoRepository, props);
+        habitDomino = new HabitDominoService(
+            transacaoRepository, cerebro, mock(WhatsAppNotificationService.class),
+            mock(JarvisProtocolService.class), usuarioRepository, props);
         cicloVida = new MemoriaCicloVidaService(
-            jdbc, props, cerebro, openAi, usuarioRepository, transacaoRepository);
+            jdbc, props, cerebro, habitDomino, openAi, usuarioRepository, transacaoRepository);
+        alertaOperacional = mock(AlertaOperacionalService.class);
+        captura = new MemoriaCapturaAutomaticaService(cerebro, props, alertaOperacional);
 
         userA = criarUsuario("memA");
         userB = criarUsuario("memB");
@@ -205,8 +230,10 @@ class MemoriaSemanticaPostgresIntegrationTest {
 
     @Test
     void preferenciaNovaContraditoria_superaAntiga() {
+        // Sem categoria em nenhuma das duas, vale o limiar mais alto (0.88) — 0.885 supera
+        // (abaixo de 0.90 para não cair no dedupe, que reforçaria em vez de inserir)
         registrarEmbedding("Quer economizar em delivery", 1.0);
-        registrarEmbedding("Liberou delivery no fim de semana", 0.85); // parecida mas não idêntica
+        registrarEmbedding("Liberou delivery no fim de semana", 0.885);
         cerebro.gravarMemoria(userA, "Quer economizar em delivery",
             MemoriaCategoriaOrigem.FINANCAS, MemoriaMetadados.inferido(MemoriaTipo.PREFERENCIA));
         cerebro.gravarMemoria(userA, "Liberou delivery no fim de semana",
@@ -220,6 +247,71 @@ class MemoriaSemanticaPostgresIntegrationTest {
             String.class, userA, "Liberou delivery no fim de semana");
         assertEquals("SUPERADA", statusAntiga);
         assertEquals("ATIVA", statusNova);
+    }
+
+    // ------------------------------------------------------------------
+    // Ajustes finos, item 4 — contradição exige categoria compatível ou limiar alto,
+    // registra superada_por_id e é reversível (restaurar sem re-superar em loop)
+    // ------------------------------------------------------------------
+
+    @Test
+    void preferenciasDeCategoriasDiferentes_naoSeSuperamMesmoComAltaSimilaridade() {
+        registrarEmbedding("Quer economizar em delivery", 1.0);
+        // Muito parecida (acima até do limiar sem categoria, 0.88), mas outra categoria;
+        // abaixo de 0.90 para não cair no dedupe
+        registrarEmbedding("Quer economizar em transporte", 0.89);
+        cerebro.gravarMemoria(userA, "Quer economizar em delivery",
+            MemoriaCategoriaOrigem.FINANCAS,
+            MemoriaMetadados.inferido(MemoriaTipo.PREFERENCIA).comCategoria("delivery"));
+        cerebro.gravarMemoria(userA, "Quer economizar em transporte",
+            MemoriaCategoriaOrigem.FINANCAS,
+            MemoriaMetadados.inferido(MemoriaTipo.PREFERENCIA).comCategoria("transporte"));
+
+        Integer ativas = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM memoria_semantica_jarvis WHERE usuario_id = ? AND status = 'ATIVA'",
+            Integer.class, userA);
+        assertEquals(2, ativas, "categorias diferentes não podem se superar, mesmo com similaridade alta");
+    }
+
+    @Test
+    void contradicaoMesmaCategoria_superaComRastreioERestauracaoSemLoop() {
+        registrarEmbedding("Quer economizar em delivery", 1.0);
+        registrarEmbedding("Liberou delivery sem limite", 0.85); // acima de 0.78, abaixo de 0.88
+        cerebro.gravarMemoria(userA, "Quer economizar em delivery",
+            MemoriaCategoriaOrigem.FINANCAS,
+            MemoriaMetadados.inferido(MemoriaTipo.PREFERENCIA).comCategoria("delivery"));
+        cerebro.gravarMemoria(userA, "Liberou delivery sem limite",
+            MemoriaCategoriaOrigem.FINANCAS,
+            MemoriaMetadados.inferido(MemoriaTipo.PREFERENCIA).comCategoria("delivery"));
+
+        Long idAntiga = jdbc.queryForObject(
+            "SELECT id FROM memoria_semantica_jarvis WHERE usuario_id = ? AND contexto = ?",
+            Long.class, userA, "Quer economizar em delivery");
+        Long idNova = jdbc.queryForObject(
+            "SELECT id FROM memoria_semantica_jarvis WHERE usuario_id = ? AND contexto = ?",
+            Long.class, userA, "Liberou delivery sem limite");
+        assertEquals("SUPERADA", jdbc.queryForObject(
+            "SELECT status FROM memoria_semantica_jarvis WHERE id = ?", String.class, idAntiga),
+            "mesma categoria e limiar normal → supera");
+        assertEquals(idNova, jdbc.queryForObject(
+            "SELECT superada_por_id FROM memoria_semantica_jarvis WHERE id = ?", Long.class, idAntiga),
+            "superação deve ser rastreável via superada_por_id");
+        assertEquals(1, cerebro.listarSuperadasRecentes(userA, 10).size());
+
+        // Restauração pelo painel: volta a ATIVA e fica imune a re-superação em loop
+        assertTrue(cerebro.restaurarMemoria(userA, idAntiga));
+        assertEquals("ATIVA", jdbc.queryForObject(
+            "SELECT status FROM memoria_semantica_jarvis WHERE id = ?", String.class, idAntiga));
+
+        // Tira a «nova» do caminho (evita dedupe) e grava outra contradição próxima da restaurada
+        cerebro.refutarMemoria(userA, idNova);
+        registrarEmbedding("Delivery liberado de vez", 0.85);
+        cerebro.gravarMemoria(userA, "Delivery liberado de vez",
+            MemoriaCategoriaOrigem.FINANCAS,
+            MemoriaMetadados.inferido(MemoriaTipo.PREFERENCIA).comCategoria("delivery"));
+        assertEquals("ATIVA", jdbc.queryForObject(
+            "SELECT status FROM memoria_semantica_jarvis WHERE id = ?", String.class, idAntiga),
+            "memória restaurada não pode ser re-superada em loop");
     }
 
     // ------------------------------------------------------------------
@@ -359,6 +451,101 @@ class MemoriaSemanticaPostgresIntegrationTest {
         assertTrue(cerebro.refutarMemoria(userB,
             jdbc.queryForObject("SELECT id FROM memoria_semantica_jarvis WHERE usuario_id = ?", Long.class, userA))
             == false, "usuário B não pode refutar memória de A");
+    }
+
+    // ------------------------------------------------------------------
+    // Ajustes finos, item 1 — re-validação de hábitos antigos sem transacoes_evidencia
+    // ------------------------------------------------------------------
+
+    @Test
+    void habitoAntigoSemEvidencia_comSuporteVivo_recebeBackfill_semSuporte_eInvalidado() {
+        // Suporte real: 5 pares posto→conveniencia em 5 dias distintos
+        tx.execute(status -> {
+            Usuario u = entityManager.find(Usuario.class, userA);
+            for (int dia = 1; dia <= 5; dia++) {
+                Transacao a = despesaConfirmada(u, "posto", LocalDateTime.now().minusDays(dia).withHour(10));
+                Transacao b = despesaConfirmada(u, "conveniencia", LocalDateTime.now().minusDays(dia).withHour(12));
+                entityManager.persist(a);
+                entityManager.persist(b);
+            }
+            return null;
+        });
+        // Hábito legítimo criado ANTES da coluna de evidência (transacoes_evidencia nula)
+        jdbc.update(
+            "INSERT INTO memoria_semantica_jarvis (usuario_id, contexto, categoria_origem, tipo, origem) "
+                + "VALUES (?,?,'HABITO','HABITO','INFERIDO')",
+            userA, "Hábito de sequência (efeito dominó): após gastos em «posto» costuma ocorrer gasto em "
+                + "«conveniencia» em até 24h (observado 5 vezes em 5 dias distintos no histórico).");
+        // Hábito fantasma (caso Nubank): as duplicatas que o geraram já foram excluídas — sem lastro vivo
+        jdbc.update(
+            "INSERT INTO memoria_semantica_jarvis (usuario_id, contexto, categoria_origem, tipo, origem) "
+                + "VALUES (?,?,'HABITO','HABITO','INFERIDO')",
+            userA, "Hábito de sequência (efeito dominó): após gastos em «Nubank» costuma ocorrer gasto em "
+                + "«Nubank» em até 24h (observado 4 vezes em 1 dias distintos no histórico).");
+
+        cicloVida.revalidarHabitosSemEvidencia();
+
+        String evidencia = jdbc.queryForObject(
+            "SELECT transacoes_evidencia FROM memoria_semantica_jarvis WHERE usuario_id = ? AND contexto LIKE '%posto%'",
+            String.class, userA);
+        assertTrue(evidencia != null && evidencia.split(",").length == 10,
+            "hábito com suporte vivo deve receber backfill das 10 transações de evidência");
+        assertEquals("ATIVA", jdbc.queryForObject(
+            "SELECT status FROM memoria_semantica_jarvis WHERE usuario_id = ? AND contexto LIKE '%posto%'",
+            String.class, userA));
+        assertEquals("INVALIDADA", jdbc.queryForObject(
+            "SELECT status FROM memoria_semantica_jarvis WHERE usuario_id = ? AND contexto LIKE '%Nubank%'",
+            String.class, userA), "hábito fantasma sem lastro vivo deve ser invalidado");
+
+        // Idempotência: 2ª execução não altera nada
+        List<Map<String, Object>> antes = jdbc.queryForList(
+            "SELECT id, status, transacoes_evidencia FROM memoria_semantica_jarvis WHERE usuario_id = ? ORDER BY id",
+            userA);
+        cicloVida.revalidarHabitosSemEvidencia();
+        List<Map<String, Object>> depois = jdbc.queryForList(
+            "SELECT id, status, transacoes_evidencia FROM memoria_semantica_jarvis WHERE usuario_id = ? ORDER BY id",
+            userA);
+        assertEquals(antes, depois, "re-validação deve ser idempotente");
+
+        // Aceite: nenhum HABITO ATIVA fica sem evidência
+        Integer semEvidencia = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM memoria_semantica_jarvis WHERE tipo = 'HABITO' AND status = 'ATIVA' "
+                + "AND (transacoes_evidencia IS NULL OR transacoes_evidencia = '')",
+            Integer.class);
+        assertEquals(0, semEvidencia);
+    }
+
+    private static Transacao despesaConfirmada(Usuario u, String descricao, LocalDateTime quando) {
+        Transacao t = new Transacao();
+        t.setUsuario(u);
+        t.setDescricao(descricao);
+        t.setValor(new BigDecimal("50.00"));
+        t.setTipoTransacao(Transacao.TipoTransacao.DESPESA);
+        t.setStatusConferencia(Transacao.StatusConferencia.CONFIRMADA);
+        t.setDataTransacao(quando);
+        return t;
+    }
+
+    // ------------------------------------------------------------------
+    // Ajustes finos, item 2 — guardrail estrutural: DOCUMENTO não gera memória automática
+    // ------------------------------------------------------------------
+
+    @Test
+    void capturaAutomatica_recusaOrigemDocumento_dentroDoServico() {
+        String texto = "vou gastar R$ 2.000,00 em julho com a cirurgia"; // geraria PLANO_FUTURO
+        registrarEmbedding(texto, 1.0);
+
+        captura.capturarDeConversaAsync(userA, texto, null, OrigemConteudo.DOCUMENTO);
+        captura.capturarDeConversaAsync(userA, texto, null, null);
+        Integer aposDocumento = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM memoria_semantica_jarvis WHERE usuario_id = ?", Integer.class, userA);
+        assertEquals(0, aposDocumento, "origem DOCUMENTO (ou nula) não pode gerar memória automática");
+
+        // Prova de que o texto geraria memória se a origem fosse legítima
+        captura.capturarDeConversaAsync(userA, texto, null, OrigemConteudo.TEXTO_USUARIO);
+        Integer aposTextoUsuario = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM memoria_semantica_jarvis WHERE usuario_id = ?", Integer.class, userA);
+        assertEquals(1, aposTextoUsuario, "mesmo texto vindo do usuário deve gerar a memória");
     }
 
     private static String literal(float[] v) {
