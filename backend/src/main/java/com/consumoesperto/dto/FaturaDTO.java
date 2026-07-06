@@ -51,6 +51,9 @@ public class FaturaDTO {
     // Campo adicional para compatibilidade com código existente
     private com.consumoesperto.model.Fatura.StatusFatura statusFatura;
 
+    /** Quitação fora do app (libera limite sem PAGAMENTO_FATURA). Obrigatório ao marcar PAGA sem pagamento real. */
+    private com.consumoesperto.model.Fatura.OrigemQuitacao origemQuitacao;
+
     private Boolean paga = false;
 
     private LocalDateTime dataPagamento;

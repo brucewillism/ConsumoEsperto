@@ -68,7 +68,7 @@ class EmprestimoPatrimonioRegressionTest {
 
         when(contaBancariaService.possuiContasAtivas(1L)).thenReturn(true);
         when(contaBancariaService.somarSaldosAtivos(1L)).thenReturn(new BigDecimal("10000.00"));
-        when(transacaoRepository.sumPassivoEmprestimoVincendas(eq(1L), any(LocalDateTime.class)))
+        when(transacaoRepository.sumPassivoEmprestimoAtivo(1L))
             .thenReturn(new BigDecimal("12000.00"));
 
         BigDecimal patrimonio = saldoService.patrimonioLiquido(1L);
@@ -83,9 +83,20 @@ class EmprestimoPatrimonioRegressionTest {
         when(transacaoRepository.sumValorConfirmadaByUsuarioIdAndTipoTransacao(any(), any()))
             .thenReturn(BigDecimal.ZERO);
         when(transacaoRepository.sumDespesaConfirmadaCaixaPorUsuarioId(2L)).thenReturn(BigDecimal.ZERO);
-        when(transacaoRepository.sumPassivoEmprestimoVincendas(eq(2L), any(LocalDateTime.class)))
-            .thenReturn(BigDecimal.ZERO);
+        when(transacaoRepository.sumPassivoEmprestimoAtivo(2L)).thenReturn(BigDecimal.ZERO);
 
         assertEquals(0, saldoService.patrimonioLiquido(2L).compareTo(BigDecimal.ZERO.setScale(2)));
+    }
+
+    @Test
+    void patrimonioLiquido_incluiParcelasVencidasNoPassivo() {
+        when(contaBancariaService.possuiContasAtivas(3L)).thenReturn(true);
+        when(contaBancariaService.somarSaldosAtivos(3L)).thenReturn(new BigDecimal("5000.00"));
+        when(transacaoRepository.sumPassivoEmprestimoAtivo(3L))
+            .thenReturn(new BigDecimal("800.00"));
+
+        BigDecimal patrimonio = saldoService.patrimonioLiquido(3L);
+        assertEquals(0, patrimonio.compareTo(new BigDecimal("4200.00")),
+            "passivo inclui parcelas vencidas PREVISTO, não só vincendas");
     }
 }

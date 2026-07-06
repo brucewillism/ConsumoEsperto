@@ -537,6 +537,9 @@ public class ContrachequeImportService {
                 .resolverContaDestinoSalarioPorUsuario(usuarioId)
                 .ifPresent(tx::setContaBancariaId);
             transacaoService.criarTransacao(tx, usuarioId);
+        } else {
+            salarioAutomaticoProvider.getObject().reconciliarSalarioExistenteComContracheque(
+                usuarioId, c.getSalarioLiquido(), competencia, diaPagamento);
         }
 
         if (competenciaIgualMesAtual) {

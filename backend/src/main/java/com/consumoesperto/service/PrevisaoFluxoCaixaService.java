@@ -11,6 +11,7 @@ import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +33,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PrevisaoFluxoCaixaService {
 
-    private static final int DIAS_AMOSTRA_BURN = 30;
+    @Value("${consumoesperto.projecao.burn-dias-amostra:31}")
+    private int burnDiasAmostraMax;
 
     private final SaldoService saldoService;
     private final FaturaRepository faturaRepository;
@@ -91,19 +94,19 @@ public class PrevisaoFluxoCaixaService {
     @Transactional(readOnly = true)
     public BigDecimal calcularBurnTotalDiario(Long usuarioId) {
         LocalDate hoje = AppTimeZone.hoje();
-        YearMonth ym = YearMonth.from(hoje);
-        int ultimo = ym.lengthOfMonth();
-        int diaHoje = hoje.getDayOfMonth();
-
-        LocalDateTime iniBurn = hoje.minusDays(DIAS_AMOSTRA_BURN).atStartOfDay();
+        int diasBurn = diasReaisBurn(hoje);
+        LocalDateTime iniBurn = hoje.minusDays(diasBurn).atStartOfDay();
         LocalDateTime fimBurn = hoje.plusDays(1).atStartOfDay();
-        BigDecimal gastoConta30d = nz(transacaoRepository.sumDespesaContaCorrenteConfirmadaPeriodo(
+        BigDecimal gastoConta = nz(transacaoRepository.sumDespesaContaCorrenteConfirmadaPeriodo(
             usuarioId, iniBurn, fimBurn));
-        BigDecimal burnDiario = gastoConta30d.divide(BigDecimal.valueOf(DIAS_AMOSTRA_BURN), 4, RoundingMode.HALF_UP);
+        BigDecimal burnDiario = gastoConta.divide(BigDecimal.valueOf(diasBurn), 4, RoundingMode.HALF_UP);
 
         BigDecimal fixasRest = somarContasFixasRestantesNoMes(usuarioId, hoje);
         BigDecimal despesasFixasRest = despesaFixaService.somarValorRestanteNoMes(usuarioId, hoje);
         BigDecimal faturas = nz(faturaRepository.sumValorFaturasPendentesByUsuarioId(usuarioId));
+        YearMonth ym = YearMonth.from(hoje);
+        int ultimo = ym.lengthOfMonth();
+        int diaHoje = hoje.getDayOfMonth();
         int diasParaFim = ultimo - diaHoje + 1;
         BigDecimal obrigDiaria = diasParaFim > 0
             ? fixasRest.add(faturas).add(despesasFixasRest).divide(BigDecimal.valueOf(diasParaFim), 4, RoundingMode.HALF_UP)
@@ -134,17 +137,18 @@ public class PrevisaoFluxoCaixaService {
 
     private PrevisaoFuturoChartDTO buildPrevisaoFuturoChartInternal(Long usuarioId, BigDecimal reducaoBurnDiaria) {
         LocalDate hoje = AppTimeZone.hoje();
+        int diasBurn = diasReaisBurn(hoje);
         YearMonth ym = YearMonth.from(hoje);
         int ultimo = ym.lengthOfMonth();
         int diaHoje = hoje.getDayOfMonth();
 
         BigDecimal saldoAtual = nz(saldoService.saldoContaCorrente(usuarioId));
 
-        LocalDateTime iniBurn = hoje.minusDays(DIAS_AMOSTRA_BURN).atStartOfDay();
+        LocalDateTime iniBurn = hoje.minusDays(diasBurn).atStartOfDay();
         LocalDateTime fimBurn = hoje.plusDays(1).atStartOfDay();
-        BigDecimal gastoConta30d = nz(transacaoRepository.sumDespesaContaCorrenteConfirmadaPeriodo(
+        BigDecimal gastoConta = nz(transacaoRepository.sumDespesaContaCorrenteConfirmadaPeriodo(
             usuarioId, iniBurn, fimBurn));
-        BigDecimal burnDiario = gastoConta30d.divide(BigDecimal.valueOf(DIAS_AMOSTRA_BURN), 4, RoundingMode.HALF_UP);
+        BigDecimal burnDiario = gastoConta.divide(BigDecimal.valueOf(diasBurn), 4, RoundingMode.HALF_UP);
 
         BigDecimal fixasRest = somarContasFixasRestantesNoMes(usuarioId, hoje);
         BigDecimal faturas = nz(faturaRepository.sumValorFaturasPendentesByUsuarioId(usuarioId));
@@ -283,5 +287,12 @@ public class PrevisaoFluxoCaixaService {
 
     private static BigDecimal nz(BigDecimal v) {
         return v != null ? v : BigDecimal.ZERO;
+    }
+
+    private int diasReaisBurn(LocalDate hoje) {
+        int max = Math.max(1, burnDiasAmostraMax);
+        LocalDate ini = hoje.minusDays(max);
+        long dias = ChronoUnit.DAYS.between(ini, hoje);
+        return (int) Math.max(1, dias);
     }
 }

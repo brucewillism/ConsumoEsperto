@@ -78,4 +78,27 @@ public final class MoedaUtil {
         out.add(t.subtract(acumulado).setScale(SCALE, ARRED));
         return out;
     }
+
+    /**
+     * Compara valores monetários com tolerância percentual (default 10%) e piso absoluto opcional.
+     */
+    public static boolean valoresProximos(
+        BigDecimal a,
+        BigDecimal b,
+        BigDecimal toleranciaPct,
+        BigDecimal pisoAbsoluto
+    ) {
+        if (a == null || b == null) {
+            return false;
+        }
+        BigDecimal ref = a.abs().max(b.abs());
+        if (ref.compareTo(BigDecimal.ZERO) == 0) {
+            return a.compareTo(b) == 0;
+        }
+        BigDecimal pct = toleranciaPct != null ? toleranciaPct : BigDecimal.TEN;
+        BigDecimal tolPct = ref.multiply(pct).divide(BigDecimal.valueOf(100), SCALE, ARRED);
+        BigDecimal piso = pisoAbsoluto != null ? pisoAbsoluto : new BigDecimal("2.00");
+        BigDecimal tol = tolPct.max(piso);
+        return a.subtract(b).abs().compareTo(tol) <= 0;
+    }
 }

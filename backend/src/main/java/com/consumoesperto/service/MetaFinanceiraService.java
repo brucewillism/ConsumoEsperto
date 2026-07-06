@@ -46,6 +46,10 @@ public class MetaFinanceiraService {
      * Soma das receitas confirmadas nos últimos 3 meses, dividida por 3 (média mensal).
      */
     public Optional<BigDecimal> calcularRendaMensalMediaUltimosTresMeses(Long usuarioId) {
+        BigDecimal estimada = rendaConfigService.getRendaMensalEstimada(usuarioId);
+        if (estimada != null && estimada.compareTo(BigDecimal.ZERO) > 0) {
+            return Optional.of(estimada.setScale(SCALE_MONEY, RoundingMode.HALF_UP));
+        }
         LocalDateTime fim = LocalDateTime.now();
         LocalDateTime inicio = fim.minusMonths(MONTHS_WINDOW);
         BigDecimal total = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
@@ -57,8 +61,27 @@ public class MetaFinanceiraService {
         if (total == null || total.compareTo(BigDecimal.ZERO) <= 0) {
             return Optional.empty();
         }
-        BigDecimal media = total.divide(BigDecimal.valueOf(MONTHS_WINDOW), SCALE_MONEY, RoundingMode.HALF_UP);
+        int mesesComDado = contarMesesComReceita(usuarioId, inicio, fim);
+        int divisor = Math.max(1, mesesComDado > 0 ? mesesComDado : MONTHS_WINDOW);
+        BigDecimal media = total.divide(BigDecimal.valueOf(divisor), SCALE_MONEY, RoundingMode.HALF_UP);
         return Optional.of(media);
+    }
+
+    private int contarMesesComReceita(Long usuarioId, LocalDateTime inicio, LocalDateTime fim) {
+        int count = 0;
+        java.time.YearMonth ym = java.time.YearMonth.from(inicio);
+        java.time.YearMonth fimYm = java.time.YearMonth.from(fim);
+        while (!ym.isAfter(fimYm)) {
+            LocalDateTime ini = ym.atDay(1).atStartOfDay();
+            LocalDateTime end = ym.atEndOfMonth().atTime(23, 59, 59);
+            BigDecimal r = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+                usuarioId, Transacao.TipoTransacao.RECEITA, ini, end);
+            if (r != null && r.compareTo(BigDecimal.ZERO) > 0) {
+                count++;
+            }
+            ym = ym.plusMonths(1);
+        }
+        return count;
     }
 
     public RendaMediaResponse getRendaMediaResponse(Long usuarioId) {
@@ -108,6 +131,16 @@ public class MetaFinanceiraService {
             return null;
         }
         String pct = totalPercentual.setScale(1, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
+        if (totalPercentual.compareTo(new BigDecimal("100")) > 0) {
+            if (textoIncluiNovaMeta) {
+                return String.format(
+                    "Atenção: com essa meta, você compromete %s%% da renda (acima de 100%%). Metas não são bloqueadas — revise prioridades.",
+                    pct);
+            }
+            return String.format(
+                "Atenção: suas metas somam %s%% da renda (acima de 100%%). Metas não são bloqueadas — revise prioridades.",
+                pct);
+        }
         if (textoIncluiNovaMeta) {
             return String.format("Cuidado, com essa nova meta, você agora compromete %s%% da sua renda total!", pct);
         }

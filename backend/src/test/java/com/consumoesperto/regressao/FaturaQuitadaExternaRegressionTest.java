@@ -29,18 +29,13 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-/**
- * Regressão P0-4: marcar fatura como PAGA via API sem transações {@code PAGAMENTO_FATURA}
- * NÃO pode preencher {@code valorPago} — o valor pago deriva só de pagamentos reais.
- * Na lógica antiga o valorPago era copiado do total da fatura, "pagando" sem caixa.
- */
+/** CF-02: PAGA sem caixa exige origem EXTERNA. */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class FaturaPagaSemCaixaRegressionTest {
+class FaturaQuitadaExternaRegressionTest {
 
     @Mock private FaturaRepository faturaRepository;
     @Mock private CartaoCreditoRepository cartaoCreditoRepository;
@@ -62,59 +57,34 @@ class FaturaPagaSemCaixaRegressionTest {
         CartaoCredito cartao = new CartaoCredito();
         cartao.setId(3L);
         cartao.setUsuario(u);
-        cartao.setNome("Cartão X");
-        cartao.setBanco("Banco Y");
 
         fatura = new Fatura();
         fatura.setId(99L);
         fatura.setCartaoCredito(cartao);
         fatura.setValorFatura(new BigDecimal("1000.00"));
-        fatura.setValorTotal(new BigDecimal("1000.00"));
         fatura.setStatusFatura(Fatura.StatusFatura.ABERTA);
-        fatura.setPaga(false);
-        fatura.setDataVencimento(LocalDateTime.now().plusDays(5));
 
         when(faturaRepository.findByIdAndCartaoCreditoUsuarioId(99L, 1L)).thenReturn(Optional.of(fatura));
         when(faturaRepository.save(any(Fatura.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(99L)).thenReturn(List.of());
+        when(transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(99L)).thenReturn(BigDecimal.ZERO);
     }
 
     @Test
-    void marcarPagaSemPagamentoReal_exigeOrigemExterna() {
-        when(transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(99L)).thenReturn(BigDecimal.ZERO);
-
+    void marcarPagaSemPagamento_semExterna_lancaExcecao() {
         FaturaDTO dto = new FaturaDTO();
         dto.setStatusFatura(Fatura.StatusFatura.PAGA);
-
         assertThrows(IllegalArgumentException.class, () -> faturaService.atualizarFatura(99L, dto, 1L));
     }
 
     @Test
-    void marcarPagaSemPagamentoReal_naoPreencheValorPago() {
-        when(transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(99L)).thenReturn(BigDecimal.ZERO);
-
+    void marcarPagaExterna_semCaixa_aceita() {
         FaturaDTO dto = new FaturaDTO();
         dto.setStatusFatura(Fatura.StatusFatura.PAGA);
         dto.setOrigemQuitacao(Fatura.OrigemQuitacao.EXTERNA);
 
-        FaturaDTO atualizado = faturaService.atualizarFatura(99L, dto, 1L);
+        FaturaDTO out = faturaService.atualizarFatura(99L, dto, 1L);
 
-        assertTrue(atualizado.getValorPago() == null
-                || atualizado.getValorPago().compareTo(BigDecimal.ZERO) == 0,
-            "valorPago não pode ser preenchido sem PAGAMENTO_FATURA real (era copiado do total)");
-        assertEquals(Fatura.StatusFatura.PAGA, atualizado.getStatusFatura());
-    }
-
-    @Test
-    void marcarPaga_comPagamentoReal_derivaValorPagoDasTransacoes() {
-        when(transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(99L))
-            .thenReturn(new BigDecimal("400.00"));
-
-        FaturaDTO dto = new FaturaDTO();
-        dto.setStatusFatura(Fatura.StatusFatura.PAGA);
-
-        FaturaDTO atualizado = faturaService.atualizarFatura(99L, dto, 1L);
-
-        assertEquals(0, atualizado.getValorPago().compareTo(new BigDecimal("400.00")));
+        assertEquals(Fatura.StatusFatura.PAGA, out.getStatusFatura());
+        assertEquals(Fatura.OrigemQuitacao.EXTERNA, fatura.getOrigemQuitacao());
     }
 }

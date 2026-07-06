@@ -174,6 +174,36 @@ public class SalarioAutomaticoService {
         tentarLancarSalarioMesAtual(usuarioId);
     }
 
+    /**
+     * EM-09: salário do mês já lançado — ajusta a receita existente em vez de duplicar.
+     */
+    @Transactional
+    public void reconciliarSalarioExistenteComContracheque(
+        Long usuarioId,
+        BigDecimal valorLiquido,
+        YearMonth competencia,
+        int diaPagamento
+    ) {
+        if (usuarioId == null || valorLiquido == null || competencia == null) {
+            return;
+        }
+        LocalDate ref = competencia.atDay(Math.min(diaPagamento, competencia.lengthOfMonth()));
+        List<Transacao> receitas = buscarReceitasSalarioMes(usuarioId, ref);
+        if (receitas.isEmpty()) {
+            return;
+        }
+        Transacao canonica = escolherReceitaSalarioCanonica(receitas);
+        if (canonica.getValor() != null && canonica.getValor().compareTo(valorLiquido) == 0) {
+            return;
+        }
+        var snap = saldoMovimentacaoService.capturarSnapshot(canonica);
+        canonica.setValor(valorLiquido);
+        transacaoRepository.save(canonica);
+        saldoMovimentacaoService.sincronizarMovimentacao(snap, canonica);
+        podarSalariosDuplicadosMes(usuarioId, ref);
+        log.info("[CONTRACHEQUE] Salário reconciliado userId={} txId={} valor={}", usuarioId, canonica.getId(), valorLiquido);
+    }
+
     /** Poda duplicatas salariais nos últimos 12 meses — usado na migração v8.3 e catch-up amplo. */
     @Transactional
     public int sanitizarSalariosDuplicadosHistorico(Long usuarioId) {

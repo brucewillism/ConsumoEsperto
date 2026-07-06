@@ -15,3 +15,15 @@ As **projeções do dashboard** passam a considerar salário e receitas esperada
 Nenhuma transação foi apagada — só a forma de somar mudou. Se algo parecer estranho, confira empréstimos e despesas fixas cadastradas.
 
 ---
+
+## Lotes 3–6 (jul/2026)
+
+- Pagamento de fatura bloqueado no CRUD genérico; use fluxo de pagamento ou quitação `EXTERNA`.
+- Limite WhatsApp inclui faturas PREVISTA/VENCIDA.
+- Simulação de compra: média por meses com dado (não `/6` fixo).
+- Burn Sentinela: divisor = dias reais da janela.
+- Metas: renda de `RendaConfig`; aviso se soma >100% (sem bloqueio).
+- Fiscal: estimativa simplificada; obrigações vencidas → ano+1.
+- Empréstimo: `descontoEmFolha` default true (consignado).
+
+---

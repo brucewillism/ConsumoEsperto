@@ -156,4 +156,36 @@ class SaldoConcorrenciaPostgresIntegrationTest {
         assertEquals(MovimentacaoSaldoLog.TipoOperacaoSaldo.CREDITO_DIRETO, linhas.get(0).getTipoOperacao());
         assertEquals(MovimentacaoSaldoLog.OrigemMovimentacaoSaldo.APP, linhas.get(0).getOrigem());
     }
+
+    @Test
+    void ajustesAbsolutosConcorrentes_serializamPeloLock() throws Exception {
+        int threads = 4;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch prontos = new CountDownLatch(threads);
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Future<?>> futures = new java.util.ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            final BigDecimal alvo = new BigDecimal("1000.00").add(BigDecimal.valueOf(i * 100L));
+            futures.add(pool.submit(() -> {
+                prontos.countDown();
+                largada.await();
+                tx.executeWithoutResult(status -> service.ajustarSaldoManual(contaId, alvo));
+                return null;
+            }));
+        }
+        prontos.await();
+        largada.countDown();
+        for (Future<?> f : futures) {
+            f.get();
+        }
+        pool.shutdown();
+
+        List<MovimentacaoSaldoLog> linhas = tx.execute(status ->
+            movimentacaoSaldoLogRepository.findUltimasPorConta(contaId, PageRequest.of(0, 10)));
+        assertEquals(4, linhas.size());
+        BigDecimal saldoFinal = tx.execute(status ->
+            contaBancariaRepository.findById(contaId).orElseThrow().getSaldoAtual());
+        assertEquals(0, linhas.get(0).getSaldoDepois().compareTo(saldoFinal),
+            "saldo final deve coincidir com última linha do ledger após ajustes serializados");
+    }
 }

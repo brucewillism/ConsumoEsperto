@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.consumoesperto.util.MoedaUtil;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -207,7 +208,8 @@ public class DashboardProjectionService {
         return transacoes.stream()
             .filter(t -> t.getDataTransacao() != null && t.getDataTransacao().toLocalDate().equals(dia))
             .filter(t -> t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA)
-            .map(t -> t.getTipoTransacao() == Transacao.TipoTransacao.RECEITA ? t.getValor() : t.getValor().negate())
+            .map(t -> t.getTipoTransacao() == Transacao.TipoTransacao.RECEITA
+                ? MoedaUtil.nz(t.getValor()) : MoedaUtil.nz(t.getValor()).negate())
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
@@ -216,7 +218,7 @@ public class DashboardProjectionService {
             .filter(t -> t.getDataTransacao() != null && t.getDataTransacao().toLocalDate().equals(dia))
             .filter(t -> t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA)
             .filter(t -> t.getTipoTransacao() == Transacao.TipoTransacao.DESPESA)
-            .map(Transacao::getValor)
+            .map(t -> MoedaUtil.nz(t.getValor()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

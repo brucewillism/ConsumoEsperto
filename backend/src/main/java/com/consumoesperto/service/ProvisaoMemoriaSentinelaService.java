@@ -4,6 +4,7 @@ import com.consumoesperto.dto.ProvisaoMemoriaDTO;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.util.FinanceTextoUtil;
+import com.consumoesperto.util.MoedaUtil;
 import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,8 +40,11 @@ public class ProvisaoMemoriaSentinelaService {
     private final TransacaoRepository transacaoRepository;
     private final DespesaFixaService despesaFixaService;
 
-    @Value("${consumoesperto.provisao.tolerancia-dedup:2.00}")
-    private BigDecimal toleranciaDedup;
+    @Value("${consumoesperto.provisao.tolerancia-dedup-pct:10}")
+    private BigDecimal toleranciaDedupPct;
+
+    @Value("${consumoesperto.provisao.tolerancia-dedup-piso:2.00}")
+    private BigDecimal toleranciaDedupPiso;
 
     @Transactional(readOnly = true)
     public List<ProvisaoMemoriaDTO> calcularProvisoesParaMesAtual(Long usuarioId) {
@@ -120,8 +124,17 @@ public class ProvisaoMemoriaSentinelaService {
             if (jaProvisionadoPorDespesaFixa(usuarioId, p)) {
                 continue;
             }
-            String k = chaveDedup(p);
-            dedup.merge(k, p, (a, b) -> prioridadeMaior(a, b));
+            ProvisaoMemoriaDTO existente = dedup.values().stream()
+                .filter(d -> rotulosCompativeis(d.getRotulo(), p.getRotulo())
+                    && valoresProximos(d.getValor(), p.getValor()))
+                .findFirst()
+                .orElse(null);
+            if (existente != null) {
+                String kExistente = chaveDedup(existente);
+                dedup.put(kExistente, prioridadeMaior(existente, p));
+            } else {
+                dedup.put(chaveDedup(p), p);
+            }
         }
         List<ProvisaoMemoriaDTO> out = new ArrayList<>(dedup.values());
         out.sort(Comparator.comparing(ProvisaoMemoriaDTO::getValor).reversed());
@@ -138,11 +151,19 @@ public class ProvisaoMemoriaSentinelaService {
     }
 
     private boolean valoresProximos(BigDecimal a, BigDecimal b) {
+        return MoedaUtil.valoresProximos(a, b, toleranciaDedupPct, toleranciaDedupPiso);
+    }
+
+    private static boolean rotulosCompativeis(String a, String b) {
         if (a == null || b == null) {
             return false;
         }
-        BigDecimal tol = toleranciaDedup != null ? toleranciaDedup : new BigDecimal("2.00");
-        return a.subtract(b).abs().compareTo(tol) <= 0;
+        String na = a.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
+        String nb = b.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
+        if (na.equals(nb)) {
+            return true;
+        }
+        return na.contains(nb) || nb.contains(na);
     }
 
     private static String chaveDedup(ProvisaoMemoriaDTO p) {

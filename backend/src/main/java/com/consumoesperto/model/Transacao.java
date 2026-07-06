@@ -143,6 +143,10 @@ public class Transacao {
     @Column(name = "emprestimo_id", length = 36)
     private String emprestimoId;
 
+    /** Quando true (default consignado), parcela descontada em folha — não debita conta corrente. */
+    @Column(name = "desconto_em_folha")
+    private Boolean descontoEmFolha;
+
     @Column(name = "parcela_atual")
     private Integer parcelaAtual;
 
@@ -211,6 +215,9 @@ public class Transacao {
 
     public String getEmprestimoId() { return emprestimoId; }
     public void setEmprestimoId(String emprestimoId) { this.emprestimoId = emprestimoId; }
+
+    public Boolean getDescontoEmFolha() { return descontoEmFolha; }
+    public void setDescontoEmFolha(Boolean descontoEmFolha) { this.descontoEmFolha = descontoEmFolha; }
 
     public Integer getParcelaAtual() { return parcelaAtual; }
     public void setParcelaAtual(Integer parcelaAtual) { this.parcelaAtual = parcelaAtual; }

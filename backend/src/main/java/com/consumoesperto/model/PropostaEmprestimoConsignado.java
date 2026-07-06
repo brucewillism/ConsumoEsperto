@@ -22,6 +22,9 @@ public class PropostaEmprestimoConsignado {
     private BigDecimal valorParcela;
     private Long contaBancariaId;
     private String nomeConta;
+    /** Default true para consignado — parcela descontada em folha, não debita conta. */
+    @Builder.Default
+    private Boolean descontoEmFolha = true;
 
     private static final Pattern VALOR_TOMADO_PATTERN = Pattern.compile(
         "(?i)(?:no\\s+)?valor\\s+(?:de\\s+)?(?:R\\$\\s*)?"

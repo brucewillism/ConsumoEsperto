@@ -17,6 +17,8 @@ public class ParcelaReceitaFiscalDTO {
     private String rotulo;
     private int mes;
     private int dia;
+    /** Ano-calendário efetivo (obrigação vencida no ano corrente pode ir para ano+1). */
+    private Integer ano;
     private BigDecimal valor;
     private String observacao;
 }

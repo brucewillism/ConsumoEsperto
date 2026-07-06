@@ -99,7 +99,7 @@ public class PlanejamentoFiscalService {
 
         int diaPagamento = resolverDiaPagamento13(cfgDto, usuarioId);
         List<ParcelaReceitaFiscalDTO> parcelas =
-            montarParcelas(cfgDto, baseOpt.orElse(null), ano, diaPagamento);
+            montarParcelasComAnoAjustado(cfgDto, baseOpt.orElse(null), ano, diaPagamento);
         int criadas = 0;
 
         for (ParcelaReceitaFiscalDTO parcela : parcelas) {
@@ -117,8 +117,9 @@ public class PlanejamentoFiscalService {
             tx.setOrigemFiscal(parcela.getOrigem());
             tx.setRecorrente(false);
             tx.setExcluido(false);
-            int dia = Math.min(parcela.getDia(), YearMonth.of(ano, parcela.getMes()).lengthOfMonth());
-            tx.setDataTransacao(LocalDateTime.of(ano, parcela.getMes(), dia, 12, 0));
+            int anoParcela = parcela.getAno() != null ? parcela.getAno() : ano;
+            int dia = Math.min(parcela.getDia(), YearMonth.of(anoParcela, parcela.getMes()).lengthOfMonth());
+            tx.setDataTransacao(LocalDateTime.of(anoParcela, parcela.getMes(), dia, 12, 0));
             transacaoRepository.save(tx);
             criadas++;
         }
@@ -155,10 +156,45 @@ public class PlanejamentoFiscalService {
         int diaHoje = LocalDate.now().getDayOfMonth();
         int mesAtual = LocalDate.now().getMonthValue();
 
-        return montarParcelas(cfg, base.orElse(null), ano, resolverDiaPagamento13(cfg, usuarioId)).stream()
-            .filter(p -> p.getMes() == mesAtual && p.getDia() > diaHoje)
+        return montarParcelasComAnoAjustado(cfg, base.orElse(null), ano, resolverDiaPagamento13(cfg, usuarioId)).stream()
+            .filter(p -> (p.getAno() == ano && p.getMes() == mesAtual && p.getDia() > diaHoje)
+                || (p.getAno() == ano + 1 && p.getMes() == mesAtual && p.getDia() > diaHoje))
             .filter(p -> p.getValor() != null && p.getValor().compareTo(BigDecimal.ZERO) > 0)
             .collect(java.util.stream.Collectors.toList());
+    }
+
+    private List<ParcelaReceitaFiscalDTO> montarParcelasComAnoAjustado(
+        ConfiguracaoFiscalDTO cfg,
+        BaseContrachequeFiscalDTO base,
+        int ano,
+        int diaPag
+    ) {
+        List<ParcelaReceitaFiscalDTO> baseParcelas = montarParcelas(cfg, base, ano, diaPag);
+        LocalDate hoje = LocalDate.now();
+        List<ParcelaReceitaFiscalDTO> out = new ArrayList<>();
+        for (ParcelaReceitaFiscalDTO p : baseParcelas) {
+            int anoEfetivo = resolverAnoObrigacao(p.getMes(), p.getDia(), ano, hoje);
+            out.add(ParcelaReceitaFiscalDTO.builder()
+                .origem(p.getOrigem())
+                .rotulo(p.getRotulo())
+                .mes(p.getMes())
+                .dia(p.getDia())
+                .ano(anoEfetivo)
+                .valor(p.getValor())
+                .observacao(p.getObservacao())
+                .build());
+        }
+        return out;
+    }
+
+    /** Obrigação fiscal com data já passada no ano corrente projeta para ano+1 (padrão PR-07). */
+    private static int resolverAnoObrigacao(int mes, int dia, int anoBase, LocalDate hoje) {
+        if (mes <= 0 || dia <= 0) {
+            return anoBase;
+        }
+        int diaEf = Math.min(dia, YearMonth.of(anoBase, mes).lengthOfMonth());
+        LocalDate candidata = LocalDate.of(anoBase, mes, diaEf);
+        return candidata.isBefore(hoje) ? anoBase + 1 : anoBase;
     }
 
     private List<ParcelaReceitaFiscalDTO> montarParcelas(
@@ -261,12 +297,12 @@ public class PlanejamentoFiscalService {
 
     private String avisoBase(Optional<BaseContrachequeFiscalDTO> baseOpt) {
         if (baseOpt.isEmpty()) {
-            return "Cadastre ou confirme um contracheque (ou configure a renda) para estimar o 13º salário.";
+            return "Cadastre ou confirme um contracheque (ou configure a renda) para estimar o 13º salário (estimativa simplificada).";
         }
         if (baseOpt.get().isEstimado()) {
-            return "Estimativa baseada na configuração de renda — importe um contracheque para maior precisão.";
+            return "Estimativa simplificada baseada na configuração de renda — importe um contracheque para maior precisão.";
         }
-        return null;
+        return "Valores fiscais exibidos como estimativa simplificada.";
     }
 
     private int resolverDiaPagamento13(ConfiguracaoFiscalDTO cfg, Long usuarioId) {

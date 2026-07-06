@@ -4,12 +4,14 @@ import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import com.consumoesperto.util.AppTimeZone;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +44,12 @@ public class SimulacaoCompraService {
     private final TransacaoRepository transacaoRepository;
     private final SaldoService saldoService;
 
+    @Value("${consumoesperto.simulacao.meses-janela:6}")
+    private int mesesJanelaSimulacao;
+
+    @Value("${consumoesperto.simulacao.meses-minimo-divisor:1}")
+    private int mesesMinimoDivisor;
+
     /**
      * Simula uma compra parcelada analisando a viabilidade financeira
      * 
@@ -62,19 +70,19 @@ public class SimulacaoCompraService {
      * @return Map com resultado da simulação e recomendações
      */
     public Map<String, Object> simularCompra(Long usuarioId, BigDecimal valorCompra, int numeroParcelas) {
-        // Calcular média de receitas e despesas dos últimos 6 meses para análise de estabilidade
         LocalDateTime agora = AppTimeZone.agora();
-        LocalDateTime seisMesesAtras = agora.minusMonths(6);
+        int janela = Math.max(1, mesesJanelaSimulacao);
+        LocalDateTime inicioJanela = agora.minusMonths(janela);
         
-        // Buscar total de receitas e despesas do período de análise
         BigDecimal totalReceitas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora));
+                usuarioId, Transacao.TipoTransacao.RECEITA, inicioJanela, agora));
         BigDecimal totalDespesas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora));
+                usuarioId, Transacao.TipoTransacao.DESPESA, inicioJanela, agora));
         
-        // Calcular médias mensais para análise de capacidade de pagamento
-        BigDecimal mediaReceitasMensal = totalReceitas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
-        BigDecimal mediaDespesasMensal = totalDespesas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
+        int mesesComDado = contarMesesComDespesaConfirmada(usuarioId, inicioJanela, agora);
+        int divisor = Math.max(mesesMinimoDivisor, mesesComDado > 0 ? mesesComDado : janela);
+        BigDecimal mediaReceitasMensal = totalReceitas.divide(BigDecimal.valueOf(divisor), 2, RoundingMode.HALF_UP);
+        BigDecimal mediaDespesasMensal = totalDespesas.divide(BigDecimal.valueOf(divisor), 2, RoundingMode.HALF_UP);
         BigDecimal mediaEconomiaMensal = mediaReceitasMensal.subtract(mediaDespesasMensal);
         
         // Calcular valor da parcela para análise de impacto mensal
@@ -131,19 +139,9 @@ public class SimulacaoCompraService {
      * @return Map com resultado da simulação e recomendações
      */
     public Map<String, Object> simularCompraAVista(Long usuarioId, BigDecimal valorCompra) {
-        // Calcular média de receitas e despesas dos últimos 6 meses para análise de estabilidade
-        LocalDateTime agora = AppTimeZone.agora();
-        LocalDateTime seisMesesAtras = agora.minusMonths(6);
-        
-        // Buscar total de receitas e despesas do período de análise
-        BigDecimal totalReceitas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora));
-        BigDecimal totalDespesas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora));
-        
-        // Calcular médias mensais para análise de capacidade de compra
-        BigDecimal mediaReceitasMensal = totalReceitas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
-        BigDecimal mediaDespesasMensal = totalDespesas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
+        MediasMensais medias = resolverMediasMensais(usuarioId);
+        BigDecimal mediaReceitasMensal = medias.receitas();
+        BigDecimal mediaDespesasMensal = medias.despesas();
         BigDecimal mediaEconomiaMensal = mediaReceitasMensal.subtract(mediaDespesasMensal);
 
         // À vista o que decide é o dinheiro disponível hoje, não a economia de um único mês
@@ -198,19 +196,9 @@ public class SimulacaoCompraService {
      * @return Map com resultado do cálculo e recomendações
      */
     public Map<String, Object> calcularEconomiaNecessaria(Long usuarioId, BigDecimal valorCompra, int mesesDesejados) {
-        // Calcular média de receitas e despesas dos últimos 6 meses para análise de estabilidade
-        LocalDateTime agora = AppTimeZone.agora();
-        LocalDateTime seisMesesAtras = agora.minusMonths(6);
-        
-        // Buscar total de receitas e despesas do período de análise
-        BigDecimal totalReceitas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, seisMesesAtras, agora));
-        BigDecimal totalDespesas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.DESPESA, seisMesesAtras, agora));
-        
-        // Calcular médias mensais para análise de capacidade de economia
-        BigDecimal mediaReceitasMensal = totalReceitas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
-        BigDecimal mediaDespesasMensal = totalDespesas.divide(BigDecimal.valueOf(6), 2, RoundingMode.HALF_UP);
+        MediasMensais medias = resolverMediasMensais(usuarioId);
+        BigDecimal mediaReceitasMensal = medias.receitas();
+        BigDecimal mediaDespesasMensal = medias.despesas();
         BigDecimal mediaEconomiaMensal = mediaReceitasMensal.subtract(mediaDespesasMensal);
         
         // Calcular economia necessária por mês para atingir a meta no prazo desejado
@@ -238,6 +226,41 @@ public class SimulacaoCompraService {
     private static BigDecimal nz(BigDecimal v) {
         return v != null ? v : BigDecimal.ZERO;
     }
+
+    private MediasMensais resolverMediasMensais(Long usuarioId) {
+        LocalDateTime agora = AppTimeZone.agora();
+        int janela = Math.max(1, mesesJanelaSimulacao);
+        LocalDateTime inicio = agora.minusMonths(janela);
+        BigDecimal totalReceitas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+            usuarioId, Transacao.TipoTransacao.RECEITA, inicio, agora));
+        BigDecimal totalDespesas = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+            usuarioId, Transacao.TipoTransacao.DESPESA, inicio, agora));
+        int mesesComDado = contarMesesComDespesaConfirmada(usuarioId, inicio, agora);
+        int divisor = Math.max(mesesMinimoDivisor, mesesComDado > 0 ? mesesComDado : janela);
+        return new MediasMensais(
+            totalReceitas.divide(BigDecimal.valueOf(divisor), 2, RoundingMode.HALF_UP),
+            totalDespesas.divide(BigDecimal.valueOf(divisor), 2, RoundingMode.HALF_UP)
+        );
+    }
+
+    private int contarMesesComDespesaConfirmada(Long usuarioId, LocalDateTime inicio, LocalDateTime fim) {
+        int count = 0;
+        YearMonth ym = YearMonth.from(inicio);
+        YearMonth fimYm = YearMonth.from(fim);
+        while (!ym.isAfter(fimYm)) {
+            LocalDateTime ini = ym.atDay(1).atStartOfDay();
+            LocalDateTime end = ym.atEndOfMonth().atTime(23, 59, 59);
+            BigDecimal d = transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
+                usuarioId, Transacao.TipoTransacao.DESPESA, ini, end);
+            if (d != null && d.compareTo(BigDecimal.ZERO) > 0) {
+                count++;
+            }
+            ym = ym.plusMonths(1);
+        }
+        return count;
+    }
+
+    private record MediasMensais(BigDecimal receitas, BigDecimal despesas) {}
 
     /**
      * Gera recomendação personalizada para compras baseada na análise financeira

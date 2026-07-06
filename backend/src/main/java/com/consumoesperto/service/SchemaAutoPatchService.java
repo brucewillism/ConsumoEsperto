@@ -92,6 +92,8 @@ public class SchemaAutoPatchService {
         ensureUsuarioSessoesContextoTable();
         ensureEventoWebhookProcessadoTable();
         ensureMovimentacaoSaldoLogTable();
+        ensureFaturaOrigemQuitacaoColumn();
+        ensureTransacaoDescontoEmFolhaColumn();
         try {
             List<String> schemas = jdbcTemplate.queryForList(
                 "SELECT table_schema " +
@@ -1467,6 +1469,36 @@ public class SchemaAutoPatchService {
             }
         } catch (Exception e) {
             log.warn("Falha ao CREATE usuario_sessoes_contexto: {}", e.getMessage());
+        }
+    }
+
+    private void ensureFaturaOrigemQuitacaoColumn() {
+        try {
+            executeDdlAutocommit("ALTER TABLE faturas ADD COLUMN IF NOT EXISTS origem_quitacao VARCHAR(20)");
+            log.info("Schema patch: faturas.origem_quitacao verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao patch faturas.origem_quitacao: {}", e.getMessage());
+        }
+    }
+
+    private void ensureTransacaoDescontoEmFolhaColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema FROM information_schema.tables "
+                    + "WHERE table_name = 'transacoes' AND table_type = 'BASE TABLE' "
+                    + "AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null) {
+                return;
+            }
+            for (String schema : schemas) {
+                String q = schema.replace("\"", "") + ".transacoes";
+                executeDdlAutocommit("ALTER TABLE " + q + " ADD COLUMN IF NOT EXISTS desconto_em_folha BOOLEAN");
+            }
+            log.info("Schema patch: transacoes.desconto_em_folha verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao patch transacoes.desconto_em_folha: {}", e.getMessage());
         }
     }
 }

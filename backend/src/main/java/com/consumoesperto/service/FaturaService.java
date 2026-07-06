@@ -228,25 +228,33 @@ public class FaturaService {
             faturaExistente.setDataPagamento(faturaDTO.getDataPagamento());
         }
         if (faturaDTO.getStatusFatura() != null) {
-            faturaExistente.setStatusFatura(faturaDTO.getStatusFatura());
             boolean paga = Fatura.StatusFatura.PAGA.equals(faturaDTO.getStatusFatura());
-            faturaExistente.setPaga(paga);
             if (paga) {
-                if (faturaExistente.getDataPagamento() == null) {
-                    faturaExistente.setDataPagamento(LocalDateTime.now());
-                }
-                // Não preencher valorPago sem pagamento real: o fluxo canônico é
-                // FaturaConciliacaoService.pagarFatura (cria PAGAMENTO_FATURA + debita conta).
                 BigDecimal pagamentosReais = transacaoRepository.sumPagamentoFaturaConfirmadoPorFaturaId(faturaExistente.getId());
                 pagamentosReais = pagamentosReais != null ? pagamentosReais : BigDecimal.ZERO;
-                if (pagamentosReais.compareTo(BigDecimal.ZERO) > 0) {
+                if (pagamentosReais.compareTo(BigDecimal.ZERO) <= 0) {
+                    if (faturaDTO.getOrigemQuitacao() != Fatura.OrigemQuitacao.EXTERNA) {
+                        throw new IllegalArgumentException(
+                            "Não é possível marcar PAGA sem pagamento registrado. "
+                                + "Use origemQuitacao=EXTERNA para quitação fora do app ou o fluxo POST /faturas/pagar.");
+                    }
+                    faturaExistente.setOrigemQuitacao(Fatura.OrigemQuitacao.EXTERNA);
+                    faturaExistente.setValorPago(BigDecimal.ZERO);
+                    log.info("[FATURA] Fatura id={} quitada EXTERNA (sem débito em conta; limite liberado).",
+                        faturaExistente.getId());
+                } else {
+                    faturaExistente.setOrigemQuitacao(Fatura.OrigemQuitacao.APP);
                     if (faturaExistente.getValorPago() == null
                         || faturaExistente.getValorPago().compareTo(BigDecimal.ZERO) == 0) {
                         faturaExistente.setValorPago(pagamentosReais);
                     }
-                } else {
-                    log.warn("[FATURA] Fatura id={} marcada PAGA via API sem PAGAMENTO_FATURA registrado — "
-                        + "sem débito em conta; use o fluxo de pagamento para conciliar o saldo.", faturaExistente.getId());
+                }
+            }
+            faturaExistente.setStatusFatura(faturaDTO.getStatusFatura());
+            faturaExistente.setPaga(paga);
+            if (paga) {
+                if (faturaExistente.getDataPagamento() == null) {
+                    faturaExistente.setDataPagamento(LocalDateTime.now());
                 }
             }
         }
@@ -543,12 +551,15 @@ public class FaturaService {
             Fatura.StatusFatura.PARCIAL,
             Fatura.StatusFatura.PREVISTA
         );
+        LocalDate hoje = ref.toLocalDate();
         List<Fatura> abertas = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
             cartao.getId(),
             statusesCicloAberto
         );
         Fatura faturaAlvo = abertas.stream()
             .filter(f -> f.getDataVencimento() != null)
+            .filter(f -> f.getStatusFatura() != Fatura.StatusFatura.VENCIDA)
+            .filter(f -> !f.getDataVencimento().toLocalDate().isBefore(hoje))
             .filter(f -> !ref.isAfter(fechamentoEfetivo(f)))
             .min(Comparator.comparing(Fatura::getDataVencimento))
             .orElseGet(() -> obterOuCriarFaturaParaVencimentoAlvo(
@@ -791,7 +802,7 @@ public class FaturaService {
                 row.put("parcelaAtual", t.getParcelaAtual());
                 row.put("totalParcelas", t.getTotalParcelas());
                 row.put("parcelasRestantes", t.getParcelaAtual() != null && t.getTotalParcelas() != null
-                    ? Math.max(0, t.getTotalParcelas() - t.getParcelaAtual())
+                    ? Math.max(0, t.getTotalParcelas() - t.getParcelaAtual() + 1)
                     : null);
                 row.put("grupoParcelaId", t.getGrupoParcelaId());
                 return row;
@@ -866,24 +877,23 @@ public class FaturaService {
         if (cartao.getUsuario() == null || !Objects.equals(cartao.getUsuario().getId(), usuarioId)) {
             throw new RuntimeException("Cartão não pertence ao usuário");
         }
-        List<Fatura> abertas = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
+        List<Fatura> pendentes = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
             cartao.getId(),
-            List.of(Fatura.StatusFatura.ABERTA, Fatura.StatusFatura.PARCIAL)
+            List.of(
+                Fatura.StatusFatura.ABERTA,
+                Fatura.StatusFatura.PARCIAL,
+                Fatura.StatusFatura.PREVISTA,
+                Fatura.StatusFatura.VENCIDA
+            )
         );
         BigDecimal gastoTrans = transacaoRepository.sumDespesaConfirmadaFaturaAbertaPorCartaoId(cartao.getId());
+        if (gastoTrans == null || gastoTrans.compareTo(BigDecimal.ZERO) <= 0) {
+            gastoTrans = faturaRepository.sumValorFaturasPendentesPorCartaoId(cartao.getId());
+        }
         if (gastoTrans == null) {
             gastoTrans = BigDecimal.ZERO;
         }
-        BigDecimal gastoFatura = BigDecimal.ZERO;
-        if (gastoTrans.compareTo(BigDecimal.ZERO) > 0) {
-            gastoFatura = gastoTrans;
-        } else {
-            for (Fatura f : abertas) {
-                if (f.getValorFatura() != null) {
-                    gastoFatura = gastoFatura.add(f.getValorFatura());
-                }
-            }
-        }
+        BigDecimal gastoFatura = gastoTrans;
         BigDecimal limiteTotal = cartao.getLimiteCredito() != null ? cartao.getLimiteCredito() : BigDecimal.ZERO;
         BigDecimal disponivel = limiteTotal.subtract(gastoFatura);
         if (disponivel.compareTo(BigDecimal.ZERO) < 0) {
@@ -894,9 +904,10 @@ public class FaturaService {
         String consultoria = montarBlocoConsultoriaEstrategica(estrategia, cartao.getNome());
 
         return "💳 *Resumo* *" + cartao.getNome() + "* (" + cartao.getBanco() + ")\n"
-            + "- *Gasto atual (fatura aberta):* " + BRL.format(gastoFatura) + "\n"
+            + "- *Limite comprometido (abertas + previstas + vencidas):* " + BRL.format(gastoFatura) + "\n"
             + "- *Limite total:* " + BRL.format(limiteTotal) + "\n"
             + "- *Limite disponível (estimado):* " + BRL.format(disponivel) + "\n"
+            + "- *Faturas pendentes:* " + pendentes.size() + "\n"
             + "- *Próximo vencimento (ciclo):* " + estrategia.proximoVencimentoCiclo().format(DDMMAAAA) + "\n"
             + "\n*Consultoria de prazo*\n"
             + consultoria + "\n"

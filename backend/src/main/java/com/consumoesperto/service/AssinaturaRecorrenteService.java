@@ -190,6 +190,58 @@ public class AssinaturaRecorrenteService {
             });
     }
 
+    /** EM-12: após 2 despesas consecutivas com novo valor, atualiza assinatura e notifica. */
+    @Transactional
+    public void avaliarDivergenciaValorCadastrada(Transacao transacao) {
+        if (transacao == null || transacao.getUsuario() == null
+            || transacao.getTipoTransacao() != Transacao.TipoTransacao.DESPESA
+            || transacao.getStatusConferencia() != Transacao.StatusConferencia.CONFIRMADA
+            || transacao.getValor() == null) {
+            return;
+        }
+        Long usuarioId = transacao.getUsuario().getId();
+        List<AssinaturaRecorrente> candidatas = assinaturaRepository.findByUsuarioIdOrderByNomeAscIdAsc(usuarioId).stream()
+            .filter(AssinaturaRecorrente::isAtivo)
+            .filter(a -> assinaturaCorrespondeDespesa(a, transacao))
+            .toList();
+        for (AssinaturaRecorrente a : candidatas) {
+            if (a.getValor() == null || a.getValor().compareTo(transacao.getValor()) == 0) {
+                continue;
+            }
+            if (contarDespesasConsecutivasMesmoValor(usuarioId, a, transacao.getValor()) >= 2) {
+                BigDecimal anterior = a.getValor();
+                a.setValor(transacao.getValor().setScale(2, RoundingMode.HALF_UP));
+                assinaturaRepository.save(a);
+                whatsAppNotificationService.enviarParaUsuario(usuarioId,
+                    "Atualizei o valor da assinatura *" + a.getNome() + "* de "
+                        + BRL.format(anterior) + " para " + BRL.format(a.getValor())
+                        + " (2 cobranças seguidas com o novo valor).");
+                log.info("[ASSINATURA] Valor atualizado id={} userId={} {} → {}", a.getId(), usuarioId, anterior, a.getValor());
+            }
+        }
+    }
+
+    private boolean assinaturaCorrespondeDespesa(AssinaturaRecorrente a, Transacao t) {
+        return chaveAgrupamento(a.getNome()).equals(chaveAgrupamento(t.getDescricao()));
+    }
+
+    private long contarDespesasConsecutivasMesmoValor(Long usuarioId, AssinaturaRecorrente a, BigDecimal valor) {
+        LocalDateTime inicio = LocalDate.now().minusMonths(3).atStartOfDay();
+        List<Transacao> recentes = transacaoRepository.findDespesasConfirmadasDesde(usuarioId, inicio).stream()
+            .filter(t -> assinaturaCorrespondeDespesa(a, t))
+            .sorted(Comparator.comparing(Transacao::getDataTransacao).reversed())
+            .toList();
+        long count = 0;
+        for (Transacao t : recentes) {
+            if (t.getValor() != null && t.getValor().compareTo(valor) == 0) {
+                count++;
+            } else {
+                break;
+            }
+        }
+        return count;
+    }
+
     public boolean temPropostaPendente(Long usuarioId) {
         return sessaoContextoService.buscarAtiva(
             usuarioId,

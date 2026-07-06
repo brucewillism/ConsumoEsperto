@@ -38,8 +38,9 @@ public class ContaBancariaService {
         ContaBancaria conta = new ContaBancaria();
         conta.setNome(dto.getNome().trim());
         conta.setTipo(ContaBancaria.TipoConta.valueOf(dto.getTipo().name()));
-        conta.setSaldoAtual(escala(dto.getSaldoAtual()));
-        conta.setSaldoInicial(escala(dto.getSaldoAtual()));
+        BigDecimal saldoAbertura = escala(dto.getSaldoAtual());
+        conta.setSaldoAtual(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        conta.setSaldoInicial(saldoAbertura);
         conta.setLimiteChequeEspecial(escalaNaoNegativa(dto.getLimiteChequeEspecial()));
         conta.setUsuario(usuario);
         conta.setAtiva(dto.isAtiva());
@@ -51,7 +52,12 @@ public class ContaBancariaService {
             conta.setPadrao(true);
         }
 
-        return converterParaDTO(contaBancariaRepository.save(conta));
+        ContaBancaria salva = contaBancariaRepository.save(conta);
+        if (saldoAbertura.compareTo(BigDecimal.ZERO) > 0) {
+            saldoMovimentacaoService.creditarConta(salva.getId(), saldoAbertura);
+            salva = contaBancariaRepository.findById(salva.getId()).orElse(salva);
+        }
+        return converterParaDTO(salva);
     }
 
     @Transactional(readOnly = true)

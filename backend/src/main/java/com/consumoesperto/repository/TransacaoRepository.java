@@ -34,7 +34,9 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     
     List<Transacao> findByUsuarioIdAndCategoriaIdOrderByDataTransacaoDesc(Long usuarioId, Long categoriaId);
     
-    @Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao")
+    /** @deprecated Sem callers — preferir {@link #sumValorConfirmadaByUsuarioIdAndTipoTransacao}. */
+    @Deprecated
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao")
     BigDecimal sumValorByUsuarioIdAndTipoTransacao(@Param("usuarioId") Long usuarioId, @Param("tipoTransacao") TipoTransacao tipoTransacao);
 
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
@@ -45,7 +47,9 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("tipoTransacao") TipoTransacao tipoTransacao
     );
     
-    @Query("SELECT SUM(t.valor) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
+    /** @deprecated Sem callers — preferir {@link #sumConfirmadaByUsuarioIdAndTipoAndPeriodo}. */
+    @Deprecated
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
     BigDecimal sumValorByUsuarioIdAndPeriodo(@Param("usuarioId") Long usuarioId, 
                                             @Param("dataInicio") LocalDateTime dataInicio, 
                                             @Param("dataFim") LocalDateTime dataFim);
@@ -96,7 +100,16 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("dataFim") LocalDateTime dataFim
     );
 
-    /** Passivo de empréstimos: parcelas PREVISTO vincendas (compromisso futuro por empréstimo ativo). */
+    /** Passivo de empréstimos: todas as parcelas PREVISTO ativas (vincendas + vencidas não pagas). */
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA")
+    BigDecimal sumPassivoEmprestimoAtivo(@Param("usuarioId") Long usuarioId);
+
+    /** @deprecated use {@link #sumPassivoEmprestimoAtivo} — inclui vencidas, não só vincendas. */
+    @Deprecated
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.excluido = false "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
@@ -215,13 +228,14 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("fim") LocalDateTime fim
     );
 
-    /** Receitas + despesas/investimentos confirmados em conta (sem fatura) — delta líquido no período. */
+    /** Receitas + despesas/investimentos/pagamento fatura confirmados em conta — delta líquido no período. */
     @Query("SELECT COALESCE(SUM(CASE WHEN t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
         + "THEN t.valor ELSE -t.valor END), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
         + "AND t.fatura IS NULL "
         + "AND t.tipoTransacao IN (com.consumoesperto.model.Transacao$TipoTransacao.RECEITA, "
-        + "com.consumoesperto.model.Transacao$TipoTransacao.DESPESA, com.consumoesperto.model.Transacao$TipoTransacao.INVESTIMENTO) "
+        + "com.consumoesperto.model.Transacao$TipoTransacao.DESPESA, com.consumoesperto.model.Transacao$TipoTransacao.INVESTIMENTO, "
+        + "com.consumoesperto.model.Transacao$TipoTransacao.PAGAMENTO_FATURA) "
         + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim")
     BigDecimal sumMovimentoLiquidoContaConfirmadaPeriodo(
         @Param("usuarioId") Long usuarioId,

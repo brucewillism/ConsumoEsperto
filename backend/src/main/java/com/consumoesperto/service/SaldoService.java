@@ -129,7 +129,7 @@ public class SaldoService {
     }
 
     /**
-     * Patrimônio líquido = ativos em conta − passivo de empréstimos (parcelas PREVISTO vincendas).
+     * Patrimônio líquido = ativos em conta − passivo de empréstimos (parcelas PREVISTO ativas, inclusive vencidas).
      * A liquidez imediata ({@link #saldoLiquidezImediata}) não desconta esse passivo.
      */
     @Transactional(readOnly = true)
@@ -140,8 +140,7 @@ public class SaldoService {
         } else {
             ativos = saldoConfirmado(usuarioId);
         }
-        BigDecimal passivoEmprestimo = nz(transacaoRepository.sumPassivoEmprestimoVincendas(
-            usuarioId, AppTimeZone.hoje().atStartOfDay()));
+        BigDecimal passivoEmprestimo = nz(transacaoRepository.sumPassivoEmprestimoAtivo(usuarioId));
         return nz(ativos).subtract(passivoEmprestimo).setScale(2, RoundingMode.HALF_UP);
     }
 
@@ -247,8 +246,8 @@ public class SaldoService {
 
         BigDecimal rendaLiquida = rendaConfigService.getRendaMensalEstimada(usuarioId);
         if (rendaLiquida.compareTo(BigDecimal.ZERO) <= 0) {
-            rendaLiquida = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuarioId, Transacao.TipoTransacao.RECEITA, inicio, fimMes));
+            rendaLiquida = nz(transacaoRepository.sumReceitasConfirmadasPeriodo(
+                usuarioId, inicio, fimMes));
         }
 
         BigDecimal receitasSalariaisConfirmadas = nz(

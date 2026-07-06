@@ -115,6 +115,11 @@ public class FinancialProactiveService {
         } catch (Exception e) {
             log.warn("Falha detecção assinatura após despesa {}: {}", id(transacao), e.getMessage());
         }
+        try {
+            assinaturaRecorrenteService.avaliarDivergenciaValorCadastrada(transacao);
+        } catch (Exception e) {
+            log.warn("Falha divergência valor assinatura após despesa {}: {}", id(transacao), e.getMessage());
+        }
     }
 
     /**

@@ -7,6 +7,7 @@ import javax.persistence.*;
 import javax.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 
 /**
@@ -110,6 +111,11 @@ public class Fatura {
     @Column(name = "valor_pago")
     private BigDecimal valorPago;
 
+    /** Origem da quitação quando status=PAGA sem PAGAMENTO_FATURA (ex.: pago fora do app). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "origem_quitacao")
+    private OrigemQuitacao origemQuitacao;
+
     /**
      * Cartão de crédito ao qual a fatura pertence
      * Relacionamento muitos-para-um: várias faturas podem pertencer a um cartão
@@ -201,7 +207,12 @@ public class Fatura {
     }
     public void setMes(Integer mes) { 
         if (dataFechamento != null && mes != null) {
-            this.dataFechamento = dataFechamento.withMonth(mes);
+            int dia = Math.min(dataFechamento.getDayOfMonth(), YearMonth.of(dataFechamento.getYear(), mes).lengthOfMonth());
+            this.dataFechamento = dataFechamento.withMonth(mes).withDayOfMonth(dia);
+            if (dataVencimento != null) {
+                int diaVenc = Math.min(dataVencimento.getDayOfMonth(), YearMonth.of(dataVencimento.getYear(), mes).lengthOfMonth());
+                this.dataVencimento = dataVencimento.withMonth(mes).withDayOfMonth(diaVenc);
+            }
         }
     }
     
@@ -213,9 +224,17 @@ public class Fatura {
     }
     public void setAno(Integer ano) { 
         if (dataFechamento != null && ano != null) {
-            this.dataFechamento = dataFechamento.withYear(ano);
+            int dia = Math.min(dataFechamento.getDayOfMonth(), YearMonth.of(ano, dataFechamento.getMonthValue()).lengthOfMonth());
+            this.dataFechamento = dataFechamento.withYear(ano).withDayOfMonth(dia);
+            if (dataVencimento != null) {
+                int diaVenc = Math.min(dataVencimento.getDayOfMonth(), YearMonth.of(ano, dataVencimento.getMonthValue()).lengthOfMonth());
+                this.dataVencimento = dataVencimento.withYear(ano).withDayOfMonth(diaVenc);
+            }
         }
     }
+
+    public OrigemQuitacao getOrigemQuitacao() { return origemQuitacao; }
+    public void setOrigemQuitacao(OrigemQuitacao origemQuitacao) { this.origemQuitacao = origemQuitacao; }
 
     /**
      * Método executado automaticamente antes de persistir a entidade
@@ -248,5 +267,13 @@ public class Fatura {
                 return ABERTA;
             }
         }
+    }
+
+    /** Como a fatura foi quitada quando não há PAGAMENTO_FATURA no app. */
+    public enum OrigemQuitacao {
+        /** Pagamento registrado via {@link com.consumoesperto.service.FaturaConciliacaoService}. */
+        APP,
+        /** Quitada fora do app — libera limite sem débito em conta. */
+        EXTERNA
     }
 }

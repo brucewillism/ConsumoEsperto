@@ -142,6 +142,7 @@ public class TransacaoService {
         if (transacaoDTO.getEmprestimoId() != null && !transacaoDTO.getEmprestimoId().isBlank()) {
             transacao.setEmprestimoId(transacaoDTO.getEmprestimoId().trim());
         }
+        validarTipoTransacaoCrudGenerico(transacaoDTO, false);
         if (transacaoDTO.getParcelaAtual() != null) {
             transacao.setParcelaAtual(transacaoDTO.getParcelaAtual());
         }
@@ -274,6 +275,12 @@ public class TransacaoService {
         Long faturaIdAntes = transacao.getFatura() != null ? transacao.getFatura().getId() : null;
         SaldoMovimentacaoService.MovimentacaoSnapshot snap = saldoMovimentacaoService.capturarSnapshot(transacao);
 
+        validarTipoTransacaoCrudGenerico(transacaoDTO, false);
+        if (transacao.getTipoTransacao() == Transacao.TipoTransacao.PAGAMENTO_FATURA) {
+            throw new IllegalArgumentException(
+                "Pagamento de fatura não pode ser alterado pelo CRUD genérico. Use o fluxo de pagamento de fatura.");
+        }
+
         // Atualiza os campos da transação com os novos valores
         transacao.setDescricao(transacaoDTO.getDescricao());
         transacao.setValor(transacaoDTO.getValor());
@@ -399,6 +406,10 @@ public class TransacaoService {
         // Verifica se a transação pertence ao usuário solicitante
         if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
             throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+        }
+        if (transacao.getTipoTransacao() == Transacao.TipoTransacao.PAGAMENTO_FATURA) {
+            throw new IllegalArgumentException(
+                "Pagamento de fatura não pode ser excluído pelo CRUD genérico. Estorne via exclusão da fatura ou fluxo de conciliação.");
         }
         
         Long faturaId = transacao.getFatura() != null ? transacao.getFatura().getId() : null;
@@ -891,5 +902,22 @@ public class TransacaoService {
         saldoService.notificarAlteracaoSaldo(usuarioId);
         log.info("[ENTITY-UPDATE] Despesa fixa id={} usuário={}", transacaoId, usuarioId);
         return salva;
+    }
+
+    /**
+     * ST-05: {@code PAGAMENTO_FATURA} só via {@link FaturaConciliacaoService} (persistência direta).
+     */
+    private static void validarTipoTransacaoCrudGenerico(TransacaoDTO dto, boolean permitirPagamentoFatura) {
+        if (dto == null || dto.getTipoTransacao() != TransacaoDTO.TipoTransacao.PAGAMENTO_FATURA) {
+            return;
+        }
+        if (!permitirPagamentoFatura) {
+            throw new IllegalArgumentException(
+                "Pagamento de fatura não pode ser criado ou alterado pelo CRUD genérico. "
+                    + "Use POST /api/faturas/pagar ou o fluxo de conciliação.");
+        }
+        if (dto.getFaturaId() == null) {
+            throw new IllegalArgumentException("PAGAMENTO_FATURA exige fatura_id vinculada.");
+        }
     }
 }

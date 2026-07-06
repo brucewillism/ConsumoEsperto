@@ -11,6 +11,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 
+/**
+ * @deprecated CF-18 — convergir para transações parceladas na fatura ({@code grupoParcelaId}).
+ * Dados legados preservados; novas criações bloqueadas em {@link CompraParceladaService}.
+ */
+@Deprecated
 @Entity
 @Table(name = "compras_parceladas")
 @NoArgsConstructor

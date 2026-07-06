@@ -82,7 +82,7 @@ public class EmprestimoService {
             if (t.getTipoTransacao() == Transacao.TipoTransacao.RECEITA
                 && t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA) {
                 saldoMovimentacaoService.aplicarExclusao(t);
-                creditoEstornado = nz(t.getValor());
+                creditoEstornado = creditoEstornado.add(nz(t.getValor()));
             } else if (t.getTipoTransacao() == Transacao.TipoTransacao.DESPESA
                 && t.getStatusConferencia() == Transacao.StatusConferencia.CONFIRMADA) {
                 saldoMovimentacaoService.aplicarExclusao(t);
@@ -130,6 +130,7 @@ public class EmprestimoService {
         credito.setEmprestimoId(emprestimoId);
         transacaoService.criarTransacao(credito, usuarioId, false);
 
+        boolean descontoFolha = proposta.getDescontoEmFolha() == null || Boolean.TRUE.equals(proposta.getDescontoEmFolha());
         int nParcelas = proposta.getQuantidadeParcelas();
         List<BigDecimal> valoresParcelas = MoedaUtil.distribuirParcelas(calc.totalAPagar(), nParcelas);
         List<Transacao> parcelas = new ArrayList<>(nParcelas);
@@ -142,9 +143,12 @@ public class EmprestimoService {
             parc.setTipoTransacao(Transacao.TipoTransacao.DESPESA);
             parc.setStatusConferencia(Transacao.StatusConferencia.PREVISTO);
             parc.setDataTransacao(hoje.plusMonths(i).atTime(12, 0));
-            parc.setContaBancaria(conta);
+            if (!descontoFolha) {
+                parc.setContaBancaria(conta);
+            }
             parc.setUsuario(usuarioRef);
             parc.setEmprestimoId(emprestimoId);
+            parc.setDescontoEmFolha(descontoFolha);
             parc.setParcelaAtual(i);
             parc.setTotalParcelas(nParcelas);
             parc.setExcluido(false);

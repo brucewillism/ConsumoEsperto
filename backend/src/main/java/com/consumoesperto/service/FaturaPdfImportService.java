@@ -461,7 +461,13 @@ public class FaturaPdfImportService {
             }
         }
         futuras += criarParcelasFuturasDasTransacoesNaFatura(usuarioId, imp, fatura, faturasParaSincronizar);
-        futuras += criarFaturasPrevistasProjetadasItau(usuarioId, imp, fatura, faturasParaSincronizar);
+        boolean temItensParcelados = itens.stream()
+            .anyMatch(i -> i.getTotalParcelas() != null && i.getTotalParcelas() > 1);
+        if (!temItensParcelados) {
+            futuras += criarFaturasPrevistasProjetadasItau(usuarioId, imp, fatura, faturasParaSincronizar);
+        } else {
+            log.info("[FaturaPDF] Itaú: projeção agregada omitida — parcelas individuais já criadas (CF-08).");
+        }
         if (futuras == 0 && BancoBrasilCatalog.bancosCorrespondem(imp.getBancoCartao(), "itau")) {
             long itensParcelados = itens.stream()
                 .filter(i -> i.getTotalParcelas() != null && i.getTotalParcelas() > 1)
@@ -849,8 +855,35 @@ public class FaturaPdfImportService {
             return List.of();
         }
         LocalDateTime dt = item.getData().atStartOfDay();
-        return transacaoRepository.findByUsuarioIdAndDescricaoAndDataTransacaoAndValor(
-            usuarioId, item.getDescricao(), dt, item.getValor());
+        LocalDateTime ini = dt.minusDays(1);
+        LocalDateTime fim = dt.plusDays(2);
+        String descNorm = normalizarDescricaoDedup(item.getDescricao());
+        return transacaoRepository.findByUsuarioIdAndPeriodoEfetivoOrderByDataDesc(usuarioId, ini, fim).stream()
+            .filter(t -> !t.isExcluido())
+            .filter(t -> descricaoDedupCompativel(descNorm, normalizarDescricaoDedup(t.getDescricao())))
+            .filter(t -> valoresDedupCompativel(t.getValor(), item.getValor()))
+            .toList();
+    }
+
+    private static String normalizarDescricaoDedup(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return norm(raw).replaceAll("\\(\\d+/\\d+\\)", "").replaceAll("\\s+", " ").trim();
+    }
+
+    private static boolean descricaoDedupCompativel(String a, String b) {
+        if (a.isBlank() || b.isBlank()) {
+            return false;
+        }
+        return a.equals(b) || a.contains(b) || b.contains(a);
+    }
+
+    private static boolean valoresDedupCompativel(BigDecimal a, BigDecimal b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return MoedaUtil.nz(a).compareTo(MoedaUtil.nz(b)) == 0;
     }
 
     private int conciliarExistentesComFatura(List<com.consumoesperto.model.Transacao> existentes, Fatura fatura, ImportacaoFaturaItemDTO item) {
@@ -904,19 +937,29 @@ public class FaturaPdfImportService {
         String grupo = parcelGroupId(imp, item);
         List<com.consumoesperto.model.Transacao> existentesGrupo =
             transacaoRepository.findByUsuarioIdAndGrupoParcelaIdOrderByParcelaAtualAsc(usuarioId, grupo);
+        int totalParcelas = item.getTotalParcelas();
+        BigDecimal totalGrupo = MoedaUtil.nz(item.getValor()).multiply(BigDecimal.valueOf(totalParcelas));
+        List<BigDecimal> valoresDistribuidos = MoedaUtil.distribuirParcelas(totalGrupo, totalParcelas);
         int criadas = 0;
         for (int parcela = item.getParcelaAtual() + 1; parcela <= item.getTotalParcelas(); parcela++) {
             final int parcelaAlvo = parcela;
-            boolean jaExiste = existentesGrupo.stream()
+            boolean jaExisteGrupo = existentesGrupo.stream()
                 .anyMatch(t -> t.getParcelaAtual() != null && t.getParcelaAtual() == parcelaAlvo);
-            if (jaExiste) {
+            if (jaExisteGrupo) {
                 continue;
             }
             LocalDate vencimento = vencimentoParcelaFutura(faturaAtual, imp.getCartaoCredito(), parcela - item.getParcelaAtual());
+            ImportacaoFaturaItemDTO chaveNatural = new ImportacaoFaturaItemDTO();
+            chaveNatural.setDescricao(removerMarcadorParcela(item.getDescricao()) + " (" + parcela + "/" + totalParcelas + ")");
+            chaveNatural.setValor(valoresDistribuidos.get(parcela - 1));
+            chaveNatural.setData((item.getData() != null ? item.getData() : LocalDate.now()).plusMonths(parcela - item.getParcelaAtual()));
+            if (!buscarExistentes(usuarioId, chaveNatural).isEmpty()) {
+                continue;
+            }
             Fatura faturaFutura = faturaService.obterOuCriarFaturaParaVencimentoAlvo(usuarioId, imp.getCartaoCredito(), vencimento);
             TransacaoDTO dto = new TransacaoDTO();
-            dto.setDescricao(removerMarcadorParcela(item.getDescricao()) + " (" + parcela + "/" + item.getTotalParcelas() + ")");
-            dto.setValor(item.getValor());
+            dto.setDescricao(chaveNatural.getDescricao());
+            dto.setValor(chaveNatural.getValor());
             dto.setTipoTransacao(TransacaoDTO.TipoTransacao.DESPESA);
             dto.setDataTransacao((item.getData() != null ? item.getData() : LocalDate.now()).plusMonths(parcela - item.getParcelaAtual()).atStartOfDay());
             dto.setFaturaId(faturaFutura.getId());

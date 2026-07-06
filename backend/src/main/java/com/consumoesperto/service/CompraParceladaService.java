@@ -63,25 +63,9 @@ public class CompraParceladaService {
      * @throws RuntimeException se o cartão de crédito ou categoria não for encontrado
      */
     public CompraParceladaDTO criarCompraParcelada(CompraParceladaDTO compraParceladaDTO) {
-        // Valida se o cartão de crédito existe antes de criar a compra
-        CartaoCredito cartaoCredito = cartaoCreditoRepository.findById(compraParceladaDTO.getCartaoCreditoId())
-                .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
-
-        // Validação e associação da categoria (opcional)
-        Categoria categoria = null;
-        if (compraParceladaDTO.getCategoriaId() != null) {
-            categoria = categoriaRepository.findById(compraParceladaDTO.getCategoriaId())
-                    .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
-        }
-
-        // Converte o DTO para entidade e associa ao cartão de crédito e categoria
-        CompraParcelada compraParcelada = converterParaEntidade(compraParceladaDTO);
-        compraParcelada.setCartaoCredito(cartaoCredito);
-        compraParcelada.setCategoria(categoria);
-        
-        // Persiste a compra no banco de dados
-        CompraParcelada compraSalva = compraParceladaRepository.save(compraParcelada);
-        return converterParaDTO(compraSalva);
+        throw new UnsupportedOperationException(
+            "Cadastro de CompraParcelada descontinuado (CF-18). Use lançamentos parcelados na fatura ou importação PDF. "
+                + "Consulte docs/PLANO_CONVERSAO_COMPRA_PARCELADA.md.");
     }
 
     /**

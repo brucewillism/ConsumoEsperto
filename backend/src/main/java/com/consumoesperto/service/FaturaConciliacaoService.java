@@ -102,6 +102,7 @@ public class FaturaConciliacaoService {
         if (quitacaoTotal) {
             fatura.setPaga(true);
             fatura.setStatus(Fatura.StatusFatura.PAGA);
+            fatura.setOrigemQuitacao(Fatura.OrigemQuitacao.APP);
         } else {
             fatura.setPaga(false);
             fatura.setStatus(Fatura.StatusFatura.PARCIAL);
