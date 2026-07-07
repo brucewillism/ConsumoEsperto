@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -15,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class JarvisConfirmacaoDespesaSimulacaoTest {
 
-    private final JarvisProtocolService jarvis = new JarvisProtocolService();
+    private final JarvisProtocolService jarvis = new JarvisProtocolService(new TratamentoUsuarioService());
 
     /** Reproduz exatamente a concatenação do handleExpense (ramo "sem cartão associado") + msgOk. */
     private String montarMensagemFinal(String vocativo, String descricao, String valorFmt, String orcamentoLinha) {

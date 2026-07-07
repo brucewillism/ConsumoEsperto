@@ -7,6 +7,7 @@ import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.AutomacaoTaticaService;
 import com.consumoesperto.service.CerebroSemanticoService;
 import com.consumoesperto.service.JarvisFeedbackService;
+import com.consumoesperto.service.jarvis.JarvisPipelineMetrics;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import javax.validation.Valid;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/jarvis")
@@ -35,6 +37,15 @@ public class JarvisProtocolController {
     private final AutomacaoTaticaService automacaoTaticaService;
     private final CerebroSemanticoService cerebroSemanticoService;
     private final JarvisFeedbackService jarvisFeedbackService;
+    private final JarvisPipelineMetrics jarvisPipelineMetrics;
+
+    @GetMapping("/performance/metrics")
+    public ResponseEntity<Map<String, Object>> performanceMetrics(@AuthenticationPrincipal UserPrincipal user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(jarvisPipelineMetrics.snapshot());
+    }
 
     @PostMapping("/feedback")
     public ResponseEntity<Void> feedback(

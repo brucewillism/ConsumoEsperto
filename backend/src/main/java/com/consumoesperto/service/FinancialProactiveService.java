@@ -49,12 +49,18 @@ public class FinancialProactiveService {
     private final PlanejamentoFiscalService planejamentoFiscalService;
     private final AmortizacaoSazonalService amortizacaoSazonalService;
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
+    private final com.consumoesperto.service.jarvis.CategoriaCorrecaoMemoriaService categoriaCorrecaoMemoriaService;
 
     @Transactional(readOnly = true)
     public Optional<Categoria> sugerirCategoria(Long usuarioId, String descricao) {
         List<Categoria> categorias = categoriaRepository.findByUsuarioIdOrderByNome(usuarioId);
         if (categorias.isEmpty() || descricao == null || descricao.isBlank()) {
             return Optional.empty();
+        }
+        Optional<Long> correcaoId = categoriaCorrecaoMemoriaService.sugerirCategoriaPorCorrecao(usuarioId, descricao);
+        if (correcaoId.isPresent()) {
+            return categoriaRepository.findById(correcaoId.get())
+                .filter(c -> c.getUsuario() != null && usuarioId.equals(c.getUsuario().getId()));
         }
         Optional<Categoria> heuristica = sugerirCategoriaHeuristica(categorias, descricao);
         if (heuristica.isPresent()) {

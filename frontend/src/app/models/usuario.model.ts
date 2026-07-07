@@ -70,6 +70,11 @@ export interface Usuario {
   /** true após calibragem na app ou escolha explícita de tratamento no perfil. */
   jarvisConfigurado?: boolean;
 
+  vocativo?: string;
+  generoGramatical?: 'MASCULINO' | 'FEMININO' | 'NEUTRO';
+  tratamentoConfigurado?: boolean;
+  saudacaoDashboard?: string;
+
   /** Endereço residencial completo */
   endereco?: string;
   

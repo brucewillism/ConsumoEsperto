@@ -6,6 +6,7 @@ import com.consumoesperto.dto.MarketIndicatorsDTO;
 import com.consumoesperto.model.Orcamento;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -24,6 +25,12 @@ public class JarvisProtocolService {
 
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
+    private final TratamentoUsuarioService tratamentoUsuarioService;
+
+    public JarvisProtocolService(TratamentoUsuarioService tratamentoUsuarioService) {
+        this.tratamentoUsuarioService = tratamentoUsuarioService;
+    }
+
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.force-vocative:}")
     private String forceVocative;
 
@@ -39,40 +46,7 @@ public class JarvisProtocolService {
 
     /** Tratamento curto para prompts e vocativo neutro (male/female/unknown ou preferência manual). */
     public String getTratamentoEstrategico(Usuario usuario) {
-        if (usuario == null) {
-            return "Senhor(a)";
-        }
-        if (Boolean.TRUE.equals(usuario.getJarvisConfigurado())) {
-            String t = usuario.getTratamento();
-            return (t == null || t.isBlank()) ? "" : t.trim();
-        }
-        Usuario.PreferenciaTratamentoJarvis p = preferenciaJarvis(usuario);
-        switch (p) {
-            case SENHOR:
-                return "Senhor";
-            case SENHORA:
-                return "Senhora";
-            case DOUTOR:
-                return "Doutor";
-            case DOUTORA:
-                return "Doutora";
-            case NENHUM:
-                return "";
-            case AUTOMATICO:
-            default:
-                break;
-        }
-        if (usuario.getGenero() == null) {
-            return "Senhor(a)";
-        }
-        switch (usuario.getGenero()) {
-            case MALE:
-                return "Senhor";
-            case FEMALE:
-                return "Senhora";
-            default:
-                return "Senhor(a)";
-        }
+        return tratamentoUsuarioService.tituloEstrategico(usuario);
     }
 
     private static Usuario.PreferenciaTratamentoJarvis preferenciaJarvis(Usuario usuario) {
@@ -83,142 +57,26 @@ public class JarvisProtocolService {
 
     /** Primeiro nome para protocolos e IA (ex.: "Maria"). */
     public String extrairPrimeiroNome(Usuario usuario) {
-        if (usuario == null || usuario.getNome() == null || usuario.getNome().isBlank()) {
-            return "";
-        }
-        return usuario.getNome().trim().split("\\s+")[0];
+        return TratamentoUsuarioService.primeiroNome(usuario);
     }
 
-    /**
-     * Vocativo completo usado na persona e nas mensagens (ex.: {@code Senhor João}, {@code Doutora Ana}, primeiro nome se sem título).
-     */
     public String montarVocativoCompleto(Usuario usuario) {
-        if (usuario == null) {
-            return "Senhor";
-        }
-        if (Boolean.TRUE.equals(usuario.getJarvisConfigurado())) {
-            String pn = extrairPrimeiroNome(usuario);
-            String t = usuario.getTratamento();
-            if (t == null || t.isBlank()) {
-                return pn.isBlank() ? "utilizador" : pn;
-            }
-            String titulo = t.trim();
-            return pn.isBlank() ? titulo : titulo + " " + pn;
-        }
-        String pn = extrairPrimeiroNome(usuario);
-        Usuario.PreferenciaTratamentoJarvis p = preferenciaJarvis(usuario);
-        switch (p) {
-            case NENHUM:
-                return pn.isBlank() ? "utilizador" : pn;
-            case SENHOR:
-                return pn.isBlank() ? "Senhor" : "Senhor " + pn;
-            case SENHORA:
-                return pn.isBlank() ? "Senhora" : "Senhora " + pn;
-            case DOUTOR:
-                return pn.isBlank() ? "Doutor" : "Doutor " + pn;
-            case DOUTORA:
-                return pn.isBlank() ? "Doutora" : "Doutora " + pn;
-            case AUTOMATICO:
-            default:
-                break;
-        }
-        Usuario.GeneroUsuario g = usuario.getGenero() != null ? usuario.getGenero() : Usuario.GeneroUsuario.UNKNOWN;
-        switch (g) {
-            case MALE:
-                return pn.isBlank() ? "Senhor" : "Senhor " + pn;
-            case FEMALE:
-                return pn.isBlank() ? "Senhora" : "Senhora " + pn;
-            default:
-                return pn.isBlank() ? "Senhor(a)" : "Senhor(a) " + pn;
-        }
+        return tratamentoUsuarioService.montarVocativoCompleto(usuario);
     }
 
-    /** Camada explícita para o system prompt de comandos (Groq etc.). */
     public String instrucaoInterlocutorJarvis(Usuario usuario) {
-        if (usuario == null) {
-            return "";
-        }
-        if (Boolean.TRUE.equals(usuario.getJarvisConfigurado())) {
-            String pn = extrairPrimeiroNome(usuario);
-            if (pn.isBlank()) {
-                pn = "utilizador";
-            }
-            String t = usuario.getTratamento();
-            if (t == null || t.isBlank()) {
-                return "Você está falando com " + pn + ". Não utilize título formal (Senhor/Senhora/Doutor(a)); "
-                    + "use o primeiro nome de forma respeitosa nos momentos chave da conversa.\n\n";
-            }
-            return "Você está falando com " + t.trim() + " " + pn + ". Utilize o vocativo \"" + t.trim()
-                + "\" em momentos chave da conversa.\n\n";
-        }
-        Usuario.PreferenciaTratamentoJarvis p = preferenciaJarvis(usuario);
-        String pn = extrairPrimeiroNome(usuario);
-        if (pn.isBlank()) {
-            pn = "utilizador";
-        }
-        if (p == Usuario.PreferenciaTratamentoJarvis.NENHUM) {
-            return "Você está falando com " + pn + ". Não utilize título formal (Senhor/Senhora/Doutor(a)); "
-                + "use o primeiro nome de forma respeitosa nos momentos chave da conversa.\n\n";
-        }
-        String title = getTratamentoEstrategico(usuario);
-        if (title.isBlank()) {
-            return "Você está falando com " + pn + ". Trate o interlocutor pelo primeiro nome de forma respeitosa.\n\n";
-        }
-        return "Você está falando com " + title + " " + pn + ". Utilize o vocativo \"" + title + "\" em momentos chave da conversa.\n\n";
+        return tratamentoUsuarioService.instrucaoInterlocutorJarvis(usuario);
     }
 
-    /** Notificação após o utilizador confirmar o tratamento J.A.R.V.I.S. na app. */
     public String mensagemProtocolosTratamentoEstabilizados(String vocativoCompletoComTitulo) {
         String v = vocativoCompletoComTitulo == null || vocativoCompletoComTitulo.isBlank()
-            ? "Senhor(a)"
+            ? tratamentoUsuarioService.tituloNeutroFormal()
             : vocativoCompletoComTitulo.trim();
         return "Protocolos de tratamento estabilizados, " + v + ". Sistemas personalizados para o seu perfil.";
     }
 
-    /**
-     * Termo de tratamento conversacional (minúsculo no fluxo, ex.: "chefe", "senhor", "Ana").
-     * Usa a preferência configurada no perfil; cai para o primeiro nome e, por fim, "você".
-     */
     public String tratamentoConversacional(Usuario usuario) {
-        if (forceVocative != null && !forceVocative.isBlank()) {
-            return forceVocative.trim();
-        }
-        if (usuario == null) {
-            return "você";
-        }
-        if (Boolean.TRUE.equals(usuario.getJarvisConfigurado())) {
-            String t = usuario.getTratamento();
-            if (t != null && !t.isBlank()) {
-                return t.trim();
-            }
-            String pn = extrairPrimeiroNome(usuario);
-            return pn.isBlank() ? "você" : pn;
-        }
-        Usuario.PreferenciaTratamentoJarvis p = preferenciaJarvis(usuario);
-        String pn = extrairPrimeiroNome(usuario);
-        switch (p) {
-            case NENHUM:
-                return pn.isBlank() ? "você" : pn;
-            case SENHOR:
-                return "senhor";
-            case SENHORA:
-                return "senhora";
-            case DOUTOR:
-                return "doutor";
-            case DOUTORA:
-                return "doutora";
-            case AUTOMATICO:
-            default:
-                break;
-        }
-        Usuario.GeneroUsuario g = usuario.getGenero() != null ? usuario.getGenero() : Usuario.GeneroUsuario.UNKNOWN;
-        if (g == Usuario.GeneroUsuario.MALE) {
-            return "senhor";
-        }
-        if (g == Usuario.GeneroUsuario.FEMALE) {
-            return "senhora";
-        }
-        return pn.isBlank() ? "você" : pn;
+        return tratamentoUsuarioService.tratamentoConversacional(usuario, forceVocative);
     }
 
     /**
@@ -299,33 +157,26 @@ public class JarvisProtocolService {
     }
 
     public String resolveVocative(Long userId, UsuarioRepository usuarioRepository) {
-        if (userId == null || usuarioRepository == null) {
-            return "Senhor";
-        }
-        return usuarioRepository.findById(userId)
-            .map(this::montarVocativoCompleto)
-            .orElse("Senhor");
+        return tratamentoUsuarioService.vocativoPorId(userId, usuarioRepository);
     }
 
-    /** Tratamento conversacional resolvido pelo id (ex.: "chefe", "senhor", primeiro nome). Cai para "Senhor". */
     public String resolveTratamento(Long userId, UsuarioRepository usuarioRepository) {
         if (userId == null || usuarioRepository == null) {
-            return "Senhor";
+            return tratamentoUsuarioService.vocativoPadrao();
         }
         return usuarioRepository.findById(userId)
-            .map(this::tratamentoConversacional)
-            .orElse("Senhor");
+            .map(u -> tratamentoUsuarioService.tratamentoConversacional(u, forceVocative))
+            .orElse(tratamentoUsuarioService.vocativoPadrao());
     }
 
-    /** Resposta canónica após comando “Jarvis, anote isso: …”. */
     public String confirmacaoMemoriaNucleo(String vocativoCompleto) {
-        String v = vocativoCompleto == null || vocativoCompleto.isBlank() ? "Senhor" : vocativoCompleto.trim();
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativoCompleto);
         return "Guardado com segurança, " + v + ". Vou deixar isso no meu radar e te lembro de provisionar esse valor quando fizer sentido.";
     }
 
     /** Efeito dominó — alerta quando o primeiro gasto da sequência dispara o protocolo de hábito. */
     public String alertaGatilhoDominioHabito(String vocativo, String rotuloGatilho, String valorFmtSegunda, String rotuloSegundaPerna) {
-        String v = vocativo == null || vocativo.isBlank() ? "Senhor" : vocativo.trim();
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return v + ", detectei o *gatilho inicial* do hábito em *" + rotuloGatilho + "*. "
             + "Lembre-se: pelo *protocolo Sentinela* isso costuma resultar num *delta* adicional de *" + valorFmtSegunda
             + "* em *" + rotuloSegundaPerna + "*. "
@@ -334,7 +185,7 @@ public class JarvisProtocolService {
 
     /** Oráculo de mercado — nota curta para o HUD (projeção ajustada). */
     public String notaOraculoMercado(String vocativo, MarketIndicatorsDTO m, BigDecimal fatorInflacao) {
-        String v = vocativo == null || vocativo.isBlank() ? "Senhor" : vocativo.trim();
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         if (m == null || fatorInflacao == null || fatorInflacao.compareTo(BigDecimal.ONE) <= 0) {
             return v + ", indicadores externos estáveis. Projeção do Sentinela sem *delta* inflacionário relevante.";
         }
@@ -345,7 +196,7 @@ public class JarvisProtocolService {
 
     /** Após feedback negativo no HUD — confirma recalibração (WhatsApp). */
     public String msgRecalibracaoPosFeedbackNegativo(String vocativo) {
-        String v = vocativo == null || vocativo.isBlank() ? "Senhor" : vocativo.trim();
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return "Entendido, " + v + ". Recalibrando prioridades de análise. Não voltarei a sugerir este protocolo tão cedo.";
     }
 
@@ -485,7 +336,7 @@ public class JarvisProtocolService {
 
     /** Confirmação de despesa em 2ª pessoa (J.A.R.V.I.S. executou a ação por você). */
     public String formatExpenseCatalogued(String vocativo, String valorFormatadoBrl) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return "Feito, " + v + ". Já lancei *" + valorFormatadoBrl + "* para você.";
     }
 
@@ -538,7 +389,7 @@ public class JarvisProtocolService {
 
     /** Fechamento de fatura — saldo cobre o valor (avisos programados). */
     public String proativoFaturaFechamentoSaldoCobre(String vocativo, String nomeCartao, String valorFaturaFmt, String saldoFmt) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return v + ", identifiquei que a fatura do *" + nomeCartao + "* fechou em *" + valorFaturaFmt + "*. "
             + "Os *sistemas online* indicam que o saldo corrente (*" + saldoFmt + "*) cobre o pagamento — "
             + "*protocolos de liquidação* dentro do esperado.";
@@ -553,7 +404,7 @@ public class JarvisProtocolService {
         String faltaFmt,
         String dataVencFmt
     ) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return v + ", identifiquei o fechamento da fatura do *" + nomeCartao + "* em *" + valorFaturaFmt + "*. "
             + "O saldo atual é *" + saldoFmt + "*; falta *" + faltaFmt + "* até o vencimento (*" + dataVencFmt + "*). "
             + "Recomendo rever os *protocolos de pagamento* e o fluxo de caixa.";
@@ -561,7 +412,7 @@ public class JarvisProtocolService {
 
     /** Lembrete de conferência de notas / lançamentos pendentes. */
     public String proativoLembreteConferenciaNotas(String vocativo, int quantidade) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return v + ", os registros mostram *" + quantidade + "* lançamento(s) aguardando confirmação no painel. "
             + "Sugiro normalizar esses *protocolos* quando for conveniente.";
     }
@@ -576,7 +427,7 @@ public class JarvisProtocolService {
         String dicaIA,
         String blocoFamiliarOpcional
     ) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         StringBuilder sb = new StringBuilder();
         sb.append("*Revisão semanal — J.A.R.V.I.S.*\n\n");
         sb.append(v).append(", seguem os agregados da semana nos *sistemas online*:\n\n");
@@ -599,7 +450,7 @@ public class JarvisProtocolService {
         String nivel,
         int pontosGanhos
     ) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return v + ", o encerramento do mês nos registros indica *resultado líquido* de *" + resultadoFmt + "* "
             + "(entradas confirmadas menos saídas confirmadas). "
             + "O *Score de Saúde Financeira* situa-se em *" + score + "* (*" + nivel + "*). "
@@ -609,13 +460,14 @@ public class JarvisProtocolService {
 
     /** Conta recorrente com vencimento em dois dias. */
     public String proativoContaRecorrenteVencimento(String vocativo, String nomeConta, String valorFmt) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return v + ", registro programado: a conta *" + nomeConta + "* (aprox. *" + valorFmt + "*) vence em *dois dias*. "
             + "Convém validar o saldo e os *protocolos de débito*.";
     }
 
     /** Lembrete WhatsApp de assinatura com vencimento em N dias (5 ou 3). */
     public String lembreteAssinaturaVencimento(
+        String vocativo,
         int diasAntecedencia,
         String nomeAssinatura,
         String valorFmt,
@@ -624,20 +476,21 @@ public class JarvisProtocolService {
         String usoChequeFmt,
         TipoSaldoLembreteAssinatura situacao
     ) {
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String nome = nomeAssinatura == null || nomeAssinatura.isBlank() ? "assinatura" : nomeAssinatura.trim();
         String diasTxt = diasAntecedencia == 1 ? "1 dia" : diasAntecedencia + " dias";
         if (situacao == TipoSaldoLembreteAssinatura.INSUFICIENTE) {
-            return "⚠️ *URGENTE*, chefe: a assinatura da *" + nome + "* (*" + valorFmt
+            return "⚠️ *URGENTE*, " + v + ": a assinatura da *" + nome + "* (*" + valorFmt
                 + "*) vence em *" + diasTxt + "*. Saldo disponível na conta *" + nomeConta + "*: *"
                 + saldoFmt + "*. Não cobre o débito nem com cheque especial. "
                 + "Faça um Pix para lá ou pause a assinatura no app.";
         }
         if (situacao == TipoSaldoLembreteAssinatura.SUFICIENTE) {
-            return "Chefe, lembrete: a assinatura da *" + nome + "* (*" + valorFmt
+            return v + ", lembrete: a assinatura da *" + nome + "* (*" + valorFmt
                 + "*) vence em *" + diasTxt + "*. A conta *" + nomeConta + "* tem saldo suficiente (*"
                 + saldoFmt + "*).";
         }
-        return "Atenção, chefe: a assinatura da sua *" + nome + "* (*" + valorFmt
+        return "Atenção, " + v + ": a assinatura da sua *" + nome + "* (*" + valorFmt
             + "*) vence em *" + diasTxt + "*. O seu saldo real é de *" + saldoFmt
             + "*. Esse débito vai ativar o seu *cheque especial* em *" + usoChequeFmt
             + "* na conta *" + nomeConta + "*. Quer que eu te lembre de fazer um Pix para lá?";
@@ -651,10 +504,10 @@ public class JarvisProtocolService {
         int diasAntecedencia,
         int diaVencimento
     ) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String rotulo = descricao == null || descricao.isBlank() ? "obrigação fixa" : descricao.trim();
         String diasTxt = diasAntecedencia == 1 ? "1 dia" : diasAntecedencia + " dias";
-        return "Chefe, lembrete: *" + rotulo + "* (*" + valorFmt + "*) vence em *" + diasTxt
+        return v + ", lembrete: *" + rotulo + "* (*" + valorFmt + "*) vence em *" + diasTxt
             + "* (dia *" + diaVencimento + "* do mês). "
             + "Já está no seu *Futuro provável* — confirme o pagamento no app quando quiser.";
     }
@@ -674,7 +527,7 @@ public class JarvisProtocolService {
         LocalDate vencimentoFatura,
         int diaSugeridoResgate
     ) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         int diaVenc = vencimentoFatura != null ? vencimentoFatura.getDayOfMonth() : 0;
         return v + ", notei *" + saldoFmt + "* em liquidez ociosa. "
             + "Se aplicar *" + aplicavelFmt + "* em instrumento de renda fixa com liquidez diária (*simulação educativa*), "
@@ -692,7 +545,7 @@ public class JarvisProtocolService {
         BigDecimal faturas,
         BigDecimal disponivel
     ) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String pct = pctDisponivelVariavel != null ? pctDisponivelVariavel.stripTrailingZeros().toPlainString() : "0";
         return v + ", após o pagamento das *obrigações fixas* e *faturas de cartão* pendentes nos registros, "
             + "restará aproximadamente *" + pct + "%* do seu saldo corrente para *gastos variáveis*. "
@@ -703,7 +556,7 @@ public class JarvisProtocolService {
 
     /** Cronos — convite ao Modo Viagem com base na agenda Google. */
     public String proativoModoViagemSugestao(String vocativo, String nomeEvento, String tetoFmt) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String nome = nomeEvento == null || nomeEvento.isBlank() ? "Evento" : nomeEvento.trim();
         return v + ", notei o evento *\"" + nome + "\"* na próxima semana nos *sistemas de agenda*. "
             + "Gostaria de ativar o *Modo Viagem* com um *teto de gastos* de *" + tetoFmt + "*? "
@@ -717,7 +570,7 @@ public class JarvisProtocolService {
         BigDecimal pctLiquidez,
         int mesesPostergar
     ) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String pct = pctLiquidez != null ? pctLiquidez.setScale(1, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() : "?";
         return v + ", esse capital renderia cerca de *" + rendimentoMensalFmt + "/mês* (referência educativa *1% a.m.*). "
             + "Esta aquisição consome *" + pct + "%* da sua *liquidez disponível* (saldo em conta). "
@@ -733,7 +586,7 @@ public class JarvisProtocolService {
         BigDecimal sobrevida,
         int diaRef
     ) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String cats = rotulosCategorias == null || rotulosCategorias.isBlank() ? "categorias não essenciais" : rotulosCategorias.trim();
         return "🚀 *Protocolo de Otimização Executado*, " + v + ".\n\n"
             + "Analisei a trajetória de colisão financeira e ajustei os tetos de *" + cats + "* em *" + pctReducao + "%*. "
@@ -744,10 +597,6 @@ public class JarvisProtocolService {
 
     private static BigDecimal nz(BigDecimal v) {
         return v != null ? v : BigDecimal.ZERO;
-    }
-
-    private static String blankToSenhor(String vocativo) {
-        return vocativo == null || vocativo.isBlank() ? "Senhor" : vocativo.trim();
     }
 
     /** PDF em processamento no fluxo Evolution (antes da extração IA). */
@@ -787,12 +636,13 @@ public class JarvisProtocolService {
     }
 
     /** Feedback após análise e persistência do contracheque (decomposição completa). */
-    public String protocoloRendaConcluidoComDecomposicao(ContrachequeDTO c) {
+    public String protocoloRendaConcluidoComDecomposicao(String vocativo, ContrachequeDTO c) {
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         if (c == null) {
-            return "📈 *Protocolo de Renda*: não houve dados para exibir, Senhor.";
+            return "📈 *Protocolo de Renda*: não houve dados para exibir, " + v + ".";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("📈 *Protocolo de Renda Concluído*, Senhor.\n");
+        sb.append("📈 *Protocolo de Renda Concluído*, ").append(v).append(".\n");
         sb.append("Analisei seu recibo de pagamento e os dados foram persistidos:\n");
         sb.append("• *Salário Bruto*: ").append(BRL.format(nz(c.getSalarioBruto()))).append("\n");
         sb.append("• *Salário Líquido*: ").append(BRL.format(nz(c.getSalarioLiquido()))).append("\n\n");
@@ -908,32 +758,33 @@ public class JarvisProtocolService {
     }
 
     /** Introdução comum a forecast mensal e sugestão de investimento (WhatsApp). */
-    public String introducaoProjecaoRotasCapital() {
-        return "Senhor, realizei uma projeção baseada no seu saldo disponível. Aqui estão as melhores rotas para o seu capital:\n\n";
+    public String introducaoProjecaoRotasCapital(String vocativo) {
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
+        return v + ", realizei uma projeção baseada no seu saldo disponível. Aqui estão as melhores rotas para o seu capital:\n\n";
     }
 
     public String semSaldoParaInvestimentoJarvis(String vocativo) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return "📊 " + v + ", revi o saldo disponível e, neste momento, não há folga suficiente para simular rotas comparativas "
             + "(Poupança, Tesouro Selic, CDB). Quando os registros indicarem liquidez ociosa, apresento as opções lado a lado.";
     }
 
     public String erroVisaoArquivo(String vocativo) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         return "🛡️ Lamento, " + v + ", mas meus sistemas de visão não conseguiram processar este arquivo. "
             + "A imagem parece estar fora dos padrões de nitidez. Poderia providenciar uma nova captura?";
     }
 
     public String erroGroqTranscricaoAudio(String vocativo) {
-        String v = blankToSenhor(vocativo);
-        return "🛡️ Houve uma instabilidade no link com a Groq, Senhor. Não consegui transcrever seu áudio.";
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
+        return "🛡️ Houve uma instabilidade no link com a Groq, " + v + ". Não consegui transcrever seu áudio.";
     }
 
     /**
      * Erros operacionais mantendo tom J.A.R.V.I.S. ({@code contexto} resume o domínio; {@code corpo} é a orientação).
      */
     public String formatoMsgErro(String vocativo, String contexto, String corpo) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String ctx = contexto == null || contexto.isBlank() ? "Aviso" : contexto.trim();
         String c = corpo == null ? "" : corpo.trim();
         String cta = "_Se precisar, reformule com *valor*, *descrição* e *dia* (quando couber) em uma única mensagem._";
@@ -943,7 +794,7 @@ public class JarvisProtocolService {
 
     /** Mensagens técnicas do webhook Evolution mapeadas para linguagem elegante. */
     public String erroEvolutionUsuario(Exception e, String vocativo) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         for (Throwable t = e; t != null; t = t.getCause()) {
             if (t instanceof javax.validation.ConstraintViolationException cv) {
                 String msg = cv.getConstraintViolations().stream()
@@ -998,14 +849,14 @@ public class JarvisProtocolService {
 
     /** Pergunta de follow-up quando o utilizador regista despesa fixa sem dia de vencimento. */
     public String perguntarDiaVencimentoDespesaFixa(String vocativo, String descricao) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String rotulo = descricao == null || descricao.isBlank() ? "esta obrigação" : descricao.trim();
         return "Entendido, " + v + ". Qual o dia de vencimento padrão para *" + rotulo + "*?";
     }
 
     /** Pergunta de follow-up quando o utilizador regista despesa fixa sem valor. */
     public String perguntarValorDespesaFixa(String vocativo, String descricao, int diaVencimento) {
-        String v = blankToSenhor(vocativo);
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String rotulo = descricao == null || descricao.isBlank() ? "esta obrigação" : descricao.trim();
         return "Entendido, " + v + ". Qual o valor mensal de *" + rotulo + "* (vencimento dia *" + diaVencimento + "*)?";
     }
@@ -1013,9 +864,10 @@ public class JarvisProtocolService {
     /**
      * Confirmação canónica após gravar despesa fixa (Sentinela / gráfico Futuro provável).
      */
-    public String protocoloSentinelaDespesaFixaRegistrada(String descricao, String valorFmt, int diaVencimento) {
+    public String protocoloSentinelaDespesaFixaRegistrada(String vocativo, String descricao, String valorFmt, int diaVencimento) {
+        String v = tratamentoUsuarioService.normalizarVocativo(vocativo);
         String rotulo = descricao == null || descricao.isBlank() ? "Obrigação" : descricao.trim();
-        return "🚀 *Protocolo Sentinela Atualizado*, Senhor.\n"
+        return "🚀 *Protocolo Sentinela Atualizado*, " + v + ".\n"
             + "Registrei *" + rotulo + "* de *" + valorFmt + "* como despesa fixa mensal (Vencimento: dia *"
             + diaVencimento + "*).\n"
             + "A partir de agora, seu gráfico de \"Futuro Provável\" considerará esta retenção automaticamente.\n"

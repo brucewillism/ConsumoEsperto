@@ -38,6 +38,7 @@ import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import com.consumoesperto.service.entityupdate.WhatsAppEntityConfigUpdateService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -106,6 +107,7 @@ public class WhatsAppCommandService {
     private final DocumentoIAContextService documentoIAContextService;
     private final SaldoService saldoService;
     private final JarvisProtocolService jarvisProtocolService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
     private final UsuarioRepository usuarioRepository;
     private final ContencaoJarvisService contencaoJarvisService;
     private final PrevisaoFluxoCaixaService previsaoFluxoCaixaService;
@@ -139,6 +141,12 @@ public class WhatsAppCommandService {
     private final FinancialAdviceCalculator financialAdviceCalculator;
     private final EmprestimoService emprestimoService;
     private final MemoriaCapturaAutomaticaService memoriaCapturaAutomaticaService;
+    private final com.consumoesperto.service.jarvis.JarvisPipelineMetrics jarvisPipelineMetrics;
+    private final com.consumoesperto.service.jarvis.JarvisFastPathParser jarvisFastPathParser;
+    private final com.consumoesperto.service.jarvis.JarvisConversaJanelaService jarvisConversaJanelaService;
+    private final com.consumoesperto.service.jarvis.JarvisTratamentoWhatsappService jarvisTratamentoWhatsappService;
+    private final com.consumoesperto.config.JarvisPerformanceProperties jarvisPerformanceProperties;
+    private final com.consumoesperto.service.jarvis.CategoriaCorrecaoMemoriaService categoriaCorrecaoMemoriaService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -263,25 +271,76 @@ public class WhatsAppCommandService {
 
     private String processJarvisCommandSemTutorial(Long userId, String sourceText, String whatsappFrom, String evolutionInstanceHint) {
         String text = sourceText == null ? "" : sourceText.trim();
+        com.consumoesperto.service.jarvis.JarvisPipelineTrace trace =
+            jarvisPipelineMetrics.startTrace(userId, whatsappFrom != null ? "whatsapp" : "web");
+        long t0 = System.nanoTime();
 
         Optional<String> pre = executarPreProcessadoresJarvis(userId, text);
+        jarvisPipelineMetrics.recordStage(trace, "preprocess", (System.nanoTime() - t0) / 1_000_000L);
         if (pre.isPresent()) {
+            jarvisConversaJanelaService.registrarUsuario(userId, text);
+            jarvisConversaJanelaService.registrarAssistente(userId, pre.get());
+            trace.route("PREPROCESS");
+            jarvisPipelineMetrics.finishTrace(trace);
             return pre.get();
         }
 
+        if (jarvisFastPathParser.isAmbiguous(text)) {
+            trace.route("CLARIFY");
+            jarvisPipelineMetrics.finishTrace(trace);
+            return msgInfo("Esclarecimento",
+                "Preciso de mais detalhe: *qual valor* e *onde* foi o gasto? Ex.: *gastei 30 no Uber*.");
+        }
+
+        long tFast = System.nanoTime();
+        Optional<com.fasterxml.jackson.databind.JsonNode> fast = jarvisFastPathParser.tryParse(text);
+        if (fast.isPresent()) {
+            jarvisPipelineMetrics.recordStage(trace, "fast_path", (System.nanoTime() - tFast) / 1_000_000L);
+            jarvisPipelineMetrics.recordRoute("FAST_PATH");
+            trace.route("FAST_PATH");
+            String resp = executeCommand(fast.get(), userId, text);
+            jarvisConversaJanelaService.registrarUsuario(userId, text);
+            jarvisConversaJanelaService.registrarAssistente(userId, resp);
+            jarvisPipelineMetrics.finishTrace(trace);
+            return resp;
+        }
+
+        long tParse = System.nanoTime();
         JsonNode parsed = parseCommandComFallback(userId, text);
-        // Captura automática de memórias (Bloco 3.1): este pipeline recebe texto digitado ou áudio
-        // já transcrito do usuário; o guardrail anti-documento vive DENTRO do serviço (item 2).
+        jarvisPipelineMetrics.recordStage(trace, "parse_llm", (System.nanoTime() - tParse) / 1_000_000L);
+        jarvisPipelineMetrics.recordRoute("LLM");
+        trace.route("LLM");
         memoriaCapturaAutomaticaService.capturarDeConversaAsync(
             userId, text, parsed, OrigemConteudo.TEXTO_USUARIO);
         String act = parsed.path("action").asText("");
         if ("GENERATE_REPORT".equals(act) || "GERAR_RELATORIO".equals(act)) {
-            return handleGenerateReport(parsed, userId, whatsappFrom, text, evolutionInstanceHint);
+            String resp = handleGenerateReport(parsed, userId, whatsappFrom, text, evolutionInstanceHint);
+            jarvisConversaJanelaService.registrarUsuario(userId, text);
+            jarvisConversaJanelaService.registrarAssistente(userId, resp);
+            jarvisPipelineMetrics.finishTrace(trace);
+            return resp;
         }
-        return executeCommand(parsed, userId, text);
+        String resp = executeCommand(parsed, userId, text);
+        jarvisConversaJanelaService.registrarUsuario(userId, text);
+        jarvisConversaJanelaService.registrarAssistente(userId, resp);
+        jarvisPipelineMetrics.finishTrace(trace);
+        return resp;
     }
 
     private Optional<String> executarPreProcessadoresJarvis(Long userId, String text) {
+        Optional<String> vocativo = jarvisTratamentoWhatsappService.tryAtualizarVocativo(userId, text);
+        if (vocativo.isPresent()) {
+            return vocativo;
+        }
+        Optional<Usuario> ou = userId != null ? usuarioRepository.findById(userId) : Optional.empty();
+        if (ou.isPresent() && jarvisTratamentoWhatsappService.precisaColetarTratamento(ou.get())) {
+            Optional<String> coleta = jarvisTratamentoWhatsappService.tryColetarTratamento(userId, text);
+            if (coleta.isPresent()) {
+                return coleta;
+            }
+            return Optional.of(msgInfo("Tratamento J.A.R.V.I.S.",
+                jarvisTratamentoWhatsappService.montarPerguntaInicial(ou.get())));
+        }
         Optional<String> ambiguidade = tryResolveAmbiguidadeTransferencia(userId, text);
         if (ambiguidade.isPresent()) {
             return ambiguidade;
@@ -664,11 +723,11 @@ public class WhatsAppCommandService {
         List<ContaBancaria> candidatos = contaBancariaService.encontrarAtivasPorApelidoNormalizado(userId, token);
         if (candidatos.isEmpty()) {
             return msgErro(userId, "Saldo da conta",
-                "Chefe, não encontrei nenhuma conta com esse nome. Pode verificar como ela está cadastrada?");
+                prefixoVoc(userId) + "não encontrei nenhuma conta com esse nome. Pode verificar como ela está cadastrada?");
         }
         if (candidatos.size() > 1) {
             awaitingAmbiguidadeTransferencia.put(userId, PendingAmbiguidadeTransferencia.pendenteConsultaSaldo(token, candidatos));
-            return msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(token, candidatos));
+            return msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(userId, token, candidatos));
         }
         ContaBancaria conta = candidatos.get(0);
         return formatarSaldoContaUnica(userId, conta);
@@ -769,7 +828,7 @@ public class WhatsAppCommandService {
             if (origemRes.isAmbiguo()) {
                 awaitingAmbiguidadeTransferencia.put(userId, PendingAmbiguidadeTransferencia.pendenteOrigem(
                     valor, origemToken, destinoToken, origemRes.ambiguas()));
-                return msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(origemToken, origemRes.ambiguas()));
+                return msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(userId, origemToken, origemRes.ambiguas()));
             }
             if (!origemRes.ok()) {
                 return msgErro(userId, "Conta de origem", origemRes.mensagem());
@@ -778,7 +837,7 @@ public class WhatsAppCommandService {
             if (destinoRes.isAmbiguo()) {
                 awaitingAmbiguidadeTransferencia.put(userId, PendingAmbiguidadeTransferencia.pendenteDestino(
                     valor, origemRes.conta().getId(), destinoToken, destinoRes.ambiguas()));
-                return msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(destinoToken, destinoRes.ambiguas()));
+                return msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(userId, destinoToken, destinoRes.ambiguas()));
             }
             if (!destinoRes.ok()) {
                 return msgErro(userId, "Conta de destino", destinoRes.mensagem());
@@ -812,7 +871,7 @@ public class WhatsAppCommandService {
         List<ContaBancaria> candidatos = contaBancariaService.encontrarAtivasPorApelidoNormalizado(userId, token);
         if (candidatos.isEmpty()) {
             return ContaResolveResult.erro(
-                "Chefe, não encontrei nenhuma conta com esse nome. Pode verificar como ela está cadastrada?");
+                prefixoVoc(userId) + "não encontrei nenhuma conta com esse nome. Pode verificar como ela está cadastrada?");
         }
         if (candidatos.size() > 1) {
             return ContaResolveResult.ambiguo(candidatos);
@@ -820,9 +879,9 @@ public class WhatsAppCommandService {
         return ContaResolveResult.ok(candidatos.get(0));
     }
 
-    private String formatarPerguntaAmbiguidadeContas(String token, List<ContaBancaria> candidatos) {
+    private String formatarPerguntaAmbiguidadeContas(Long userId, String token, List<ContaBancaria> candidatos) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Chefe, \"").append(token).append("\" pode ser mais de uma coisa aqui. Qual você quis dizer?\n\n");
+        sb.append(prefixoVoc(userId)).append("\"").append(token).append("\" pode ser mais de uma coisa aqui. Qual você quis dizer?\n\n");
         int i = 1;
         for (ContaBancaria c : candidatos) {
             sb.append("*").append(i++).append("* — ").append(c.getNome());
@@ -856,7 +915,7 @@ public class WhatsAppCommandService {
                 if (destinoRes.isAmbiguo()) {
                     awaitingAmbiguidadeTransferencia.put(userId, PendingAmbiguidadeTransferencia.pendenteDestino(
                         pending.valor, origem.getId(), pending.destinoToken, destinoRes.ambiguas()));
-                    return Optional.of(msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(pending.destinoToken, destinoRes.ambiguas())));
+                    return Optional.of(msgInfo("Qual conta?", formatarPerguntaAmbiguidadeContas(userId, pending.destinoToken, destinoRes.ambiguas())));
                 }
                 if (!destinoRes.ok()) {
                     return Optional.of(msgErro(userId, "Conta de destino", destinoRes.mensagem()));
@@ -2012,6 +2071,7 @@ public class WhatsAppCommandService {
             .filter(k -> k != null && !k.isBlank())
             .orElse(null);
         try {
+            evolutionApiService.enviarPresencaComposing(from, webhookEvolutionInstanceHint);
             if (fromMe) {
                 log.debug("Recebida mensagem de self-chat: from={}, mediaType={}, textPreview={}",
                     from,
@@ -2277,6 +2337,10 @@ public class WhatsAppCommandService {
     private String executeCommand(JsonNode cmd, Long userId, String sourceText) {
         String action = cmd.path("action").asText("UNKNOWN");
         double confianca = readConfianca(cmd);
+        if (("CREATE_EXPENSE".equals(action) || "CREATE_INCOME".equals(action))
+            && precisaEsclarecimentoComando(cmd, confianca)) {
+            return msgInfo("Esclarecimento", mensagemEsclarecimentoComando(action));
+        }
         if (!"GET_INSIGHTS".equals(action) && !"CHECK_CARD_STATUS".equals(action) && !"LIST_CARDS".equals(action)
             && !"LIST_FATURAS".equals(action) && !"LIST_ACCOUNTS".equals(action) && !"TRANSFER_BETWEEN_ACCOUNTS".equals(action)
             && !"LIST_TRANSACTIONS".equals(action) && !"LIST_CATEGORIES".equals(action)
@@ -2423,7 +2487,8 @@ public class WhatsAppCommandService {
             if ("CONTRACHEQUE".equalsIgnoreCase(tipo)) {
                 ContrachequeDTO c = contrachequeImportService.processarExtracao(userId, extracted);
                 awaitingContrachequeImportConfirm.put(userId, c.getId());
-                return jarvisProtocolService.protocoloRendaConcluidoComDecomposicao(c);
+                return jarvisProtocolService.protocoloRendaConcluidoComDecomposicao(
+                    jarvisProtocolService.resolveVocative(userId, usuarioRepository), c);
             }
             if ("BOLETO_COBRANCA".equalsIgnoreCase(tipo) || documentoIAContextService.pareceBoletoOuPix(extracted)) {
                 JsonNode boleto = documentoIAContextService.normalizarBoletoPdf(extracted);
@@ -2694,7 +2759,7 @@ public class WhatsAppCommandService {
 
     private String respostaInvestimento(Long userId) {
         String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
-        String intro = jarvisProtocolService.introducaoProjecaoRotasCapital();
+        String intro = jarvisProtocolService.introducaoProjecaoRotasCapital(voc);
         return saldoService.sugerirInvestimentoSaldo(userId)
             .map(o -> intro + o.mensagemWhatsApp())
             .orElse(jarvisProtocolService.semSaldoParaInvestimentoJarvis(voc));
@@ -2772,7 +2837,7 @@ public class WhatsAppCommandService {
         if (!parcelado
             && (proposta.getValorTotal() == null || proposta.getValorTotal().compareTo(BigDecimal.ZERO) <= 0)) {
             return msgErro(userId, "Conselho financeiro",
-                "Me passa o valor da compra ou do empréstimo para eu analisar, chefe.");
+                prefixoVoc(userId) + "me passa o valor da compra ou do empréstimo para eu analisar.");
         }
         if (parcelado
             && (proposta.getValorParcela() == null || proposta.getQuantidadeParcelas() == null)) {
@@ -2785,7 +2850,7 @@ public class WhatsAppCommandService {
         // Fallback 1: renda não configurada em operação parcelada
         if (parcelado && ctx.getRendaLiquidaMensal() == null) {
             return msgInfo("Conselho financeiro",
-                "Chefe, pra te dar um veredito preciso sobre essa parcela eu preciso saber quanto "
+                prefixoVoc(userId) + "pra te dar um veredito preciso sobre essa parcela eu preciso saber quanto "
                     + "você recebe por mês. Quer configurar sua renda rapidinho? É só me dizer algo como "
                     + "_'minha renda é 4 mil por mês'_ ou acessar a aba Renda no app.");
         }
@@ -2988,9 +3053,13 @@ public class WhatsAppCommandService {
         return "✅ *" + acao + "*\n" + detalhe;
     }
 
+    private String prefixoVoc(Long userId) {
+        return tratamentoUsuarioService.prefixoVocativo(jarvisProtocolService.resolveVocative(userId, usuarioRepository));
+    }
+
     private String msgErro(Long userId, String contexto, String detalhe) {
         if (userId == null) {
-            return jarvisProtocolService.formatoMsgErro("Senhor", contexto, detalhe);
+            return jarvisProtocolService.formatoMsgErro(TratamentoUsuarioService.VOCATIVO_PADRAO, contexto, detalhe);
         }
         String v = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
         return jarvisProtocolService.formatoMsgErro(v, contexto, detalhe);
@@ -3350,6 +3419,9 @@ public class WhatsAppCommandService {
             dto.setDataTransacao(LocalDateTime.now());
             dto.setStatusConferencia(status);
             Long categoriaId = resolveCategoriaId(userId, readCategoriaFiltro(cmd));
+            if (categoriaId == null) {
+                categoriaId = resolveCategoriaId(userId, sanitizeDescription(description));
+            }
             if (categoriaId != null) {
                 dto.setCategoriaId(categoriaId);
             }
@@ -3885,7 +3957,8 @@ public class WhatsAppCommandService {
             && dto.getMetaFaturamentoMensal().compareTo(BigDecimal.ZERO) > 0
             ? BRL.format(dto.getMetaFaturamentoMensal())
             : "não informada";
-        return "Entendido, chefe! Mudei seu perfil para *Fluxo Diário (Múltiplos PIX)*. "
+        return tratamentoUsuarioService.entendidoExclamacao(jarvisProtocolService.resolveVocative(userId, usuarioRepository))
+            + "Mudei seu perfil para *Fluxo Diário (Múltiplos PIX)*. "
             + "Analisei suas receitas dos últimos 90 dias e sua renda média real está em *"
             + BRL.format(mediaReal) + "*. Defini sua meta de faturamento em *" + metaTxt + "*.";
     }
@@ -4315,7 +4388,7 @@ public class WhatsAppCommandService {
             || normalized.contains("estou a preparar o seu relatorio")
             || normalized.contains("segue o pdf acima")
             || normalized.contains("relatorio_export")
-            || normalized.contains("compreendido, senhor")
+            || normalized.contains(TratamentoUsuarioService.MARCADOR_COMPREENDIDO_SENHOR)
             || normalized.contains("deixe comigo. ja estou analisando")
             || normalized.contains("deixe comigo. processando")
             || normalized.contains("ouvindo seu audio")
@@ -4343,7 +4416,7 @@ public class WhatsAppCommandService {
             || normalized.contains("recebi o documento")
             || normalized.contains("processando a sua mensagem")
             || normalized.contains("sistemas ativos")
-            || normalized.contains("lamento, senhor")
+            || normalized.contains(TratamentoUsuarioService.MARCADOR_LAMENTO_SENHOR)
             || normalized.contains("meus sistemas de visao");
     }
 
@@ -4453,11 +4526,31 @@ public class WhatsAppCommandService {
         if (categoriaSugerida == null || categoriaSugerida.isBlank()) {
             return null;
         }
+        Optional<Long> correcao = categoriaCorrecaoMemoriaService.sugerirCategoriaPorCorrecao(userId, categoriaSugerida);
+        if (correcao.isPresent()) {
+            return correcao.get();
+        }
         List<Categoria> candidatos = categoriaService.encontrarAtivasPorApelidoNormalizado(userId, categoriaSugerida);
         if (candidatos.isEmpty()) {
             return null;
         }
         return candidatos.get(0).getId();
+    }
+
+    private static boolean precisaEsclarecimentoComando(JsonNode cmd, double confianca) {
+        if (confianca >= 0.75d) {
+            return false;
+        }
+        boolean semValor = !cmd.has("amount") || cmd.path("amount").asDouble(0d) <= 0d;
+        boolean semDesc = cmd.path("description").asText("").isBlank();
+        return confianca < 0.55d || semValor || semDesc;
+    }
+
+    private static String mensagemEsclarecimentoComando(String action) {
+        if ("CREATE_INCOME".equals(action)) {
+            return "Preciso de mais detalhe: *qual valor* entrou e *de onde* veio? Ex.: *recebi 500 do freelance*.";
+        }
+        return "Preciso de mais detalhe: *qual valor* e *onde* foi o gasto? Ex.: *gastei 30 no Uber*.";
     }
 
     private String nomeCategoriaParaExibicao(Long userId, Long categoriaId, String categoriaSugeridaPeloOcr) {
@@ -5604,7 +5697,7 @@ public class WhatsAppCommandService {
                 UsuarioSessaoContextoService.CHAVE_HABITO_CONFIRMACAO);
             cerebroSemanticoService.confirmarHabito(userId, memoriaId, true);
             return Optional.of(msgOk("Memória",
-                "Padrão confirmado, chefe. Vou tratá-lo como comportamento estabelecido nas próximas análises."));
+                prefixoVoc(userId) + "padrão confirmado. Vou tratá-lo como comportamento estabelecido nas próximas análises."));
         }
         if (isNegativeReply(text)) {
             sessaoContextoService.remover(userId, UsuarioSessaoContextoService.CANAL_WHATSAPP,
@@ -5660,7 +5753,9 @@ public class WhatsAppCommandService {
         req.setDiaVencimento(dia);
         req.setCategoria("Obrigações fixas");
         despesaFixaService.criar(userId, req);
-        return jarvisProtocolService.protocoloSentinelaDespesaFixaRegistrada(req.getDescricao(), BRL.format(valor), dia);
+        return jarvisProtocolService.protocoloSentinelaDespesaFixaRegistrada(
+            jarvisProtocolService.resolveVocative(userId, usuarioRepository),
+            req.getDescricao(), BRL.format(valor), dia);
     }
 
     private static DespesaFixaIntent toDespesaFixaIntent(DespesaFixaWhatsappTextParser.ParsedDespesaFixa parsed) {

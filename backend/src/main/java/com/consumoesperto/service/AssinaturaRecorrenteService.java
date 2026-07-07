@@ -10,6 +10,7 @@ import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.AssinaturaRecorrenteRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -58,6 +59,7 @@ public class AssinaturaRecorrenteService {
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final JarvisProtocolService jarvisProtocolService;
     private final TextMatcherService textMatcherService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
 
     @Transactional(readOnly = true)
     public Map<Long, String> mapearNomesPorId(Long usuarioId) {
@@ -255,7 +257,7 @@ public class AssinaturaRecorrenteService {
             usuarioId,
             UsuarioSessaoContextoService.CANAL_WHATSAPP,
             UsuarioSessaoContextoService.CHAVE_ASSINATURA_CONFIRMACAO
-        ).map(this::mensagemSugestaoFromContexto)
+        ).map(ctx -> mensagemSugestaoFromContexto(usuarioId, ctx))
             .orElse("");
     }
 
@@ -423,19 +425,21 @@ public class AssinaturaRecorrenteService {
         String nomeConta = conta.getNome();
         String saldoFmt = BRL.format(conta.getSaldoDisponivel());
 
+        String voc = tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository);
+
         if (!conta.temSaldoSuficiente(valor)) {
             return jarvisProtocolService.lembreteAssinaturaVencimento(
-                diasAntecedencia, nome, valorFmt, nomeConta, saldoFmt, null,
+                voc, diasAntecedencia, nome, valorFmt, nomeConta, saldoFmt, null,
                 JarvisProtocolService.TipoSaldoLembreteAssinatura.INSUFICIENTE);
         }
         if (saldo.compareTo(valor) >= 0) {
             return jarvisProtocolService.lembreteAssinaturaVencimento(
-                diasAntecedencia, nome, valorFmt, nomeConta, BRL.format(saldo), null,
+                voc, diasAntecedencia, nome, valorFmt, nomeConta, BRL.format(saldo), null,
                 JarvisProtocolService.TipoSaldoLembreteAssinatura.SUFICIENTE);
         }
         BigDecimal usoCheque = valor.subtract(saldo.max(BigDecimal.ZERO)).setScale(2, RoundingMode.HALF_UP);
         return jarvisProtocolService.lembreteAssinaturaVencimento(
-            diasAntecedencia, nome, valorFmt, nomeConta, BRL.format(saldo), BRL.format(usoCheque),
+            voc, diasAntecedencia, nome, valorFmt, nomeConta, BRL.format(saldo), BRL.format(usoCheque),
             JarvisProtocolService.TipoSaldoLembreteAssinatura.CHEQUE_ESPECIAL);
     }
 
@@ -471,24 +475,26 @@ public class AssinaturaRecorrenteService {
             if (u == null || u.getWhatsappNumero() == null || u.getWhatsappNumero().isBlank()) {
                 return;
             }
-            whatsAppNotificationService.enviarParaUsuario(usuarioId, mensagemSugestao(d));
+            whatsAppNotificationService.enviarParaUsuario(usuarioId, mensagemSugestao(usuarioId, d));
         } catch (Exception e) {
             log.debug("Falha ao notificar proposta assinatura userId={}: {}", usuarioId, e.getMessage());
         }
     }
 
-    private String mensagemSugestao(DeteccaoRecorrencia d) {
-        return "Chefe, notei que você paga *" + d.nomeExibicao() + "* todo mês (cerca de *"
+    private String mensagemSugestao(Long usuarioId, DeteccaoRecorrencia d) {
+        String vocPrefix = tratamentoUsuarioService.prefixoVocativo(
+            tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository));
+        return vocPrefix + "notei que você paga *" + d.nomeExibicao() + "* todo mês (cerca de *"
             + BRL.format(d.valorMedio()) + "*). Quer que eu salve isso como uma *Assinatura ativa* "
             + "para eu passar a monitorar para você? Responda *sim* ou *não*.";
     }
 
-    private String mensagemSugestaoFromContexto(Map<String, Object> ctx) {
+    private String mensagemSugestaoFromContexto(Long usuarioId, Map<String, Object> ctx) {
         String nome = String.valueOf(ctx.getOrDefault("nome", "assinatura"));
         BigDecimal valor = ctx.get("valor") instanceof Number n
             ? BigDecimal.valueOf(n.doubleValue()).setScale(2, RoundingMode.HALF_UP)
             : BigDecimal.ZERO;
-        return "\n\n" + mensagemSugestao(new DeteccaoRecorrencia(nome, valor, 1, null));
+        return "\n\n" + mensagemSugestao(usuarioId, new DeteccaoRecorrencia(nome, valor, 1, null));
     }
 
     private DeteccaoRecorrencia dadosFromContexto(Map<String, Object> ctx) {

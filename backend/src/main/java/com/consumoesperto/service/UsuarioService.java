@@ -5,6 +5,7 @@ import com.consumoesperto.exception.DataConflictException;
 import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -48,6 +49,7 @@ public class UsuarioService {
     private final PasswordEncoder passwordEncoder;
 
     private final JarvisProtocolService jarvisProtocolService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
     private final WhatsAppNotificationService whatsAppNotificationService;
 
     /**
@@ -313,26 +315,6 @@ public class UsuarioService {
         }
     }
 
-    private static String tituloCurtoDePreferencia(Usuario.PreferenciaTratamentoJarvis p) {
-        if (p == null) {
-            return "";
-        }
-        switch (p) {
-            case SENHOR:
-                return "Senhor";
-            case SENHORA:
-                return "Senhora";
-            case DOUTOR:
-                return "Doutor";
-            case DOUTORA:
-                return "Doutora";
-            case NENHUM:
-            case AUTOMATICO:
-            default:
-                return "";
-        }
-    }
-
     private void aplicarSincPreferenciaJarvis(Usuario u, Usuario.PreferenciaTratamentoJarvis escolha) {
         Usuario.PreferenciaTratamentoJarvis e = escolha != null
             ? escolha
@@ -345,7 +327,7 @@ public class UsuarioService {
         } else {
             u.setGeneroConfirmado(true);
             u.setJarvisConfigurado(true);
-            u.setTratamento(tituloCurtoDePreferencia(e));
+            u.setTratamento(tratamentoUsuarioService.rotuloPreferenciaTratamento(e));
         }
     }
 

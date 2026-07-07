@@ -5,6 +5,7 @@ import com.consumoesperto.dto.MemoriaSemanticaSimilaridadeDTO;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,7 @@ public class InsightService {
     private final JarvisProtocolService jarvisProtocolService;
     private final UsuarioRepository usuarioRepository;
     private final JarvisFeedbackService jarvisFeedbackService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
 
     /**
      * Mensagem Markdown para WhatsApp com até 3 recorrências prováveis (últimos 90 dias).
@@ -57,6 +59,8 @@ public class InsightService {
     public String montarRecorrenciasWhatsapp(Long userId) {
         log.info("[INSIGHT-LOG] Início análise 90d userId={}", userId);
         String alertaDomino = montarAlertaGatilhoHabito2h(userId);
+        String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+        String vocPrefix = tratamentoUsuarioService.prefixoVocativo(voc);
         LocalDateTime inicio = LocalDate.now().minusDays(DIAS).atStartOfDay();
         List<Transacao> linhas = transacaoRepository.findDespesasConfirmadasDesde(userId, inicio);
         if (linhas.isEmpty()) {
@@ -162,7 +166,7 @@ public class InsightService {
                 .setScale(0, RoundingMode.HALF_UP)
                 .intValue();
             if (perfil == FinanceInsightProfileClassifier.Perfil.ASSINATURA_SERVICO) {
-                sb.append("• ⚠️ Senhor, detectei uma elevação na assinatura de *")
+                sb.append("• ⚠️ ").append(vocPrefix).append("detectei uma elevação na assinatura de *")
                     .append(x.nomeExibicao)
                     .append("*. O valor típico mensal está em *")
                     .append(BRL.format(x.media))
@@ -175,7 +179,7 @@ public class InsightService {
                     sb.append(mem).append('\n');
                 }
             } else {
-                sb.append("• ⛽ Senhor, seus gastos em *")
+                sb.append("• ⛽ ").append(vocPrefix).append("seus gastos em *")
                     .append(x.nomeExibicao)
                     .append("* seguem padrão de consumo variável — média *")
                     .append(BRL.format(x.media))
@@ -214,7 +218,8 @@ public class InsightService {
             }
             if (det.isPresent()) {
                 GatilhoHabitoDeteccaoDTO g = det.get();
-                return "⚠️ Senhor, detectei o gatilho *" + g.getGatilhoRotulo() + "*. O histórico indica *"
+                String voc = jarvisProtocolService.resolveVocative(userId, usuarioRepository);
+                return "⚠️ " + tratamentoUsuarioService.prefixoVocativo(voc) + "detectei o gatilho *" + g.getGatilhoRotulo() + "*. O histórico indica *"
                     + g.getProbabilidadePercentual() + "%* de chance de um gasto subsequente em *"
                     + g.getAlvoRotulo() + "*. Recomendo cautela para preservar o *Escudo de Energia*.";
             }

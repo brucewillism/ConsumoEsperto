@@ -9,6 +9,8 @@ import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
+import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -47,6 +49,8 @@ public class EmprestimoService {
     private final JarvisContextoFinanceiroService jarvisContextoFinanceiroService;
     private final FinancialAdviceCalculator financialAdviceCalculator;
     private final MarketDataService marketDataService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
+    private final UsuarioRepository usuarioRepository;
 
     /** Pré-visualização sem persistir — usada para confirmação no WhatsApp. */
     @Transactional(readOnly = true)
@@ -217,7 +221,7 @@ public class EmprestimoService {
                 motivos.add("valor elevado");
             }
             motivo = String.join(", ", motivos);
-            msgConfirm = montarMensagemConfirmacao(proposta, calc, contaRes, pctDepois);
+            msgConfirm = montarMensagemConfirmacao(usuarioId, proposta, calc, contaRes, pctDepois);
         }
 
         return ResultadoRegistroEmprestimo.builder()
@@ -247,11 +251,13 @@ public class EmprestimoService {
     }
 
     private String montarMensagemConfirmacao(
+        Long usuarioId,
         PropostaEmprestimoConsignado proposta,
         CalculoEmprestimo calc,
         ResolucaoConta contaRes,
         BigDecimal pctDepois
     ) {
+        String voc = tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository);
         NumberFormat brl = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
         String contaTxt = contaRes.conta() != null
             ? contaRes.conta().getNome()
@@ -259,7 +265,7 @@ public class EmprestimoService {
                 ? String.join(" ou ", contaRes.nomesAmbiguos())
                 : "conta padrão");
         StringBuilder sb = new StringBuilder();
-        sb.append("Confirmando, chefe: *").append(brl.format(proposta.getValorTomado()))
+        sb.append(tratamentoUsuarioService.confirmando(voc)).append("*").append(brl.format(proposta.getValorTomado()))
             .append("* caindo no *").append(contaTxt).append("*, em *")
             .append(proposta.getQuantidadeParcelas()).append("x de ")
             .append(brl.format(calc.parcela())).append("*");

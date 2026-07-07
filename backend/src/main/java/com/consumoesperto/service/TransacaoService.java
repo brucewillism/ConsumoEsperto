@@ -76,6 +76,14 @@ public class TransacaoService {
 
     private final CerebroSemanticoService cerebroSemanticoService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.consumoesperto.service.jarvis.JarvisContextoFinanceiroCacheService jarvisContextoFinanceiroCacheService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.consumoesperto.service.jarvis.CategoriaCorrecaoMemoriaService categoriaCorrecaoMemoriaService;
+
     /**
      * Cria uma nova transação financeira no sistema
      * 
@@ -201,6 +209,7 @@ public class TransacaoService {
             scoreService.registrarEvento(usuarioId, ScoreService.EventoScore.INVESTIMENTO_REGISTRADO,
                 "Investimento registrado: " + transacaoSalva.getDescricao());
         }
+        invalidarContextoJarvis(usuarioId);
         return converterParaDTO(transacaoSalva);
     }
 
@@ -273,6 +282,7 @@ public class TransacaoService {
         }
 
         Long faturaIdAntes = transacao.getFatura() != null ? transacao.getFatura().getId() : null;
+        Long categoriaIdAntes = transacao.getCategoria() != null ? transacao.getCategoria().getId() : null;
         SaldoMovimentacaoService.MovimentacaoSnapshot snap = saldoMovimentacaoService.capturarSnapshot(transacao);
 
         validarTipoTransacaoCrudGenerico(transacaoDTO, false);
@@ -322,6 +332,14 @@ public class TransacaoService {
         if (transacaoAtualizada.getTipoTransacao() == Transacao.TipoTransacao.DESPESA) {
             financialProactiveService.aposDespesaSalva(transacaoAtualizada);
         }
+        Long categoriaIdDepois = transacaoAtualizada.getCategoria() != null ? transacaoAtualizada.getCategoria().getId() : null;
+        if (categoriaCorrecaoMemoriaService != null && categoriaIdDepois != null
+            && !Objects.equals(categoriaIdAntes, categoriaIdDepois)
+            && transacaoAtualizada.getDescricao() != null && !transacaoAtualizada.getDescricao().isBlank()) {
+            categoriaCorrecaoMemoriaService.registrarCorrecaoCategoria(
+                usuarioId, transacaoAtualizada.getDescricao(), categoriaIdDepois);
+        }
+        invalidarContextoJarvis(usuarioId);
         return converterParaDTO(transacaoAtualizada);
     }
 
@@ -425,6 +443,7 @@ public class TransacaoService {
         }
         saldoService.notificarAlteracaoSaldo(usuarioId);
         revalidarMemoriasAposExclusao(usuarioId, List.of(id));
+        invalidarContextoJarvis(usuarioId);
     }
 
     /**
@@ -904,9 +923,6 @@ public class TransacaoService {
         return salva;
     }
 
-    /**
-     * ST-05: {@code PAGAMENTO_FATURA} só via {@link FaturaConciliacaoService} (persistência direta).
-     */
     private static void validarTipoTransacaoCrudGenerico(TransacaoDTO dto, boolean permitirPagamentoFatura) {
         if (dto == null || dto.getTipoTransacao() != TransacaoDTO.TipoTransacao.PAGAMENTO_FATURA) {
             return;
@@ -918,6 +934,12 @@ public class TransacaoService {
         }
         if (dto.getFaturaId() == null) {
             throw new IllegalArgumentException("PAGAMENTO_FATURA exige fatura_id vinculada.");
+        }
+    }
+
+    private void invalidarContextoJarvis(Long usuarioId) {
+        if (jarvisContextoFinanceiroCacheService != null && usuarioId != null) {
+            jarvisContextoFinanceiroCacheService.invalidar(usuarioId);
         }
     }
 }

@@ -59,7 +59,7 @@ public class TestController {
     public Map<String, String> root() {
         // Cria resposta com informações básicas da API
         Map<String, String> response = new HashMap<>();
-        response.put("message", "Bem-vindo à API ConsumoEsperto!");
+        response.put("message", "API ConsumoEsperto operacional.");
         response.put("version", "1.0.0");
         return response;
     }

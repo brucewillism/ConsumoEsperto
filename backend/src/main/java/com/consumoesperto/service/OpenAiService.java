@@ -5,6 +5,7 @@ import com.consumoesperto.model.ResultadoRegistroEmprestimo;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.Veredito;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import com.consumoesperto.service.ai.AiGatewayPromptContext;
 import com.consumoesperto.service.ai.AiGatewayService;
 import com.consumoesperto.util.AiProviderOrder;
@@ -49,13 +50,22 @@ public class OpenAiService {
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
     private final AiGatewayService aiGatewayService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
 
     /** Injeção lazy para quebrar o ciclo OpenAiService → Contexto → SaldoService → OpenAiService. */
     @org.springframework.beans.factory.annotation.Autowired
     @org.springframework.context.annotation.Lazy
-    private JarvisContextoFinanceiroService jarvisContextoFinanceiroService;
+    private com.consumoesperto.service.jarvis.JarvisContextoFinanceiroCacheService jarvisContextoFinanceiroCacheService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.consumoesperto.service.jarvis.JarvisConversaJanelaService jarvisConversaJanelaService;
+
+    @Value("${consumoesperto.jarvis.performance.parse-read-timeout-ms:25000}")
+    private int parseReadTimeoutMs;
 
     private RestTemplate restTemplate;
+    private RestTemplate parseRestTemplate;
 
     @Value("${consumoesperto.ai.http.connect-timeout-ms:15000}")
     private int aiHttpConnectTimeoutMs;
@@ -103,6 +113,11 @@ public class OpenAiService {
         factory.setConnectTimeout(Math.max(5_000, aiHttpConnectTimeoutMs));
         factory.setReadTimeout(Math.max(30_000, aiHttpReadTimeoutMs));
         restTemplate = new RestTemplate(factory);
+
+        SimpleClientHttpRequestFactory parseFactory = new SimpleClientHttpRequestFactory();
+        parseFactory.setConnectTimeout(Math.max(3_000, Math.min(aiHttpConnectTimeoutMs, 10_000)));
+        parseFactory.setReadTimeout(Math.max(5_000, parseReadTimeoutMs));
+        parseRestTemplate = new RestTemplate(parseFactory);
     }
 
     public String transcribeAudio(byte[] audioBytes, String filename, String contentType, Long userId) {
@@ -117,11 +132,14 @@ public class OpenAiService {
 
     /** Monta o bloco de contexto financeiro da persona; nunca lança nem deixa placeholder literal. */
     private String montarContextoFinanceiroSeguro(Long userId) {
-        if (userId == null || jarvisContextoFinanceiroService == null) {
+        if (userId == null) {
             return "";
         }
         try {
-            return jarvisContextoFinanceiroService.montarBlocoContexto(userId);
+            if (jarvisContextoFinanceiroCacheService != null) {
+                return jarvisContextoFinanceiroCacheService.montarBlocoContexto(userId);
+            }
+            return "";
         } catch (Exception e) {
             log.debug("Contexto financeiro J.A.R.V.I.S. indisponível userId={}: {}", userId, e.getMessage());
             return "";
@@ -174,8 +192,14 @@ public class OpenAiService {
             "na dúvida, devolva array vazio. " +
             "Se a frase citar cartão/banco (ex: 'paguei 20 no Nubank'), preencha cardName e/ou bank.";
 
-        String userPrompt = "Texto do usuário: " + inputText + "\n" +
-            "Regras:\n" +
+        String userPrompt = "Texto do usuário: " + inputText + "\n";
+        if (jarvisConversaJanelaService != null && userId != null) {
+            String hist = jarvisConversaJanelaService.montarBlocoHistorico(userId);
+            if (hist != null && !hist.isBlank()) {
+                userPrompt = hist + "\n" + userPrompt;
+            }
+        }
+        userPrompt += "Regras:\n" +
             "- Se for despesa: action CREATE_EXPENSE e preencher description + amount; categoryName quando o estabelecimento " +
             "implicar categoria (ex.: ubr/uber→Transporte, mrcdo/mercado→Alimentação); nome_normalizado nas entidades.\n" +
             "- Parcelamento no cartão (CREATE_EXPENSE): obrigatório cartão (cardName/bank). " +
@@ -605,7 +629,9 @@ public class OpenAiService {
      */
     public String narrarConselho(Long userId, ResultadoConselho resultado) {
         if (resultado == null) {
-            return "Chefe, não consegui montar o cenário agora. Tenta de novo com valor e parcelas, se houver.";
+            String voc = tratamentoUsuarioService.vocativoPorId(userId, usuarioRepository);
+            return tratamentoUsuarioService.prefixoVocativo(voc)
+                + "não consegui montar o cenário agora. Tenta de novo com valor e parcelas, se houver.";
         }
         NumberFormat brl = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
         String vereditoTxt = switch (resultado.getVeredito() != null ? resultado.getVeredito() : Veredito.ATENCAO) {
@@ -650,10 +676,11 @@ public class OpenAiService {
         }
 
         Usuario u = userId == null ? null : usuarioRepository.findById(userId).orElse(null);
+        String trat = tratamentoUsuarioService.tratamentoConversacional(u, null);
         String contextoFinanceiro = montarContextoFinanceiroSeguro(userId);
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(u, contextoFinanceiro);
         String system = persona
-            + "Você é o J.A.R.V.I.S., estrategista financeiro pessoal do chefe. Os cálculos JÁ FORAM FEITOS.\n"
+            + "Você é o J.A.R.V.I.S., estrategista financeiro pessoal. Os cálculos JÁ FORAM FEITOS.\n"
             + "Sua tarefa é APENAS transformar os dados abaixo em uma resposta clara, direta e humana.\n"
             + "NÃO recalcule nada. NÃO invente números. Use exatamente os valores fornecidos.\n\n"
             + "REGRAS DE REDAÇÃO:\n"
@@ -661,12 +688,12 @@ public class OpenAiService {
             + "2. Explique o PORQUÊ em linguagem simples, sem jargão técnico.\n"
             + "3. Se houver juros, mostre o impacto concreto no bolso.\n"
             + "4. Para parcelas, diga quantos % da renda ficam comprometidos.\n"
-            + "5. Em decisões grandes, feche lembrando que a decisão é do chefe.\n"
-            + "6. Tom: direto, honesto, protetor do bolso. Chame de chefe.\n"
+            + "5. Em decisões grandes, feche lembrando que a decisão é de " + trat + ".\n"
+            + "6. Tom: direto, honesto, protetor do bolso. Trate por \"" + trat + "\".\n"
             + "7. Máximo 2 emojis além do selo.\n"
             + "8. Orientação baseada nos dados cadastrados — não é garantia nem consultoria profissional.\n";
         String userPrompt = "DADOS CALCULADOS:\n" + dados;
-        String fallback = montarFallbackDeterministico(resultado, brl);
+        String fallback = montarFallbackDeterministico(userId, resultado, brl);
         return gerarTexto(userId, system, userPrompt, fallback);
     }
 
@@ -675,7 +702,9 @@ public class OpenAiService {
      */
     public String narrarRegistroEmprestimo(Long userId, ResultadoRegistroEmprestimo resultado) {
         if (resultado == null) {
-            return "Chefe, não consegui concluir o registro do empréstimo agora.";
+            String voc = tratamentoUsuarioService.vocativoPorId(userId, usuarioRepository);
+            return tratamentoUsuarioService.prefixoVocativo(voc)
+                + "não consegui concluir o registro do empréstimo agora.";
         }
         NumberFormat brl = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
         StringBuilder dados = new StringBuilder();
@@ -717,6 +746,7 @@ public class OpenAiService {
         }
 
         Usuario u = userId == null ? null : usuarioRepository.findById(userId).orElse(null);
+        String trat = tratamentoUsuarioService.tratamentoConversacional(u, null);
         String contextoFinanceiro = montarContextoFinanceiroSeguro(userId);
         String persona = jarvisProtocolService.camadaPersonaCompletaParaIa(u, contextoFinanceiro);
         String system = persona
@@ -726,15 +756,16 @@ public class OpenAiService {
             + "2. Mostre o custo real: quanto recebe vs quanto devolve e juros.\n"
             + "3. Diga quanto da renda fica comprometido e por quantos meses.\n"
             + "4. Se parcela estimada, avise para informar valor exato do contrato.\n"
-            + "5. Linguagem simples. Chame de chefe. Máximo 2 emojis.\n"
+            + "5. Linguagem simples. Trate por \"" + trat + "\". Máximo 2 emojis.\n"
             + "6. Feche lembrando que dá pra acompanhar na aba Transações.\n";
-        String fallback = montarFallbackRegistroEmprestimo(resultado, brl);
+        String fallback = montarFallbackRegistroEmprestimo(userId, resultado, brl);
         return gerarTexto(userId, system, "DADOS CALCULADOS (não recalcule, apenas redija):\n" + dados, fallback);
     }
 
-    private static String montarFallbackRegistroEmprestimo(ResultadoRegistroEmprestimo r, NumberFormat brl) {
+    private String montarFallbackRegistroEmprestimo(Long userId, ResultadoRegistroEmprestimo r, NumberFormat brl) {
+        String voc = tratamentoUsuarioService.vocativoPorId(userId, usuarioRepository);
         StringBuilder sb = new StringBuilder();
-        sb.append("Feito, chefe! Creditei *").append(brl.format(r.getValorTomado())).append("*");
+        sb.append(tratamentoUsuarioService.feitoExclamacao(voc)).append("Creditei *").append(brl.format(r.getValorTomado())).append("*");
         if (r.getContaNome() != null) {
             sb.append(" na *").append(r.getContaNome()).append("*");
         }
@@ -760,7 +791,8 @@ public class OpenAiService {
         return sb.toString();
     }
 
-    private static String montarFallbackDeterministico(ResultadoConselho r, NumberFormat brl) {
+    private String montarFallbackDeterministico(Long userId, ResultadoConselho r, NumberFormat brl) {
+        String voc = tratamentoUsuarioService.vocativoPorId(userId, usuarioRepository);
         String selo = switch (r.getVeredito() != null ? r.getVeredito() : Veredito.ATENCAO) {
             case RISCO_ALTO -> "🔴 *[RISCO ALTO]*";
             case SEGURO -> "🟢 *[PODE IR]*";
@@ -780,7 +812,7 @@ public class OpenAiService {
         if (r.getSaldoAposCompra() != null) {
             sb.append("Saldo após compra: ").append(brl.format(r.getSaldoAposCompra())).append(". ");
         }
-        sb.append("A palavra final é sua, chefe.");
+        sb.append(tratamentoUsuarioService.palavraFinal(voc));
         return sb.toString();
     }
 
@@ -875,7 +907,22 @@ public class OpenAiService {
     }
 
     private List<AiProviderType> orderedProviders(AiProvidersConfig cfg) {
-        return AiProviderOrder.canonicalTypes();
+        List<String> userOrder = cfg != null && cfg.getProviderOrder() != null
+            ? cfg.getProviderOrder()
+            : List.of();
+        List<AiProviderType> out = new ArrayList<>();
+        for (String name : userOrder) {
+            AiProviderType t = AiProviderType.fromString(name);
+            if (t != null && !out.contains(t)) {
+                out.add(t);
+            }
+        }
+        for (AiProviderType t : AiProviderOrder.canonicalTypes()) {
+            if (!out.contains(t)) {
+                out.add(t);
+            }
+        }
+        return out;
     }
 
     private boolean canChatJson(AiProvidersConfig cfg, AiProviderType p) {
@@ -1072,7 +1119,7 @@ public class OpenAiService {
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
         String url = trimTrailingSlash(claudeBaseUrl) + "/v1/messages";
-        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = parseRestTemplate.exchange(url, HttpMethod.POST, entity, String.class);
         try {
             JsonNode root = objectMapper.readTree(response.getBody());
             String content = root.path("content").path(0).path("text").asText("");
@@ -1114,7 +1161,7 @@ public class OpenAiService {
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
         String url = trimTrailingSlash(geminiBaseUrl) + "/models/" + model + ":generateContent?key=" + platformGeminiApiKey.trim();
-        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = parseRestTemplate.exchange(url, HttpMethod.POST, entity, String.class);
         return extractJsonFromGeminiResponse(response.getBody());
     }
 
@@ -1123,7 +1170,7 @@ public class OpenAiService {
         ensureOpenAiCompatibleConfigured(providerName, key, providerBaseUrl);
         boolean ollama = AiProviderType.OLLAMA.name().equalsIgnoreCase(providerName);
         Map<String, Object> payload = buildChatJsonPayload(model, systemPrompt, userPrompt, !ollama);
-        ResponseEntity<String> response = callOpenAiCompatible(providerBaseUrl, key, payload);
+        ResponseEntity<String> response = callOpenAiCompatibleForParse(providerBaseUrl, key, payload);
         return extractJsonFromOpenAiCompatibleResponse(response.getBody(), providerName, "comando");
     }
 
@@ -1182,13 +1229,24 @@ public class OpenAiService {
     }
 
     private ResponseEntity<String> callOpenAiCompatible(String providerBaseUrl, String key, Map<String, Object> payload) {
+        return callOpenAiCompatibleForParse(providerBaseUrl, key, payload, false);
+    }
+
+    private ResponseEntity<String> callOpenAiCompatibleForParse(String providerBaseUrl, String key, Map<String, Object> payload) {
+        return callOpenAiCompatibleForParse(providerBaseUrl, key, payload, true);
+    }
+
+    private ResponseEntity<String> callOpenAiCompatibleForParse(
+        String providerBaseUrl, String key, Map<String, Object> payload, boolean parse
+    ) {
         HttpHeaders headers = new HttpHeaders();
         if (key != null && !key.isBlank()) {
             headers.setBearerAuth(key);
         }
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
-        return restTemplate.exchange(trimTrailingSlash(providerBaseUrl) + "/chat/completions", HttpMethod.POST, entity, String.class);
+        RestTemplate rt = parse ? parseRestTemplate : restTemplate;
+        return rt.exchange(trimTrailingSlash(providerBaseUrl) + "/chat/completions", HttpMethod.POST, entity, String.class);
     }
 
     private JsonNode extractJsonFromOpenAiCompatibleResponse(String body, String providerName, String operation) {

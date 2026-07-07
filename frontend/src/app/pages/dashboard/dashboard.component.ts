@@ -1925,8 +1925,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   get linhaCabecalhoDashboard(): string {
     const u = this.userPerfilJarvis;
+    if (u?.saudacaoDashboard?.trim()) {
+      return u.saudacaoDashboard;
+    }
     if (u?.jarvisConfigurado === true && u.jarvisTratamentoResumo?.trim()) {
-      return `Bem-vindo de volta, ${u.jarvisTratamentoResumo}.`;
+      return `Que bom te ver de volta, ${u.jarvisTratamentoResumo}.`;
     }
     return 'Visão geral das suas finanças';
   }

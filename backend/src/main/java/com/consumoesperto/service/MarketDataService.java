@@ -15,6 +15,7 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 
@@ -55,6 +56,13 @@ public class MarketDataService {
     @Value("${consumoesperto.market.fallback.taxa-veiculo-aa:22}")
     private BigDecimal fallbackVeiculoAa;
 
+    @Value("${consumoesperto.jarvis.performance.market-cache-ttl-seconds:7200}")
+    private int marketCacheTtlSeconds;
+
+    private volatile MarketIndicatorsDTO cachedIndicadores;
+    private volatile long cachedAtEpochMs;
+    private volatile MarketIndicatorsDTO lastKnownIndicadores;
+
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -67,6 +75,33 @@ public class MarketDataService {
     }
 
     public MarketIndicatorsDTO buscarIndicadoresResiliente() {
+        long now = System.currentTimeMillis();
+        if (cachedIndicadores != null && cachedAtEpochMs > 0
+            && (now - cachedAtEpochMs) < marketCacheTtlSeconds * 1000L) {
+            return cachedIndicadores;
+        }
+        MarketIndicatorsDTO fresh = buscarIndicadoresAoVivo();
+        cachedIndicadores = fresh;
+        cachedAtEpochMs = now;
+        if (fresh != null && (!Boolean.TRUE.equals(fresh.getDadosParciais()) || lastKnownIndicadores == null)) {
+            lastKnownIndicadores = fresh;
+        }
+        return fresh;
+    }
+
+    private MarketIndicatorsDTO buscarIndicadoresAoVivo() {
+        try {
+            return montarIndicadoresMercado();
+        } catch (Exception e) {
+            log.debug("Falha ao buscar indicadores BCB/USD: {}", e.getMessage());
+            if (lastKnownIndicadores != null) {
+                return lastKnownIndicadores;
+            }
+            return montarIndicadoresMercado();
+        }
+    }
+
+    private MarketIndicatorsDTO montarIndicadoresMercado() {
         MarketIndicatorsDTO.MarketIndicatorsDTOBuilder b = MarketIndicatorsDTO.builder().dadosParciais(false);
         boolean parcial = false;
         BigDecimal selic = null;

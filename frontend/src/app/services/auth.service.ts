@@ -423,6 +423,10 @@ export class AuthService {
       tratamento: response.tratamento,
       jarvisConfigurado:
         response.jarvisConfigurado === true || response.jarvis_configurado === true,
+      vocativo: response.vocativo,
+      generoGramatical: response.generoGramatical,
+      tratamentoConfigurado: response.tratamentoConfigurado === true,
+      saudacaoDashboard: response.saudacaoDashboard,
       ativo: true
     };
   }

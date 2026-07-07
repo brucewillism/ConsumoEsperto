@@ -2,6 +2,8 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.ContaBancaria;
+import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,8 @@ public class ChequeEspecialConfirmacaoService {
     private final UsuarioSessaoContextoService sessaoContextoService;
     private final ContaBancariaService contaBancariaService;
     private final ObjectMapper objectMapper;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
+    private final UsuarioRepository usuarioRepository;
 
     public boolean precisaConfirmacao(ContaBancaria conta, BigDecimal valor) {
         if (conta == null || valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
@@ -95,12 +99,14 @@ public class ChequeEspecialConfirmacaoService {
         });
     }
 
-    public String mensagemProposta(Map<String, Object> ctx) {
+    public String mensagemProposta(Long usuarioId, Map<String, Object> ctx) {
+        String vocPrefix = tratamentoUsuarioService.prefixoVocativo(
+            tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository));
         String conta = String.valueOf(ctx.getOrDefault("contaBancariaNome", "conta"));
         BigDecimal saldo = toBigDecimal(ctx.get("saldoAtual"));
         BigDecimal valor = toBigDecimal(ctx.get("valor"));
         BigDecimal novoSaldo = toBigDecimal(ctx.get("novoSaldo"));
-        return "Chefe, o seu saldo na conta *" + conta + "* é de *" + BRL.format(saldo)
+        return vocPrefix + "o seu saldo na conta *" + conta + "* é de *" + BRL.format(saldo)
             + "*, mas a transação é de *" + BRL.format(valor)
             + "*. Vai entrar no seu *cheque especial*, deixando seu saldo em *" + BRL.format(novoSaldo)
             + "*. Como você tem limite disponível, posso seguir e autorizar o pagamento nos livros? "
@@ -112,7 +118,7 @@ public class ChequeEspecialConfirmacaoService {
             usuarioId,
             UsuarioSessaoContextoService.CANAL_WHATSAPP,
             UsuarioSessaoContextoService.CHAVE_CHEQUE_ESPECIAL_CONFIRMACAO
-        ).map(this::mensagemProposta).orElse("");
+        ).map(ctx -> mensagemProposta(usuarioId, ctx)).orElse("");
     }
 
     @Transactional

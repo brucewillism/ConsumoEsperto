@@ -10,6 +10,7 @@ import com.consumoesperto.service.EvolutionPairingService;
 import com.consumoesperto.service.JarvisProtocolService;
 import com.consumoesperto.service.UsuarioService;
 import com.consumoesperto.service.WhatsAppUserMappingService;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import com.consumoesperto.security.SecurityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +47,7 @@ public class UsuarioController {
     private final EvolutionPairingService evolutionPairingService;
     private final EvolutionInstanceLifecycleService evolutionInstanceLifecycleService;
     private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
 
     /**
      * Busca o perfil do usuário autenticado
@@ -171,8 +173,12 @@ public class UsuarioController {
         usuarioDTO.setGenero(usuario.getGenero() != null ? usuario.getGenero().name() : com.consumoesperto.model.Usuario.GeneroUsuario.UNKNOWN.name());
         usuarioDTO.setGeneroConfirmado(usuario.getGeneroConfirmado());
         usuarioDTO.setTratamento(usuario.getTratamento());
-        // Evita null no JSON (coluna legada nullable / JDBC) — o front trata só === true como calibrado.
         usuarioDTO.setJarvisConfigurado(Boolean.TRUE.equals(usuario.getJarvisConfigurado()));
+        usuarioDTO.setVocativo(usuario.getVocativo());
+        usuarioDTO.setGeneroGramatical(usuario.getGeneroGramatical() != null
+            ? usuario.getGeneroGramatical().name() : com.consumoesperto.model.Usuario.GeneroGramatical.NEUTRO.name());
+        usuarioDTO.setTratamentoConfigurado(Boolean.TRUE.equals(usuario.getTratamentoConfigurado()));
+        usuarioDTO.setSaudacaoDashboard(tratamentoUsuarioService.bemVindoDeVolta(usuario));
         return usuarioDTO;
     }
 

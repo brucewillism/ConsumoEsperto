@@ -86,7 +86,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         }
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
             "DATA_INTEGRITY",
-            "Senhor, esta operação conflita com dados já existentes no sistema.",
+            "Esta operação conflita com dados já existentes no sistema.",
             JarvisErrorCopy.CONFLICT_INSTRUCAO,
             HttpStatus.CONFLICT.value(),
             path

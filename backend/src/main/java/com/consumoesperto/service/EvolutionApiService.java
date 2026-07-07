@@ -57,9 +57,6 @@ public class EvolutionApiService {
         return enviarMensagem(to, message, null);
     }
 
-    /**
-     * @param evolutionInstanceOverride nome da instância na Evolution (multitenant); se vazio usa {@link #evolutionInstance}
-     */
     public boolean enviarMensagem(String to, String message, String evolutionInstanceOverride) {
         try {
             ensureApiConfigured();
@@ -105,6 +102,36 @@ public class EvolutionApiService {
             return false;
         } catch (RuntimeException ex) {
             log.error("[EvolutionApi] Erro ao enviar mensagem pela Evolution: {} [J.A.R.V.I.S. Offline]", ex.getMessage(), ex);
+            return false;
+        }
+    }
+
+    /**
+     * Indicador "digitando…" (composing) enquanto o J.A.R.V.I.S. processa a mensagem.
+     */
+    public boolean enviarPresencaComposing(String to, String evolutionInstanceOverride) {
+        try {
+            ensureApiConfigured();
+            ensureDefaultInstanceIfNeeded(evolutionInstanceOverride);
+            String number = normalizeToNumber(to);
+            if (number.isBlank()) {
+                return false;
+            }
+            String instance = resolveInstanceName(evolutionInstanceOverride);
+            String url = EvolutionUrlSupport.joinEvolutionPath(evolutionUrl, "/chat/sendPresence/" + instance);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("apikey", evolutionApiKey);
+            Map<String, Object> payload = Map.of(
+                "number", number,
+                "presence", "composing",
+                "delay", 12000
+            );
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
+            return response.getStatusCode().is2xxSuccessful() || response.getStatusCode().is3xxRedirection();
+        } catch (Exception ex) {
+            log.debug("[EvolutionApi] composing indisponível: {}", ex.getMessage());
             return false;
         }
     }

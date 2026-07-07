@@ -137,4 +137,16 @@ public class UsuarioDTO {
 
     /** Calibragem inicial concluída na aplicação. */
     private Boolean jarvisConfigurado;
+
+    /** Vocativo personalizado (ex.: chefa, capitã). */
+    private String vocativo;
+
+    /** MASCULINO | FEMININO | NEUTRO */
+    private String generoGramatical;
+
+    /** Tratamento escolhido explicitamente pelo usuário. */
+    private Boolean tratamentoConfigurado;
+
+    /** Saudação do dashboard (ex.: Que bom te ver de volta, chefa!). */
+    private String saudacaoDashboard;
 }

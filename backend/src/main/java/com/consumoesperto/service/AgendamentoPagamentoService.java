@@ -8,6 +8,7 @@ import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.AgendamentoPagamentoRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,7 @@ public class AgendamentoPagamentoService {
     private final TransacaoService transacaoService;
     private final UsuarioSessaoContextoService sessaoContextoService;
     private final WhatsAppNotificationService whatsAppNotificationService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
 
     /** Dados normalizados extraídos de boleto/Pix. */
     public record DadosPagamento(
@@ -109,7 +111,7 @@ public class AgendamentoPagamentoService {
             SESSAO_TTL_MIN
         );
 
-        return montarMensagemProposta(conta, dados);
+        return montarMensagemProposta(usuarioId, conta, dados);
     }
 
     @Transactional
@@ -286,9 +288,11 @@ public class AgendamentoPagamentoService {
         }
     }
 
-    private String montarMensagemProposta(ContaBancaria conta, DadosPagamento dados) {
+    private String montarMensagemProposta(Long usuarioId, ContaBancaria conta, DadosPagamento dados) {
+        String vocPrefix = tratamentoUsuarioService.prefixoVocativo(
+            tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository));
         StringBuilder sb = new StringBuilder();
-        sb.append("Chefe, identifiquei um ");
+        sb.append(vocPrefix).append("identifiquei um ");
         sb.append("PIX".equalsIgnoreCase(dados.tipo()) ? "*Pix*" : "*boleto*");
         sb.append(" da *").append(dados.beneficiario()).append("* de *")
             .append(BRL.format(dados.valor())).append("* para o dia *")

@@ -1,6 +1,9 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.stereotype.Service;
 
@@ -17,16 +20,15 @@ import java.util.regex.Pattern;
  * Estado em memória por {@code userId} — mesmo padrão dos rascunhos {@code awaiting*} no pipeline Jarvis.
  */
 @Service
+@RequiredArgsConstructor
 public class JarvisTutorialService {
 
     private static final Pattern CAPITULO_NUMERO = Pattern.compile("^[1-5]$");
 
     private final Map<Long, TutorialSessao> sessoes = new ConcurrentHashMap<>();
     private final SaudacaoService saudacaoService;
-
-    public JarvisTutorialService(SaudacaoService saudacaoService) {
-        this.saudacaoService = saudacaoService;
-    }
+    private final TratamentoUsuarioService tratamentoUsuarioService;
+    private final UsuarioRepository usuarioRepository;
 
     public boolean isEmTutorial(Long userId) {
         return userId != null && sessoes.getOrDefault(userId, new TutorialSessao()).isEmTutorial();
@@ -57,7 +59,7 @@ public class JarvisTutorialService {
 
         if (sessao.isEmTutorial() && isPararTutorial(norm)) {
             encerrar(sessao);
-            return Optional.of(getMensagemEncerramento());
+            return Optional.of(getMensagemEncerramento(userId));
         }
 
         if (sessao.isEmTutorial() && isPassoCapitulo(norm)) {
@@ -79,7 +81,7 @@ public class JarvisTutorialService {
                 sessao.setCapituloAtual(capituloDireto);
                 return Optional.of(getCapitulo(capituloDireto));
             }
-            return Optional.of(getMenuInicial());
+            return Optional.of(getMenuInicial(userId));
         }
 
         if (sessao.isEmTutorial()) {
@@ -97,7 +99,7 @@ public class JarvisTutorialService {
             case "START_TUTORIAL" -> iniciarTutorial(userId, sourceText, 0);
             case "STOP_TUTORIAL" -> {
                 encerrar(sessoes.computeIfAbsent(userId, id -> new TutorialSessao()));
-                yield getMensagemEncerramento();
+                yield getMensagemEncerramento(userId);
             }
             case "TUTORIAL_STEP" -> {
                 TutorialSessao s = sessoes.computeIfAbsent(userId, id -> new TutorialSessao());
@@ -106,7 +108,7 @@ public class JarvisTutorialService {
                 }
                 int cap = extrairCapituloDeTexto(sourceText);
                 if (cap < 1 || cap > 5) {
-                    yield getMenuInicial();
+                    yield getMenuInicial(userId);
                 }
                 s.setCapituloAtual(cap);
                 yield getCapitulo(cap);
@@ -126,7 +128,7 @@ public class JarvisTutorialService {
             s.setCapituloAtual(cap);
             return getCapitulo(cap);
         }
-        return getMenuInicial();
+        return getMenuInicial(userId);
     }
 
     public void encerrarUsuario(Long userId) {
@@ -136,21 +138,18 @@ public class JarvisTutorialService {
         sessoes.remove(userId);
     }
 
-    public String getMenuInicial() {
-        return """
-            📖 *COMO USAR O CONSUMO ESPERTO*
-
-            Chefe, vou te explicar como funciona cada tela do sistema para você dominar suas finanças. Escolha o número da aba que quer entender:
-
-            *1️⃣* — Aba Contas (Onde seu dinheiro mora)
-            *2️⃣* — Aba Transações (Entradas e saídas do dia a dia)
-            *3️⃣* — Aba Cartões e Faturas (Limite e boletos)
-            *4️⃣* — Aba Renda (Seu perfil financeiro)
-            *5️⃣* — Aba Orçamentos e Metas (Seu planejamento)
-
-            💡 _Dica: Você também pode me perguntar diretamente, tipo "como uso a aba de renda?" que eu já te explico._
-
-            Digite *sair* a qualquer momento para fechar este guia.""";
+    public String getMenuInicial(Long userId) {
+        String voc = tratamentoUsuarioService.vocativoPorId(userId, usuarioRepository);
+        return "📖 *COMO USAR O CONSUMO ESPERTO*\n\n"
+            + voc + ", vou te explicar como funciona cada tela do sistema para você dominar suas finanças. "
+            + "Escolha o número da aba que quer entender:\n\n"
+            + "*1️⃣* — Aba Contas (Onde seu dinheiro mora)\n"
+            + "*2️⃣* — Aba Transações (Entradas e saídas do dia a dia)\n"
+            + "*3️⃣* — Aba Cartões e Faturas (Limite e boletos)\n"
+            + "*4️⃣* — Aba Renda (Seu perfil financeiro)\n"
+            + "*5️⃣* — Aba Orçamentos e Metas (Seu planejamento)\n\n"
+            + "💡 _Dica: Você também pode me perguntar diretamente, tipo \"como uso a aba de renda?\" que eu já te explico._\n\n"
+            + "Digite *sair* a qualquer momento para fechar este guia.";
     }
 
     public String getCapitulo(int numero) {
@@ -238,17 +237,15 @@ public class JarvisTutorialService {
                 _Configure acessando a aba Orçamentos e Metas no app._
 
                 _Digite outro número para continuar ou *sair* para fechar o guia._""";
-            default -> getMenuInicial();
+            default -> getMenuInicial(null);
         };
     }
 
-    public String getMensagemEncerramento() {
-        return """
-            ✅ *Guia encerrado, chefe.*
-
-            Voltei para o modo de operação padrão. Se precisar do guia novamente, é só digitar *tutorial* ou *como usar*.
-
-            O que precisa agora?""";
+    public String getMensagemEncerramento(Long userId) {
+        String voc = tratamentoUsuarioService.vocativoPorId(userId, usuarioRepository);
+        return "✅ *Guia encerrado, " + voc + ".*\n\n"
+            + "Voltei para o modo de operação padrão. Se precisar do guia novamente, é só digitar *tutorial* ou *como usar*.\n\n"
+            + "O que precisa agora?";
     }
 
     private static void iniciar(TutorialSessao sessao) {

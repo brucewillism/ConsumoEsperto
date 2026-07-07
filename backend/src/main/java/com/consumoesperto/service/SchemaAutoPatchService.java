@@ -79,6 +79,7 @@ public class SchemaAutoPatchService {
         ensureTransacaoEmprestimoIdColumn();
         ensureUsuarioGeneroColumns();
         ensureUsuarioJarvisPerfilColumns();
+        ensureUsuarioTratamentoPersonalizadoColumns();
         ensureUsuarioFotoUrlTextColumn();
         ensureUsuarioGoogleCalendarColumns();
         ensureMetasFinanceirasCronosColumns();
@@ -1003,6 +1004,34 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: colunas tratamento / jarvis_configurado verificadas em usuarios.");
         } catch (Exception e) {
             log.warn("Falha ao aplicar colunas J.A.R.V.I.S. em usuarios: {}", e.getMessage());
+        }
+    }
+
+    private void ensureUsuarioTratamentoPersonalizadoColumns() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuarios' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            if (schemas == null || schemas.isEmpty()) {
+                return;
+            }
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String q = schema + ".usuarios";
+                executeDdlAutocommit("ALTER TABLE " + q + " ADD COLUMN IF NOT EXISTS vocativo VARCHAR(64)");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + q + " ADD COLUMN IF NOT EXISTS genero_gramatical VARCHAR(16) NOT NULL DEFAULT 'NEUTRO'");
+                executeDdlAutocommit(
+                    "ALTER TABLE " + q + " ADD COLUMN IF NOT EXISTS tratamento_configurado BOOLEAN NOT NULL DEFAULT FALSE");
+            }
+            log.info("Schema patch: vocativo / genero_gramatical / tratamento_configurado verificados em usuarios.");
+        } catch (Exception e) {
+            log.warn("Falha ao aplicar colunas de tratamento personalizado: {}", e.getMessage());
         }
     }
 

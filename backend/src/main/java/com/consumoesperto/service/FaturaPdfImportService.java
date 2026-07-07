@@ -27,6 +27,7 @@ import com.consumoesperto.service.fatura.layout.GenericoFaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.InterFaturaTextoExtrator;
 import com.consumoesperto.service.fatura.layout.ItauFaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.ItauFaturaTextoExtrator;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbMeta;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbPendente;
@@ -97,6 +98,7 @@ public class FaturaPdfImportService {
     private final PdfTextExtractionService pdfTextExtractionService;
     private final CartaoCreditoService cartaoCreditoService;
     private final SaldoService saldoService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
     public static boolean isBulletVisivelAoUsuario(String linhaAuditoria) {
@@ -247,7 +249,7 @@ public class FaturaPdfImportService {
         List<ContencaoJarvisService.SugestaoContencaoDraft> contencaoDrafts = new ArrayList<>();
         auditorias.addAll(contencaoJarvisService.montarAuditoriasComMetasNaImportacao(
             usuarioId, cartao.getId(), prevItens, itens, contencaoDrafts));
-        aplicarValidacaoChecksumFatura(valorTotal, itens, extracted, auditorias);
+        aplicarValidacaoChecksumFatura(usuarioId, valorTotal, itens, extracted, auditorias);
         Optional<BigDecimal> ultimaFatura = ultimoValorFaturaConfirmadaCartao(cartao.getId());
         BigDecimal somaItens = somaValoresItens(itens);
         SaldoAnteriorFaturaBbSupport.detectar(extracted, banco, valorTotal, somaItens, itens, ultimaFatura)
@@ -549,7 +551,7 @@ public class FaturaPdfImportService {
             : itens.stream()
                 .filter(i -> !SaldoAnteriorFaturaBbSupport.descricaoEhLinhaSaldoFaturaAnterior(i.getDescricao()))
                 .collect(Collectors.toList());
-        aplicarValidacaoChecksumFatura(novoTotal, itensChecksum, objectMapper.createObjectNode(), auditoriasAtualizadas);
+        aplicarValidacaoChecksumFatura(usuarioId, novoTotal, itensChecksum, objectMapper.createObjectNode(), auditoriasAtualizadas);
         auditoriasAtualizadas.add(
             SaldoAnteriorFaturaBbSupport.mensagemPosEscolha(somar, novoTotal, linhasSaldoIgnoradas));
         imp.setAuditoriaJson(writeJson(auditoriasAtualizadas));
@@ -1577,6 +1579,8 @@ public class FaturaPdfImportService {
         }
         List<ImportacaoFaturaItemDTO> prev = readItens(anteriores.get(0).getItensJson());
         List<String> out = new ArrayList<>();
+        String vocPrefix = tratamentoUsuarioService.prefixoVocativo(
+            tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository));
         Map<String, BigDecimal> somaMesAnterior = somaPorChaveEstabelecimento(prev);
         Map<String, BigDecimal> somaMesAtual = somaPorChaveEstabelecimento(itens);
         Map<String, String> rotuloPorChave = rotuloExibicaoPorChave(itens);
@@ -1592,7 +1596,7 @@ public class FaturaPdfImportService {
                 String rotulo = rotuloPorChave.getOrDefault(chave, chave);
                 if (FinanceInsightProfileClassifier.perfilPorDescricao(rotulo)
                     == FinanceInsightProfileClassifier.Perfil.ASSINATURA_SERVICO) {
-                    out.add("⚠️ Senhor, detectei uma elevação na assinatura de *" + rotulo + "*. "
+                    out.add("⚠️ " + vocPrefix + "detectei uma elevação na assinatura de *" + rotulo + "*. "
                         + "O valor saltou de *R$ " + formatBrl(totalAnterior).trim() + "* para *R$ "
                         + formatBrl(totalAtual).trim() + "*. Deseja *cancelar* este protocolo?");
                 }
@@ -1618,6 +1622,7 @@ public class FaturaPdfImportService {
     }
 
     private void aplicarValidacaoChecksumFatura(
+        Long usuarioId,
         BigDecimal valorTotal,
         List<ImportacaoFaturaItemDTO> itens,
         JsonNode extracted,
@@ -1641,8 +1646,10 @@ public class FaturaPdfImportService {
         if (anuidadeDeclarada.isPresent()
             && moedasQuaseIguais(diferenca, anuidadeDeclarada.get(), new BigDecimal("0.04"))) {
             BigDecimal ano = anuidadeDeclarada.get().setScale(2, RoundingMode.HALF_UP);
+            String vocPrefix = tratamentoUsuarioService.prefixoVocativo(
+                tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository));
             auditorias.add(
-                "Senhor, os cálculos batem perfeitamente após incluirmos a taxa de Anuidade de R$ "
+                vocPrefix + "os cálculos batem perfeitamente após incluirmos a taxa de Anuidade de R$ "
                     + formatBrl(ano).trim() + "."
             );
             auditorias.add(META_ANUIDADE_CKSM_PREFIX + ano.stripTrailingZeros().toPlainString());

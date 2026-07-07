@@ -150,6 +150,16 @@ public class Usuario {
     @Column(name = "tratamento", length = 32)
     private String tratamento;
 
+    @Column(name = "vocativo", length = 64)
+    private String vocativo;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "genero_gramatical", length = 16)
+    private GeneroGramatical generoGramatical = GeneroGramatical.NEUTRO;
+
+    @Column(name = "tratamento_configurado")
+    private Boolean tratamentoConfigurado = false;
+
     /**
      * Indica que o utilizador concluiu a calibragem inicial do protocolo na aplicação.
      */
@@ -268,6 +278,19 @@ public class Usuario {
         this.tratamento = tratamento;
     }
 
+    public String getVocativo() { return vocativo; }
+    public void setVocativo(String vocativo) { this.vocativo = vocativo; }
+
+    public GeneroGramatical getGeneroGramatical() { return generoGramatical; }
+    public void setGeneroGramatical(GeneroGramatical generoGramatical) {
+        this.generoGramatical = generoGramatical;
+    }
+
+    public Boolean getTratamentoConfigurado() { return tratamentoConfigurado; }
+    public void setTratamentoConfigurado(Boolean tratamentoConfigurado) {
+        this.tratamentoConfigurado = tratamentoConfigurado;
+    }
+
     public Boolean getJarvisConfigurado() {
         return jarvisConfigurado;
     }
@@ -331,5 +354,11 @@ public class Usuario {
         DOUTOR,
         DOUTORA,
         NENHUM
+    }
+
+    public enum GeneroGramatical {
+        MASCULINO,
+        FEMININO,
+        NEUTRO
     }
 }

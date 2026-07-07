@@ -1,5 +1,8 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.model.Usuario;
+import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalTime;
@@ -57,10 +60,19 @@ public class SaudacaoService {
 
     private final TextMatcherService textMatcherService;
     private final JarvisContextoService contextoService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
+    private final UsuarioRepository usuarioRepository;
 
-    public SaudacaoService(TextMatcherService textMatcherService, JarvisContextoService contextoService) {
+    public SaudacaoService(
+        TextMatcherService textMatcherService,
+        JarvisContextoService contextoService,
+        TratamentoUsuarioService tratamentoUsuarioService,
+        UsuarioRepository usuarioRepository
+    ) {
         this.textMatcherService = textMatcherService;
         this.contextoService = contextoService;
+        this.tratamentoUsuarioService = tratamentoUsuarioService;
+        this.usuarioRepository = usuarioRepository;
     }
 
     public String normalizarParaDetecao(String mensagem) {
@@ -83,14 +95,28 @@ public class SaudacaoService {
     }
 
     public String gerarResposta(String saudacaoUsada, Long usuarioId) {
-        String periodo = determinarPeriodo(saudacaoUsada);
-        String saudacaoInicial = montarSaudacaoInicial(periodo);
         String corpo = sortearCorpo(usuarioId);
-        return saudacaoInicial + " " + corpo;
+        if (usuarioId != null) {
+            return usuarioRepository.findById(usuarioId)
+                .map(u -> tratamentoUsuarioService.saudacaoPeriodo(u) + " " + corpo)
+                .orElseGet(() -> montarSaudacaoNeutra(saudacaoUsada) + " " + corpo);
+        }
+        return montarSaudacaoNeutra(saudacaoUsada) + " " + corpo;
     }
 
     public String lembreteTutorialAtivo() {
         return "\n\n_(Você ainda está no guia. Digite um número de 1 a 5 ou *sair*.)_";
+    }
+
+    private String montarSaudacaoNeutra(String saudacaoUsada) {
+        String periodo = determinarPeriodo(saudacaoUsada);
+        return switch (periodo) {
+            case "MANHA" -> "Bom dia!";
+            case "TARDE" -> "Boa tarde!";
+            case "NOITE" -> "Boa noite!";
+            case "MADRUGADA" -> "Boa madrugada — trabalhando até tarde, hein?";
+            default -> "Olá!";
+        };
     }
 
     private String determinarPeriodo(String saudacaoUsada) {
@@ -126,16 +152,6 @@ public class SaudacaoService {
             return "NOITE";
         }
         return "MADRUGADA";
-    }
-
-    private static String montarSaudacaoInicial(String periodo) {
-        return switch (periodo) {
-            case "MANHA" -> "Bom dia, chefe!";
-            case "TARDE" -> "Boa tarde, chefe!";
-            case "NOITE" -> "Boa noite, chefe!";
-            case "MADRUGADA" -> "Boa madrugada, chefe — trabalhando até tarde, hein?";
-            default -> "Olá, chefe!";
-        };
     }
 
     private String sortearCorpo(Long usuarioId) {

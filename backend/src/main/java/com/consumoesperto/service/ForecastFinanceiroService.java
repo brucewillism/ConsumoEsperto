@@ -3,6 +3,8 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.ForecastFinanceiroDTO;
 import com.consumoesperto.dto.ProjecaoMesResumoDTO;
 import com.consumoesperto.repository.TransacaoRepository;
+import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,8 @@ public class ForecastFinanceiroService {
     private final OpenAiService openAiService;
     private final JarvisProtocolService jarvisProtocolService;
     private final SaldoService saldoService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
+    private final UsuarioRepository usuarioRepository;
 
     @Transactional(readOnly = true)
     public ForecastFinanceiroDTO calcular(Long usuarioId) {
@@ -62,7 +66,8 @@ public class ForecastFinanceiroService {
 
     public String montarRespostaWhatsapp(Long usuarioId) {
         ForecastFinanceiroDTO f = calcular(usuarioId);
-        String intro = jarvisProtocolService.introducaoProjecaoRotasCapital();
+        String voc = tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository);
+        String intro = jarvisProtocolService.introducaoProjecaoRotasCapital(voc);
         String linhaFiscal = f.getReceitasFiscaisPrevistas() != null
             && f.getReceitasFiscaisPrevistas().compareTo(BigDecimal.ZERO) > 0
             ? "Receitas sazonais (13º/IR previsto): *" + BRL.format(f.getReceitasFiscaisPrevistas()) + "*\n"

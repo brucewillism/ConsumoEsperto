@@ -6,12 +6,12 @@ package com.consumoesperto.exception;
 public final class JarvisErrorCopy {
 
     public static final String DUPLICATE_RECORD_MESSAGE =
-        "Senhor, este registro já consta em nossa base. Se desejar alterá-lo, tente o comando de edição ou verifique o módulo correspondente.";
+        "Este registro já consta em nossa base. Se desejar alterá-lo, tente o comando de edição ou verifique o módulo correspondente.";
     public static final String DUPLICATE_RECORD_INSTRUCAO =
         "Abra o módulo certo no painel (ou use *editar* no item existente) e tente novamente.";
 
     public static final String AUTH_DENIED_MESSAGE =
-        "Protocolo de segurança negado. Senhor, sua sessão pode ter expirado ou o acesso não foi autorizado.";
+        "Protocolo de segurança negado. Sua sessão pode ter expirado ou o acesso não foi autorizado.";
     public static final String AUTH_DENIED_INSTRUCAO =
         "Por favor, revalide suas credenciais — faça login novamente se necessário.";
 

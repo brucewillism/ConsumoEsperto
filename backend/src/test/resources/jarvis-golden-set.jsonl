@@ -1,0 +1,30 @@
+{"input":"gastei 45,90 no mercado","action":"CREATE_EXPENSE","amount":"45.90","descriptionContains":"mercado","minConf":0.9}
+{"input":"gastei 45 no mercado","action":"CREATE_EXPENSE","amount":"45.00","descriptionContains":"mercado","minConf":0.9}
+{"input":"paguei 30 no uber","action":"CREATE_EXPENSE","amount":"30.00","descriptionContains":"uber","minConf":0.9}
+{"input":"comprei 120,50 na farmácia","action":"CREATE_EXPENSE","amount":"120.50","descriptionContains":"farm","minConf":0.9}
+{"input":"despesa 89,99 padaria","action":"CREATE_EXPENSE","amount":"89.99","descriptionContains":"padaria","minConf":0.9}
+{"input":"gasto 15 reais no mercado","action":"CREATE_EXPENSE","amount":"15.00","descriptionContains":"mercado","minConf":0.9}
+{"input":"gastei R$ 200 no restaurante","action":"CREATE_EXPENSE","amount":"200.00","descriptionContains":"restaurante","minConf":0.9}
+{"input":"paguei 9,90 no ifood","action":"CREATE_EXPENSE","amount":"9.90","descriptionContains":"ifood","minConf":0.9}
+{"input":"recebi 500 do freelance","action":"CREATE_INCOME","amount":"500.00","minConf":0.9}
+{"input":"receita 1200 salário","action":"CREATE_INCOME","amount":"1200.00","minConf":0.9}
+{"input":"ganhei 80 reais","action":"CREATE_INCOME","amount":"80.00","minConf":0.9}
+{"input":"entrada 350 pix cliente","action":"CREATE_INCOME","amount":"350.00","minConf":0.9}
+{"input":"paguei aquele negócio","ambiguous":true}
+{"input":"paguei aquele negocio","ambiguous":true}
+{"input":"gastei isso ontem","noParse":true}
+{"input":"quanto tenho na conta?","noParse":true}
+{"input":"lista meus cartões","noParse":true}
+{"input":"gastei 1.234,56 no mercado","action":"CREATE_EXPENSE","amount":"1234.56","descriptionContains":"mercado","minConf":0.9}
+{"input":"paguei 45,90 mercado","action":"CREATE_EXPENSE","amount":"45.90","descriptionContains":"mercado","minConf":0.9}
+{"input":"gastei 10 na padaria do zé","action":"CREATE_EXPENSE","amount":"10.00","descriptionContains":"padaria","minConf":0.9}
+{"input":"comprei 250 no supermercado","action":"CREATE_EXPENSE","amount":"250.00","descriptionContains":"supermercado","minConf":0.9}
+{"input":"despesa 19,90 uber","action":"CREATE_EXPENSE","amount":"19.90","descriptionContains":"uber","minConf":0.9}
+{"input":"gastei 7,50 no busão","action":"CREATE_EXPENSE","amount":"7.50","descriptionContains":"bus","minConf":0.9}
+{"input":"paguei 600 aluguel","action":"CREATE_EXPENSE","amount":"600.00","descriptionContains":"aluguel","minConf":0.9}
+{"input":"recebi 1500","action":"CREATE_INCOME","amount":"1500.00","minConf":0.9}
+{"input":"receita 200 venda","action":"CREATE_INCOME","amount":"200.00","minConf":0.9}
+{"input":"gastei 33,33 no posto","action":"CREATE_EXPENSE","amount":"33.33","descriptionContains":"posto","minConf":0.9}
+{"input":"paguei 12,00 na lotérica","action":"CREATE_EXPENSE","amount":"12.00","descriptionContains":"lot","minConf":0.9}
+{"input":"comprei 999,99 notebook","action":"CREATE_EXPENSE","amount":"999.99","descriptionContains":"notebook","minConf":0.9}
+{"input":"gastei 0,50 no mercado","action":"CREATE_EXPENSE","amount":"0.50","descriptionContains":"mercado","minConf":0.9}

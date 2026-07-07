@@ -13,6 +13,7 @@ import com.consumoesperto.repository.ImportacaoFaturaCartaoRepository;
 import com.consumoesperto.repository.SugestaoContencaoJarvisRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,7 @@ public class ContencaoJarvisService {
     private final OrcamentoService orcamentoService;
     private final ScoreService scoreService;
     private final JarvisFeedbackService jarvisFeedbackService;
+    private final TratamentoUsuarioService tratamentoUsuarioService;
 
     /** Fila por usuário: próximas sugestões a confirmar via *sim* no WhatsApp (após importação de fatura). */
     private final Map<Long, ArrayDeque<Long>> filaConfirmacaoWhatsApp = new ConcurrentHashMap<>();
@@ -120,6 +122,8 @@ public class ContencaoJarvisService {
 
         candidatos.sort(Comparator.comparing((CandidatoAlerta c) -> impactoFinanceiro(c)).reversed());
         List<String> linhas = new ArrayList<>();
+        String vocPrefix = tratamentoUsuarioService.prefixoVocativo(
+            tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository));
         int n = 0;
         for (CandidatoAlerta c : candidatos) {
             if (jarvisFeedbackService.isMacroEmPenalidade30d(usuarioId, nomeMacroCategoriaJarvis(c.tipo()))) {
@@ -141,7 +145,7 @@ public class ContencaoJarvisService {
             ));
             String nomeMacro = nomeMacroCategoriaJarvis(c.tipo());
             linhas.add(
-                "⛽ Senhor, seus gastos em *" + c.rotulo() + "* aumentaram *" + c.pct().stripTrailingZeros().toPlainString()
+                "⛽ " + vocPrefix + "seus gastos em *" + c.rotulo() + "* aumentaram *" + c.pct().stripTrailingZeros().toPlainString()
                     + "%* este mês. Para estabilizar sua reserva de emergência, sugiro uma meta de teto de *"
                     + BRL.format(c.teto()) + "* para *" + nomeMacro + "* no próximo mês. "
                     + "Deseja que eu *configure este protocolo* agora?"
@@ -393,7 +397,10 @@ public class ContencaoJarvisService {
 
     public String mensagemProtocoloAtivo(SugestaoContencaoJarvis s) {
         String macro = nomeMacroCategoriaJarvis(s.getTipoHabito());
-        return "Protocolo de contenção ativo, Senhor. Vou monitorar seus lançamentos em *" + macro
+        String voc = s.getUsuario() != null
+            ? tratamentoUsuarioService.vocativo(s.getUsuario())
+            : TratamentoUsuarioService.VOCATIVO_PADRAO;
+        return "Protocolo de contenção ativo, " + voc + ". Vou monitorar seus lançamentos em *" + macro
             + "* e avisarei se chegarmos a *80%* do limite estabelecido.";
     }
 
@@ -424,6 +431,8 @@ public class ContencaoJarvisService {
             return "";
         }
         List<String> linhas = new ArrayList<>();
+        String vocPrefix = tratamentoUsuarioService.prefixoVocativo(
+            tratamentoUsuarioService.vocativoPorId(usuarioId, usuarioRepository));
         List<Map.Entry<String, BigDecimal>> ordenado = new ArrayList<>(atualPorChave.entrySet());
         ordenado.sort(Comparator.comparing((Map.Entry<String, BigDecimal> e) -> e.getValue()).reversed());
         int lim = 0;
@@ -443,7 +452,7 @@ public class ContencaoJarvisService {
                 .divide(media3, 1, RoundingMode.HALF_UP);
             BigDecimal teto = calcularTetoSugerido(media3, gasto);
             String r = rotulo.getOrDefault(ch, ch);
-            linhas.add("⛽ Senhor, em *" + r + "* o mês vai *" + pct.stripTrailingZeros().toPlainString()
+            linhas.add("⛽ " + vocPrefix + "em *" + r + "* o mês vai *" + pct.stripTrailingZeros().toPlainString()
                 + "%* acima da sua média dos últimos 3 meses. Sugiro teto *" + BRL.format(teto)
                 + "* no próximo mês — *aceite no app* (Sugestões J.A.R.V.I.S.) ou peça pelo WhatsApp.");
         }
