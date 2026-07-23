@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ModoViagemJarvisDTO;
+import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
@@ -135,7 +136,8 @@ public class CronosJarvisService {
             recarregarFilaWhatsApp(usuarioId, pending);
             String voc = jarvisProtocolService.resolveVocative(usuarioId, usuarioRepository);
             String msg = jarvisProtocolService.proativoModoViagemSugestao(voc, ev.titulo(), BRL.format(teto));
-            whatsAppNotificationService.enviarParaUsuario(usuarioId, msg);
+            whatsAppNotificationService.enviarParaUsuario(
+                usuarioId, msg, JarvisTipoNotificacaoProativa.MODO_VIAGEM_CRONOS);
         }
     }
 

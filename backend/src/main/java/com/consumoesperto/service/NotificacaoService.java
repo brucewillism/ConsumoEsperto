@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.WhatsAppLembretePendencia;
@@ -57,7 +58,8 @@ public class NotificacaoService {
             int x = e.getValue().size();
             String vocativo = jarvisProtocolService.resolveVocative(usuario.getId(), usuarioRepository);
             String msg = jarvisProtocolService.proativoLembreteConferenciaNotas(vocativo, x);
-            boolean enviado = whatsAppNotificationService.enviarParaUsuario(usuario.getId(), msg);
+            boolean enviado = whatsAppNotificationService.enviarParaUsuario(
+                usuario.getId(), msg, JarvisTipoNotificacaoProativa.CONFERENCIA_NOTAS);
             if (!enviado) {
                 log.warn("[J.A.R.V.I.S. Offline] Lembrete conferência não enviado para usuário {}.", e.getKey());
                 continue;

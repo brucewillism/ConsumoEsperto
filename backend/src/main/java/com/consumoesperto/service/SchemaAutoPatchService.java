@@ -54,6 +54,7 @@ public class SchemaAutoPatchService {
         ensureUsuarioAiConfigTable();
         ensureUsuarioAiConfigEvolutionApiKeyColumn();
         ensureUsuarioAiConfigEvolutionSessionSuppressedColumn();
+        ensureUsuarioAiConfigJarvisNotifPrefsColumn();
         ensureUsuarioRendaConfigTable();
         ensureRendaConfigContaBancariaColumn();
         ensureRendaConfigTipoRendaColumns();
@@ -199,6 +200,27 @@ public class SchemaAutoPatchService {
             }
         } catch (Exception e) {
             log.warn("Falha ao adicionar evolution_session_suppressed em usuario_ai_config: {}", e.getMessage());
+        }
+    }
+
+    private void ensureUsuarioAiConfigJarvisNotifPrefsColumn() {
+        try {
+            List<String> schemas = jdbcTemplate.queryForList(
+                "SELECT table_schema "
+                    + "FROM information_schema.tables "
+                    + "WHERE table_name = 'usuario_ai_config' "
+                    + "  AND table_type = 'BASE TABLE' "
+                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
+                String.class
+            );
+            for (String rawSchema : schemas) {
+                String schema = rawSchema.replace("\"", "");
+                String qualifiedTable = schema + ".usuario_ai_config";
+                executeDdlAutocommit(
+                    "ALTER TABLE " + qualifiedTable + " ADD COLUMN IF NOT EXISTS jarvis_notif_prefs_json TEXT");
+            }
+        } catch (Exception e) {
+            log.warn("Falha ao adicionar jarvis_notif_prefs_json em usuario_ai_config: {}", e.getMessage());
         }
     }
 

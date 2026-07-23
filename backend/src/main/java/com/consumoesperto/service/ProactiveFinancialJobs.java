@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.OrcamentoDTO;
+import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.FaturaRepository;
@@ -66,7 +67,8 @@ public class ProactiveFinancialJobs {
             for (RecurringExpenseDetectionService.RecurringExpense r : vencendo) {
                 String vocativo = jarvisProtocolService.resolveVocative(usuario.getId(), usuarioRepository);
                 String msg = jarvisProtocolService.proativoContaRecorrenteVencimento(vocativo, r.nome(), BRL.format(r.valorMedio()));
-                whatsAppNotificationService.enviarParaUsuario(usuario.getId(), msg);
+                whatsAppNotificationService.enviarParaUsuario(
+                    usuario.getId(), msg, JarvisTipoNotificacaoProativa.RECORRENCIAS_VENCIMENTO);
             }
             saldoService.analisarDinheiroParado(usuario.getId())
                 .ifPresent(a -> {
@@ -79,7 +81,8 @@ public class ProactiveFinancialJobs {
                         a.vencimentoFatura(),
                         a.vencimentoFatura().minusDays(1).getDayOfMonth()
                     );
-                    whatsAppNotificationService.enviarParaUsuario(usuario.getId(), m);
+                    whatsAppNotificationService.enviarParaUsuario(
+                        usuario.getId(), m, JarvisTipoNotificacaoProativa.RECORRENCIAS_VENCIMENTO);
                 });
             if (!faturaRepository.findVencidasByUsuarioId(usuario.getId(), AppTimeZone.agora()).isEmpty()) {
                 scoreService.registrarEvento(usuario.getId(), ScoreService.EventoScore.FATURA_VENCIDA,
@@ -98,7 +101,8 @@ public class ProactiveFinancialJobs {
             }
             try {
                 String msg = previsaoFluxoCaixaService.montarRelatorioDisponibilidadeWhatsapp(usuario.getId());
-                whatsAppNotificationService.enviarParaUsuario(usuario.getId(), msg);
+                whatsAppNotificationService.enviarParaUsuario(
+                    usuario.getId(), msg, JarvisTipoNotificacaoProativa.SENTINELA_DIA5);
             } catch (Exception e) {
                 log.warn("[SENTINELA] user {}: {}", usuario.getId(), e.getMessage());
             }
@@ -148,7 +152,8 @@ public class ProactiveFinancialJobs {
                 dica,
                 feedbackFamiliar(usuario.getId()));
             msg += blocoConfirmacaoHabitoInferido(usuario.getId());
-            whatsAppNotificationService.enviarParaUsuario(usuario.getId(), msg);
+            whatsAppNotificationService.enviarParaUsuario(
+                usuario.getId(), msg, JarvisTipoNotificacaoProativa.RESUMO_SEMANAL);
         }
     }
 
@@ -204,6 +209,22 @@ public class ProactiveFinancialJobs {
         }
     }
 
+    /** Dia 1 18h15 — digest Sentinela + forecast (formato do alerta proativo, agendado). */
+    @Scheduled(cron = "0 15 18 1 * *", zone = "America/Sao_Paulo")
+    @Transactional(readOnly = true)
+    public void enviarDigestMensalSentinela() {
+        for (Usuario usuario : usuarioRepository.findAll()) {
+            if (usuario.getWhatsappNumero() == null || usuario.getWhatsappNumero().isBlank()) {
+                continue;
+            }
+            try {
+                financialProactiveService.enviarDigestMensalSentinela(usuario.getId());
+            } catch (Exception e) {
+                log.warn("[SENTINELA-DIGEST] user {}: {}", usuario.getId(), e.getMessage());
+            }
+        }
+    }
+
     @Scheduled(cron = "0 30 18 1 * *", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)
     public void enviarRelatorioMensalScore() {
@@ -217,7 +238,10 @@ public class ProactiveFinancialJobs {
                 scoreService.registrarEvento(usuario.getId(), ScoreService.EventoScore.ORCAMENTO_NO_VERDE,
                     "Fechou o mês dentro de todos os orçamentos");
             }
-            whatsAppNotificationService.enviarParaUsuario(usuario.getId(), scoreService.relatorioMensalEconomia(usuario.getId()));
+            whatsAppNotificationService.enviarParaUsuario(
+                usuario.getId(),
+                scoreService.relatorioMensalEconomia(usuario.getId()),
+                JarvisTipoNotificacaoProativa.RELATORIO_MENSAL_SCORE);
         }
     }
 

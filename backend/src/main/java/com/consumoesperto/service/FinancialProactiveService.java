@@ -1,6 +1,7 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.model.Categoria;
+import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
 import com.consumoesperto.model.MetaFinanceira;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -17,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.text.NumberFormat;
+import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -46,6 +48,8 @@ public class FinancialProactiveService {
     private final ComportamentoService comportamentoService;
     private final HabitDominoService habitDominoService;
     private final SentinelaProtocolService sentinelaProtocolService;
+    private final JarvisProtocolService jarvisProtocolService;
+    private final com.consumoesperto.repository.UsuarioRepository usuarioRepository;
     private final PlanejamentoFiscalService planejamentoFiscalService;
     private final AmortizacaoSazonalService amortizacaoSazonalService;
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
@@ -173,7 +177,36 @@ public class FinancialProactiveService {
             uid, sentinelaRuim, forecastRuim);
 
         String texto = montarMensagemAlertaRiscoUnica(transacao, sentinelaRuim, forecastRuim, sentinela, forecast);
-        whatsAppNotificationService.enviarParaUsuario(uid, texto);
+        whatsAppNotificationService.enviarParaUsuario(uid, texto, JarvisTipoNotificacaoProativa.ALERTA_RISCO_REATIVO);
+    }
+
+    /** Digest mensal agendado (dia 1) — snapshot Sentinela + forecast, independente de despesa. */
+    @Transactional(readOnly = true)
+    public void enviarDigestMensalSentinela(Long usuarioId) {
+        if (usuarioId == null) {
+            return;
+        }
+        var forecast = forecastFinanceiroService.calcular(usuarioId);
+        var sentinela = sentinelaProtocolService.calcularMargemSentinelaUsuario(usuarioId);
+        String vocativo = jarvisProtocolService.resolveVocative(usuarioId, usuarioRepository);
+        YearMonth mes = YearMonth.now();
+        StringBuilder sb = new StringBuilder();
+        sb.append("*Relatório mensal Sentinela — J.A.R.V.I.S.*\n");
+        sb.append(vocativo).append(", panorama de *").append(mes.getMonthValue()).append("/")
+            .append(mes.getYear()).append("*:\n\n");
+        sb.append("Patrimônio em contas: *").append(BRL.format(sentinela.patrimonioLiquido())).append("*.\n");
+        sb.append("Margem Sentinela: *").append(BRL.format(sentinela.saldoMarginal())).append("*");
+        if (sentinela.colchaoVirtual().compareTo(BigDecimal.ZERO) > 0) {
+            sb.append(" (colchão sazonal: ").append(BRL.format(sentinela.colchaoVirtual())).append(")");
+        }
+        sb.append(".\n\n");
+        sb.append("Projeção de fechamento — saldo: *").append(BRL.format(forecast.getSaldoProjetado()))
+            .append("*; probabilidade: *").append(forecast.getProbabilidadeVermelho()).append("%*.\n\n");
+        if (forecast.getMensagemIa() != null && !forecast.getMensagemIa().isBlank()) {
+            sb.append(forecast.getMensagemIa());
+        }
+        whatsAppNotificationService.enviarParaUsuario(
+            usuarioId, sb.toString(), JarvisTipoNotificacaoProativa.DIGEST_MENSAL_SENTINELA);
     }
 
     /**
@@ -237,7 +270,8 @@ public class FinancialProactiveService {
             + "(" + melhor.parcelasRestantes() + "x).\n"
             + "Economia estimada de juros: *" + BRL.format(melhor.jurosEconomizadosEstimados()) + "*.\n"
             + "Sugestão: destinar *" + BRL.format(melhor.valorSugeridoAmortizar()) + "* à quitação.";
-        whatsAppNotificationService.enviarParaUsuario(usuarioId, msg);
+        whatsAppNotificationService.enviarParaUsuario(
+            usuarioId, msg, JarvisTipoNotificacaoProativa.AMORTIZACAO_SAZONAL);
     }
 
     private void auditarJuros(Transacao transacao) {
@@ -261,7 +295,8 @@ public class FinancialProactiveService {
         String msg = "*Auditoria de juros*\n"
             + "Você pagará aproximadamente *" + BRL.format(juros) + "* de juros em *" + transacao.getDescricao() + "*.\n"
             + "Se pagasse à vista, essa economia poderia ir para *" + meta + "*.";
-        whatsAppNotificationService.enviarParaUsuario(transacao.getUsuario().getId(), msg);
+        whatsAppNotificationService.enviarParaUsuario(
+            transacao.getUsuario().getId(), msg, JarvisTipoNotificacaoProativa.ALERTA_RISCO_REATIVO);
     }
 
     private Optional<Categoria> sugerirCategoriaHeuristica(List<Categoria> categorias, String descricao) {

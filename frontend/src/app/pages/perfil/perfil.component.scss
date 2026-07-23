@@ -46,8 +46,63 @@ h1 {
 
 .alert-jarvis.calendar-box,
 .alert-jarvis.contas-box,
-.alert-jarvis.fixas-box {
+.alert-jarvis.fixas-box,
+.alert-jarvis.notif-box {
   margin-top: 16px;
+}
+
+.alert-jarvis.notif-box {
+  flex-wrap: wrap;
+}
+
+.alert-jarvis.notif-box .alert-icon {
+  color: #fbbf24;
+}
+
+.notif-body {
+  width: 100%;
+  flex: 1 1 280px;
+}
+
+.notif-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notif-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 2px 10px;
+  align-items: start;
+  cursor: pointer;
+}
+
+.notif-toggle input {
+  margin-top: 3px;
+  grid-row: 1 / span 2;
+}
+
+.notif-label {
+  font-size: 0.92rem;
+  color: #e5e7eb;
+}
+
+.notif-hint {
+  grid-column: 2;
+  font-size: 0.78rem;
+  color: #9ca3af;
+  line-height: 1.35;
+}
+
+.notif-loading {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: #9ca3af;
 }
 
 .alert-jarvis.contas-box .alert-icon {

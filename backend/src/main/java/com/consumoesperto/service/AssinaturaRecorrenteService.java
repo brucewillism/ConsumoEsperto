@@ -4,6 +4,7 @@ import com.consumoesperto.dto.AssinaturaRecorrenteDTO;
 import com.consumoesperto.dto.AssinaturaRecorrenteRequest;
 import com.consumoesperto.dto.MatchResult;
 import com.consumoesperto.model.AssinaturaRecorrente;
+import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
@@ -343,7 +344,8 @@ public class AssinaturaRecorrenteService {
                 }
                 try {
                     String msg = montarAlertaVencimento(u.getId(), a, dias);
-                    whatsAppNotificationService.enviarParaUsuario(u.getId(), msg);
+                    whatsAppNotificationService.enviarParaUsuario(
+                        u.getId(), msg, JarvisTipoNotificacaoProativa.RECORRENCIAS_VENCIMENTO);
                 } catch (Exception e) {
                     log.warn("[ASSINATURA] Falha alerta id={} userId={} dias={}: {}", a.getId(), u.getId(), dias, e.getMessage());
                 }

@@ -144,6 +144,32 @@ export class UsuarioService {
   desligarEvolutionWhatsapp(): Observable<EvolutionDesligarResponse> {
     return this.http.post<EvolutionDesligarResponse>(`${this.apiUrl}/whatsapp/evolution-desligar`, {});
   }
+
+  getJarvisNotificacoesPreferencias(): Observable<JarvisNotificacaoPreferencias> {
+    return this.http.get<JarvisNotificacaoPreferencias>(`${this.apiUrl}/jarvis-notificacoes-preferencias`);
+  }
+
+  salvarJarvisNotificacoesPreferencias(
+    prefs: JarvisNotificacaoPreferencias
+  ): Observable<JarvisNotificacaoPreferencias> {
+    return this.http.put<JarvisNotificacaoPreferencias>(
+      `${this.apiUrl}/jarvis-notificacoes-preferencias`,
+      prefs
+    );
+  }
+}
+
+/** Preferências de alertas proativos WhatsApp (J.A.R.V.I.S.). */
+export interface JarvisNotificacaoPreferencias {
+  alertaRiscoReativo?: boolean;
+  resumoSemanal?: boolean;
+  relatorioMensalScore?: boolean;
+  digestMensalSentinela?: boolean;
+  sentinelaDia5?: boolean;
+  recorrenciasVencimento?: boolean;
+  amortizacaoSazonal?: boolean;
+  conferenciaNotas?: boolean;
+  modoViagemCronos?: boolean;
 }
 
 export interface EvolutionDesligarResponse {

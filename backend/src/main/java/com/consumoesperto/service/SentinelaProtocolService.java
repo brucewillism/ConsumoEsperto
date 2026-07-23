@@ -55,7 +55,21 @@ public class SentinelaProtocolService {
             return vazio();
         }
         Long usuarioId = novaDespesa.getUsuario().getId();
+        BigDecimal nova = nz(novaDespesa.getValor());
+        BigDecimal deltaNova = saldoService.deltaProjecaoNovaDespesa(novaDespesa);
+        return calcularMargemInterno(usuarioId, nova, deltaNova);
+    }
 
+    /** Snapshot Sentinela sem nova despesa (digest mensal, consultas). */
+    @Transactional(readOnly = true)
+    public SentinelaMargemDTO calcularMargemSentinelaUsuario(Long usuarioId) {
+        if (usuarioId == null) {
+            return vazio();
+        }
+        return calcularMargemInterno(usuarioId, BigDecimal.ZERO, BigDecimal.ZERO);
+    }
+
+    private SentinelaMargemDTO calcularMargemInterno(Long usuarioId, BigDecimal nova, BigDecimal deltaNova) {
         SaldoService.ProjecaoMesCaixa projecao = saldoService.calcularProjecaoMes(usuarioId);
         SentinelaBufferSazonalService.ColchaoSazonal colchao = sentinelaBufferSazonalService.calcularColchao(usuarioId);
 
@@ -67,9 +81,6 @@ public class SentinelaProtocolService {
             .setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal receitasPrevistas = projecao.receitasPrevistasConsolidadas();
-        BigDecimal nova = nz(novaDespesa.getValor());
-        BigDecimal deltaNova = saldoService.deltaProjecaoNovaDespesa(novaDespesa);
-
         BigDecimal saldoMarginal = projecao.patrimonioLiquido()
             .add(receitasPrevistas)
             .subtract(projecao.despesasPrevistas())
@@ -90,7 +101,7 @@ public class SentinelaProtocolService {
             receitasPrevistas,
             projecao.despesasPrevistas(),
             somaFixas,
-            nova,
+            nz(nova),
             colchaoValor,
             saldoMarginal,
             saldoAjustado,

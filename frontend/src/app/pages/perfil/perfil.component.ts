@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { UsuarioService } from '../../services/usuario.service';
+import { UsuarioService, JarvisNotificacaoPreferencias } from '../../services/usuario.service';
 import { AuthService } from '../../services/auth.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -50,6 +50,62 @@ export class PerfilComponent implements OnInit {
 
   linhaTratamento = '';
 
+  notifPrefs: JarvisNotificacaoPreferencias = {};
+  notifPrefsCarregando = false;
+  notifPrefsSalvando = false;
+
+  readonly notifOpcoes: {
+    key: keyof JarvisNotificacaoPreferencias;
+    label: string;
+    hint: string;
+  }[] = [
+    {
+      key: 'alertaRiscoReativo',
+      label: 'Alerta após despesa (Sentinela + forecast)',
+      hint: 'Quando uma despesa confirmada indica risco no caixa — como o alerta financeiro proativo.',
+    },
+    {
+      key: 'digestMensalSentinela',
+      label: 'Digest mensal Sentinela (dia 1, 18h15)',
+      hint: 'Panorama mensal: património, margem Sentinela e projeção de fechamento.',
+    },
+    {
+      key: 'relatorioMensalScore',
+      label: 'Relatório mensal de score (dia 1, 18h30)',
+      hint: 'Resultado líquido do mês anterior e pontuação de saúde financeira.',
+    },
+    {
+      key: 'sentinelaDia5',
+      label: 'Disponibilidade real (dia 5, 09h30)',
+      hint: 'Relatório Sentinela após obrigações do início do mês.',
+    },
+    {
+      key: 'resumoSemanal',
+      label: 'Resumo semanal (domingo 18h)',
+      hint: 'Gastos da semana, maior despesa e orçamentos em atenção.',
+    },
+    {
+      key: 'recorrenciasVencimento',
+      label: 'Vencimentos e recorrências (diário 08h)',
+      hint: 'Contas a vencer, assinaturas e alertas de liquidez.',
+    },
+    {
+      key: 'conferenciaNotas',
+      label: 'Lembretes de conferência (diário 10h)',
+      hint: 'Lançamentos pendentes de confirmação no painel.',
+    },
+    {
+      key: 'amortizacaoSazonal',
+      label: 'Oportunidade debt snowball (segunda 10h)',
+      hint: 'Sugestões de amortização antes de receitas fiscais (13º/IR).',
+    },
+    {
+      key: 'modoViagemCronos',
+      label: 'Modo Viagem — Cronos (segunda 10h)',
+      hint: 'Sugestões com base na agenda Google, quando vinculada.',
+    },
+  ];
+
   constructor(
     private usuarioService: UsuarioService,
     private authService: AuthService,
@@ -73,10 +129,39 @@ export class PerfilComponent implements OnInit {
         this.escolhaModal = u.preferenciaTratamentoJarvis || 'AUTOMATICO';
         this.carregando = false;
         this.carregarFixas();
+        this.carregarNotifPrefs();
       },
       error: () => {
         this.carregando = false;
         this.toastService.error('Não foi possível carregar o perfil.');
+      },
+    });
+  }
+
+  carregarNotifPrefs(): void {
+    this.notifPrefsCarregando = true;
+    this.usuarioService.getJarvisNotificacoesPreferencias().subscribe({
+      next: (prefs) => {
+        this.notifPrefs = { ...prefs };
+        this.notifPrefsCarregando = false;
+      },
+      error: () => {
+        this.notifPrefsCarregando = false;
+      },
+    });
+  }
+
+  salvarNotifPrefs(): void {
+    this.notifPrefsSalvando = true;
+    this.usuarioService.salvarJarvisNotificacoesPreferencias(this.notifPrefs).subscribe({
+      next: (prefs) => {
+        this.notifPrefs = { ...prefs };
+        this.notifPrefsSalvando = false;
+        this.toastService.success('Preferências de notificação guardadas.');
+      },
+      error: () => {
+        this.notifPrefsSalvando = false;
+        this.toastService.error('Não foi possível guardar as preferências.');
       },
     });
   }

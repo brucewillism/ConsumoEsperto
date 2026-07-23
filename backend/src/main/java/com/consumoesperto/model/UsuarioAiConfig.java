@@ -78,4 +78,8 @@ public class UsuarioAiConfig {
      */
     @Column(name = "evolution_session_suppressed", nullable = false)
     private boolean evolutionSessionSuppressed = false;
+
+    /** JSON {@link com.consumoesperto.dto.JarvisNotificacaoPreferenciasDTO} — tipos de alerta proativo WhatsApp. */
+    @Column(name = "jarvis_notif_prefs_json", columnDefinition = "TEXT")
+    private String jarvisNotifPrefsJson;
 }

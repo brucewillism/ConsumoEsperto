@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
 import com.consumoesperto.repository.UsuarioRepository;
@@ -16,9 +17,18 @@ public class WhatsAppNotificationService {
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
     private final EvolutionApiService evolutionApiService;
     private final JarvisProtocolService jarvisProtocolService;
+    private final JarvisNotificacaoPreferenciasService jarvisNotificacaoPreferenciasService;
 
     public boolean enviarParaUsuario(Long usuarioId, String mensagem) {
+        return enviarParaUsuario(usuarioId, mensagem, null);
+    }
+
+    public boolean enviarParaUsuario(Long usuarioId, String mensagem, JarvisTipoNotificacaoProativa tipo) {
         if (usuarioId == null || mensagem == null || mensagem.isBlank()) {
+            return false;
+        }
+        if (tipo != null && !jarvisNotificacaoPreferenciasService.estaAtiva(usuarioId, tipo)) {
+            log.debug("Notificação {} suprimida por preferência userId={}", tipo, usuarioId);
             return false;
         }
         Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);

@@ -1,5 +1,6 @@
 package com.consumoesperto.controller;
 
+import com.consumoesperto.dto.JarvisNotificacaoPreferenciasDTO;
 import com.consumoesperto.dto.EvolutionPairingOutcomeDTO;
 import com.consumoesperto.dto.PerfilJarvisRequest;
 import com.consumoesperto.dto.PreferenciaTratamentoRequest;
@@ -7,6 +8,7 @@ import com.consumoesperto.dto.UsuarioDTO;
 import com.consumoesperto.service.EvolutionInstanceLifecycleService;
 import com.consumoesperto.service.EvolutionInstanceSettingsService;
 import com.consumoesperto.service.EvolutionPairingService;
+import com.consumoesperto.service.JarvisNotificacaoPreferenciasService;
 import com.consumoesperto.service.JarvisProtocolService;
 import com.consumoesperto.service.UsuarioService;
 import com.consumoesperto.service.WhatsAppUserMappingService;
@@ -48,6 +50,7 @@ public class UsuarioController {
     private final EvolutionInstanceLifecycleService evolutionInstanceLifecycleService;
     private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
     private final TratamentoUsuarioService tratamentoUsuarioService;
+    private final JarvisNotificacaoPreferenciasService jarvisNotificacaoPreferenciasService;
 
     /**
      * Busca o perfil do usuário autenticado
@@ -129,9 +132,6 @@ public class UsuarioController {
         }
     }
 
-    /**
-     * Calibragem J.A.R.V.I.S.: persiste título (Senhor, Doutora, NENHUM, etc.) e marca {@code jarvis_configurado = true}.
-     */
     @PatchMapping("/perfil-jarvis")
     public ResponseEntity<UsuarioDTO> atualizarPerfilJarvis(@Valid @RequestBody PerfilJarvisRequest body) {
         try {
@@ -153,6 +153,26 @@ public class UsuarioController {
             log.error("Erro ao atualizar perfil J.A.R.V.I.S.: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    @GetMapping("/jarvis-notificacoes-preferencias")
+    public ResponseEntity<JarvisNotificacaoPreferenciasDTO> obterPreferenciasNotificacoes() {
+        Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
+        if (!usuarioOpt.isPresent()) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(jarvisNotificacaoPreferenciasService.obter(usuarioOpt.get().getId()));
+    }
+
+    @PutMapping("/jarvis-notificacoes-preferencias")
+    public ResponseEntity<JarvisNotificacaoPreferenciasDTO> salvarPreferenciasNotificacoes(
+        @RequestBody JarvisNotificacaoPreferenciasDTO body
+    ) {
+        Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();
+        if (!usuarioOpt.isPresent()) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(jarvisNotificacaoPreferenciasService.salvar(usuarioOpt.get().getId(), body));
     }
 
     private UsuarioDTO mapPerfilDto(com.consumoesperto.model.Usuario usuario) {
