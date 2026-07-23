@@ -200,7 +200,8 @@ public class EvolutionInstanceSettingsService {
             report.put("instanceRestarted", restarted);
         }
 
-        if (setUnavailablePresence && !sessionSticky) {
+        // Presença unavailable é segura com sessionSticky (não derruba Baileys); só o restart é omitido.
+        if (setUnavailablePresence) {
             boolean presence = applyPresenceUnavailable(name);
             report.put("presenceUnavailable", presence);
         }
