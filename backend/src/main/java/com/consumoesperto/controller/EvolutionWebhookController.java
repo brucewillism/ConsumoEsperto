@@ -11,6 +11,7 @@ import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.service.EvolutionWebhookAsyncProcessor;
 import com.consumoesperto.service.EvolutionWebhookDedupService;
 import com.consumoesperto.service.EvolutionBotEchoFilterService;
+import com.consumoesperto.service.EvolutionSessionMetricsService;
 import com.consumoesperto.service.EvolutionSessionWatchdogService;
 import com.consumoesperto.service.WhatsappAccountProvisioner;
 import com.consumoesperto.service.WhatsAppBotAllowlist;
@@ -46,6 +47,7 @@ public class EvolutionWebhookController {
     private final EvolutionPairingService evolutionPairingService;
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
     private final EvolutionSessionWatchdogService evolutionSessionWatchdogService;
+    private final EvolutionSessionMetricsService evolutionSessionMetricsService;
     private final AiRateLimitService aiRateLimitService;
 
     /**
@@ -167,6 +169,9 @@ public class EvolutionWebhookController {
         }
         whatsAppUserMappingService.ensureLinkedIfEmpty(userId, incoming.getFromJid());
         evolutionSessionWatchdogService.touchWebhookActivity(instance);
+        if (instance != null && !instance.isBlank()) {
+            evolutionSessionMetricsService.recordIncoming(instance.trim());
+        }
         aiRateLimitService.checkOrThrow(userId, "whatsapp-webhook", incoming.getFromJid());
         whatsAppCommandService.sendJarvisInstantAck(incoming, userId, instance);
         log.info("Evolution webhook enfileirado (async): userId={} remoteJid={} fromMe={} msgKey={}", userId, incoming.getFromJid(), incoming.isFromMe(), incoming.getMessageKeyId());
@@ -378,8 +383,14 @@ public class EvolutionWebhookController {
             data.path("instanceName").asText("")
         );
         log.info("Evolution CONNECTION_UPDATE event={} instance={} state={}", event, instance, state);
-        if (instance != null && !instance.isBlank() && EvolutionSessionWatchdogService.isConnectionLostState(state)) {
-            evolutionSessionWatchdogService.onConnectionLost(instance.trim(), state);
+        if (instance != null && !instance.isBlank()) {
+            String inst = instance.trim();
+            if (EvolutionSessionWatchdogService.isConnectionLostState(state)) {
+                evolutionSessionMetricsService.recordDisconnect(inst, state);
+                evolutionSessionWatchdogService.onConnectionLost(inst, state);
+            } else if ("open".equalsIgnoreCase(state)) {
+                evolutionSessionMetricsService.recordConnected(inst);
+            }
         }
         if ("open".equalsIgnoreCase(state) && instance != null && !instance.isBlank()) {
             String inst = instance.trim();

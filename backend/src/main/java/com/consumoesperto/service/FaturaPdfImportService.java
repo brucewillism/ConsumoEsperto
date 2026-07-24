@@ -5,6 +5,7 @@ import com.consumoesperto.dto.ImportacaoFaturaDTO;
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
 import com.consumoesperto.dto.ProjecaoFaturaMesDTO;
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.dto.ai.structured.OcrFaturaStructuredDTO;
 import com.consumoesperto.exception.DivergenciaFaturaException;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Fatura;
@@ -27,6 +28,9 @@ import com.consumoesperto.service.fatura.layout.GenericoFaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.InterFaturaTextoExtrator;
 import com.consumoesperto.service.fatura.layout.ItauFaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.ItauFaturaTextoExtrator;
+import com.consumoesperto.service.ai.AiStructuredOutputKind;
+import com.consumoesperto.service.ai.AiStructuredOutputResult;
+import com.consumoesperto.service.ai.AiStructuredOutputService;
 import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport;
 import com.consumoesperto.util.SaldoAnteriorFaturaBbSupport.SaldoAnteriorBbMeta;
@@ -99,6 +103,7 @@ public class FaturaPdfImportService {
     private final CartaoCreditoService cartaoCreditoService;
     private final SaldoService saldoService;
     private final TratamentoUsuarioService tratamentoUsuarioService;
+    private final AiStructuredOutputService aiStructuredOutputService;
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
     public static boolean isBulletVisivelAoUsuario(String linhaAuditoria) {
@@ -165,6 +170,21 @@ public class FaturaPdfImportService {
         String textoNorm = FaturaPdfLayoutSupport.norm(textoPdf);
         if (!documentoAceitoComoFaturaCartao(extracted, layoutEfetivo, textoNorm)) {
             throw new IllegalArgumentException("O PDF parece ser um extrato de conta, não uma fatura de cartão.");
+        }
+
+        AiStructuredOutputResult<OcrFaturaStructuredDTO> validado = aiStructuredOutputService.parseAndValidate(
+            extracted,
+            AiStructuredOutputKind.OCR_FATURA,
+            OcrFaturaStructuredDTO.class,
+            usuarioId,
+            null
+        );
+        if (!validado.isValid()) {
+            String detalhes = validado.getErrors() == null || validado.getErrors().isEmpty()
+                ? "estrutura inválida"
+                : String.join("; ", validado.getErrors());
+            throw new IllegalArgumentException(
+                "Fatura não validada pela IA. Revise o PDF ou confirme manualmente antes de importar. Detalhes: " + detalhes);
         }
 
         String bancoExtraido = firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText(""));

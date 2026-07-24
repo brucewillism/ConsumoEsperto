@@ -1,0 +1,97 @@
+<app-page-loading *ngIf="carregando && !health" message="Carregando painel Evolution…"></app-page-loading>
+
+<div class="evo-admin-page" *ngIf="!carregando || health">
+  <header class="evo-admin-header">
+    <div>
+      <p class="eyebrow">Admin · Observabilidade</p>
+      <h1>Painel Evolution</h1>
+      <span class="sub" *ngIf="health?.coletadoEm">
+        Atualizado {{ health?.coletadoEm | date:'dd/MM/yyyy HH:mm:ss' }} · refresh automático 30s
+      </span>
+    </div>
+    <div class="actions">
+      <a routerLink="/whatsapp-config" class="btn-link">← WhatsApp</a>
+      <button type="button" class="btn-refresh" (click)="atualizar()" [disabled]="carregando">
+        Atualizar
+      </button>
+    </div>
+  </header>
+
+  <p class="alert" *ngIf="erro">{{ erro }}</p>
+
+  <section class="metrics-grid" *ngIf="health">
+    <mat-card class="metric-card ok">
+      <span class="label">Sessões ativas</span>
+      <strong>{{ health.sessoesAtivas }}</strong>
+    </mat-card>
+    <mat-card class="metric-card warn">
+      <span class="label">Desconectadas</span>
+      <strong>{{ health.sessoesDesconectadas }}</strong>
+    </mat-card>
+    <mat-card class="metric-card">
+      <span class="label">Mensagens hoje</span>
+      <strong>{{ health.mensagensHoje | number }}</strong>
+    </mat-card>
+    <mat-card class="metric-card">
+      <span class="label">Reconexões hoje</span>
+      <strong>{{ health.reconexoesHoje }}</strong>
+    </mat-card>
+    <mat-card class="metric-card" [class.danger]="health.falhasHoje > 0">
+      <span class="label">Falhas hoje</span>
+      <strong>{{ health.falhasHoje }}</strong>
+    </mat-card>
+    <mat-card class="metric-card">
+      <span class="label">Latência média</span>
+      <strong>{{ health.latenciaMediaMs }} ms</strong>
+      <small>P95 {{ health.latenciaP95Ms }} ms</small>
+    </mat-card>
+  </section>
+
+  <mat-card class="instaveis-card" *ngIf="health?.sessoesInstaveis?.length">
+    <h2>Sessões instáveis</h2>
+    <ul>
+      <li *ngFor="let nome of health?.sessoesInstaveis">{{ nome }}</li>
+    </ul>
+  </mat-card>
+
+  <mat-card class="table-card" *ngIf="health?.sessoes?.length">
+    <h2>Detalhe por instância</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Instância</th>
+            <th>Status</th>
+            <th>Uptime</th>
+            <th>Msg hoje</th>
+            <th>Recon.</th>
+            <th>Falhas</th>
+            <th>Latência</th>
+            <th>Instável</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of health?.sessoes; trackBy: trackSessao" [class.offline]="!s.ativa">
+            <td><code>{{ s.instancia }}</code></td>
+            <td>
+              <span class="pill" [class.on]="s.ativa">{{ s.status || 'unknown' }}</span>
+            </td>
+            <td>{{ formatUptime(s.uptimeSegundos) }}</td>
+            <td>{{ s.mensagensEnviadasHoje + s.mensagensRecebidasHoje }}</td>
+            <td>{{ s.reconexoesHoje }}</td>
+            <td>{{ s.falhasHoje }}</td>
+            <td>{{ s.latenciaMediaMs }} ms</td>
+            <td>
+              <span *ngIf="s.instavel" class="pill warn" [title]="s.motivoInstabilidade || ''">sim</span>
+              <span *ngIf="!s.instavel" class="muted">não</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </mat-card>
+
+  <mat-card class="empty-card" *ngIf="health && !health.sessoes?.length">
+    <p>Nenhuma instância reportada pela Evolution API. Métricas locais (mensagens/falhas/latência) continuam a ser contabilizadas.</p>
+  </mat-card>
+</div>

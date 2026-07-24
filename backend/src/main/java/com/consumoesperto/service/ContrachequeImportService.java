@@ -4,6 +4,7 @@ import com.consumoesperto.dto.ContrachequeDTO;
 import com.consumoesperto.dto.DescontoFixoDTO;
 import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.dto.ai.structured.ContrachequeStructuredDTO;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContrachequeDesconto;
 import com.consumoesperto.model.ContrachequeImportado;
@@ -11,6 +12,9 @@ import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.ContrachequeImportadoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.ai.AiStructuredOutputKind;
+import com.consumoesperto.service.ai.AiStructuredOutputResult;
+import com.consumoesperto.service.ai.AiStructuredOutputService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -63,6 +67,7 @@ public class ContrachequeImportService {
     private final PlanejamentoFiscalService planejamentoFiscalService;
     private final ObjectProvider<SalarioAutomaticoService> salarioAutomaticoProvider;
     private final ObjectProvider<ContrachequeImportService> selfProvider;
+    private final AiStructuredOutputService aiStructuredOutputService;
 
     public ContrachequeDTO processarPdf(Long usuarioId, byte[] pdfBytes) {
         JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(usuarioId, pdfBytes);
@@ -71,6 +76,20 @@ public class ContrachequeImportService {
 
     @Transactional(timeout = 300)
     public ContrachequeDTO processarExtracao(Long usuarioId, JsonNode extracted) {
+        AiStructuredOutputResult<ContrachequeStructuredDTO> validado = aiStructuredOutputService.parseAndValidate(
+            extracted,
+            AiStructuredOutputKind.CONTRACHEQUE,
+            ContrachequeStructuredDTO.class,
+            usuarioId,
+            null
+        );
+        if (!validado.isValid()) {
+            String detalhes = validado.getErrors() == null || validado.getErrors().isEmpty()
+                ? "formato inválido"
+                : String.join("; ", validado.getErrors());
+            throw new IllegalArgumentException(
+                "Contracheque não validado pela IA. Confirme os dados manualmente antes de importar. Detalhes: " + detalhes);
+        }
         String tipo = extracted.path("tipoDocumento").asText("");
         if (!"CONTRACHEQUE".equalsIgnoreCase(tipo)) {
             throw new IllegalArgumentException("O PDF não parece ser um contracheque/holerite.");

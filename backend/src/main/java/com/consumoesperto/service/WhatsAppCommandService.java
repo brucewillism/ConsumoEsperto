@@ -38,6 +38,9 @@ import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.ai.AiStructuredOutputKind;
+import com.consumoesperto.service.ai.AiStructuredOutputResult;
+import com.consumoesperto.service.ai.AiStructuredOutputService;
 import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import com.consumoesperto.service.entityupdate.WhatsAppEntityConfigUpdateService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -147,6 +150,7 @@ public class WhatsAppCommandService {
     private final com.consumoesperto.service.jarvis.JarvisTratamentoWhatsappService jarvisTratamentoWhatsappService;
     private final com.consumoesperto.config.JarvisPerformanceProperties jarvisPerformanceProperties;
     private final com.consumoesperto.service.jarvis.CategoriaCorrecaoMemoriaService categoriaCorrecaoMemoriaService;
+    private final AiStructuredOutputService aiStructuredOutputService;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -571,6 +575,55 @@ public class WhatsAppCommandService {
             }
             return fallback;
         }
+    }
+
+    private Optional<String> validarComandoFinanceiroEstruturado(JsonNode cmd, Long userId, String sourceText) {
+        Optional<AiStructuredOutputResult<?>> rejected = aiStructuredOutputService.validateWhatsappMutation(
+            cmd, userId, attempt -> openAiService.parseCommand(sourceText, userId, 0.0));
+        if (rejected.isEmpty()) {
+            return Optional.empty();
+        }
+        AiStructuredOutputResult<?> result = rejected.get();
+        AiStructuredOutputKind kind = AiStructuredOutputKind.resolveWhatsappMutation(cmd).orElse(null);
+        return Optional.of(aiStructuredOutputService.mensagemConfirmacaoUsuario(
+            kind != null ? kind : AiStructuredOutputKind.WHATSAPP_DESPESA,
+            result.getErrors()));
+    }
+
+    private JsonNode validarOcrCupomComRetry(Long userId, byte[] imageBytes, String mediaContentType) {
+        JsonNode initial = openAiService.analisarImagemNotaFiscal(imageBytes, mediaContentType, userId);
+        AiStructuredOutputResult<com.consumoesperto.dto.ai.structured.OcrCupomStructuredDTO> result =
+            aiStructuredOutputService.parseAndValidate(
+                initial,
+                AiStructuredOutputKind.OCR_CUPOM,
+                com.consumoesperto.dto.ai.structured.OcrCupomStructuredDTO.class,
+                userId,
+                attempt -> openAiService.analisarImagemNotaFiscal(imageBytes, mediaContentType, userId, 0.0)
+            );
+        if (!result.isValid()) {
+            return null;
+        }
+        return strictMapperFromStructured(result.getPayload());
+    }
+
+    private JsonNode strictMapperFromStructured(com.consumoesperto.dto.ai.structured.OcrCupomStructuredDTO dto) {
+        ObjectNode node = JsonNodeFactory.instance.objectNode();
+        node.put("valorTotal", dto.getValorTotal().doubleValue());
+        node.put("estabelecimento", dto.getEstabelecimento());
+        if (dto.getDataCompra() != null) {
+            node.put("dataCompra", dto.getDataCompra().toString());
+        }
+        if (dto.getCategoriaSugerida() != null) {
+            node.put("categoriaSugerida", dto.getCategoriaSugerida());
+        }
+        if (dto.getCnpj() != null) {
+            node.put("cnpj", dto.getCnpj());
+        }
+        node.put("confianca", dto.getConfianca());
+        if (dto.getErro() != null) {
+            node.put("erro", dto.getErro());
+        }
+        return node;
     }
 
     private boolean textoPedeListaCartoes(String text) {
@@ -2297,7 +2350,11 @@ public class WhatsAppCommandService {
         } catch (Exception e) {
             log.debug("[VISION-LOG] Leitura boleto/Pix falhou, tentando cupom: {}", e.getMessage());
         }
-        JsonNode ocr = openAiService.analisarImagemNotaFiscal(imageBytes, mediaContentType, userId);
+        JsonNode ocr = validarOcrCupomComRetry(userId, imageBytes, mediaContentType);
+        if (ocr == null) {
+            log.info("[VISION-LOG] OCR rejeitado após validação estruturada userId={}", userId);
+            return jarvisProtocolService.erroVisaoArquivo(voc);
+        }
         double confianca = ocr.path("confianca").asDouble(0.0d);
         String erro = ocr.path("erro").asText("");
         if (!erro.isBlank() || confianca < 0.45d) {
@@ -2336,6 +2393,10 @@ public class WhatsAppCommandService {
 
     private String executeCommand(JsonNode cmd, Long userId, String sourceText) {
         String action = cmd.path("action").asText("UNKNOWN");
+        Optional<String> gateEstruturado = validarComandoFinanceiroEstruturado(cmd, userId, sourceText);
+        if (gateEstruturado.isPresent()) {
+            return msgInfo("Confirmação", gateEstruturado.get());
+        }
         double confianca = readConfianca(cmd);
         if (("CREATE_EXPENSE".equals(action) || "CREATE_INCOME".equals(action))
             && precisaEsclarecimentoComando(cmd, confianca)) {

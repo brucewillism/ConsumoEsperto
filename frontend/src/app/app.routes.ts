@@ -83,6 +83,12 @@ export const routes: Routes = [
   },
 
   {
+    path: 'admin/evolution',
+    loadComponent: () => import('./pages/admin-evolution/admin-evolution.component').then(m => m.AdminEvolutionComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
     path: 'contas',
     loadComponent: () => import('./pages/contas-bancarias/contas-bancarias.component').then(m => m.ContasBancariasComponent),
     canActivate: [AuthGuard]

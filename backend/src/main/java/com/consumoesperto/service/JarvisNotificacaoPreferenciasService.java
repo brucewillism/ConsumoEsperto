@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.JarvisNotificacaoPreferenciasDTO;
 import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
+import com.consumoesperto.model.NotificacaoCanalEntrega;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
@@ -56,8 +57,32 @@ public class JarvisNotificacaoPreferenciasService {
         if (patch.getModoViagemCronos() != null) {
             atual.setModoViagemCronos(patch.getModoViagemCronos());
         }
+        if (patch.getCanalEntrega() != null) {
+            atual.setCanalEntrega(normalizarCanal(patch.getCanalEntrega()));
+        }
         persistir(usuarioId, atual);
         return atual;
+    }
+
+    @Transactional(readOnly = true)
+    public NotificacaoCanalEntrega obterCanalEntrega(Long usuarioId) {
+        String raw = lerOuDefaults(usuarioId).getCanalEntrega();
+        if (raw == null || raw.isBlank()) {
+            return NotificacaoCanalEntrega.WHATSAPP;
+        }
+        try {
+            return NotificacaoCanalEntrega.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return NotificacaoCanalEntrega.WHATSAPP;
+        }
+    }
+
+    private static String normalizarCanal(String canal) {
+        try {
+            return NotificacaoCanalEntrega.valueOf(canal.trim().toUpperCase()).name();
+        } catch (IllegalArgumentException e) {
+            return NotificacaoCanalEntrega.WHATSAPP.name();
+        }
     }
 
     @Transactional(readOnly = true)
@@ -147,6 +172,9 @@ public class JarvisNotificacaoPreferenciasService {
         }
         if (parsed.getModoViagemCronos() != null) {
             d.setModoViagemCronos(parsed.getModoViagemCronos());
+        }
+        if (parsed.getCanalEntrega() != null) {
+            d.setCanalEntrega(normalizarCanal(parsed.getCanalEntrega()));
         }
         return d;
     }

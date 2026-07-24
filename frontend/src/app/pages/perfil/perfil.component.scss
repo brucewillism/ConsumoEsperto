@@ -64,6 +64,34 @@ h1 {
   flex: 1 1 280px;
 }
 
+.notif-canal {
+  margin-bottom: 1rem;
+  width: 100%;
+
+  label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+  }
+
+  select {
+    width: 100%;
+    max-width: 280px;
+    padding: 0.45rem 0.6rem;
+    border-radius: 8px;
+    border: 1px solid var(--exec-border, #334155);
+    background: var(--exec-bg, #0f172a);
+    color: inherit;
+  }
+
+  .notif-hint {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    color: #9ca3af;
+  }
+}
+
 .notif-list {
   list-style: none;
   margin: 12px 0 0;

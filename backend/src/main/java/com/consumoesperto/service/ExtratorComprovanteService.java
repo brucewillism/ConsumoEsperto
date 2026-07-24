@@ -2,10 +2,14 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.ExtratorComprovanteWebhookRequest;
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.dto.ai.structured.OcrComprovanteStructuredDTO;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.ai.AiStructuredOutputKind;
+import com.consumoesperto.service.ai.AiStructuredOutputResult;
+import com.consumoesperto.service.ai.AiStructuredOutputService;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -37,6 +41,7 @@ public class ExtratorComprovanteService {
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
     private final CategoriaRepository categoriaRepository;
+    private final AiStructuredOutputService aiStructuredOutputService;
 
     public ExtratorComprovanteService(
         OpenAiService openAiService,
@@ -46,7 +51,8 @@ public class ExtratorComprovanteService {
         @Lazy WhatsAppNotificationService whatsAppNotificationService,
         UsuarioRepository usuarioRepository,
         JarvisProtocolService jarvisProtocolService,
-        CategoriaRepository categoriaRepository
+        CategoriaRepository categoriaRepository,
+        AiStructuredOutputService aiStructuredOutputService
     ) {
         this.openAiService = openAiService;
         this.contaBancariaService = contaBancariaService;
@@ -56,32 +62,43 @@ public class ExtratorComprovanteService {
         this.usuarioRepository = usuarioRepository;
         this.jarvisProtocolService = jarvisProtocolService;
         this.categoriaRepository = categoriaRepository;
+        this.aiStructuredOutputService = aiStructuredOutputService;
     }
 
     @Transactional
     public TransacaoDTO processarWebhook(Long usuarioId, ExtratorComprovanteWebhookRequest request) {
-        JsonNode json = openAiService.gerarJson(
-            usuarioId,
-            "Extraia dados de comprovante PIX/TED de notificação bancária. "
-                + "Retorne JSON: {\"valor\":0.00,\"tipo\":\"RECEITA|DESPESA\",\"data\":\"yyyy-MM-dd\","
-                + "\"descricao\":\"nome do recebedor ou pagador\","
-                + "\"categoria\":\"categoria provável ex: Alimentação, Mercado, Transporte\","
-                + "\"confianca\":0-1}. "
-                + "tipo=RECEITA se dinheiro entrou na conta; DESPESA se saiu.",
-            "Banco: " + request.getBanco() + "\nTexto da notificação:\n" + request.getTexto()
-        );
+        String systemPrompt = "Extraia dados de comprovante PIX/TED de notificação bancária. "
+            + "Retorne JSON: {\"valor\":0.00,\"tipo\":\"RECEITA|DESPESA\",\"data\":\"yyyy-MM-dd\","
+            + "\"descricao\":\"nome do recebedor ou pagador\","
+            + "\"categoria\":\"categoria provável ex: Alimentação, Mercado, Transporte\","
+            + "\"confianca\":0-1}. "
+            + "tipo=RECEITA se dinheiro entrou na conta; DESPESA se saiu.";
+        String userPrompt = "Banco: " + request.getBanco() + "\nTexto da notificação:\n" + request.getTexto();
 
-        BigDecimal valor = BigDecimal.valueOf(json.path("valor").asDouble(0));
-        if (valor.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Não foi possível extrair valor válido do comprovante.");
+        JsonNode json = openAiService.gerarJson(usuarioId, systemPrompt, userPrompt);
+        AiStructuredOutputResult<OcrComprovanteStructuredDTO> validado = aiStructuredOutputService.parseAndValidate(
+            json,
+            AiStructuredOutputKind.OCR_COMPROVANTE,
+            OcrComprovanteStructuredDTO.class,
+            usuarioId,
+            attempt -> openAiService.gerarJson(usuarioId, systemPrompt, userPrompt, 0.0)
+        );
+        if (!validado.isValid()) {
+            enviarPedidoConfirmacaoComprovante(usuarioId, request, validado.getErrors());
+            throw new IllegalArgumentException("Comprovante não validado pela IA — confirmação solicitada ao usuário.");
         }
-        String tipoStr = json.path("tipo").asText("DESPESA").trim().toUpperCase();
+
+        OcrComprovanteStructuredDTO dto = validado.getPayload();
+        BigDecimal valor = dto.getValor();
+        String tipoStr = dto.getTipo().trim().toUpperCase();
         TransacaoDTO.TipoTransacao tipo = "RECEITA".equals(tipoStr)
             ? TransacaoDTO.TipoTransacao.RECEITA
             : TransacaoDTO.TipoTransacao.DESPESA;
-        String descricao = json.path("descricao").asText("Comprovante " + request.getBanco()).trim();
-        String categoriaNome = json.path("categoria").asText("Outros").trim();
-        LocalDateTime data = parseData(json.path("data").asText(""));
+        String descricao = dto.getDescricao().trim();
+        String categoriaNome = dto.getCategoria() != null ? dto.getCategoria().trim() : "Outros";
+        LocalDateTime data = dto.getData() != null
+            ? dto.getData().atStartOfDay()
+            : parseData("");
 
         ContaBancaria conta = resolverConta(usuarioId, request.getBanco());
         Long categoriaId = resolverCategoriaId(usuarioId, categoriaNome, tipo);
@@ -143,6 +160,19 @@ public class ExtratorComprovanteService {
             + "(ex.: _Não, altera para Mercado_).";
 
         whatsAppNotificationService.enviarParaUsuario(usuarioId, msg);
+    }
+
+    private void enviarPedidoConfirmacaoComprovante(
+        Long usuarioId,
+        ExtratorComprovanteWebhookRequest request,
+        List<String> errors
+    ) {
+        String vocativo = jarvisProtocolService.resolveVocative(usuarioId, usuarioRepository);
+        String detalhes = errors == null || errors.isEmpty() ? "dados incompletos" : String.join("; ", errors);
+        whatsAppNotificationService.enviarParaUsuario(usuarioId,
+            vocativo + ", recebi um comprovante do " + request.getBanco()
+                + ", mas não consegui validar automaticamente (" + detalhes + "). "
+                + "Reenvie o valor, tipo (receita/despesa) e descrição por texto para eu registrar com segurança.");
     }
 
     private Long resolverCategoriaId(Long usuarioId, String categoriaNome, TransacaoDTO.TipoTransacao tipo) {

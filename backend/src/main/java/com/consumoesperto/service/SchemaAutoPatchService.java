@@ -85,6 +85,8 @@ public class SchemaAutoPatchService {
         ensureUsuarioGoogleCalendarColumns();
         ensureMetasFinanceirasCronosColumns();
         ensureMetasFinanceirasValorAcumuladoColumn();
+        ensureUsuarioPerfilComportamentalTable();
+        ensureNotificacaoOrquestracaoTables();
         ensureJarvisCronosEventLogTable();
         ensureAuditLogTable();
         ensurePgvectorExtensionAndMemoriaSemanticaJarvisTable();
@@ -1130,6 +1132,71 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: metas_financeiras — coluna valor_acumulado verificada.");
         } catch (Exception e) {
             log.warn("Falha ao aplicar valor_acumulado em metas_financeiras: {}", e.getMessage());
+        }
+    }
+
+    private void ensureUsuarioPerfilComportamentalTable() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.usuario_perfil_comportamental ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "perfil VARCHAR(32) NOT NULL,"
+                    + "confianca_pct INTEGER NOT NULL,"
+                    + "perfil_anterior VARCHAR(32),"
+                    + "calculado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_usuario_perfil_comportamental_usuario "
+                    + "ON public.usuario_perfil_comportamental(usuario_id, calculado_em DESC)"
+            );
+            log.info("Schema patch: usuario_perfil_comportamental verificada.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE usuario_perfil_comportamental: {}", e.getMessage());
+        }
+    }
+
+    private void ensureNotificacaoOrquestracaoTables() {
+        try {
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.notificacao_enviada ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "tipo VARCHAR(64) NOT NULL,"
+                    + "categoria VARCHAR(16) NOT NULL,"
+                    + "hash_evento VARCHAR(128) NOT NULL,"
+                    + "data_envio TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_notif_enviada_usuario_hash "
+                    + "ON public.notificacao_enviada(usuario_id, hash_evento)"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_notif_enviada_usuario_categoria_data "
+                    + "ON public.notificacao_enviada(usuario_id, categoria, data_envio DESC)"
+            );
+            executeDdlAutocommit(
+                "CREATE TABLE IF NOT EXISTS public.notificacao_digest_buffer ("
+                    + "id BIGSERIAL PRIMARY KEY,"
+                    + "usuario_id BIGINT NOT NULL REFERENCES public.usuarios(id) ON DELETE CASCADE,"
+                    + "data_ref DATE NOT NULL,"
+                    + "tipo VARCHAR(64) NOT NULL,"
+                    + "hash_evento VARCHAR(128) NOT NULL,"
+                    + "linha_digest VARCHAR(500),"
+                    + "mensagem_completa TEXT,"
+                    + "titulo_web VARCHAR(200),"
+                    + "criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                    + ")"
+            );
+            executeDdlAutocommit(
+                "CREATE INDEX IF NOT EXISTS idx_notif_digest_usuario_data "
+                    + "ON public.notificacao_digest_buffer(usuario_id, data_ref)"
+            );
+            log.info("Schema patch: tabelas de orquestração de notificações verificadas.");
+        } catch (Exception e) {
+            log.warn("Falha ao CREATE tabelas notificacao_*: {}", e.getMessage());
         }
     }
 

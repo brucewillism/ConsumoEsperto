@@ -30,6 +30,7 @@ public class EvolutionApiService {
     private final EvolutionBotEchoFilterService evolutionBotEchoFilterService;
     private final ObjectMapper objectMapper;
     private final EvolutionSessionWatchdogService evolutionSessionWatchdogService;
+    private final EvolutionSessionMetricsService evolutionSessionMetricsService;
 
     private RestTemplate restTemplate;
 
@@ -80,25 +81,33 @@ public class EvolutionApiService {
                 "text", message
             );
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            long startNs = System.nanoTime();
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
+            evolutionSessionMetricsService.recordApiLatency(instance, (System.nanoTime() - startNs) / 1_000_000L);
             if (!response.getStatusCode().is2xxSuccessful() && !response.getStatusCode().is3xxRedirection()) {
                 log.error("[EvolutionApi] Falha HTTP ao enviar texto: {} instance={} destino={} [J.A.R.V.I.S. Offline]",
                     response.getStatusCode(), instance, number);
                 evolutionSessionWatchdogService.onSendFailure(instance);
+                evolutionSessionMetricsService.recordSendFailure(instance);
                 return false;
             }
             registerOutgoingFromResponse(number, response.getBody());
+            evolutionSessionMetricsService.recordOutgoing(instance);
             return true;
         } catch (IllegalStateException cfg) {
             log.error("[EvolutionApi] Configuração Evolution incompleta: {} [J.A.R.V.I.S. Offline]", cfg.getMessage());
             return false;
         } catch (ResourceAccessException ex) {
             log.error("[EvolutionApi] Evolution offline ou timeout ao enviar mensagem (rede): {} [J.A.R.V.I.S. Offline]", ex.getMessage());
-            evolutionSessionWatchdogService.onSendFailure(resolveInstanceName(evolutionInstanceOverride));
+            String inst = resolveInstanceName(evolutionInstanceOverride);
+            evolutionSessionWatchdogService.onSendFailure(inst);
+            evolutionSessionMetricsService.recordSendFailure(inst);
             return false;
         } catch (RestClientException ex) {
             log.error("[EvolutionApi] Erro de cliente HTTP Evolution ao enviar mensagem: {} [J.A.R.V.I.S. Offline]", ex.getMessage(), ex);
-            evolutionSessionWatchdogService.onSendFailure(resolveInstanceName(evolutionInstanceOverride));
+            String inst = resolveInstanceName(evolutionInstanceOverride);
+            evolutionSessionWatchdogService.onSendFailure(inst);
+            evolutionSessionMetricsService.recordSendFailure(inst);
             return false;
         } catch (RuntimeException ex) {
             log.error("[EvolutionApi] Erro ao enviar mensagem pela Evolution: {} [J.A.R.V.I.S. Offline]", ex.getMessage(), ex);
@@ -176,6 +185,7 @@ public class EvolutionApiService {
             }
             log.info("[JARVIS-LOG] Evolution áudio PTT enviado instance={} destino={}", instance, number);
             registerOutgoingFromResponse(number, response.getBody());
+            evolutionSessionMetricsService.recordOutgoing(instance);
             evolutionBotEchoFilterService.registerOutgoingMedia(number, "audio", audioBytes, null);
             return true;
         } catch (IllegalStateException cfg) {
@@ -237,6 +247,7 @@ public class EvolutionApiService {
                 return false;
             }
             registerOutgoingFromResponse(number, response.getBody());
+            evolutionSessionMetricsService.recordOutgoing(instance);
             evolutionBotEchoFilterService.registerOutgoingMedia(number, "document", pdfBytes, fileName);
             return true;
         } catch (IllegalStateException cfg) {

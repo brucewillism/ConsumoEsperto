@@ -170,6 +170,8 @@ export interface JarvisNotificacaoPreferencias {
   amortizacaoSazonal?: boolean;
   conferenciaNotas?: boolean;
   modoViagemCronos?: boolean;
+  /** WHATSAPP | WEB | AMBOS */
+  canalEntrega?: string;
 }
 
 export interface EvolutionDesligarResponse {

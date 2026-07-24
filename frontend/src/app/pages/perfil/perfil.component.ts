@@ -142,7 +142,7 @@ export class PerfilComponent implements OnInit {
     this.notifPrefsCarregando = true;
     this.usuarioService.getJarvisNotificacoesPreferencias().subscribe({
       next: (prefs) => {
-        this.notifPrefs = { ...prefs };
+        this.notifPrefs = { canalEntrega: 'WHATSAPP', ...prefs };
         this.notifPrefsCarregando = false;
       },
       error: () => {
@@ -155,7 +155,7 @@ export class PerfilComponent implements OnInit {
     this.notifPrefsSalvando = true;
     this.usuarioService.salvarJarvisNotificacoesPreferencias(this.notifPrefs).subscribe({
       next: (prefs) => {
-        this.notifPrefs = { ...prefs };
+        this.notifPrefs = { canalEntrega: 'WHATSAPP', ...prefs };
         this.notifPrefsSalvando = false;
         this.toastService.success('Preferências de notificação guardadas.');
       },

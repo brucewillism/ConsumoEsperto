@@ -1,7 +1,8 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.model.Categoria;
-import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
+import com.consumoesperto.dto.NotificacaoSolicitacao;
+import com.consumoesperto.model.NotificacaoEventoTipo;
 import com.consumoesperto.model.MetaFinanceira;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -23,7 +24,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,16 +33,15 @@ public class FinancialProactiveService {
 
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
 
-    /** Cooldown entre alertas “risco vermelho” por utilizador (0 = desligado). */
-    @Value("${consumoesperto.jarvis.alerta-risco-cooldown-minutes:30}")
+    /** @deprecated Cooldown migrado para {@link NotificationOrchestratorService}. */
+    @Value("${consumoesperto.jarvis.alerta-risco-cooldown-minutes:0}")
+    @SuppressWarnings("unused")
     private int alertaRiscoCooldownMinutes;
-
-    private final ConcurrentHashMap<Long, Long> ultimoAlertaRiscoPorUsuarioMs = new ConcurrentHashMap<>();
 
     private final CategoriaRepository categoriaRepository;
     private final OrcamentoService orcamentoService;
     private final ForecastFinanceiroService forecastFinanceiroService;
-    private final WhatsAppNotificationService whatsAppNotificationService;
+    private final NotificationOrchestratorService notificationOrchestratorService;
     private final MetaFinanceiraRepository metaFinanceiraRepository;
     private final OpenAiService openAiService;
     private final ComportamentoService comportamentoService;
@@ -161,23 +160,18 @@ public class FinancialProactiveService {
         if (!forecastRuim && !sentinelaRuim) {
             return;
         }
-        if (alertaRiscoCooldownMinutes > 0) {
-            long agora = System.currentTimeMillis();
-            long janelaMs = alertaRiscoCooldownMinutes * 60_000L;
-            Long anterior = ultimoAlertaRiscoPorUsuarioMs.get(uid);
-            if (anterior != null && agora - anterior < janelaMs) {
-                log.info("[JARVIS-LOG] Alerta risco suprimido (cooldown {} min) userId={}",
-                    alertaRiscoCooldownMinutes, uid);
-                return;
-            }
-            ultimoAlertaRiscoPorUsuarioMs.put(uid, agora);
-        }
 
         log.info("[JARVIS-LOG] Alerta Sentinela/forecast userId={} sentinelaRuim={} forecastRuim={}",
             uid, sentinelaRuim, forecastRuim);
 
         String texto = montarMensagemAlertaRiscoUnica(transacao, sentinelaRuim, forecastRuim, sentinela, forecast);
-        whatsAppNotificationService.enviarParaUsuario(uid, texto, JarvisTipoNotificacaoProativa.ALERTA_RISCO_REATIVO);
+        notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+            .usuarioId(uid)
+            .evento(NotificacaoEventoTipo.SALDO_NEGATIVO_PREVISTO)
+            .mensagem(texto)
+            .hashEvento("RISCO:" + uid + ":" + id(transacao))
+            .tituloWeb("Alerta financeiro")
+            .build());
     }
 
     /** Digest mensal agendado (dia 1) — snapshot Sentinela + forecast, independente de despesa. */
@@ -205,8 +199,16 @@ public class FinancialProactiveService {
         if (forecast.getMensagemIa() != null && !forecast.getMensagemIa().isBlank()) {
             sb.append(forecast.getMensagemIa());
         }
-        whatsAppNotificationService.enviarParaUsuario(
-            usuarioId, sb.toString(), JarvisTipoNotificacaoProativa.DIGEST_MENSAL_SENTINELA);
+        String digestLinha = "Forecast: saldo projetado " + BRL.format(forecast.getSaldoProjetado())
+            + " (" + forecast.getProbabilidadeVermelho() + "% risco)";
+        notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+            .usuarioId(usuarioId)
+            .evento(NotificacaoEventoTipo.FORECAST_MENSAL)
+            .mensagem(sb.toString())
+            .digestLinha(digestLinha)
+            .hashEvento("FORECAST_MENSAL:" + usuarioId + ":" + mes)
+            .tituloWeb("Forecast mensal")
+            .build());
     }
 
     /**
@@ -270,8 +272,13 @@ public class FinancialProactiveService {
             + "(" + melhor.parcelasRestantes() + "x).\n"
             + "Economia estimada de juros: *" + BRL.format(melhor.jurosEconomizadosEstimados()) + "*.\n"
             + "Sugestão: destinar *" + BRL.format(melhor.valorSugeridoAmortizar()) + "* à quitação.";
-        whatsAppNotificationService.enviarParaUsuario(
-            usuarioId, msg, JarvisTipoNotificacaoProativa.AMORTIZACAO_SAZONAL);
+        notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+            .usuarioId(usuarioId)
+            .evento(NotificacaoEventoTipo.DIVIDA_RELEVANTE)
+            .mensagem(msg)
+            .hashEvento("DEBT_SNOWBALL:" + usuarioId + ":" + melhor.descricao())
+            .tituloWeb("Oportunidade Debt Snowball")
+            .build());
     }
 
     private void auditarJuros(Transacao transacao) {
@@ -295,8 +302,13 @@ public class FinancialProactiveService {
         String msg = "*Auditoria de juros*\n"
             + "Você pagará aproximadamente *" + BRL.format(juros) + "* de juros em *" + transacao.getDescricao() + "*.\n"
             + "Se pagasse à vista, essa economia poderia ir para *" + meta + "*.";
-        whatsAppNotificationService.enviarParaUsuario(
-            transacao.getUsuario().getId(), msg, JarvisTipoNotificacaoProativa.ALERTA_RISCO_REATIVO);
+        notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+            .usuarioId(transacao.getUsuario().getId())
+            .evento(NotificacaoEventoTipo.AUDITORIA_JUROS)
+            .mensagem(msg)
+            .hashEvento("JUROS:" + transacao.getId())
+            .tituloWeb("Auditoria de juros")
+            .build());
     }
 
     private Optional<Categoria> sugerirCategoriaHeuristica(List<Categoria> categorias, String descricao) {

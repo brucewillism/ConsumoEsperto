@@ -33,6 +33,15 @@
         <div class="notif-loading" *ngIf="notifPrefsCarregando">
           <i class="fas fa-spinner fa-spin"></i> A carregar…
         </div>
+        <div class="notif-canal" *ngIf="!notifPrefsCarregando">
+          <label for="canalEntrega">Canal de entrega</label>
+          <select id="canalEntrega" name="canalEntrega" [(ngModel)]="notifPrefs.canalEntrega">
+            <option value="WHATSAPP">WhatsApp</option>
+            <option value="WEB">Web (in-app)</option>
+            <option value="AMBOS">WhatsApp e Web</option>
+          </select>
+          <span class="notif-hint">Web Push será suportado neste canal no futuro.</span>
+        </div>
         <ul class="notif-list" *ngIf="!notifPrefsCarregando">
           <li *ngFor="let op of notifOpcoes">
             <label class="notif-toggle">

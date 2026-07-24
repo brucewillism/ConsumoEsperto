@@ -32,6 +32,9 @@ public class JarvisNotificacaoPreferenciasDTO {
     /** Segunda 10h — sugestão Modo Viagem (Cronos). */
     private Boolean modoViagemCronos;
 
+    /** Canal de entrega: WHATSAPP, WEB ou AMBOS. */
+    private String canalEntrega;
+
     public static JarvisNotificacaoPreferenciasDTO defaults() {
         JarvisNotificacaoPreferenciasDTO d = new JarvisNotificacaoPreferenciasDTO();
         d.setAlertaRiscoReativo(true);
@@ -43,6 +46,7 @@ public class JarvisNotificacaoPreferenciasDTO {
         d.setAmortizacaoSazonal(true);
         d.setConferenciaNotas(true);
         d.setModoViagemCronos(true);
+        d.setCanalEntrega("WHATSAPP");
         return d;
     }
 }

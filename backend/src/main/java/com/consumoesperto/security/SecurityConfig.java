@@ -30,6 +30,7 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
     private final JwtAccessDeniedHandler accessDeniedHandler;
     private final PasswordEncoder passwordEncoder;
+    private final AdminApiKeyFilter adminApiKeyFilter;
 
     /**
      * Padrões permitidos (origins), separados por vírgula. Em produção use o domínio HTTPS do frontend
@@ -75,6 +76,7 @@ public class SecurityConfig {
             new JwtAuthenticationFilter(jwtTokenProvider, customUserDetailsService),
             UsernamePasswordAuthenticationFilter.class
         );
+        http.addFilterAfter(adminApiKeyFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

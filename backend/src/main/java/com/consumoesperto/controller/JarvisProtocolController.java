@@ -8,6 +8,7 @@ import com.consumoesperto.service.AutomacaoTaticaService;
 import com.consumoesperto.service.CerebroSemanticoService;
 import com.consumoesperto.service.JarvisFeedbackService;
 import com.consumoesperto.service.jarvis.JarvisPipelineMetrics;
+import com.consumoesperto.service.ai.AiStructuredOutputMetrics;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,13 +39,16 @@ public class JarvisProtocolController {
     private final CerebroSemanticoService cerebroSemanticoService;
     private final JarvisFeedbackService jarvisFeedbackService;
     private final JarvisPipelineMetrics jarvisPipelineMetrics;
+    private final AiStructuredOutputMetrics aiStructuredOutputMetrics;
 
     @GetMapping("/performance/metrics")
     public ResponseEntity<Map<String, Object>> performanceMetrics(@AuthenticationPrincipal UserPrincipal user) {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        return ResponseEntity.ok(jarvisPipelineMetrics.snapshot());
+        Map<String, Object> out = new java.util.LinkedHashMap<>(jarvisPipelineMetrics.snapshot());
+        out.put("structuredOutputs", aiStructuredOutputMetrics.snapshot());
+        return ResponseEntity.ok(out);
     }
 
     @PostMapping("/feedback")

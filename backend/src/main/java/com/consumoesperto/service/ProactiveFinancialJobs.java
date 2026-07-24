@@ -1,7 +1,8 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.OrcamentoDTO;
-import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
+import com.consumoesperto.dto.NotificacaoSolicitacao;
+import com.consumoesperto.model.NotificacaoEventoTipo;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.FaturaRepository;
@@ -36,7 +37,7 @@ public class ProactiveFinancialJobs {
     private final UsuarioRepository usuarioRepository;
     private final TransacaoRepository transacaoRepository;
     private final RecurringExpenseDetectionService recurringExpenseDetectionService;
-    private final WhatsAppNotificationService whatsAppNotificationService;
+    private final NotificationOrchestratorService notificationOrchestratorService;
     private final OrcamentoService orcamentoService;
     private final ForecastFinanceiroService forecastFinanceiroService;
     private final SaldoService saldoService;
@@ -54,22 +55,42 @@ public class ProactiveFinancialJobs {
     @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)
     public void alertarRecorrenciasComVencimentoProximo() {
-        LocalDate alvo = AppTimeZone.hoje().plusDays(2);
+        LocalDate hoje = AppTimeZone.hoje();
+        LocalDate emDoisDias = hoje.plusDays(2);
         for (Usuario usuario : usuarioRepository.findAll()) {
             if (usuario.getWhatsappNumero() == null || usuario.getWhatsappNumero().isBlank()) {
                 continue;
             }
-            List<RecurringExpenseDetectionService.RecurringExpense> vencendo = recurringExpenseDetectionService
-                .detectar(usuario.getId())
-                .stream()
-                .filter(r -> r.proximaData().equals(alvo))
-                .collect(Collectors.toList());
-            for (RecurringExpenseDetectionService.RecurringExpense r : vencendo) {
-                String vocativo = jarvisProtocolService.resolveVocative(usuario.getId(), usuarioRepository);
-                String msg = jarvisProtocolService.proativoContaRecorrenteVencimento(vocativo, r.nome(), BRL.format(r.valorMedio()));
-                whatsAppNotificationService.enviarParaUsuario(
-                    usuario.getId(), msg, JarvisTipoNotificacaoProativa.RECORRENCIAS_VENCIMENTO);
+            List<RecurringExpenseDetectionService.RecurringExpense> recorrencias =
+                recurringExpenseDetectionService.detectar(usuario.getId());
+
+            for (RecurringExpenseDetectionService.RecurringExpense r : recorrencias) {
+                if (r.proximaData().equals(hoje)) {
+                    String vocativo = jarvisProtocolService.resolveVocative(usuario.getId(), usuarioRepository);
+                    String msg = jarvisProtocolService.proativoContaRecorrenteVencimento(
+                        vocativo, r.nome(), BRL.format(r.valorMedio()));
+                    notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+                        .usuarioId(usuario.getId())
+                        .evento(NotificacaoEventoTipo.VENCIMENTO_HOJE)
+                        .mensagem(msg)
+                        .hashEvento("VENC_HOJE:" + usuario.getId() + ":" + r.nome() + ":" + hoje)
+                        .tituloWeb("Vencimento hoje")
+                        .build());
+                } else if (r.proximaData().equals(emDoisDias)) {
+                    String vocativo = jarvisProtocolService.resolveVocative(usuario.getId(), usuarioRepository);
+                    String msg = jarvisProtocolService.proativoContaRecorrenteVencimento(
+                        vocativo, r.nome(), BRL.format(r.valorMedio()));
+                    notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+                        .usuarioId(usuario.getId())
+                        .evento(NotificacaoEventoTipo.ASSINATURA_PROXIMA)
+                        .mensagem(msg)
+                        .digestLinha("1 assinatura/recorrência vence em 2 dias (" + r.nome() + ")")
+                        .hashEvento("VENC_2D:" + usuario.getId() + ":" + r.nome() + ":" + emDoisDias)
+                        .tituloWeb("Vencimento próximo")
+                        .build());
+                }
             }
+
             saldoService.analisarDinheiroParado(usuario.getId())
                 .ifPresent(a -> {
                     String v = jarvisProtocolService.resolveVocative(usuario.getId(), usuarioRepository);
@@ -81,8 +102,13 @@ public class ProactiveFinancialJobs {
                         a.vencimentoFatura(),
                         a.vencimentoFatura().minusDays(1).getDayOfMonth()
                     );
-                    whatsAppNotificationService.enviarParaUsuario(
-                        usuario.getId(), m, JarvisTipoNotificacaoProativa.RECORRENCIAS_VENCIMENTO);
+                    notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+                        .usuarioId(usuario.getId())
+                        .evento(NotificacaoEventoTipo.LIQUIDEZ_PARADA)
+                        .mensagem(m)
+                        .hashEvento("LIQUIDEZ:" + usuario.getId() + ":" + hoje)
+                        .tituloWeb("Liquidez parada")
+                        .build());
                 });
             if (!faturaRepository.findVencidasByUsuarioId(usuario.getId(), AppTimeZone.agora()).isEmpty()) {
                 scoreService.registrarEvento(usuario.getId(), ScoreService.EventoScore.FATURA_VENCIDA,
@@ -101,8 +127,14 @@ public class ProactiveFinancialJobs {
             }
             try {
                 String msg = previsaoFluxoCaixaService.montarRelatorioDisponibilidadeWhatsapp(usuario.getId());
-                whatsAppNotificationService.enviarParaUsuario(
-                    usuario.getId(), msg, JarvisTipoNotificacaoProativa.SENTINELA_DIA5);
+                notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+                    .usuarioId(usuario.getId())
+                    .evento(NotificacaoEventoTipo.SENTINELA_DIA5)
+                    .mensagem(msg)
+                    .digestLinha("Sentinela: disponibilidade real do mês")
+                    .hashEvento("SENTINELA_D5:" + usuario.getId() + ":" + YearMonth.now())
+                    .tituloWeb("Sentinela dia 5")
+                    .build());
             } catch (Exception e) {
                 log.warn("[SENTINELA] user {}: {}", usuario.getId(), e.getMessage());
             }
@@ -152,8 +184,13 @@ public class ProactiveFinancialJobs {
                 dica,
                 feedbackFamiliar(usuario.getId()));
             msg += blocoConfirmacaoHabitoInferido(usuario.getId());
-            whatsAppNotificationService.enviarParaUsuario(
-                usuario.getId(), msg, JarvisTipoNotificacaoProativa.RESUMO_SEMANAL);
+            notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+                .usuarioId(usuario.getId())
+                .evento(NotificacaoEventoTipo.RESUMO_SEMANAL)
+                .mensagem(msg)
+                .hashEvento("RESUMO_SEM:" + usuario.getId() + ":" + inicioSemana)
+                .tituloWeb("Resumo semanal")
+                .build());
         }
     }
 
@@ -238,10 +275,15 @@ public class ProactiveFinancialJobs {
                 scoreService.registrarEvento(usuario.getId(), ScoreService.EventoScore.ORCAMENTO_NO_VERDE,
                     "Fechou o mês dentro de todos os orçamentos");
             }
-            whatsAppNotificationService.enviarParaUsuario(
-                usuario.getId(),
-                scoreService.relatorioMensalEconomia(usuario.getId()),
-                JarvisTipoNotificacaoProativa.RELATORIO_MENSAL_SCORE);
+            String relatorio = scoreService.relatorioMensalEconomia(usuario.getId());
+            notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+                .usuarioId(usuario.getId())
+                .evento(NotificacaoEventoTipo.SCORE_MENSAL)
+                .mensagem(relatorio)
+                .digestLinha("Score mensal disponível")
+                .hashEvento("SCORE_MES:" + usuario.getId() + ":" + mesAnterior)
+                .tituloWeb("Score mensal")
+                .build());
         }
     }
 

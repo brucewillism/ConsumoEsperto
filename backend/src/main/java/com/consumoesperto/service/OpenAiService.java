@@ -147,6 +147,11 @@ public class OpenAiService {
     }
 
     public JsonNode parseCommand(String inputText, Long userId) {
+        return parseCommand(inputText, userId, 0.1);
+    }
+
+    /** Retry estruturado: use temperatura 0 para resposta determinística. */
+    public JsonNode parseCommand(String inputText, Long userId, double temperature) {
         AiProvidersConfig cfg = cfgForAi(userId);
         Optional<Usuario> ou = userId == null ? Optional.empty() : usuarioRepository.findById(userId);
         Usuario uEnt = ou.orElse(null);
@@ -348,12 +353,13 @@ public class OpenAiService {
             "- Sempre retornar o campo confianca com valor entre 0 e 1.";
 
         PromptPar otimizado = aplicarSuppressorAntesDaIa(userId, systemPrompt, userPrompt, cfg, false);
+        final double tempFinal = temperature;
         return executeAIRequestWithFallback(
             cfg,
             p -> canChatJson(cfg, p),
             (p, c) -> {
                 String model = chatModelFor(p, c);
-                return parseChatJsonForProvider(p, c, model, otimizado.system(), otimizado.user());
+                return parseChatJsonForProvider(p, c, model, otimizado.system(), otimizado.user(), tempFinal);
             },
             "Nao foi possivel processar IA (Groq/OpenAI/Claude/Gemini/DeepSeek/Ollama). Detalhes: "
         );
@@ -447,16 +453,24 @@ public class OpenAiService {
     }
 
     public JsonNode analisarImagemNotaFiscal(byte[] imageBytes, String contentType, Long userId) {
+        return analisarImagemNotaFiscal(imageBytes, contentType, userId, 0.1);
+    }
+
+    public JsonNode analisarImagemNotaFiscal(byte[] imageBytes, String contentType, Long userId, double temperature) {
         if (imageBytes == null || imageBytes.length == 0) {
             throw new RuntimeException("Imagem não informada para OCR");
         }
         String safeContentType = (contentType == null || contentType.isBlank()) ? "image/jpeg" : contentType;
         String base64 = Base64.getEncoder().encodeToString(imageBytes);
         String dataUrl = "data:" + safeContentType + ";base64," + base64;
-        return analisarImagemNotaFiscalConteudo(dataUrl, userId);
+        return analisarImagemNotaFiscalConteudo(dataUrl, userId, temperature);
     }
 
     private JsonNode analisarImagemNotaFiscalConteudo(String imageSource, Long userId) {
+        return analisarImagemNotaFiscalConteudo(imageSource, userId, 0.1);
+    }
+
+    private JsonNode analisarImagemNotaFiscalConteudo(String imageSource, Long userId, double temperature) {
         log.info("[VISION-LOG] Iniciando OCR de cupom userId={}", userId);
         AiProvidersConfig cfg = cfgForAi(userId);
         String systemPrompt = "Você é um extrator OCR financeiro especializado em cupons/notas fiscais brasileiras. " +
@@ -475,6 +489,7 @@ public class OpenAiService {
         );
         final String visionSys = visionOpt.systemPrompt();
         final String visionUsr = visionOpt.userPrompt();
+        final double tempFinal = temperature;
 
         JsonNode out = executeAIRequestWithFallback(
             cfg,
@@ -483,7 +498,7 @@ public class OpenAiService {
                 String model = visionModelFor(p, c);
                 log.info("[VISION-LOG] Provedor={} modelo={} userId={}", p.name(), model, userId);
                 return parseVisionOpenAiCompatible(
-                    p.name(), apiKeyFor(p, c), baseUrlFor(p, c), model, visionSys, visionUsr, imageSource);
+                    p.name(), apiKeyFor(p, c), baseUrlFor(p, c), model, visionSys, visionUsr, imageSource, tempFinal);
             },
             "Falha OCR em todos provedores (Groq/OpenAI/Ollama): "
         );
@@ -534,25 +549,34 @@ public class OpenAiService {
     }
 
     public JsonNode gerarJson(Long userId, String systemPrompt, String userPrompt) {
-        return gerarJsonInternal(userId, systemPrompt, userPrompt, false);
+        return gerarJson(userId, systemPrompt, userPrompt, 0.1);
+    }
+
+    public JsonNode gerarJson(Long userId, String systemPrompt, String userPrompt, double temperature) {
+        return gerarJsonInternal(userId, systemPrompt, userPrompt, false, temperature);
     }
 
     /** Extração de PDF/contracheque: modelo Groq mais leve para poupar quota diária. */
     public JsonNode gerarJsonDocumento(Long userId, String systemPrompt, String userPrompt) {
-        return gerarJsonInternal(userId, systemPrompt, userPrompt, true);
+        return gerarJsonDocumento(userId, systemPrompt, userPrompt, 0.1);
     }
 
-    private JsonNode gerarJsonInternal(Long userId, String systemPrompt, String userPrompt, boolean documento) {
+    public JsonNode gerarJsonDocumento(Long userId, String systemPrompt, String userPrompt, double temperature) {
+        return gerarJsonInternal(userId, systemPrompt, userPrompt, true, temperature);
+    }
+
+    private JsonNode gerarJsonInternal(Long userId, String systemPrompt, String userPrompt, boolean documento, double temperature) {
         AiProvidersConfig cfg = cfgForAi(userId);
         PromptPar otimizado = aplicarSuppressorAntesDaIa(userId, systemPrompt, userPrompt, cfg, documento);
         final String systemFinal = otimizado.system();
         final String userFinal = otimizado.user();
+        final double tempFinal = temperature;
         return executeAIRequestWithFallback(
             cfg,
             p -> canChatJson(cfg, p),
             (p, c) -> {
                 String model = documento ? chatModelForDocument(p, c) : chatModelFor(p, c);
-                return parseChatJsonForProvider(p, c, model, systemFinal, userFinal);
+                return parseChatJsonForProvider(p, c, model, systemFinal, userFinal, tempFinal);
             },
             "Nao foi possivel gerar JSON via IA. Detalhes: "
         );
@@ -1092,11 +1116,16 @@ public class OpenAiService {
 
     private JsonNode parseChatJsonForProvider(AiProviderType provider, AiProvidersConfig cfg, String model,
                                                String systemPrompt, String userPrompt) {
+        return parseChatJsonForProvider(provider, cfg, model, systemPrompt, userPrompt, 0.1);
+    }
+
+    private JsonNode parseChatJsonForProvider(AiProviderType provider, AiProvidersConfig cfg, String model,
+                                               String systemPrompt, String userPrompt, double temperature) {
         return switch (provider) {
-            case GEMINI -> parseGeminiJson(model, systemPrompt, userPrompt);
+            case GEMINI -> parseGeminiJson(model, systemPrompt, userPrompt, temperature);
             case CLAUDE -> parseClaudeJson(model, systemPrompt, userPrompt);
             default -> parseCommandOpenAiCompatible(provider.name(), apiKeyFor(provider, cfg), baseUrlFor(provider, cfg),
-                model, systemPrompt, userPrompt);
+                model, systemPrompt, userPrompt, temperature);
         };
     }
 
@@ -1135,7 +1164,7 @@ public class OpenAiService {
         }
     }
 
-    private JsonNode parseGeminiJson(String model, String systemPrompt, String userPrompt) {
+    private JsonNode parseGeminiJson(String model, String systemPrompt, String userPrompt, double temperature) {
         if (platformGeminiApiKey == null || platformGeminiApiKey.isBlank()) {
             throw new RuntimeException("GEMINI_API_KEY não configurada");
         }
@@ -1152,7 +1181,7 @@ public class OpenAiService {
                 )
             ),
             "generationConfig", Map.of(
-                "temperature", 0.1,
+                "temperature", temperature,
                 "responseMimeType", "application/json"
             )
         );
@@ -1167,18 +1196,28 @@ public class OpenAiService {
 
     private JsonNode parseCommandOpenAiCompatible(String providerName, String key, String providerBaseUrl, String model,
                                                     String systemPrompt, String userPrompt) {
+        return parseCommandOpenAiCompatible(providerName, key, providerBaseUrl, model, systemPrompt, userPrompt, 0.1);
+    }
+
+    private JsonNode parseCommandOpenAiCompatible(String providerName, String key, String providerBaseUrl, String model,
+                                                    String systemPrompt, String userPrompt, double temperature) {
         ensureOpenAiCompatibleConfigured(providerName, key, providerBaseUrl);
         boolean ollama = AiProviderType.OLLAMA.name().equalsIgnoreCase(providerName);
-        Map<String, Object> payload = buildChatJsonPayload(model, systemPrompt, userPrompt, !ollama);
+        Map<String, Object> payload = buildChatJsonPayload(model, systemPrompt, userPrompt, !ollama, temperature);
         ResponseEntity<String> response = callOpenAiCompatibleForParse(providerBaseUrl, key, payload);
         return extractJsonFromOpenAiCompatibleResponse(response.getBody(), providerName, "comando");
     }
 
     private JsonNode parseVisionOpenAiCompatible(String providerName, String key, String providerBaseUrl, String model,
                                                  String systemPrompt, String userPrompt, String imageSource) {
+        return parseVisionOpenAiCompatible(providerName, key, providerBaseUrl, model, systemPrompt, userPrompt, imageSource, 0.1);
+    }
+
+    private JsonNode parseVisionOpenAiCompatible(String providerName, String key, String providerBaseUrl, String model,
+                                                 String systemPrompt, String userPrompt, String imageSource, double temperature) {
         ensureOpenAiCompatibleConfigured(providerName, key, providerBaseUrl);
         boolean ollama = AiProviderType.OLLAMA.name().equalsIgnoreCase(providerName);
-        Map<String, Object> payload = buildVisionJsonPayload(model, systemPrompt, userPrompt, imageSource, !ollama);
+        Map<String, Object> payload = buildVisionJsonPayload(model, systemPrompt, userPrompt, imageSource, !ollama, temperature);
         ResponseEntity<String> response = callOpenAiCompatible(providerBaseUrl, key, payload);
         return extractJsonFromOpenAiCompatibleResponse(response.getBody(), providerName, "ocr");
     }
@@ -1187,9 +1226,15 @@ public class OpenAiService {
     private static Map<String, Object> buildChatJsonPayload(
         String model, String systemPrompt, String userPrompt, boolean useOpenAiJsonMode
     ) {
+        return buildChatJsonPayload(model, systemPrompt, userPrompt, useOpenAiJsonMode, 0.1);
+    }
+
+    private static Map<String, Object> buildChatJsonPayload(
+        String model, String systemPrompt, String userPrompt, boolean useOpenAiJsonMode, double temperature
+    ) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("model", model);
-        payload.put("temperature", 0.1);
+        payload.put("temperature", temperature);
         if (useOpenAiJsonMode) {
             payload.put("response_format", Map.of("type", "json_object"));
         }
@@ -1206,9 +1251,15 @@ public class OpenAiService {
     private static Map<String, Object> buildVisionJsonPayload(
         String model, String systemPrompt, String userPrompt, String imageSource, boolean useOpenAiJsonMode
     ) {
+        return buildVisionJsonPayload(model, systemPrompt, userPrompt, imageSource, useOpenAiJsonMode, 0.1);
+    }
+
+    private static Map<String, Object> buildVisionJsonPayload(
+        String model, String systemPrompt, String userPrompt, String imageSource, boolean useOpenAiJsonMode, double temperature
+    ) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("model", model);
-        payload.put("temperature", 0.1);
+        payload.put("temperature", temperature);
         if (useOpenAiJsonMode) {
             payload.put("response_format", Map.of("type", "json_object"));
         }

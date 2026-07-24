@@ -28,6 +28,7 @@ public class EvolutionSessionWatchdogService {
     private final EvolutionWaSessionRegistry evolutionWaSessionRegistry;
     private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
     private final EvolutionInstanceLifecycleService evolutionInstanceLifecycleService;
+    private final EvolutionSessionMetricsService evolutionSessionMetricsService;
 
     private final ConcurrentHashMap<String, Long> lastWebhookActivityMs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> lastRecoverAttemptMs = new ConcurrentHashMap<>();
@@ -157,6 +158,7 @@ public class EvolutionSessionWatchdogService {
             evolutionInstanceLifecycleService.ensureInstanceWebhook(instanceName);
             if (evolutionPairingService.attemptSessionReconnect(instanceName)) {
                 log.info("Evolution watchdog: instance={} reconectada sem restart (motivo={})", instanceName, reason);
+                evolutionSessionMetricsService.recordReconnect(instanceName, reason);
                 evolutionInstanceSettingsService.maintainPhoneFriendlySession(instanceName);
                 evolutionInstanceSettingsService.markInstanceStabilized(instanceName);
                 return;
@@ -164,6 +166,7 @@ public class EvolutionSessionWatchdogService {
             boolean restarted = evolutionInstanceSettingsService.restartInstance(instanceName);
             log.info("Evolution watchdog: instance={} restart={} reason={}", instanceName, restarted, reason);
             if (restarted && evolutionPairingService.attemptSessionReconnect(instanceName)) {
+                evolutionSessionMetricsService.recordReconnect(instanceName, "watchdog-restart:" + reason);
                 evolutionInstanceSettingsService.maintainPhoneFriendlySession(instanceName);
                 evolutionInstanceSettingsService.markInstanceStabilized(instanceName);
             }

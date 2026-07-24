@@ -1,7 +1,9 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dto.NotificacaoSolicitacao;
 import com.consumoesperto.dto.OrcamentoDTO;
 import com.consumoesperto.dto.OrcamentoRequest;
+import com.consumoesperto.model.NotificacaoEventoTipo;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.GrupoFamiliar;
 import com.consumoesperto.model.Orcamento;
@@ -31,7 +33,7 @@ public class OrcamentoService {
     private final CategoriaRepository categoriaRepository;
     private final UsuarioRepository usuarioRepository;
     private final TransacaoRepository transacaoRepository;
-    private final WhatsAppNotificationService whatsAppNotificationService;
+    private final NotificationOrchestratorService notificationOrchestratorService;
     private final ScoreService scoreService;
     private final GrupoFamiliarService grupoFamiliarService;
     private final JarvisProtocolService jarvisProtocolService;
@@ -137,12 +139,16 @@ public class OrcamentoService {
         }
         AlertaOrcamento alerta = new AlertaOrcamento(o, gastoAtual, pctAtual, marco);
         String msgJarvis = jarvisProtocolService.formatOrcamentoAlert(o, marco, gastoAtual, pctAtual);
+        NotificacaoEventoTipo evento = marco >= 100
+            ? NotificacaoEventoTipo.ORCAMENTO_ULTRAPASSADO
+            : NotificacaoEventoTipo.ORCAMENTO_LIMITE;
+        String hash = "ORC:" + o.getId() + ":" + ym + ":" + marco;
         if (o.isCompartilhado() && o.getGrupoFamiliar() != null) {
             for (Usuario membro : grupoFamiliarService.membrosAceitos(o.getGrupoFamiliar().getId())) {
-                whatsAppNotificationService.enviarParaUsuario(membro.getId(), msgJarvis);
+                enviarAlertaOrcamento(membro.getId(), evento, msgJarvis, hash + ":" + membro.getId());
             }
         } else {
-            whatsAppNotificationService.enviarParaUsuario(usuarioId, msgJarvis);
+            enviarAlertaOrcamento(usuarioId, evento, msgJarvis, hash);
         }
         if (marco >= 100) {
             scoreService.registrarEvento(usuarioId, ScoreService.EventoScore.ORCAMENTO_ESTOURADO,
@@ -185,6 +191,21 @@ public class OrcamentoService {
         BigDecimal pct = percentual(gasto, limite);
         String nome = o.getCategoria() != null ? o.getCategoria().getNome() : null;
         return Optional.of(new StatusOrcamentoCategoria(nome, nz(gasto), nz(limite), pct));
+    }
+
+    private void enviarAlertaOrcamento(
+        Long usuarioId,
+        NotificacaoEventoTipo evento,
+        String mensagem,
+        String hashEvento
+    ) {
+        notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
+            .usuarioId(usuarioId)
+            .evento(evento)
+            .mensagem(mensagem)
+            .hashEvento(hashEvento)
+            .tituloWeb("Alerta de orçamento")
+            .build());
     }
 
     public OrcamentoDTO toDto(Orcamento o) {

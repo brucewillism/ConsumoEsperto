@@ -1,0 +1,159 @@
+.evo-admin-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  color: #e5e7eb;
+}
+
+.evo-admin-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+
+  h1 {
+    margin: 0.25rem 0;
+    font-size: 1.75rem;
+  }
+
+  .eyebrow {
+    margin: 0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+  }
+
+  .sub {
+    color: #94a3b8;
+    font-size: 0.875rem;
+  }
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-link {
+  color: #38bdf8;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.btn-refresh {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #e0f2fe;
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+}
+
+.alert {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.metric-card {
+  padding: 1rem !important;
+  background: rgba(15, 23, 42, 0.72) !important;
+  border: 1px solid rgba(51, 65, 85, 0.65);
+
+  .label {
+    display: block;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-bottom: 0.35rem;
+  }
+
+  strong {
+    font-size: 1.6rem;
+    line-height: 1.1;
+  }
+
+  small {
+    display: block;
+    margin-top: 0.25rem;
+    color: #64748b;
+    font-size: 0.75rem;
+  }
+
+  &.danger strong {
+    color: #f87171;
+  }
+}
+
+.instaveis-card,
+.table-card,
+.empty-card {
+  margin-top: 1rem;
+  padding: 1rem !important;
+  background: rgba(15, 23, 42, 0.72) !important;
+  border: 1px solid rgba(51, 65, 85, 0.65);
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+  }
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+
+  th,
+  td {
+    padding: 0.5rem 0.65rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.45);
+  }
+
+  th {
+    color: #94a3b8;
+    font-weight: 600;
+  }
+
+  tr.offline td {
+    opacity: 0.75;
+  }
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: rgba(100, 116, 139, 0.25);
+
+  &.on {
+    background: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+  }
+
+  &.warn {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fcd34d;
+  }
+}
+
+.muted {
+  color: #64748b;
+}
