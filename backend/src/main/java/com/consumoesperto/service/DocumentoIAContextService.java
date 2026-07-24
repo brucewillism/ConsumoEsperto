@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.service.ai.AITaskType;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy;
 import com.consumoesperto.service.fatura.layout.FaturaPdfLayoutSupport;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -260,7 +261,8 @@ public class DocumentoIAContextService {
         String system = sistemaExtracaoCabecalho(esquemaCabecalho, layoutFatura);
         String userMsg = "(Trecho inicial do PDF; pode haver continuações. Layout detectado: "
             + layoutFatura.layout().getNomeExibicao() + ".)\n\nTexto extraído:\n" + trechoUsuario;
-        JsonNode json = openAiService.gerarJsonDocumento(usuarioId, system, userMsg);
+        AITaskType taskType = esquemaCabecalho ? AITaskType.OCR_PAYSLIP : AITaskType.OCR_INVOICE;
+        JsonNode json = openAiService.gerarJsonDocumento(usuarioId, system, userMsg, taskType);
         registrarAuditoria(logOp, userMsg, json);
         return json;
     }

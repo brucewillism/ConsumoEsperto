@@ -31,6 +31,7 @@ public class AiStructuredOutputService {
 
     private final Validator validator;
     private final AiStructuredOutputMetrics metrics;
+    private final com.consumoesperto.service.ai.trace.AiTraceService aiTraceService;
     private final ObjectMapper strictMapper = buildStrictMapper();
 
     public <T> AiStructuredOutputResult<T> parseAndValidate(
@@ -79,6 +80,7 @@ public class AiStructuredOutputService {
                     : AiStructuredOutputStatus.VALID;
                 metrics.record(status);
                 logStructured(kind, userId, status, attempts, null);
+                aiTraceService.attachStructuredOutput(true, corrected);
                 return AiStructuredOutputResult.<T>builder()
                     .status(status)
                     .payload(parsed.dto())
@@ -93,6 +95,7 @@ public class AiStructuredOutputService {
 
         metrics.record(AiStructuredOutputStatus.REJECTED);
         logStructured(kind, userId, AiStructuredOutputStatus.REJECTED, attempts, lastErrors);
+        aiTraceService.attachStructuredOutput(false, false);
         return AiStructuredOutputResult.<T>builder()
             .status(AiStructuredOutputStatus.NEEDS_CONFIRMATION)
             .payload(null)

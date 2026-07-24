@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class AiStructuredOutputServiceTest {
 
@@ -24,7 +25,7 @@ class AiStructuredOutputServiceTest {
     void setUp() {
         metrics = new AiStructuredOutputMetrics();
         Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
-        service = new AiStructuredOutputService(validator, metrics);
+        service = new AiStructuredOutputService(validator, metrics, mock(com.consumoesperto.service.ai.trace.AiTraceService.class));
     }
 
     @Test

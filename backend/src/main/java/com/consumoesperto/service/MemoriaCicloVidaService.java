@@ -8,6 +8,7 @@ import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.ai.AITaskType;
 import com.consumoesperto.util.AppTimeZone;
 import com.consumoesperto.util.FinanceTextoUtil;
 import lombok.RequiredArgsConstructor;
@@ -271,7 +272,8 @@ public class MemoriaCicloVidaService {
                     + "em português, máximo 400 caracteres, preservando valores e padrões relevantes. "
                     + "Retorne JSON {\"texto\":\"...\"}.",
                 corpo.toString(),
-                "");
+                "",
+                AITaskType.MEMORY_SUMMARY);
             if (texto != null && !texto.isBlank()) {
                 return "Consolidado: " + texto.trim();
             }

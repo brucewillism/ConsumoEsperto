@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.ai.AITaskType;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
@@ -118,7 +119,7 @@ public class ConciergeNfceUrlService {
 
         JsonNode root;
         try {
-            root = openAiService.gerarJson(userId, system, userPrompt);
+            root = openAiService.gerarJson(userId, system, userPrompt, AITaskType.OCR_RECEIPT);
         } catch (Exception e) {
             log.warn("[JARVIS-LOG] Concierge: IA extratora falhou: {}", e.getMessage());
             return Optional.of("Não consegui interpretar o conteúdo da nota automaticamente. Envie *foto* do cupom se preferir.");

@@ -6,8 +6,11 @@ import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.Veredito;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
+import com.consumoesperto.service.ai.AiRouterRequestContext;
+import com.consumoesperto.service.ai.AITaskType;
 import com.consumoesperto.service.ai.AiGatewayPromptContext;
 import com.consumoesperto.service.ai.AiGatewayService;
+import com.consumoesperto.service.ai.AiRouterService;
 import com.consumoesperto.util.AiProviderOrder;
 import com.consumoesperto.service.AiProvidersConfigService.AiProvidersConfig;
 import com.consumoesperto.service.AiProvidersConfigService.GroqSection;
@@ -50,6 +53,7 @@ public class OpenAiService {
     private final UsuarioRepository usuarioRepository;
     private final JarvisProtocolService jarvisProtocolService;
     private final AiGatewayService aiGatewayService;
+    private final AiRouterService aiRouterService;
     private final TratamentoUsuarioService tratamentoUsuarioService;
 
     /** Injeção lazy para quebrar o ciclo OpenAiService → Contexto → SaldoService → OpenAiService. */
@@ -122,9 +126,13 @@ public class OpenAiService {
 
     public String transcribeAudio(byte[] audioBytes, String filename, String contentType, Long userId) {
         AiProvidersConfig cfg = cfgForAi(userId);
+        String tokenHint = filename != null ? filename : "audio";
         return executeAIRequestWithFallback(
+            AITaskType.VOICE_TRANSCRIPTION,
+            userId,
             cfg,
             p -> canTranscribe(cfg, p),
+            tokenHint,
             (p, c) -> transcribeForProvider(p, c, audioBytes, filename),
             "Nenhum provedor de transcrição disponível. Detalhes: "
         );
@@ -354,14 +362,19 @@ public class OpenAiService {
 
         PromptPar otimizado = aplicarSuppressorAntesDaIa(userId, systemPrompt, userPrompt, cfg, false);
         final double tempFinal = temperature;
+        String tokenHint = otimizado.system() + otimizado.user();
         return executeAIRequestWithFallback(
+            AITaskType.WHATSAPP_COMMAND,
+            userId,
+            tempFinal,
             cfg,
             p -> canChatJson(cfg, p),
+            tokenHint,
             (p, c) -> {
                 String model = chatModelFor(p, c);
                 return parseChatJsonForProvider(p, c, model, otimizado.system(), otimizado.user(), tempFinal);
             },
-            "Nao foi possivel processar IA (Groq/OpenAI/Claude/Gemini/DeepSeek/Ollama). Detalhes: "
+            "Nao foi possivel processar IA (roteador WhatsApp). Detalhes: "
         );
     }
 
@@ -385,7 +398,8 @@ public class OpenAiService {
             userId,
             system,
             userPrompt,
-            "Ainda não há memória semântica de transações suficiente para responder com precisão. Faça mais lançamentos ou reformule."
+            "Ainda não há memória semântica de transações suficiente para responder com precisão. Faça mais lançamentos ou reformule.",
+            AITaskType.SEMANTIC_ANALYSIS
         );
     }
 
@@ -411,9 +425,13 @@ public class OpenAiService {
 
         try {
             PromptPar otimizado = aplicarSuppressorAntesDaIa(userId, systemPrompt, userPrompt, cfg, false);
+            String tokenHint = otimizado.system() + otimizado.user();
             String linha = executeAIRequestWithFallback(
+                AITaskType.REPORT_GENERATION,
+                userId,
                 cfg,
                 p -> canChatJson(cfg, p),
+                tokenHint,
                 (p, c) -> {
                     String model = chatModelFor(p, c);
                     JsonNode j = parseChatJsonForProvider(p, c, model, otimizado.system(), otimizado.user());
@@ -490,17 +508,21 @@ public class OpenAiService {
         final String visionSys = visionOpt.systemPrompt();
         final String visionUsr = visionOpt.userPrompt();
         final double tempFinal = temperature;
+        String tokenHint = visionSys + visionUsr;
 
         JsonNode out = executeAIRequestWithFallback(
+            AITaskType.OCR_RECEIPT,
+            userId,
+            tempFinal,
             cfg,
-            p -> canVision(cfg, p),
+            p -> canVisionForTask(AITaskType.OCR_RECEIPT, cfg, p),
+            tokenHint,
             (p, c) -> {
                 String model = visionModelFor(p, c);
                 log.info("[VISION-LOG] Provedor={} modelo={} userId={}", p.name(), model, userId);
-                return parseVisionOpenAiCompatible(
-                    p.name(), apiKeyFor(p, c), baseUrlFor(p, c), model, visionSys, visionUsr, imageSource, tempFinal);
+                return parseVisionForProvider(p, c, model, visionSys, visionUsr, imageSource, tempFinal);
             },
-            "Falha OCR em todos provedores (Groq/OpenAI/Ollama): "
+            "Falha OCR em todos provedores (roteador cupom): "
         );
         log.info("[VISION-LOG] OCR concluído userId={} confianca={}", userId, out.path("confianca").asDouble(Double.NaN));
         return out;
@@ -532,14 +554,17 @@ public class OpenAiService {
         );
         final String visionSys = visionOpt.systemPrompt();
         final String visionUsr = visionOpt.userPrompt();
+        String tokenHint = visionSys + visionUsr;
 
         JsonNode out = executeAIRequestWithFallback(
+            AITaskType.OCR_RECEIPT,
+            userId,
             cfg,
-            p -> canVision(cfg, p),
+            p -> canVisionForTask(AITaskType.OCR_RECEIPT, cfg, p),
+            tokenHint,
             (p, c) -> {
                 String model = visionModelFor(p, c);
-                return parseVisionOpenAiCompatible(
-                    p.name(), apiKeyFor(p, c), baseUrlFor(p, c), model, visionSys, visionUsr, dataUrl);
+                return parseVisionForProvider(p, c, model, visionSys, visionUsr, dataUrl, 0.1);
             },
             "Falha leitura boleto/Pix em todos provedores: "
         );
@@ -549,31 +574,59 @@ public class OpenAiService {
     }
 
     public JsonNode gerarJson(Long userId, String systemPrompt, String userPrompt) {
-        return gerarJson(userId, systemPrompt, userPrompt, 0.1);
+        return gerarJson(userId, systemPrompt, userPrompt, AITaskType.STRUCTURED_OUTPUT);
     }
 
     public JsonNode gerarJson(Long userId, String systemPrompt, String userPrompt, double temperature) {
-        return gerarJsonInternal(userId, systemPrompt, userPrompt, false, temperature);
+        return gerarJson(userId, systemPrompt, userPrompt, temperature, AITaskType.STRUCTURED_OUTPUT);
+    }
+
+    public JsonNode gerarJson(Long userId, String systemPrompt, String userPrompt, AITaskType taskType) {
+        return gerarJson(userId, systemPrompt, userPrompt, 0.1, taskType);
+    }
+
+    public JsonNode gerarJson(Long userId, String systemPrompt, String userPrompt, double temperature, AITaskType taskType) {
+        return gerarJsonInternal(userId, systemPrompt, userPrompt, false, temperature, taskType);
     }
 
     /** Extração de PDF/contracheque: modelo Groq mais leve para poupar quota diária. */
     public JsonNode gerarJsonDocumento(Long userId, String systemPrompt, String userPrompt) {
-        return gerarJsonDocumento(userId, systemPrompt, userPrompt, 0.1);
+        return gerarJsonDocumento(userId, systemPrompt, userPrompt, AITaskType.OCR_INVOICE);
     }
 
     public JsonNode gerarJsonDocumento(Long userId, String systemPrompt, String userPrompt, double temperature) {
-        return gerarJsonInternal(userId, systemPrompt, userPrompt, true, temperature);
+        return gerarJsonDocumento(userId, systemPrompt, userPrompt, temperature, AITaskType.OCR_INVOICE);
     }
 
-    private JsonNode gerarJsonInternal(Long userId, String systemPrompt, String userPrompt, boolean documento, double temperature) {
+    public JsonNode gerarJsonDocumento(Long userId, String systemPrompt, String userPrompt, AITaskType taskType) {
+        return gerarJsonDocumento(userId, systemPrompt, userPrompt, 0.1, taskType);
+    }
+
+    public JsonNode gerarJsonDocumento(Long userId, String systemPrompt, String userPrompt, double temperature, AITaskType taskType) {
+        return gerarJsonInternal(userId, systemPrompt, userPrompt, true, temperature, taskType);
+    }
+
+    private JsonNode gerarJsonInternal(
+        Long userId,
+        String systemPrompt,
+        String userPrompt,
+        boolean documento,
+        double temperature,
+        AITaskType taskType
+    ) {
         AiProvidersConfig cfg = cfgForAi(userId);
         PromptPar otimizado = aplicarSuppressorAntesDaIa(userId, systemPrompt, userPrompt, cfg, documento);
         final String systemFinal = otimizado.system();
         final String userFinal = otimizado.user();
         final double tempFinal = temperature;
+        String tokenHint = systemFinal + userFinal;
         return executeAIRequestWithFallback(
+            taskType,
+            userId,
+            tempFinal,
             cfg,
             p -> canChatJson(cfg, p),
+            tokenHint,
             (p, c) -> {
                 String model = documento ? chatModelForDocument(p, c) : chatModelFor(p, c);
                 return parseChatJsonForProvider(p, c, model, systemFinal, userFinal, tempFinal);
@@ -636,10 +689,15 @@ public class OpenAiService {
     }
 
     public String gerarTexto(Long userId, String systemPrompt, String userPrompt, String fallback) {
+        return gerarTexto(userId, systemPrompt, userPrompt, fallback, AITaskType.CHAT);
+    }
+
+    public String gerarTexto(Long userId, String systemPrompt, String userPrompt, String fallback, AITaskType taskType) {
         try {
             JsonNode json = gerarJson(userId,
                 systemPrompt + " Retorne estritamente JSON sem markdown no formato {\"texto\":\"...\"}.",
-                userPrompt);
+                userPrompt,
+                taskType);
             String texto = json.path("texto").asText("").trim();
             return texto.isBlank() ? fallback : texto;
         } catch (Exception e) {
@@ -718,12 +776,8 @@ public class OpenAiService {
             + "8. Orientação baseada nos dados cadastrados — não é garantia nem consultoria profissional.\n";
         String userPrompt = "DADOS CALCULADOS:\n" + dados;
         String fallback = montarFallbackDeterministico(userId, resultado, brl);
-        return gerarTexto(userId, system, userPrompt, fallback);
+        return gerarTexto(userId, system, userPrompt, fallback, AITaskType.FINANCIAL_ADVISOR);
     }
-
-    /**
-     * Narra o registro de empréstimo consignado — números já calculados em Java.
-     */
     public String narrarRegistroEmprestimo(Long userId, ResultadoRegistroEmprestimo resultado) {
         if (resultado == null) {
             String voc = tratamentoUsuarioService.vocativoPorId(userId, usuarioRepository);
@@ -783,7 +837,7 @@ public class OpenAiService {
             + "5. Linguagem simples. Trate por \"" + trat + "\". Máximo 2 emojis.\n"
             + "6. Feche lembrando que dá pra acompanhar na aba Transações.\n";
         String fallback = montarFallbackRegistroEmprestimo(userId, resultado, brl);
-        return gerarTexto(userId, system, "DADOS CALCULADOS (não recalcule, apenas redija):\n" + dados, fallback);
+        return gerarTexto(userId, system, "DADOS CALCULADOS (não recalcule, apenas redija):\n" + dados, fallback, AITaskType.FINANCIAL_ADVISOR);
     }
 
     private String montarFallbackRegistroEmprestimo(Long userId, ResultadoRegistroEmprestimo r, NumberFormat brl) {
@@ -883,46 +937,53 @@ public class OpenAiService {
     }
 
     /**
-     * Percorre {@link AiProvidersConfig#getProviderOrder()} (completando provedores faltantes) até o primeiro sucesso.
+     * Roteamento inteligente por tipo de tarefa — fallback apenas dentro da categoria.
      */
     private <T> T executeAIRequestWithFallback(
+        AITaskType taskType,
+        Long userId,
         AiProvidersConfig cfg,
         Predicate<AiProviderType> canUseProvider,
+        String tokenEstimateInput,
         FallbackAttempt<T> attempt,
         String failureMessagePrefix
     ) {
-        return executeAIRequestWithFallback(cfg, orderedProviders(cfg), canUseProvider, attempt, failureMessagePrefix);
+        return executeAIRequestWithFallback(taskType, userId, null, cfg, canUseProvider, tokenEstimateInput, attempt, failureMessagePrefix);
     }
 
     private <T> T executeAIRequestWithFallback(
+        AITaskType taskType,
+        Long userId,
+        Double temperature,
         AiProvidersConfig cfg,
-        List<AiProviderType> providerOrder,
         Predicate<AiProviderType> canUseProvider,
+        String tokenEstimateInput,
         FallbackAttempt<T> attempt,
         String failureMessagePrefix
     ) {
-        List<String> errors = new ArrayList<>();
-        for (AiProviderType provider : providerOrder) {
-            if (!canUseProvider.test(provider)) {
-                continue;
+        try {
+            return aiRouterService.route(
+                AiRouterRequestContext.builder().userId(userId).temperature(temperature).build(),
+                taskType,
+                cfg,
+                canUseProvider,
+                tokenEstimateInput != null ? tokenEstimateInput : "",
+                attempt::execute,
+                failureMessagePrefix
+            );
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("nenhum provedor elegível")) {
+                appendMissingPlatformProvidersHint(cfg, e);
             }
-            log.debug("Usando provedor {} (config usuario)", provider.name());
-            try {
-                return attempt.execute(provider, cfg);
-            } catch (Exception e) {
-                errors.add(provider.name() + ": " + e.getMessage());
-                log.warn("Falha no provedor {}: {}", provider.name(), e.getMessage());
-            }
+            throw e;
         }
-        if (errors.isEmpty()) {
-            String geminiHint = canChatJson(cfg, AiProviderType.GEMINI)
-                ? ""
-                : " GEMINI: chave ausente — defina GEMINI_API_KEY no .env do servidor.";
-            throw new RuntimeException(
-                failureMessagePrefix + "nenhum provedor elegível (credenciais/URL ausentes)." + geminiHint);
+    }
+
+    private void appendMissingPlatformProvidersHint(AiProvidersConfig cfg, RuntimeException e) {
+        // mantém mensagens de diagnóstico legadas quando chaves de plataforma faltam
+        if (!canChatJson(cfg, AiProviderType.GEMINI)) {
+            log.debug("GEMINI: GEMINI_API_KEY não configurada no servidor");
         }
-        appendMissingPlatformProviders(cfg, errors);
-        throw new RuntimeException(failureMessagePrefix + String.join(" | ", errors));
     }
 
     @FunctionalInterface
@@ -965,6 +1026,53 @@ public class OpenAiService {
             case GROQ, OPENAI, OLLAMA -> canChatJson(cfg, p);
             case CLAUDE, GEMINI, DEEPSEEK -> false;
         };
+    }
+
+    /** OCR de cupom/fatura/contracheque — Gemini e Claude também suportam visão. */
+    private boolean canVisionForTask(AITaskType taskType, AiProvidersConfig cfg, AiProviderType p) {
+        if (taskType == AITaskType.OCR_RECEIPT || taskType == AITaskType.OCR_INVOICE || taskType == AITaskType.OCR_PAYSLIP) {
+            return switch (p) {
+                case GEMINI, CLAUDE, GROQ, OPENAI, OLLAMA -> canChatJson(cfg, p);
+                default -> false;
+            };
+        }
+        return canVision(cfg, p);
+    }
+
+    private JsonNode parseVisionForProvider(
+        AiProviderType provider,
+        AiProvidersConfig cfg,
+        String model,
+        String systemPrompt,
+        String userPrompt,
+        String imageSource,
+        double temperature
+    ) throws Exception {
+        return switch (provider) {
+            case GEMINI -> parseGeminiVisionJson(model, systemPrompt, userPrompt, imageSource, temperature);
+            case CLAUDE -> parseClaudeVisionJson(model, systemPrompt, userPrompt, imageSource);
+            default -> parseVisionOpenAiCompatible(
+                provider.name(), apiKeyFor(provider, cfg), baseUrlFor(provider, cfg),
+                model, systemPrompt, userPrompt, imageSource, temperature);
+        };
+    }
+
+    private record ImageInline(String mimeType, String base64) {}
+
+    private ImageInline parseImageSource(String imageSource) {
+        if (imageSource == null || imageSource.isBlank()) {
+            throw new RuntimeException("Imagem não informada");
+        }
+        if (imageSource.startsWith("data:")) {
+            int comma = imageSource.indexOf(',');
+            if (comma < 0) {
+                throw new RuntimeException("Data URL inválida");
+            }
+            String meta = imageSource.substring(5, comma);
+            String mime = meta.contains(";") ? meta.substring(0, meta.indexOf(';')) : meta;
+            return new ImageInline(mime.isBlank() ? "image/jpeg" : mime, imageSource.substring(comma + 1));
+        }
+        throw new RuntimeException("Provedor requer imagem em data URL (base64)");
     }
 
     private boolean canTranscribe(AiProvidersConfig cfg, AiProviderType p) {
@@ -1192,6 +1300,77 @@ public class OpenAiService {
         String url = trimTrailingSlash(geminiBaseUrl) + "/models/" + model + ":generateContent?key=" + platformGeminiApiKey.trim();
         ResponseEntity<String> response = parseRestTemplate.exchange(url, HttpMethod.POST, entity, String.class);
         return extractJsonFromGeminiResponse(response.getBody());
+    }
+
+    private JsonNode parseGeminiVisionJson(
+        String model, String systemPrompt, String userPrompt, String imageSource, double temperature
+    ) throws Exception {
+        if (platformGeminiApiKey == null || platformGeminiApiKey.isBlank()) {
+            throw new RuntimeException("GEMINI_API_KEY não configurada");
+        }
+        ensureBaseUrl("GEMINI", geminiBaseUrl);
+        ImageInline img = parseImageSource(imageSource);
+
+        List<Map<String, Object>> parts = new ArrayList<>();
+        parts.add(Map.of("text", userPrompt));
+        parts.add(Map.of("inline_data", Map.of("mime_type", img.mimeType(), "data", img.base64())));
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("systemInstruction", Map.of("parts", List.of(Map.of("text", systemPrompt))));
+        payload.put("contents", List.of(Map.of("role", "user", "parts", parts)));
+        payload.put("generationConfig", Map.of(
+            "temperature", temperature,
+            "responseMimeType", "application/json"
+        ));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+        String url = trimTrailingSlash(geminiBaseUrl) + "/models/" + model + ":generateContent?key=" + platformGeminiApiKey.trim();
+        ResponseEntity<String> response = parseRestTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        log.info("IA processada via GEMINI (visão/json)");
+        return extractJsonFromGeminiResponse(response.getBody());
+    }
+
+    private JsonNode parseClaudeVisionJson(String model, String systemPrompt, String userPrompt, String imageSource)
+        throws Exception {
+        if (platformClaudeApiKey == null || platformClaudeApiKey.isBlank()) {
+            throw new RuntimeException("CLAUDE_API_KEY não configurada");
+        }
+        ensureBaseUrl("CLAUDE", claudeBaseUrl);
+        ImageInline img = parseImageSource(imageSource);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("model", model);
+        payload.put("max_tokens", 8192);
+        payload.put("system", systemPrompt);
+        payload.put("messages", List.of(Map.of(
+            "role", "user",
+            "content", List.of(
+                Map.of("type", "image", "source", Map.of(
+                    "type", "base64",
+                    "media_type", img.mimeType(),
+                    "data", img.base64()
+                )),
+                Map.of("type", "text", "text", userPrompt)
+            )
+        )));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("x-api-key", platformClaudeApiKey.trim());
+        headers.set("anthropic-version", "2023-06-01");
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+        String url = trimTrailingSlash(claudeBaseUrl) + "/v1/messages";
+        ResponseEntity<String> response = parseRestTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+        JsonNode root = objectMapper.readTree(response.getBody());
+        String content = root.path("content").path(0).path("text").asText("");
+        if (content.isBlank()) {
+            throw new RuntimeException("CLAUDE retornou conteúdo vazio");
+        }
+        log.info("IA processada via CLAUDE (visão/json)");
+        return objectMapper.readTree(stripJsonFence(content).getBytes(StandardCharsets.UTF_8));
     }
 
     private JsonNode parseCommandOpenAiCompatible(String providerName, String key, String providerBaseUrl, String model,
