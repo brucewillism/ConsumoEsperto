@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -11,7 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
-import { forkJoin, timeout, catchError, finalize, of } from 'rxjs';
+import { forkJoin, timeout, catchError, of, Subscription } from 'rxjs';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { NovoOrcamentoDialogComponent } from '../../shared/novo-orcamento-dialog/novo-orcamento-dialog.component';
 import { Categoria } from '../../models/categoria.model';
@@ -44,15 +44,16 @@ import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/w
   templateUrl: './orcamentos.component.html',
   styleUrl: './orcamentos.component.scss'
 })
-export class OrcamentosComponent implements OnInit {
+export class OrcamentosComponent implements OnInit, OnDestroy {
   orcamentos: Orcamento[] = [];
   categorias: Categoria[] = [];
   forecast: ForecastFinanceiro | null = null;
   carregando = true;
-  carregandoForecast = false;
   forecastIndisponivel = false;
   mes = new Date().getMonth() + 1;
   ano = new Date().getFullYear();
+  private forecastSub?: Subscription;
+  private readonly forecastTimeoutMs = 12_000;
 
   constructor(
     private orcamentoService: OrcamentoService,
@@ -65,9 +66,15 @@ export class OrcamentosComponent implements OnInit {
     this.carregar();
   }
 
+  ngOnDestroy(): void {
+    this.forecastSub?.unsubscribe();
+  }
+
   carregar(): void {
-    // Lista + categorias são rápidas: liberam a página de imediato.
     this.carregando = true;
+    this.forecastSub?.unsubscribe();
+    this.forecast = null;
+    this.forecastIndisponivel = false;
     forkJoin({
       orcamentos: this.orcamentoService.listar(this.mes, this.ano),
       categorias: this.categoriaService.buscarPorUsuario()
@@ -76,31 +83,26 @@ export class OrcamentosComponent implements OnInit {
         this.orcamentos = orcamentos;
         this.categorias = categorias;
         this.carregando = false;
+        this.carregarForecast();
       },
       error: () => {
         this.toast.error('Erro ao carregar orçamentos.');
         this.carregando = false;
       }
     });
-    // Forecast usa IA e pode demorar: carrega à parte, sem prender a página.
-    this.carregarForecast();
   }
 
   private carregarForecast(): void {
-    this.carregandoForecast = true;
-    this.forecastIndisponivel = false;
-    this.orcamentoService.forecast().pipe(
-      timeout(25_000),
+    this.forecastSub = this.orcamentoService.forecast().pipe(
+      timeout({ first: this.forecastTimeoutMs }),
       catchError(() => {
         this.forecastIndisponivel = true;
         return of(null);
-      }),
-      finalize(() => {
-        this.carregandoForecast = false;
       })
     ).subscribe((forecast) => {
       if (forecast) {
         this.forecast = forecast;
+        this.forecastIndisponivel = false;
       }
     });
   }

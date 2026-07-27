@@ -43,6 +43,16 @@ public class ForecastFinanceiroService {
 
     @Transactional(readOnly = true)
     public ForecastFinanceiroDTO calcular(Long usuarioId) {
+        return montarDto(usuarioId, true, true);
+    }
+
+    /** Resposta rápida para o painel web — sem IA nem safra (evita loading travado). */
+    @Transactional(readOnly = true, timeout = 20)
+    public ForecastFinanceiroDTO calcularParaPainel(Long usuarioId) {
+        return montarDto(usuarioId, false, false);
+    }
+
+    private ForecastFinanceiroDTO montarDto(Long usuarioId, boolean incluirSafra, boolean incluirIa) {
         SaldoService.ProjecaoMesCaixa p = saldoService.calcularProjecaoMes(usuarioId);
         YearMonth ym = YearMonth.now();
         LocalDate hoje = AppTimeZone.hoje();
@@ -64,8 +74,13 @@ public class ForecastFinanceiroService {
         dto.setDespesasPrevistas(p.despesasPrevistas());
         dto.setSaldoProjetado(p.saldoProjetadoFimMes());
         dto.setMaioresCategorias(maioresCategorias(usuarioId, inicio, fimHoje));
-        dto.setSafraPatrimonio(saldoService.calcularProjecaoSafraDto(usuarioId, 2));
-        aplicarAnaliseIa(usuarioId, dto);
+        if (incluirSafra) {
+            dto.setSafraPatrimonio(saldoService.calcularProjecaoSafraDto(usuarioId, 2));
+        }
+        aplicarAnaliseHeuristica(dto);
+        if (incluirIa) {
+            enriquecerComIa(usuarioId, dto);
+        }
         return dto;
     }
 
@@ -120,7 +135,7 @@ public class ForecastFinanceiroService {
         );
     }
 
-    private void aplicarAnaliseIa(Long usuarioId, ForecastFinanceiroDTO dto) {
+    private void aplicarAnaliseHeuristica(ForecastFinanceiroDTO dto) {
         BigDecimal probFallback = calcularProbabilidadeFallback(dto.getRendaLiquida(), dto.getGastoProjetado());
         probFallback = ProjecaoMesCaixaSupport.suavizarProbabilidadeComSaldoPositivo(
             probFallback, dto.getSaldoProjetado());
@@ -135,6 +150,10 @@ public class ForecastFinanceiroService {
             dto.setMensagemIa("Mantendo o ritmo atual, você deve fechar com saldo projetado de "
                 + BRL.format(dto.getSaldoProjetado()) + ".");
         }
+    }
+
+    private void enriquecerComIa(Long usuarioId, ForecastFinanceiroDTO dto) {
+        BigDecimal probFallback = dto.getProbabilidadeVermelho();
         try {
             JsonNode json = CompletableFuture
                 .supplyAsync(() -> openAiService.gerarJson(

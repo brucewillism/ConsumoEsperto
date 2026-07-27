@@ -48,6 +48,6 @@ public class OrcamentoController {
 
     @GetMapping("/forecast")
     public ResponseEntity<ForecastFinanceiroDTO> forecast(@AuthenticationPrincipal UserPrincipal user) {
-        return ResponseEntity.ok(forecastFinanceiroService.calcular(user.getId()));
+        return ResponseEntity.ok(forecastFinanceiroService.calcularParaPainel(user.getId()));
     }
 }
