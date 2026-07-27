@@ -54,9 +54,16 @@ export class ImportacaoFaturaService {
     return this.http.delete<void>(`${this.base}/${id}`);
   }
 
-  confirmar(id: number, indices: number[], ignorarDivergencia = false): Observable<{ criadas: number }> {
+  confirmar(
+    id: number,
+    indices: number[],
+    ignorarDivergencia = false
+  ): Observable<{ criadas: number; conciliadas: number; futuras: number }> {
     return this.http
-      .post<{ criadas: number }>(`${this.base}/${id}/confirmar`, { indices, ignorarDivergencia })
+      .post<{ criadas: number; conciliadas: number; futuras: number }>(
+        `${this.base}/${id}/confirmar`,
+        { indices, ignorarDivergencia }
+      )
       .pipe(timeout(300_000));
   }
 

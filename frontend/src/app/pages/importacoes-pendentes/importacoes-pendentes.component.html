@@ -109,12 +109,16 @@
         <strong class="diff">{{ brl(imp.diferencaLancamentos) }}</strong>
       </div>
       <div class="conciliacao-item selecionados">
-        <span>Selecionados (novos)</span>
-        <strong>{{ brl(somaSelecionados(imp)) }}</strong>
+        <span>{{ faturaPagaNoBanco(imp) && imp.novosDetectados === 0 ? 'Total a vincular' : 'Selecionados (novos)' }}</span>
+        <strong>{{ faturaPagaNoBanco(imp) && imp.novosDetectados === 0 ? brl(imp.somaLancamentos) : brl(somaSelecionados(imp)) }}</strong>
       </div>
     </div>
 
-    <p class="conciliacao-hint" *ngIf="faturaPagaNoBanco(imp)">
+    <p class="conciliacao-hint" *ngIf="faturaPagaNoBanco(imp) && imp.novosDetectados === 0">
+      Os {{ imp.itens.length }} lançamentos do PDF já estão no app (WhatsApp, notificações ou importação anterior).
+      «Já lançado» não é erro — confirme para criar a fatura no histórico e vincular essas compras, sem duplicar.
+    </p>
+    <p class="conciliacao-hint" *ngIf="faturaPagaNoBanco(imp) && imp.novosDetectados > 0">
       Fatura já paga no banco (total zerado no PDF). O sistema usa a soma dos lançamentos como valor —
       confirme para registrar no histórico e depois marque como paga em Faturas.
     </p>
@@ -134,7 +138,7 @@
           Lançamentos ({{ imp.itens.length }})
         </mat-panel-title>
         <mat-panel-description>
-          {{ imp.novosDetectados }} novos · {{ brl(somaSelecionados(imp)) }} selecionados
+          {{ resumoSelecionados(imp) }}
         </mat-panel-description>
       </mat-expansion-panel-header>
 
@@ -154,7 +158,7 @@
 
     <div class="actions">
       <button mat-raised-button color="primary" (click)="confirmar(imp)" [disabled]="confirmandoId === imp.id || imp.aguardandoEscolhaSaldoAnterior || apagandoId === imp.id">
-        {{ confirmandoId === imp.id ? 'Salvando...' : 'Confirmar selecionados' }}
+        {{ confirmarLabel(imp) }}
       </button>
       <button mat-stroked-button color="warn" (click)="apagarUma(imp)" [disabled]="confirmandoId === imp.id || apagandoId === imp.id">
         Descartar

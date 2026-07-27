@@ -152,19 +152,41 @@ export class ImportacoesPendentesComponent implements OnInit {
       .filter(({ item }) => item.novo && item.selecionado)
       .map(({ index }) => index);
     if (!indices.length) {
+      if (this.podeRegistrarSoHistorico(imp)) {
+        this.executarConfirmacao(imp, [], false);
+        return;
+      }
       this.toast.warning('Selecione pelo menos um lançamento novo.');
       return;
     }
     this.executarConfirmacao(imp, indices, false);
   }
 
+  /** Fatura paga no banco: mesmo com 0 novos, registra a fatura e vincula compras já existentes. */
+  podeRegistrarSoHistorico(imp: ImportacaoFatura): boolean {
+    return this.faturaPagaNoBanco(imp) && (imp.itens?.length ?? 0) > 0 && this.conciliacaoOk(imp);
+  }
+
+  confirmarLabel(imp: ImportacaoFatura): string {
+    if (this.confirmandoId === imp.id) {
+      return 'Salvando...';
+    }
+    if (this.podeRegistrarSoHistorico(imp) && imp.novosDetectados === 0) {
+      return 'Registrar fatura no histórico';
+    }
+    return 'Confirmar selecionados';
+  }
+
   private executarConfirmacao(imp: ImportacaoFatura, indices: number[], ignorarDivergencia: boolean): void {
     this.confirmandoId = imp.id;
     this.importacaoService.confirmar(imp.id, indices, ignorarDivergencia).subscribe({
       next: (res) => {
-        this.toast.success(
-          `${res.criadas} lançamento(s) importado(s). Veja no Dashboard se há protocolos de teto sugeridos.`
-        );
+        const msg = res.criadas > 0
+          ? `${res.criadas} lançamento(s) importado(s). Veja no Dashboard se há protocolos de teto sugeridos.`
+          : res.conciliadas > 0
+            ? `Fatura registrada: ${res.conciliadas} compra(s) já existente(s) vinculada(s) à fatura.`
+            : 'Fatura registrada no histórico.';
+        this.toast.success(msg);
         this.confirmandoId = null;
         this.carregar();
       },
@@ -246,9 +268,19 @@ export class ImportacoesPendentesComponent implements OnInit {
   }
 
   somaSelecionados(imp: ImportacaoFatura): number {
+    const incluir = this.faturaPagaNoBanco(imp)
+      ? (i: ImportacaoFatura['itens'][number]) => i.selecionado
+      : (i: ImportacaoFatura['itens'][number]) => i.novo && i.selecionado;
     return imp.itens
-      .filter((i) => i.novo && i.selecionado)
+      .filter(incluir)
       .reduce((acc, i) => acc + Number(i.valor || 0), 0);
+  }
+
+  resumoSelecionados(imp: ImportacaoFatura): string {
+    if (this.faturaPagaNoBanco(imp) && imp.novosDetectados === 0) {
+      return `${imp.itens.length} já lançados · ${this.brl(imp.somaLancamentos)} na fatura`;
+    }
+    return `${imp.novosDetectados} novos · ${this.brl(this.somaSelecionados(imp))} selecionados`;
   }
 
   conciliacaoOk(imp: ImportacaoFatura): boolean {
