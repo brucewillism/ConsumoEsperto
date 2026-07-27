@@ -11,9 +11,11 @@
       <strong>{{ forecast.probabilidadeVermelho }}%</strong>
       <small>{{ forecast.nivelRisco }} · saldo projetado {{ brl(forecast.saldoProjetado) }}</small>
     </div>
-    <div class="forecast-card forecast-card--loading" *ngIf="!forecast && carregandoForecast">
-      <mat-spinner diameter="22"></mat-spinner>
-      <small>Calculando previsão do mês…</small>
+    <div class="forecast-card forecast-card--loading" *ngIf="carregandoForecast">
+      <app-loading-indicator mode="inline" size="sm" message="Calculando previsão do mês…"></app-loading-indicator>
+    </div>
+    <div class="forecast-card forecast-card--muted" *ngIf="!carregandoForecast && !forecast && forecastIndisponivel">
+      <small>Previsão indisponível agora. Os orçamentos abaixo continuam válidos.</small>
     </div>
     <button mat-raised-button color="primary" type="button" (click)="abrirNovoOrcamento()" [disabled]="carregando">
       <mat-icon>add</mat-icon>
@@ -33,7 +35,9 @@
     <app-chart-metodologia id="ORCAMENTO_FORECAST"></app-chart-metodologia>
   </mat-card>
 
-  <app-page-loading *ngIf="carregando" message="Carregando orçamentos…"></app-page-loading>
+  <div class="lista-loading" *ngIf="carregando">
+    <app-loading-indicator mode="panel" size="md" message="Carregando orçamentos…"></app-loading-indicator>
+  </div>
 
   <div class="empty" *ngIf="!carregando && orcamentos.length === 0">
     Nenhum orçamento cadastrado para este mês.

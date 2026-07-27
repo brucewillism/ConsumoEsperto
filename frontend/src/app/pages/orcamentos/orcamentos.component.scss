@@ -45,12 +45,23 @@
 .forecast-card--loading {
   flex-direction: row;
   align-items: center;
-  gap: 12px;
-  opacity: 0.85;
+  justify-content: center;
+  min-height: 72px;
+  opacity: 0.92;
 }
 
-.forecast-card--loading small {
+.forecast-card--muted {
+  justify-content: center;
+  opacity: 0.75;
+}
+
+.forecast-card--muted small {
   margin: 0;
+  color: #cbd5e1;
+}
+
+.lista-loading {
+  padding: 8px 0 16px;
 }
 
 .form-card,

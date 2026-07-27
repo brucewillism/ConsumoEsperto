@@ -11,8 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
-import { forkJoin } from 'rxjs';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { forkJoin, timeout, catchError, finalize, of } from 'rxjs';
 import { openCeFormDialog } from '../../shared/ce-form-dialog.util';
 import { NovoOrcamentoDialogComponent } from '../../shared/novo-orcamento-dialog/novo-orcamento-dialog.component';
 import { Categoria } from '../../models/categoria.model';
@@ -20,7 +19,7 @@ import { CategoriaService } from '../../services/categoria.service';
 import { ForecastFinanceiro, Orcamento, OrcamentoService } from '../../services/orcamento.service';
 import { ToastService } from '../../services/toast.service';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
-import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
+import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 
 @Component({
@@ -38,9 +37,8 @@ import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/w
     MatSelectModule,
     MatCheckboxModule,
     ...CE_DIALOG_IMPORTS,
-    MatProgressSpinnerModule,
     ChartMetodologiaComponent,
-    PageLoadingComponent,
+    LoadingIndicatorComponent,
     WhatsappParityHintComponent,
   ],
   templateUrl: './orcamentos.component.html',
@@ -52,6 +50,7 @@ export class OrcamentosComponent implements OnInit {
   forecast: ForecastFinanceiro | null = null;
   carregando = true;
   carregandoForecast = false;
+  forecastIndisponivel = false;
   mes = new Date().getMonth() + 1;
   ano = new Date().getFullYear();
 
@@ -89,13 +88,19 @@ export class OrcamentosComponent implements OnInit {
 
   private carregarForecast(): void {
     this.carregandoForecast = true;
-    this.orcamentoService.forecast().subscribe({
-      next: (forecast) => {
+    this.forecastIndisponivel = false;
+    this.orcamentoService.forecast().pipe(
+      timeout(25_000),
+      catchError(() => {
+        this.forecastIndisponivel = true;
+        return of(null);
+      }),
+      finalize(() => {
+        this.carregandoForecast = false;
+      })
+    ).subscribe((forecast) => {
+      if (forecast) {
         this.forecast = forecast;
-        this.carregandoForecast = false;
-      },
-      error: () => {
-        this.carregandoForecast = false;
       }
     });
   }

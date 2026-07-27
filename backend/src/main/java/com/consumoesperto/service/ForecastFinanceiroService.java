@@ -21,6 +21,9 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +31,8 @@ import java.util.Locale;
 public class ForecastFinanceiroService {
 
     private static final NumberFormat BRL = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+    /** IA enriquece a previsão; não bloquear a UI além disso. */
+    private static final long IA_FORECAST_TIMEOUT_SEC = 8;
 
     private final TransacaoRepository transacaoRepository;
     private final OpenAiService openAiService;
@@ -131,21 +136,24 @@ public class ForecastFinanceiroService {
                 + BRL.format(dto.getSaldoProjetado()) + ".");
         }
         try {
-            JsonNode json = openAiService.gerarJson(
-                usuarioId,
-                "Você é um analista financeiro. Retorne apenas JSON: {\"probabilidadeVermelho\":0-100,\"nivelRisco\":\"BAIXO|MEDIO|ALTO|CRITICO\",\"mensagem\":\"texto curto\"}.",
-                "Dia atual do mês: " + dto.getDiaAtual()
-                    + "\nDias no mês: " + dto.getDiasNoMes()
-                    + "\nPatrimônio líquido: " + dto.getPatrimonioLiquido()
-                    + "\nRenda líquida: " + dto.getRendaLiquida()
-                    + "\nReceitas previstas (salário): " + dto.getReceitasPrevistas()
-                    + "\nReceitas fiscais previstas (13º/IR): " + dto.getReceitasFiscaisPrevistas()
-                    + "\nGasto atual: " + dto.getGastoAtual()
-                    + "\nMédia diária: " + dto.getMediaDiaria()
-                    + "\nGasto projetado: " + dto.getGastoProjetado()
-                    + "\nSaldo projetado: " + dto.getSaldoProjetado()
-                    + "\nMaiores categorias: " + dto.getMaioresCategorias()
-            );
+            JsonNode json = CompletableFuture
+                .supplyAsync(() -> openAiService.gerarJson(
+                    usuarioId,
+                    "Você é um analista financeiro. Retorne apenas JSON: {\"probabilidadeVermelho\":0-100,\"nivelRisco\":\"BAIXO|MEDIO|ALTO|CRITICO\",\"mensagem\":\"texto curto\"}.",
+                    "Dia atual do mês: " + dto.getDiaAtual()
+                        + "\nDias no mês: " + dto.getDiasNoMes()
+                        + "\nPatrimônio líquido: " + dto.getPatrimonioLiquido()
+                        + "\nRenda líquida: " + dto.getRendaLiquida()
+                        + "\nReceitas previstas (salário): " + dto.getReceitasPrevistas()
+                        + "\nReceitas fiscais previstas (13º/IR): " + dto.getReceitasFiscaisPrevistas()
+                        + "\nGasto atual: " + dto.getGastoAtual()
+                        + "\nMédia diária: " + dto.getMediaDiaria()
+                        + "\nGasto projetado: " + dto.getGastoProjetado()
+                        + "\nSaldo projetado: " + dto.getSaldoProjetado()
+                        + "\nMaiores categorias: " + dto.getMaioresCategorias()
+                ))
+                .orTimeout(IA_FORECAST_TIMEOUT_SEC, TimeUnit.SECONDS)
+                .join();
             BigDecimal prob = BigDecimal.valueOf(json.path("probabilidadeVermelho").asDouble(probFallback.doubleValue()))
                 .setScale(2, RoundingMode.HALF_UP);
             prob = ProjecaoMesCaixaSupport.suavizarProbabilidadeComSaldoPositivo(prob, dto.getSaldoProjetado());
@@ -157,7 +165,11 @@ public class ForecastFinanceiroService {
                 dto.setMensagemIa(msg);
             }
         } catch (Exception e) {
-            log.debug("Forecast IA indisponível, usando heurística: {}", e.getMessage());
+            if (e.getCause() instanceof TimeoutException || e instanceof TimeoutException) {
+                log.debug("Forecast IA timeout ({}s), usando heurística", IA_FORECAST_TIMEOUT_SEC);
+            } else {
+                log.debug("Forecast IA indisponível, usando heurística: {}", e.getMessage());
+            }
         }
     }
 
