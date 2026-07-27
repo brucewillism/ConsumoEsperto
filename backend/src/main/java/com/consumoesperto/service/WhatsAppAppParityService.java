@@ -204,10 +204,14 @@ public class WhatsAppAppParityService {
             List.of("Painel J.A.R.V.I.S. / chat no dashboard"),
             "Web: POST /api/ia-chat — mesmas regras que o bot."
         ),
-        item("familia", "Família", "/familia", "Família", "APP_ONLY",
-            List.of(),
-            List.of("Grupo familiar", "Partilha de visão (conforme plano)"),
-            "Gestão de família apenas no app por agora."
+        item("familia", "Família", "/familia", "Família", "BOTH",
+            List.of(
+                "racha 150 com a Esposa",
+                "acertei os 50 com o João",
+                "balanço do grupo"
+            ),
+            List.of("Grupo familiar", "Orçamentos compartilhados", "Racha-contas"),
+            "Crie o grupo no app; rachas e acertos pelo WhatsApp (J.A.R.V.I.S.)."
         ),
         item("score", "Score e nível", "/score", "Score", "APP_ONLY",
             List.of(),

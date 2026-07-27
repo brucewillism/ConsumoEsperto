@@ -41,6 +41,20 @@ public class GrupoFamiliarController {
         return ResponseEntity.ok(grupoFamiliarService.criar(user.getId(), request));
     }
 
+    @PutMapping
+    public ResponseEntity<GrupoFamiliarDTO> renomear(
+        @AuthenticationPrincipal UserPrincipal user,
+        @RequestBody GrupoFamiliarRequest request
+    ) {
+        return ResponseEntity.ok(grupoFamiliarService.renomear(user.getId(), request));
+    }
+
+    @DeleteMapping("/sair")
+    public ResponseEntity<Void> sair(@AuthenticationPrincipal UserPrincipal user) {
+        grupoFamiliarService.sair(user.getId());
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/convites")
     public ResponseEntity<GrupoFamiliarDTO> convidar(@AuthenticationPrincipal UserPrincipal user, @RequestBody ConviteGrupoFamiliarRequest request) {
         return ResponseEntity.ok(grupoFamiliarService.convidar(user.getId(), request));
@@ -82,5 +96,11 @@ public class GrupoFamiliarController {
         @PathVariable Long debitoId
     ) {
         return ResponseEntity.ok(splitBillService.liquidarDebito(user.getId(), debitoId));
+    }
+
+    /** Histórico de débitos liquidados do usuário no racha-contas. */
+    @GetMapping("/debitos/historico")
+    public ResponseEntity<List<DebitoInternoDTO>> historicoDebitos(@AuthenticationPrincipal UserPrincipal user) {
+        return ResponseEntity.ok(splitBillService.historicoLiquidados(user.getId()));
     }
 }

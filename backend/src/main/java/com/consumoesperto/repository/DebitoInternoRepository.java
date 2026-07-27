@@ -29,4 +29,10 @@ public interface DebitoInternoRepository extends JpaRepository<DebitoInterno, Lo
     List<DebitoInterno> findPendentesEntre(@Param("credorId") Long credorId, @Param("devedorId") Long devedorId);
 
     Optional<DebitoInterno> findByIdAndCredorId(Long id, Long credorId);
+
+    /** Débitos liquidados em que o usuário participou (credor ou devedor). */
+    @Query("SELECT d FROM DebitoInterno d JOIN FETCH d.devedor JOIN FETCH d.credor "
+        + "WHERE d.liquidado = true AND (d.credor.id = :usuarioId OR d.devedor.id = :usuarioId) "
+        + "ORDER BY d.dataLiquidacao DESC, d.dataCriacao DESC")
+    List<DebitoInterno> findHistoricoLiquidados(@Param("usuarioId") Long usuarioId);
 }

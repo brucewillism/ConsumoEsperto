@@ -142,6 +142,13 @@ public class SplitBillService {
             .build();
     }
 
+    @Transactional(readOnly = true)
+    public List<DebitoInternoDTO> historicoLiquidados(Long usuarioId) {
+        return debitoInternoRepository.findHistoricoLiquidados(usuarioId).stream()
+            .map(this::toDto)
+            .collect(Collectors.toList());
+    }
+
     /** Liquida um débito específico onde o usuário é o credor. */
     @Transactional
     public DebitoInternoDTO liquidarDebito(Long usuarioId, Long debitoId) {

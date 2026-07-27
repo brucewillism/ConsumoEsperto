@@ -23,6 +23,8 @@ export interface NovoOrcamentoDialogData {
   categorias: Categoria[];
   mes?: number;
   ano?: number;
+  /** Pré-marca o checkbox "compartilhado" (ex.: aba Família). */
+  compartilhadoDefault?: boolean;
 }
 
 @Component({
@@ -66,6 +68,7 @@ export class NovoOrcamentoDialogComponent implements OnInit {
     this.ano = this.data.ano ?? hoje.getFullYear();
     this.mesInput = String(this.mes);
     this.anoInput = String(this.ano);
+    this.compartilhado = this.data.compartilhadoDefault ?? false;
   }
 
   onValorLimiteInput(raw: string): void {

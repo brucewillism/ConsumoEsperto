@@ -18,7 +18,9 @@ export type ChartMetodologiaId =
   | 'INVESTIMENTO_SIMULADOR'
   | 'TIMELINE_IMPACTO'
   | 'METAS_PROGRESSO'
-  | 'PAGAMENTO_FATURA_PROJECAO';
+  | 'PAGAMENTO_FATURA_PROJECAO'
+  | 'FAMILIA_ORCAMENTO_COMPARTILHADO'
+  | 'FAMILIA_RACHA_CONTAS';
 
 export interface ChartMetodologia {
   titulo: string;
@@ -211,5 +213,25 @@ export const CHART_METODOLOGIAS: Record<ChartMetodologiaId, ChartMetodologia> = 
       'Subtrai o valor da fatura para estimar patrimônio líquido ao fim do mês após o débito.',
     ],
     fonte: 'ProjecaoDashboardService.previsaoFuturo() + valor da fatura selecionada.',
+  },
+  FAMILIA_ORCAMENTO_COMPARTILHADO: {
+    titulo: 'Orçamentos compartilhados do grupo',
+    itens: [
+      'Só entram orçamentos marcados como compartilhados por qualquer membro aceito do grupo.',
+      'Valor gasto: soma das despesas confirmadas da categoria, de todos os membros, no mês/ano do orçamento.',
+      'Percentual = gasto agregado ÷ limite cadastrado × 100.',
+      'Transações, cartões e contracheques individuais permanecem privados — só o agregado por categoria é visível.',
+    ],
+    fonte: 'GET /api/familia/orcamentos-compartilhados (OrcamentoService.listarCompartilhados).',
+  },
+  FAMILIA_RACHA_CONTAS: {
+    titulo: 'Racha-contas (split bills)',
+    itens: [
+      'Quem pagou registra só a sua fatia como despesa real; o restante vira débito interno dos demais.',
+      'Divisão igualitária entre pagador + membros marcados; centavos de arredondamento ficam com o pagador.',
+      'Liquidar no app ou via WhatsApp ("acertei os X com Fulano") — não debita conta bancária do devedor.',
+      'Saldo líquido = total a receber − total devido (apenas débitos pendentes).',
+    ],
+    fonte: 'GET /api/familia/balanco · POST /api/familia/debitos/{id}/liquidar · SplitBillService.',
   },
 };

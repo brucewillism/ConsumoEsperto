@@ -1,105 +1,211 @@
 <div class="familia-page">
+  <app-whatsapp-parity-hint rota="/familia"></app-whatsapp-parity-hint>
+
   <section class="hero">
     <div>
-      <p>Modo Família/Casal</p>
+      <p class="eyebrow">Modo Família / Casal</p>
       <h1>Orçamentos Compartilhados</h1>
-      <span>Veja apenas agregados combinados. Transações, cartões e contracheques seguem privados.</span>
+      <span>Veja agregados combinados do grupo. Transações, cartões e contracheques seguem privados.</span>
+      <div class="hero-stats" *ngIf="grupo && !carregando">
+        <span><mat-icon>group</mat-icon> {{ membrosAceitos().length }} membro(s)</span>
+        <span><mat-icon>savings</mat-icon> {{ orcamentos.length }} orçamento(s)</span>
+        <span><mat-icon>account_balance_wallet</mat-icon> {{ totalRachasPendentes() }} racha(s) pendente(s)</span>
+      </div>
     </div>
-    <button mat-raised-button color="primary" (click)="carregar()">Atualizar</button>
+    <button mat-stroked-button type="button" (click)="carregar()" [disabled]="carregando">
+      <mat-icon>refresh</mat-icon>
+      Atualizar
+    </button>
   </section>
 
-  <mat-card class="panel" *ngIf="!grupo">
-    <h2>Grupo familiar</h2>
-    <p>Crie um grupo para compartilhar orçamentos com família ou casal.</p>
-    <button mat-raised-button color="primary" (click)="abrirCriarGrupo()">
-      <mat-icon>group_add</mat-icon>
-      Criar grupo
-    </button>
-  </mat-card>
+  <div class="lista-loading" *ngIf="carregando">
+    <app-loading-indicator mode="panel" size="md" message="Carregando família…"></app-loading-indicator>
+  </div>
 
-  <mat-card class="panel" *ngIf="grupo">
-    <h2>{{ grupo.nome }}</h2>
-    <div class="members">
-      <span *ngFor="let m of grupo.membros" [class.pending]="m.status === 'PENDENTE'">
-        {{ m.nome }} · {{ m.status }} <strong *ngIf="m.eu">(você)</strong>
-      </span>
-    </div>
+  <ng-container *ngIf="!carregando">
+    <mat-card class="panel" *ngIf="!grupo">
+      <h2>Grupo familiar</h2>
+      <p>Crie um grupo para compartilhar orçamentos com família ou casal.</p>
+      <button mat-raised-button color="primary" type="button" (click)="abrirCriarGrupo()">
+        <mat-icon>group_add</mat-icon>
+        Criar grupo
+      </button>
+    </mat-card>
 
-    <h3>Convidar parceiro(a)</h3>
-    <button mat-raised-button color="primary" (click)="abrirConvidar()">
-      <mat-icon>person_add</mat-icon>
-      Enviar convite
-    </button>
-    <div class="invite-link" *ngIf="conviteVisual">
-      <img [src]="qrUrl()" alt="QR Code do convite">
-      <div>
-        <strong>Convite visual gerado</strong>
-        <code>{{ conviteVisual }}</code>
-        <small>O aceite formal ainda precisa ser feito pelo usuário convidado no app.</small>
+    <mat-card class="panel" *ngIf="grupo">
+      <div class="panel-head">
+        <div class="grupo-titulo" *ngIf="!editandoNome">
+          <h2>{{ grupo.nome }}</h2>
+          <button mat-icon-button type="button" (click)="iniciarRenomear()" aria-label="Renomear grupo">
+            <mat-icon>edit</mat-icon>
+          </button>
+        </div>
+        <div class="grupo-rename" *ngIf="editandoNome">
+          <mat-form-field appearance="outline" class="grow">
+            <mat-label>Nome do grupo</mat-label>
+            <input matInput [(ngModel)]="nomeEdicao" maxlength="120" (keyup.enter)="salvarRenomear()" />
+          </mat-form-field>
+          <button mat-button type="button" (click)="cancelarRenomear()" [disabled]="salvandoNome">Cancelar</button>
+          <button mat-raised-button color="primary" type="button" (click)="salvarRenomear()" [disabled]="salvandoNome">
+            {{ salvandoNome ? 'Salvando…' : 'Salvar' }}
+          </button>
+        </div>
+        <button mat-stroked-button color="warn" type="button" (click)="confirmarSairGrupo()" [disabled]="saindoGrupo">
+          <mat-icon>logout</mat-icon>
+          {{ saindoGrupo ? 'Saindo…' : 'Sair do grupo' }}
+        </button>
       </div>
-    </div>
-  </mat-card>
 
-  <mat-card class="panel" *ngIf="convites.length">
-    <h2>Convites recebidos</h2>
-    <div class="invite" *ngFor="let c of convites">
-      <span>Convite pendente para grupo familiar</span>
-      <div>
-        <button mat-button color="primary" (click)="responder(c, true)">Aceitar</button>
-        <button mat-button color="warn" (click)="responder(c, false)">Recusar</button>
+      <div class="members">
+        <span
+          *ngFor="let m of grupo.membros"
+          [class.pending]="m.status === 'PENDENTE'"
+          [class.you]="m.eu"
+        >
+          {{ m.nome }} · {{ statusLabel(m.status) }}
+          <strong *ngIf="m.eu">(você)</strong>
+        </span>
       </div>
-    </div>
-  </mat-card>
 
-  <mat-card class="panel" *ngIf="grupo">
-    <h2>Balanço do Grupo</h2>
-    <p class="balanco-sub" *ngIf="balanco">
-      Racha-contas: registre divisões pelo J.A.R.V.I.S. (ex.: <em>"racha 150 com a Esposa e o Filho"</em>).
-    </p>
-
-    <div class="empty" *ngIf="!temBalanco()">Nenhum débito pendente no grupo.</div>
-
-    <div class="balanco-cols" *ngIf="temBalanco()">
-      <div class="balanco-col" *ngIf="balanco && balanco.aReceber.length">
-        <h3>Valores a receber <span class="total receber">{{ brl(balanco.totalAReceber) }}</span></h3>
-        <div class="debito-item" *ngFor="let d of balanco.aReceber">
-          <div class="debito-info">
-            <strong>{{ primeiroNome(d.devedorNome) }}</strong>
-            <span class="desc" *ngIf="d.descricao">{{ d.descricao }}</span>
+      <ng-container *ngIf="podeConvidar()">
+        <h3>Convidar parceiro(a)</h3>
+        <p class="hint">Com dois membros aceitos, o grupo fica completo para orçamentos e rachas.</p>
+        <button mat-raised-button color="primary" type="button" (click)="abrirConvidar()">
+          <mat-icon>person_add</mat-icon>
+          Enviar convite
+        </button>
+        <div class="invite-link" *ngIf="conviteVisual">
+          <img [src]="qrUrl()" alt="QR Code do convite" loading="lazy" />
+          <div>
+            <strong>Convite gerado</strong>
+            <code>{{ conviteVisual }}</code>
+            <div class="invite-actions">
+              <button mat-stroked-button type="button" (click)="copiarConvite()">
+                <mat-icon>content_copy</mat-icon>
+                Copiar link
+              </button>
+            </div>
+            <small>O aceite formal precisa ser feito pelo convidado no app (Família → Convites recebidos).</small>
           </div>
-          <div class="debito-acao">
-            <span class="valor receber">{{ brl(d.valor) }}</span>
-            <button mat-stroked-button color="primary" (click)="marcarPago(d)" [disabled]="liquidandoId === d.id">
-              <mat-icon>check</mat-icon>
-              {{ liquidandoId === d.id ? '...' : 'Marcar como pago' }}
-            </button>
+        </div>
+      </ng-container>
+    </mat-card>
+
+    <mat-card class="panel" *ngIf="convites.length">
+      <h2>Convites recebidos</h2>
+      <div class="invite" *ngFor="let c of convites">
+        <span>Convite pendente para grupo familiar</span>
+        <div>
+          <button mat-button color="primary" type="button" (click)="responder(c, true)">Aceitar</button>
+          <button mat-button color="warn" type="button" (click)="responder(c, false)">Recusar</button>
+        </div>
+      </div>
+    </mat-card>
+
+    <mat-card class="panel" *ngIf="grupo">
+      <h2>Balanço do Grupo</h2>
+      <p class="balanco-sub">
+        Racha-contas: registre divisões pelo J.A.R.V.I.S. no WhatsApp (ex.:
+        <em>"racha 150 com a Esposa"</em> ou <em>"acertei os 50 com o João"</em>).
+      </p>
+      <app-chart-metodologia id="FAMILIA_RACHA_CONTAS" [compact]="true"></app-chart-metodologia>
+
+      <div class="empty empty-action" *ngIf="!temBalanco()">
+        <mat-icon>receipt_long</mat-icon>
+        <div>
+          <strong>Nenhum débito pendente</strong>
+          <p>Quando alguém pagar uma conta dividida, os valores aparecem aqui.</p>
+          <p class="jarvis-exemplo">
+            Exemplo no WhatsApp: <em>racha 120 do jantar com a Pamela</em>
+          </p>
+        </div>
+      </div>
+
+      <div class="balanco-resumo" *ngIf="balanco && temBalanco()">
+        <span>Saldo líquido: <strong [class.positivo]="balanco.saldoLiquido >= 0" [class.negativo]="balanco.saldoLiquido < 0">{{ brl(balanco.saldoLiquido) }}</strong></span>
+      </div>
+
+      <div class="balanco-cols" *ngIf="temBalanco()">
+        <div class="balanco-col" *ngIf="balanco && balanco.aReceber.length">
+          <h3>Valores a receber <span class="total receber">{{ brl(balanco.totalAReceber) }}</span></h3>
+          <div class="debito-item" *ngFor="let d of balanco.aReceber">
+            <div class="debito-info">
+              <strong>{{ primeiroNome(d.devedorNome) }}</strong>
+              <span class="desc" *ngIf="d.descricao">{{ d.descricao }}</span>
+            </div>
+            <div class="debito-acao">
+              <span class="valor receber">{{ brl(d.valor) }}</span>
+              <button mat-stroked-button color="primary" type="button" (click)="marcarPago(d)" [disabled]="liquidandoId === d.id">
+                <mat-icon>check</mat-icon>
+                {{ liquidandoId === d.id ? '...' : 'Marcar como pago' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="balanco-col" *ngIf="balanco && balanco.devidos.length">
+          <h3>Suas pendências <span class="total devido">{{ brl(balanco.totalDevido) }}</span></h3>
+          <div class="debito-item" *ngFor="let d of balanco.devidos">
+            <div class="debito-info">
+              <strong>{{ primeiroNome(d.credorNome) }}</strong>
+              <span class="desc" *ngIf="d.descricao">{{ d.descricao }}</span>
+            </div>
+            <span class="valor devido">{{ brl(d.valor) }}</span>
           </div>
         </div>
       </div>
 
-      <div class="balanco-col" *ngIf="balanco && balanco.devidos.length">
-        <h3>Suas pendências <span class="total devido">{{ brl(balanco.totalDevido) }}</span></h3>
-        <div class="debito-item" *ngFor="let d of balanco.devidos">
-          <div class="debito-info">
-            <strong>{{ primeiroNome(d.credorNome) }}</strong>
-            <span class="desc" *ngIf="d.descricao">{{ d.descricao }}</span>
+      <div class="historico" *ngIf="historico.length">
+        <button class="historico-toggle" type="button" (click)="historicoAberto = !historicoAberto">
+          <mat-icon>{{ historicoAberto ? 'expand_less' : 'expand_more' }}</mat-icon>
+          Histórico de acertos ({{ historico.length }})
+        </button>
+        <div class="historico-lista" *ngIf="historicoAberto">
+          <div class="debito-item historico-item" *ngFor="let h of historico">
+            <div class="debito-info">
+              <strong>{{ primeiroNome(h.devedorNome) }} → {{ primeiroNome(h.credorNome) }}</strong>
+              <span class="desc">{{ h.descricao || 'Racha-contas' }} · {{ formatarData(h.dataLiquidacao || h.dataCriacao) }}</span>
+            </div>
+            <span class="valor">{{ brl(h.valor) }}</span>
           </div>
-          <span class="valor devido">{{ brl(d.valor) }}</span>
         </div>
       </div>
-    </div>
-  </mat-card>
+    </mat-card>
 
-  <mat-card class="panel">
-    <h2>Barras compartilhadas</h2>
-    <div class="empty" *ngIf="!orcamentos.length">Nenhum orçamento compartilhado ativo.</div>
-    <div class="budget" *ngFor="let o of orcamentos">
-      <div class="budget-head">
-        <strong>{{ o.categoriaNome }}</strong>
-        <span>{{ brl(o.valorGasto) }} / {{ brl(o.valorLimite) }} · {{ o.membrosContabilizados || 1 }} membro(s)</span>
+    <mat-card class="panel" *ngIf="grupo">
+      <div class="panel-head">
+        <h2>Barras compartilhadas</h2>
+        <button mat-raised-button color="primary" type="button" (click)="abrirNovoOrcamentoCompartilhado()">
+          <mat-icon>add</mat-icon>
+          Orçamento compartilhado
+        </button>
       </div>
-      <mat-progress-bar mode="determinate" [value]="progress(o)"></mat-progress-bar>
-      <small>{{ o.percentualUso | number:'1.0-1' }}% usado pelo grupo</small>
-    </div>
-  </mat-card>
+      <app-chart-metodologia id="FAMILIA_ORCAMENTO_COMPARTILHADO" [compact]="true"></app-chart-metodologia>
+
+      <div class="empty empty-action" *ngIf="!orcamentos.length">
+        <mat-icon>pie_chart</mat-icon>
+        <div>
+          <strong>Nenhum orçamento compartilhado ativo</strong>
+          <p>Crie um limite de categoria visível para todos os membros aceitos do grupo.</p>
+          <button mat-stroked-button color="primary" type="button" (click)="abrirNovoOrcamentoCompartilhado()">
+            Criar orçamento compartilhado
+          </button>
+        </div>
+      </div>
+
+      <div class="budget-list">
+        <div class="budget budget-card" *ngFor="let o of orcamentos" [class]="corOrcamento(o)">
+          <div class="budget-head">
+            <div>
+              <strong>{{ o.categoriaNome }}</strong>
+              <span>{{ brl(o.valorGasto) }} / {{ brl(o.valorLimite) }} · {{ o.membrosContabilizados || 1 }} membro(s)</span>
+            </div>
+            <strong class="pct">{{ o.percentualUso | number:'1.0-1' }}%</strong>
+          </div>
+          <mat-progress-bar mode="determinate" [value]="progress(o)"></mat-progress-bar>
+          <small>{{ o.percentualUso | number:'1.0-1' }}% usado pelo grupo</small>
+        </div>
+      </div>
+    </mat-card>
+  </ng-container>
 </div>

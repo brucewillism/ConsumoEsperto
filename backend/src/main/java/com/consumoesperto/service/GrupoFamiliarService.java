@@ -147,6 +147,32 @@ public class GrupoFamiliarService {
         }
     }
 
+    @Transactional
+    public GrupoFamiliarDTO renomear(Long usuarioId, GrupoFamiliarRequest request) {
+        GrupoFamiliar grupo = grupoAceitoDoUsuario(usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Você não participa de um grupo familiar."));
+        String nome = request != null && request.getNome() != null ? request.getNome().trim() : "";
+        if (nome.isBlank()) {
+            throw new IllegalArgumentException("Informe um nome para o grupo.");
+        }
+        if (nome.length() > 120) {
+            throw new IllegalArgumentException("Nome do grupo deve ter no máximo 120 caracteres.");
+        }
+        grupo.setNome(nome);
+        grupoRepository.save(grupo);
+        return toDto(grupo, usuarioId);
+    }
+
+    @Transactional
+    public void sair(Long usuarioId) {
+        GrupoFamiliarMembro membro = membroRepository.findAceitosByUsuarioId(usuarioId).stream()
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Você não participa de um grupo familiar."));
+        membro.setStatus(GrupoFamiliarMembro.Status.CANCELADO);
+        membro.setDataResposta(LocalDateTime.now());
+        membroRepository.save(membro);
+    }
+
     private Optional<Usuario> resolveUsuario(String email, String whatsapp) {
         if (email != null && !email.isBlank()) {
             Optional<Usuario> byEmail = usuarioRepository.findByEmail(email);

@@ -81,4 +81,16 @@ export class FamiliaService {
   liquidarDebito(debitoId: number): Observable<DebitoInterno> {
     return this.http.post<DebitoInterno>(`${this.base}/debitos/${debitoId}/liquidar`, {});
   }
+
+  historicoDebitos(): Observable<DebitoInterno[]> {
+    return this.http.get<DebitoInterno[]>(`${this.base}/debitos/historico`);
+  }
+
+  renomearGrupo(nome: string): Observable<GrupoFamiliar> {
+    return this.http.put<GrupoFamiliar>(this.base, { nome });
+  }
+
+  sairGrupo(): Observable<void> {
+    return this.http.delete<void>(`${this.base}/sair`);
+  }
 }
