@@ -3,8 +3,10 @@ package com.consumoesperto.service.fatura.layout;
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Faturas com bandeira Mastercard (emissor pode ser Itaú, Santander, etc.).
@@ -83,5 +85,29 @@ public class MastercardFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrateg
             return bancoExtraidoIa;
         }
         return "Mastercard";
+    }
+
+    @Override
+    public void complementarLancamentosDoTexto(
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        int anoReferencia
+    ) {
+        GenericoFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
+    }
+
+    @Override
+    public Optional<BigDecimal> extrairTotalFaturaDoTexto(String textoPdf) {
+        return GenericoFaturaTextoExtrator.extrairTotalFatura(textoPdf);
+    }
+
+    @Override
+    public void finalizarLancamentosDoTexto(
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        BigDecimal totalFatura,
+        int anoReferencia
+    ) {
+        GenericoFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
     }
 }

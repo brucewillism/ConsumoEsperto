@@ -3,7 +3,9 @@ package com.consumoesperto.service.fatura.layout;
 import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class GenericoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
@@ -40,5 +42,29 @@ public class GenericoFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy 
             return bancoExtraidoIa;
         }
         return FaturaPdfLayoutSupport.inferirBancoEmissorDoTexto(textoPdfNormalizado);
+    }
+
+    @Override
+    public void complementarLancamentosDoTexto(
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        int anoReferencia
+    ) {
+        GenericoFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
+    }
+
+    @Override
+    public Optional<BigDecimal> extrairTotalFaturaDoTexto(String textoPdf) {
+        return GenericoFaturaTextoExtrator.extrairTotalFatura(textoPdf);
+    }
+
+    @Override
+    public void finalizarLancamentosDoTexto(
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        BigDecimal totalFatura,
+        int anoReferencia
+    ) {
+        GenericoFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura, anoReferencia);
     }
 }

@@ -25,6 +25,10 @@ public final class SantanderFaturaTextoExtrator {
         return FaturaTextoExtratorPadrao.deveIgnorar(descricao, CFG);
     }
 
+    public static List<ImportacaoFaturaItemDTO> extrairLancamentos(String textoPdf, int anoReferencia) {
+        return FaturaTextoExtratorPadrao.extrairLancamentos(textoPdf, anoReferencia, CFG);
+    }
+
     public static Optional<BigDecimal> extrairTotalFatura(String textoPdf) {
         return FaturaTextoExtratorPadrao.extrairTotalFatura(textoPdf, CFG);
     }

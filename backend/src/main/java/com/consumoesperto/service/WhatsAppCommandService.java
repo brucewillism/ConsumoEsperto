@@ -2516,9 +2516,8 @@ public class WhatsAppCommandService {
             String textoPdf = pdfTextExtractionService.extrairTexto(mediaBytes, senhaPdf);
             com.consumoesperto.service.fatura.layout.FaturaPdfLayoutStrategy layoutFatura =
                 faturaPdfLayoutDetector.detectarTexto(textoPdf);
-            // Classificação ampla: contracheque, boleto ou fatura (fluxo original do WhatsApp).
-            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(
-                userId, mediaBytes, layoutFatura, true, senhaPdf);
+            JsonNode extracted = faturaPdfImportService.extrairJsonFatura(
+                userId, mediaBytes, senhaPdf, textoPdf, layoutFatura, true);
             awaitingFaturaPdfSenha.remove(userId);
             return processarPdfFinanceiroExtraido(userId, mediaBytes, senhaPdf, extracted, layoutFatura, textoPdf);
         } catch (IllegalArgumentException e) {

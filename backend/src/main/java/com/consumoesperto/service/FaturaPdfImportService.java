@@ -104,6 +104,7 @@ public class FaturaPdfImportService {
     private final SaldoService saldoService;
     private final TratamentoUsuarioService tratamentoUsuarioService;
     private final AiStructuredOutputService aiStructuredOutputService;
+    private final FaturaPdfExtracaoDeterministicaService faturaPdfExtracaoDeterministicaService;
 
     /** Filtra marcadores persistidos apenas para lógica de reconciliação. */
     public static boolean isBulletVisivelAoUsuario(String linhaAuditoria) {
@@ -129,8 +130,7 @@ public class FaturaPdfImportService {
         try {
             String textoPdf = pdfTextExtractionService.extrairTexto(pdfBytes, senhaPdf);
             FaturaPdfLayoutStrategy layout = faturaPdfLayoutDetector.detectarTexto(textoPdf);
-            JsonNode extracted = documentoIAContextService.extrairDocumentoPdf(
-                usuarioId, pdfBytes, layout, false, senhaPdf);
+            JsonNode extracted = extrairJsonFatura(usuarioId, pdfBytes, senhaPdf, textoPdf, layout, false);
             ImportacaoFaturaDTO dto = selfProvider.getObject().processarExtracao(usuarioId, extracted, layout, textoPdf);
             validarImportacaoNaoVazia(dto, pdfBytes, senhaPdf);
             return dto;
@@ -147,6 +147,23 @@ public class FaturaPdfImportService {
                 : e.getClass().getSimpleName();
             throw new IllegalArgumentException("Não consegui processar esta fatura: " + detalhe, e);
         }
+    }
+
+    public JsonNode extrairJsonFatura(
+        Long usuarioId,
+        byte[] pdfBytes,
+        String senhaPdf,
+        String textoPdf,
+        FaturaPdfLayoutStrategy layout,
+        boolean classificacaoAmpla
+    ) {
+        if (FaturaPdfLayoutSupport.pareceFaturaCartao(FaturaPdfLayoutSupport.norm(textoPdf))) {
+            FaturaPdfLayoutStrategy layoutEfetivo = layout != null ? layout : genericoFaturaPdfLayoutStrategy;
+            log.info("Usando leitura determinística de fatura (sem IA) layout={}", layoutEfetivo.layout());
+            return faturaPdfExtracaoDeterministicaService.extrair(textoPdf, layoutEfetivo);
+        }
+        return documentoIAContextService.extrairDocumentoPdf(
+            usuarioId, pdfBytes, layout, classificacaoAmpla, senhaPdf);
     }
 
     @Transactional(timeout = 300)
@@ -184,7 +201,7 @@ public class FaturaPdfImportService {
                 ? "estrutura inválida"
                 : String.join("; ", validado.getErrors());
             throw new IllegalArgumentException(
-                "Fatura não validada pela IA. Revise o PDF ou confirme manualmente antes de importar. Detalhes: " + detalhes);
+                "Fatura não validada automaticamente. Revise o PDF ou confirme manualmente antes de importar. Detalhes: " + detalhes);
         }
 
         String bancoExtraido = firstNonBlank(extracted.path("bancoCartao").asText(""), extracted.path("cartao").asText(""));

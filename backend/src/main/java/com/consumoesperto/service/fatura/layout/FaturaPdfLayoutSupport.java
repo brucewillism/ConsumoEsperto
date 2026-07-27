@@ -4,8 +4,10 @@ import com.consumoesperto.dto.ImportacaoFaturaItemDTO;
 
 import java.math.BigDecimal;
 import java.text.Normalizer;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 public final class FaturaPdfLayoutSupport {
 
@@ -178,5 +180,20 @@ public final class FaturaPdfLayoutSupport {
             .filter(i -> pareceDescricaoGenericaIa(i.getDescricao()))
             .count();
         return genericos >= itens.size() || genericos > 0;
+    }
+
+    public static Optional<LocalDate> extrairDataVencimentoDoTexto(String textoPdf) {
+        Optional<LocalDate> padrao = FaturaTextoExtratorPadrao.extrairDataVencimento(textoPdf);
+        if (padrao.isPresent()) {
+            return padrao;
+        }
+        return InterFaturaTextoExtrator.extrairDataVencimento(textoPdf);
+    }
+
+    public static Optional<LocalDate> extrairDataCorteDoTexto(String textoPdf, BancoFaturaLayout layout) {
+        if (layout == BancoFaturaLayout.INTER) {
+            return InterFaturaTextoExtrator.extrairDataCorte(textoPdf);
+        }
+        return FaturaTextoExtratorPadrao.extrairDataCorte(textoPdf);
     }
 }

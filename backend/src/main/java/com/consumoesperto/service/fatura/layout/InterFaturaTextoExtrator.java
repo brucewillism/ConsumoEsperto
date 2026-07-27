@@ -1380,7 +1380,10 @@ public final class InterFaturaTextoExtrator {
         }
     }
 
-    private static Optional<LocalDate> extrairDataVencimento(String textoPdf) {
+    public static Optional<LocalDate> extrairDataVencimento(String textoPdf) {
+        if (textoPdf == null || textoPdf.isBlank()) {
+            return Optional.empty();
+        }
         Matcher m = DATA_VENCIMENTO.matcher(textoPdf);
         if (!m.find()) {
             return Optional.empty();

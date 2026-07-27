@@ -522,7 +522,10 @@ final class FaturaTextoExtratorPadrao {
         }
     }
 
-    private static Optional<LocalDate> extrairDataCorte(String textoPdf) {
+    static Optional<LocalDate> extrairDataCorte(String textoPdf) {
+        if (textoPdf == null || textoPdf.isBlank()) {
+            return Optional.empty();
+        }
         Matcher m = DATA_CORTE.matcher(textoPdf);
         if (!m.find()) {
             return Optional.empty();
@@ -530,7 +533,10 @@ final class FaturaTextoExtratorPadrao {
         return parseDataCompleta(m.group(1), m.group(2), m.group(3));
     }
 
-    private static Optional<LocalDate> extrairDataVencimento(String textoPdf) {
+    static Optional<LocalDate> extrairDataVencimento(String textoPdf) {
+        if (textoPdf == null || textoPdf.isBlank()) {
+            return Optional.empty();
+        }
         Matcher m = DATA_VENCIMENTO.matcher(textoPdf);
         if (!m.find()) {
             return Optional.empty();
