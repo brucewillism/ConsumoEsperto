@@ -171,7 +171,7 @@ public class FaturaPdfExtracaoDeterministicaService {
     private static Optional<BigDecimal> extrairTotal(String textoPdf, BancoFaturaLayout layout) {
         return switch (layout) {
             case ITAU -> ItauFaturaTextoExtrator.extrairTotalFatura(textoPdf);
-            case NUBANK -> NubankFaturaTextoExtrator.extrairTotalCompras(textoPdf);
+            case NUBANK -> NubankFaturaTextoExtrator.extrairTotalFatura(textoPdf);
             case INTER -> InterFaturaTextoExtrator.extrairTotalFatura(textoPdf);
             case MERCADO_PAGO -> MercadoPagoFaturaTextoExtrator.extrairTotalFatura(textoPdf);
             case CAIXA -> CaixaFaturaTextoExtrator.extrairTotalFatura(textoPdf);

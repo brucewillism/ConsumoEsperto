@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -67,6 +68,21 @@ public class NubankFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
         int anoReferencia
     ) {
         NubankFaturaTextoExtrator.complementar(itens, textoPdf, anoReferencia);
+    }
+
+    @Override
+    public void finalizarLancamentosDoTexto(
+        String textoPdf,
+        List<ImportacaoFaturaItemDTO> itens,
+        BigDecimal totalFatura,
+        int anoReferencia
+    ) {
+        NubankFaturaTextoExtrator.finalizarLista(itens, textoPdf, totalFatura);
+    }
+
+    @Override
+    public Optional<BigDecimal> extrairTotalFaturaDoTexto(String textoPdf) {
+        return NubankFaturaTextoExtrator.extrairTotalFatura(textoPdf);
     }
 
     @Override

@@ -69,6 +69,32 @@ class NubankFaturaTextoExtratorTest {
     }
 
     @Test
+    void extraiTotalComprasComIntervaloDeDatas() {
+        String trecho = """
+            Total de compras de todos os cartões, 25 JUN a 26 JUL R$ 4.038,47
+            Total de compras de todos os cartões, 25 JUN a 26 JULR$ 4.038,47
+            """;
+        assertEquals(
+            new BigDecimal("4038.47"),
+            NubankFaturaTextoExtrator.extrairTotalCompras(trecho).orElseThrow()
+        );
+    }
+
+    @Test
+    void extraiTotalAPagarDoResumo() {
+        String trecho = """
+            RESUMO DA FATURA ATUAL
+            Pagamento recebido −R$ 1.764,24
+            Total de compras de todos os cartões, 25 JUN a 26 JUL R$ 4.038,47
+            Total a pagar R$ 2.274,23
+            """;
+        assertEquals(
+            new BigDecimal("2274.23"),
+            NubankFaturaTextoExtrator.extrairTotalAPagar(trecho).orElseThrow()
+        );
+    }
+
+    @Test
     void extraiCompraComMascaraAsterisco() {
         String trecho = """
             TRANSAÇÕES DE BRUCE W M SILVA
