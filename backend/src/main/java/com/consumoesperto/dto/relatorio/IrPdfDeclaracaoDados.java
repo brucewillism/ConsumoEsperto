@@ -14,7 +14,8 @@ public record IrPdfDeclaracaoDados(
     BigDecimal totalPendentes,
     List<IrPdfDetalheVm> detalhes,
     long qtdLancamentosConfirmados,
-    long qtdLancamentosPendentes
+    long qtdLancamentosPendentes,
+    List<Integer> anosComLancamentos
 ) {
     public boolean semDados() {
         return linhas.isEmpty() && linhasPendentes.isEmpty();

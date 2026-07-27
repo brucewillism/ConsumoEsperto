@@ -198,6 +198,14 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         Pageable pageable
     );
 
+    /** Anos com despesas (confirmadas ou pendentes) — apoio ao PDF de IR quando o ano escolhido está vazio. */
+    @Query("SELECT DISTINCT YEAR(COALESCE(t.dataTransacao, t.dataCriacao)) FROM Transacao t "
+        + "WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia IN (com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA, "
+        + "com.consumoesperto.model.Transacao$StatusConferencia.PENDENTE) "
+        + "ORDER BY 1 DESC")
+    List<Integer> findAnosComDespesasIr(@Param("usuarioId") Long usuarioId);
+
     @Query("SELECT t FROM Transacao t JOIN FETCH t.usuario u WHERE " +
         "t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PENDENTE " +
         "AND t.dataCriacao < :limite AND " +

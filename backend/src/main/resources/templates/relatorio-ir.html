@@ -203,8 +203,15 @@
 </table>
 
 <p class="vazio" th:if="${semDados}">
-    Não há despesas (confirmadas nem pendentes) neste ano-calendário com os critérios acima.
-    Confirme se escolheu o ano certo ou se os lançamentos estão noutro período.
+    Não há despesas (confirmadas nem pendentes) no ano-calendário <strong th:text="${anoIr}">—</strong>.
+    <span th:if="${anosComLancamentos != null and !anosComLancamentos.isEmpty()}">
+        Seus lançamentos estão em:
+        <strong th:text="${#strings.listJoin(anosComLancamentos, ', ')}">—</strong>
+        — selecione um desses anos em Relatórios e gere o PDF novamente.
+    </span>
+    <span th:if="${anosComLancamentos == null or anosComLancamentos.isEmpty()}">
+        Importe faturas ou lance despesas no app/WhatsApp e confirme a conferência antes de exportar.
+    </span>
 </p>
 </body>
 </html>

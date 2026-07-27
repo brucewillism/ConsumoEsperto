@@ -101,7 +101,7 @@ export class RelatoriosComponent implements OnInit {
       dataFim: [null],
       tipoTransacao: [''],
       cartaoId: [''],
-      anoIr: [y - 1],
+      anoIr: [y],
     });
   }
 

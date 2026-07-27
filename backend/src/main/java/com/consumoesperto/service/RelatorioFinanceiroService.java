@@ -340,6 +340,7 @@ public class RelatorioFinanceiroService {
         long qtdConf = quantidadeLancamentos(conf);
         long qtdPend = quantidadeLancamentos(pend);
         List<IrPdfDetalheVm> detalhes = montarDetalhesIr(usuarioId, anoCalendario, brl);
+        List<Integer> anosComLancamentos = transacaoRepository.findAnosComDespesasIr(usuarioId);
         return new IrPdfDeclaracaoDados(
             linhasConfirmadas,
             totalConfirmado,
@@ -347,7 +348,8 @@ public class RelatorioFinanceiroService {
             totalPendenteValor,
             detalhes,
             qtdConf,
-            qtdPend
+            qtdPend,
+            anosComLancamentos
         );
     }
 

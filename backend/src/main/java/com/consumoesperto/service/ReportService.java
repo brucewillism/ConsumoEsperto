@@ -211,6 +211,7 @@ public class ReportService {
         ctx.setVariable("qtdLancamentosPendentes", dados.qtdLancamentosPendentes());
         ctx.setVariable("geradoEm", LocalDateTime.now().format(GERADO));
         ctx.setVariable("semDados", dados.semDados());
+        ctx.setVariable("anosComLancamentos", dados.anosComLancamentos());
         String html = templateEngine.process("relatorio-ir", ctx);
         byte[] pdf = renderPdf(html);
         String nomeArquivo = "consumo-esperto-ir-" + anoCalendario + ".pdf";

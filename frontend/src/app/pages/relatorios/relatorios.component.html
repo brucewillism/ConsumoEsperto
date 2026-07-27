@@ -59,6 +59,7 @@
             <mat-select formControlName="anoIr" panelClass="exec-select-panel">
               <mat-option *ngFor="let a of anosIrCalendario" [value]="a">{{ a }}</mat-option>
             </mat-select>
+            <mat-hint>Ano das despesas no app. Para declarar o IR, use o ano anterior (ex.: IR 2026 → 2025).</mat-hint>
           </mat-form-field>
 
           <button mat-raised-button color="primary" type="submit" [disabled]="carregando">
