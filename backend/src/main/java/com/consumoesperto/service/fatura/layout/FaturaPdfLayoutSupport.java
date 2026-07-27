@@ -132,12 +132,29 @@ public final class FaturaPdfLayoutSupport {
         if (valorTotalPdf != null && valorTotalPdf.compareTo(BigDecimal.ZERO) > 0) {
             return SituacaoLeituraFaturaPdf.ABERTA;
         }
+        if (texto != null && pareceTotalAPagarZerado(texto)) {
+            return SituacaoLeituraFaturaPdf.PAGA_NO_BANCO;
+        }
         if (texto != null && texto.matches(
             "(?is).*(?:valor da fatura|total desta fatura|total para pagamento)[^\\d]{0,80}R\\$\\s*0[,.]00.*"
         )) {
             return SituacaoLeituraFaturaPdf.PAGA_NO_BANCO;
         }
         return SituacaoLeituraFaturaPdf.ABERTA;
+    }
+
+    private static boolean pareceTotalAPagarZerado(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return false;
+        }
+        boolean totalZerado = texto.matches(
+            "(?is).*total\\s+a\\s+pagar[^\\d]{0,80}R\\$\\s*0[,.]00.*"
+        );
+        if (!totalZerado) {
+            return false;
+        }
+        String n = norm(texto);
+        return contem(n, "nao tem gastos pendentes", "não tem gastos pendentes", "gastos pendentes de pagamento");
     }
 
     /** Fatura já paga — total R$ 0,00 no PDF; lançamentos costumam vir após o resumo. */

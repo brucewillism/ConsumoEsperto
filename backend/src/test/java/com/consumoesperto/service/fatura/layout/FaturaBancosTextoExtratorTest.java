@@ -56,6 +56,47 @@ class FaturaBancosTextoExtratorTest {
     }
 
     @Test
+    void mercadoPagoFaturaPagaJunho2026UsaConsumosEParcelas() {
+        String texto = """
+            Mercado Pago
+            Total a pagar
+            R$ 0,00
+            Vence em
+            06/07/2026
+            Você não tem gastos pendentes de pagamento.
+            Resumo da fatura
+            Consumos de 30/05 a 29/06 R$ 632,96
+            Total da fatura de maio R$ 661,94
+            Pagamentos e créditos devolvidos R$ 1.294,90
+            Total R$ 0,00
+            Detalhes de consumo
+            Movimentações na fatura
+            01/03 Parcela da fatura de março/2026 Parcela 5 de 6 R$ 283,13
+            06/04 Parcela da fatura de abril/2026 Parcela 4 de 10 R$ 250,65
+            13/05 Parcela da fatura de maio/2026 Parcela 2 de 10 R$ 99,18
+            30/05 Pagamento da fatura de maio/2026 R$ 661,94
+            20/06 Pagamento da fatura de junho/2026 R$ 632,96
+            Parcele a fatura do seu Cartão de Crédito Mercado Pago
+            """;
+        assertEquals(
+            FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO,
+            FaturaPdfLayoutSupport.detectarSituacaoLeituraFatura(texto, BigDecimal.ZERO)
+        );
+        BigDecimal total = MercadoPagoFaturaTextoExtrator.extrairTotalFatura(texto).orElseThrow();
+        assertEquals(new BigDecimal("632.96"), total);
+
+        List<ImportacaoFaturaItemDTO> itens = new ArrayList<>();
+        itens.add(item("Parcela da fatura de maio/2026 Parcela 2 de 10", new BigDecimal("99.18")));
+        MercadoPagoFaturaTextoExtrator.finalizarLista(itens, texto, total, 2026);
+
+        assertEquals(3, itens.size());
+        BigDecimal soma = itens.stream()
+            .map(ImportacaoFaturaItemDTO::getValor)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(0, soma.compareTo(total));
+    }
+
+    @Test
     void mercadoPagoIgnoraLimiteTotal() {
         assertTrue(MercadoPagoFaturaTextoExtrator.deveIgnorarDescricao("Limite total"));
     }

@@ -161,18 +161,25 @@ final class FaturaTextoExtratorPadrao {
         podarEspurios(itens, textoPdf, cfg);
 
         List<ImportacaoFaturaItemDTO> doTexto = extrairLancamentos(textoPdf, anoReferencia, cfg);
-        if (total != null && !doTexto.isEmpty()) {
-            BigDecimal somaAtual = somaValores(itens);
-            BigDecimal somaTexto = somaValores(doTexto);
-            if (distanciaAoTotal(somaTexto, total).compareTo(distanciaAoTotal(somaAtual, total)) <= 0) {
+        if (!doTexto.isEmpty()) {
+            if (total == null || total.compareTo(BigDecimal.ZERO) <= 0) {
                 itens.clear();
                 itens.addAll(doTexto);
                 podarEspurios(itens, textoPdf, cfg);
-                log.info("{} finalizar: lista do texto ({} itens).", cfg.nomeLog(), itens.size());
+                log.info("{} finalizar: lista do texto ({} itens, total não positivo).", cfg.nomeLog(), itens.size());
+            } else {
+                BigDecimal somaAtual = somaValores(itens);
+                BigDecimal somaTexto = somaValores(doTexto);
+                if (distanciaAoTotal(somaTexto, total).compareTo(distanciaAoTotal(somaAtual, total)) <= 0) {
+                    itens.clear();
+                    itens.addAll(doTexto);
+                    podarEspurios(itens, textoPdf, cfg);
+                    log.info("{} finalizar: lista do texto ({} itens).", cfg.nomeLog(), itens.size());
+                }
             }
         }
 
-        if (total != null && somaValores(itens).compareTo(total) > 0) {
+        if (total != null && total.compareTo(BigDecimal.ZERO) > 0 && somaValores(itens).compareTo(total) > 0) {
             colapsarMesmaDataValorParcelaMenor(itens);
             podarEspurios(itens, textoPdf, cfg);
             ajustarSomaAoTotal(itens, total, cfg.nomeLog());
