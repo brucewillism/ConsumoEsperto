@@ -20,6 +20,8 @@ import { markAllControlsTouched, parseValorBrasileiro, resolveHttpError } from '
 
 export interface NovaFaturaDialogData {
   cartoes: CartaoCredito[];
+  /** Quando informada, o diálogo abre em modo edição. */
+  fatura?: CreditCardInvoice;
 }
 
 @Component({
@@ -46,6 +48,7 @@ export interface NovaFaturaDialogData {
 export class NovaFaturaDialogComponent implements OnInit {
   form!: FormGroup;
   salvando = false;
+  readonly modoEdicao: boolean;
 
   constructor(
     private fb: FormBuilder,
@@ -53,17 +56,41 @@ export class NovaFaturaDialogComponent implements OnInit {
     private snackBar: MatSnackBar,
     private dialogRef: MatDialogRef<NovaFaturaDialogComponent, boolean>,
     @Inject(MAT_DIALOG_DATA) public data: NovaFaturaDialogData
-  ) {}
+  ) {
+    this.modoEdicao = !!data.fatura?.id;
+  }
 
   ngOnInit(): void {
-    const cartaoPadrao =
-      this.data.cartoes[0]?.id != null ? String(this.data.cartoes[0].id) : '';
+    const fatura = this.data.fatura;
+    const cartaoPadrao = fatura?.cardId
+      ? String(fatura.cardId)
+      : this.data.cartoes[0]?.id != null
+        ? String(this.data.cartoes[0].id)
+        : '';
     this.form = this.fb.group({
       cartaoCreditoId: [cartaoPadrao, Validators.required],
-      valor: ['', [Validators.required, Validators.min(0.01)]],
-      vencimento: ['', Validators.required],
-      fechamento: ['', Validators.required],
-      status: ['PENDING', Validators.required],
+      valor: [
+        fatura ? this.formatarValorCampo(Number(fatura.amount) || 0) : '',
+        [Validators.required, Validators.min(0.01)],
+      ],
+      vencimento: [fatura ? this.parseDataCampo(fatura.dueDate) : '', Validators.required],
+      fechamento: [fatura ? this.parseDataCampo(fatura.closingDate) : '', Validators.required],
+      status: [fatura?.status ?? 'PENDING', Validators.required],
+    });
+  }
+
+  private parseDataCampo(raw: Date | string | undefined): Date | '' {
+    if (!raw) {
+      return '';
+    }
+    const d = raw instanceof Date ? raw : new Date(raw);
+    return Number.isNaN(d.getTime()) ? '' : d;
+  }
+
+  private formatarValorCampo(valor: number): string {
+    return valor.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     });
   }
 
@@ -91,29 +118,44 @@ export class NovaFaturaDialogComponent implements OnInit {
 
     const cartao = this.data.cartoes.find((c) => c.id === cartaoCreditoId);
     const payload: CreditCardInvoice = {
+      id: this.modoEdicao ? this.data.fatura!.id : undefined,
+      numeroFatura: this.modoEdicao ? this.data.fatura!.numeroFatura : undefined,
       cardId: String(cartaoCreditoId),
-      bankName: cartao?.banco || cartao?.nome || '',
+      bankName: cartao?.banco || cartao?.nome || this.data.fatura?.bankName || '',
       amount: parseValorBrasileiro(formValue.valor) ?? formValue.valor,
       dueDate: formValue.vencimento,
       closingDate: formValue.fechamento,
       status: formValue.status,
-      transactions: [],
+      transactions: this.modoEdicao ? (this.data.fatura!.transactions ?? []) : [],
     };
 
     this.salvando = true;
-    this.faturaService.criarFaturaCartao(payload).subscribe({
+    const req$ = this.modoEdicao
+      ? this.faturaService.atualizarFaturaCartao(payload)
+      : this.faturaService.criarFaturaCartao(payload);
+
+    req$.subscribe({
       next: () => {
         this.salvando = false;
-        this.snackBar.open('Fatura adicionada com sucesso!', 'Fechar', {
-          duration: 3000,
-          panelClass: ['success-snackbar'],
-        });
+        this.snackBar.open(
+          this.modoEdicao ? 'Fatura atualizada com sucesso!' : 'Fatura adicionada com sucesso!',
+          'Fechar',
+          {
+            duration: 3000,
+            panelClass: ['success-snackbar'],
+          }
+        );
         this.dialogRef.close(true);
       },
       error: (error) => {
         this.salvando = false;
         this.snackBar.open(
-          resolveHttpError(error, 'Erro ao adicionar fatura. Verifique o cartão e tente novamente.'),
+          resolveHttpError(
+            error,
+            this.modoEdicao
+              ? 'Erro ao atualizar fatura. Tente novamente.'
+              : 'Erro ao adicionar fatura. Verifique o cartão e tente novamente.'
+          ),
           'Fechar',
           { duration: 4000, panelClass: ['error-snackbar'] }
         );

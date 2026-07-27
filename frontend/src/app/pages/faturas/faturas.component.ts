@@ -192,11 +192,25 @@ export class FaturasComponent implements OnInit, OnDestroy {
   }
 
   editarFatura(fatura: CreditCardInvoice): void {
-    // Implementar edição de fatura
-    this.snackBar.open('Funcionalidade de edição em desenvolvimento', 'Fechar', {
-      duration: 3000,
-      panelClass: ['warning-snackbar']
-    });
+    if (!fatura.id) {
+      this.snackBar.open('Fatura inválida para edição.', 'Fechar', {
+        duration: 3500,
+        panelClass: ['warning-snackbar'],
+      });
+      return;
+    }
+    openCeFormDialog(this.dialog, NovaFaturaDialogComponent, {
+      width: '560px',
+      data: { cartoes: this.cartoes, fatura },
+    })
+      .afterClosed()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((atualizada) => {
+        if (atualizada) {
+          this.financaAlteracao.notificar('faturas');
+          this.loadData({ silent: true });
+        }
+      });
   }
 
   excluirFatura(fatura: CreditCardInvoice): void {

@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>Adicionar Nova Fatura</h2>
+<h2 mat-dialog-title>{{ modoEdicao ? 'Editar Fatura' : 'Adicionar Nova Fatura' }}</h2>
 <form [formGroup]="form" (ngSubmit)="salvar()">
   <mat-dialog-content class="ce-form-body">
     <div class="ce-form-row">
@@ -66,7 +66,7 @@
     <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || salvando">
       <mat-icon *ngIf="!salvando">save</mat-icon>
       <mat-spinner *ngIf="salvando" diameter="18"></mat-spinner>
-      {{ salvando ? 'Salvando...' : 'Adicionar Fatura' }}
+      {{ salvando ? 'Salvando...' : (modoEdicao ? 'Salvar alterações' : 'Adicionar Fatura') }}
     </button>
   </mat-dialog-actions>
 </form>
