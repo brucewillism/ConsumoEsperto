@@ -95,6 +95,41 @@ class NubankFaturaTextoExtratorTest {
     }
 
     @Test
+    void pixParceladoEmAndamentoUsaValorDaParcela() {
+        String trecho = """
+            Pagamentos e Financiamentos
+            03 JUL
+            PAMELA PRISCILA RIBEIRO DE ALCANTARA - Parcela 1/2
+            Total a pagar: R$ 529,25 (valor da transação de R$ 400,00 + R$ 4,26 de IOF + juros)
+            2 parcelas de R$ 264,63
+            """;
+        List<ImportacaoFaturaItemDTO> pix = NubankFaturaTextoExtrator.extrairPixFinanciados(trecho, 2026);
+        assertEquals(1, pix.size());
+        assertEquals(new BigDecimal("264.63"), pix.get(0).getValor());
+        assertEquals(1, pix.get(0).getParcelaAtual());
+        assertEquals(2, pix.get(0).getTotalParcelas());
+    }
+
+    @Test
+    void finalizarConciliaPixParceladoComTotalCompras() {
+        List<ImportacaoFaturaItemDTO> itens = new ArrayList<>();
+        ImportacaoFaturaItemDTO pix = new ImportacaoFaturaItemDTO();
+        pix.setDescricao("PAMELA - Parcela 1/2 (Pix/boleto no crédito)");
+        pix.setParcelaAtual(1);
+        pix.setTotalParcelas(2);
+        pix.setValor(new BigDecimal("529.25"));
+        itens.add(pix);
+        ImportacaoFaturaItemDTO cartao = new ImportacaoFaturaItemDTO();
+        cartao.setDescricao("Atacadao");
+        cartao.setValor(new BigDecimal("3768.42"));
+        itens.add(cartao);
+
+        NubankFaturaTextoExtrator.finalizarLista(itens, "", new BigDecimal("4038.47"));
+        assertEquals(new BigDecimal("4038.47"), soma(itens));
+        assertEquals(new BigDecimal("270.05"), pix.getValor());
+    }
+
+    @Test
     void extraiCompraComMascaraAsterisco() {
         String trecho = """
             TRANSAÇÕES DE BRUCE W M SILVA

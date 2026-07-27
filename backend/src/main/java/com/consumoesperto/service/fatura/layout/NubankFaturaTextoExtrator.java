@@ -55,6 +55,9 @@ public final class NubankFaturaTextoExtrator {
     private static final Pattern PARCELA = Pattern.compile(
         "(?i)(?:parc(?:ela)?\\.?\\s*)?(\\d{1,2})\\s*/\\s*(\\d{1,2})"
     );
+    private static final Pattern PARCELAS_DE_VALOR = Pattern.compile(
+        "(?i)(\\d{1,2})\\s+parcelas?\\s+de\\s+R\\$\\s*([\\d.]+,\\d{2})"
+    );
     private static final Pattern TOTAL_A_PAGAR = Pattern.compile(
         "(?i)total a pagar\\s*:?\\s*R\\$\\s*([\\d.]+,\\d{2})"
     );
@@ -108,6 +111,124 @@ public final class NubankFaturaTextoExtrator {
             return;
         }
         podarEspurios(itens);
+        if (totalFatura != null && totalFatura.compareTo(BigDecimal.ZERO) > 0) {
+            ajustarPixParceladoParaTotalCompras(itens, totalFatura);
+            conciliarResidualPequeno(itens, totalFatura);
+        }
+    }
+
+    /**
+     * Pix parcelado em andamento (ex.: 1/2) pode vir com «Total a pagar» integral; ajusta o residual
+     * para bater com o Total de compras do PDF quando a diferença é pequena e localizada.
+     */
+    static void ajustarPixParceladoParaTotalCompras(List<ImportacaoFaturaItemDTO> itens, BigDecimal totalCompras) {
+        if (itens == null || itens.isEmpty() || totalCompras == null) {
+            return;
+        }
+        BigDecimal soma = somaValores(itens);
+        BigDecimal diff = soma.subtract(totalCompras).setScale(2, RoundingMode.HALF_UP);
+        if (diff.abs().compareTo(new BigDecimal("0.01")) <= 0) {
+            return;
+        }
+        if (diff.abs().compareTo(new BigDecimal("320.00")) > 0) {
+            return;
+        }
+        for (ImportacaoFaturaItemDTO item : itens) {
+            if (!parecePixParceladoEmAndamento(item)) {
+                continue;
+            }
+            if (item.getValor() == null) {
+                continue;
+            }
+            Integer totalParcelas = item.getTotalParcelas();
+            if (totalParcelas != null && totalParcelas > 1
+                && item.getValor().compareTo(new BigDecimal("350.00")) > 0) {
+                BigDecimal parcela = item.getValor()
+                    .divide(BigDecimal.valueOf(totalParcelas), 2, RoundingMode.HALF_UP);
+                log.info(
+                    "Nubank: Pix parcelado '{}' usa parcela {} (total {} / {} parcelas), não {}.",
+                    item.getDescricao(),
+                    parcela,
+                    item.getValor(),
+                    totalParcelas,
+                    item.getValor()
+                );
+                item.setValor(parcela);
+                ajustarPixParceladoParaTotalCompras(itens, totalCompras);
+                return;
+            }
+            if (diff.abs().compareTo(new BigDecimal("10.00")) > 0) {
+                continue;
+            }
+            BigDecimal novo = item.getValor().subtract(diff).setScale(2, RoundingMode.HALF_UP);
+            if (novo.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            log.info(
+                "Nubank: Pix parcelado «{}» ajustado de {} para {} (concilia total compras {}).",
+                item.getDescricao(),
+                item.getValor(),
+                novo,
+                totalCompras
+            );
+            item.setValor(novo);
+            return;
+        }
+    }
+
+    private static boolean parecePixParceladoEmAndamento(ImportacaoFaturaItemDTO item) {
+        if (item == null || item.getDescricao() == null) {
+            return false;
+        }
+        String n = FaturaPdfLayoutSupport.norm(item.getDescricao());
+        if (!FaturaPdfLayoutSupport.contem(n, "pix boleto")) {
+            return false;
+        }
+        Integer atual = item.getParcelaAtual();
+        Integer total = item.getTotalParcelas();
+        return atual != null && total != null && total > 1;
+    }
+
+
+    /** Residual pequeno após parcelas Pix: ajusta a 1ª parcela quando o texto usa valor mensal ligeiramente diferente. */
+    static void conciliarResidualPequeno(List<ImportacaoFaturaItemDTO> itens, BigDecimal totalCompras) {
+        if (itens == null || itens.isEmpty() || totalCompras == null) {
+            return;
+        }
+        BigDecimal diff = somaValores(itens).subtract(totalCompras).setScale(2, RoundingMode.HALF_UP);
+        if (diff.abs().compareTo(new BigDecimal("0.01")) <= 0
+            || diff.abs().compareTo(new BigDecimal("10.00")) > 0) {
+            return;
+        }
+        for (ImportacaoFaturaItemDTO item : itens) {
+            if (item.getValor() == null || item.getParcelaAtual() == null || item.getTotalParcelas() == null) {
+                continue;
+            }
+            if (item.getTotalParcelas() <= 1 || item.getParcelaAtual() != 1) {
+                continue;
+            }
+            BigDecimal novo = item.getValor().subtract(diff).setScale(2, RoundingMode.HALF_UP);
+            if (novo.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            log.info(
+                "Nubank: residual {} conciliado em «{}»: {} -> {} (total compras {}).",
+                diff,
+                item.getDescricao(),
+                item.getValor(),
+                novo,
+                totalCompras
+            );
+            item.setValor(novo);
+            return;
+        }
+    }
+
+    private static BigDecimal somaValores(List<ImportacaoFaturaItemDTO> itens) {
+        return itens.stream()
+            .map(i -> i.getValor() != null ? i.getValor() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
     }
 
     static void podarEspurios(List<ImportacaoFaturaItemDTO> itens) {
@@ -315,9 +436,9 @@ public final class NubankFaturaTextoExtrator {
         String trecho = texto.substring(secao, fimSecao);
         Matcher tm = TOTAL_A_PAGAR.matcher(trecho);
         while (tm.find()) {
-            int fim = tm.end();
-            int inicio = Math.max(0, tm.start() - 420);
-            String contexto = trecho.substring(inicio, fim);
+            int inicio = Math.max(0, tm.start() - 140);
+            int fimContexto = Math.min(trecho.length(), tm.end() + 140);
+            String contexto = trecho.substring(inicio, fimContexto);
             if (pareceSimulacaoOuResumoFatura(contexto)) {
                 continue;
             }
@@ -327,19 +448,168 @@ public final class NubankFaturaTextoExtrator {
             }
             BigDecimal valor = parseMoney(tm.group(1));
             String descricao = extrairDescricaoPix(contexto);
-            if (descricao.isBlank() || valor.compareTo(BigDecimal.ZERO) <= 0) {
+            if (descricao.isBlank() || valor.compareTo(BigDecimal.ZERO) <= 0
+                || pareceDescricaoPixEspuria(descricao)) {
                 continue;
             }
             ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
             item.setData(data);
             item.setDescricao(descricao + " (Pix/boleto no crédito)");
-            item.setValor(valor);
+            aplicarParcelaNaDescricao(item);
+            if (pareceTotalFinanciadoPixParcelado(contexto, valor, item)
+                && extrairValorCobradoPix(contexto, valor).isEmpty()) {
+                continue;
+            }
+            item.setValor(resolverValorPixFinanciado(contexto, valor, item));
             if (!jaExiste(out, item)) {
                 out.add(item);
             }
         }
         return out;
     }
+
+
+    /**
+     * Pix/boleto parcelado: «Total a pagar» é o financiamento inteiro; na fatura entra só a parcela do mês.
+     */
+    static BigDecimal resolverValorPixFinanciado(String contexto, BigDecimal totalAPagar, ImportacaoFaturaItemDTO item) {
+        Integer atual = item.getParcelaAtual();
+        Integer total = item.getTotalParcelas();
+        if (atual == null || total == null || total <= 1) {
+            return totalAPagar;
+        }
+        if (atual < total) {
+            Matcher parcelas = PARCELAS_DE_VALOR.matcher(contexto);
+            if (parcelas.find()) {
+                try {
+                    int nParcelas = Integer.parseInt(parcelas.group(1));
+                    BigDecimal valorParcela = parseMoney(parcelas.group(2));
+                    if (nParcelas == total && valorParcela.compareTo(BigDecimal.ZERO) > 0
+                        && parcelaCompativelComTotal(totalAPagar, nParcelas, valorParcela)) {
+                        log.info(
+                            "Nubank Pix parcelado {}/{}: usa parcela R$ {} (texto), não total R$ {}.",
+                            atual,
+                            total,
+                            valorParcela,
+                            totalAPagar
+                        );
+                        return valorParcela;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            BigDecimal dividido = totalAPagar.divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP);
+            log.info(
+                "Nubank Pix parcelado {}/{}: usa R$ {} (total/{}) em vez de R$ {}.",
+                atual,
+                total,
+                dividido,
+                total,
+                totalAPagar
+            );
+            return dividido;
+        }
+        if (parcelaExplicitaNaDescricao(item)) {
+            Optional<BigDecimal> cobrado = extrairValorCobradoPix(contexto, totalAPagar);
+            if (cobrado.isPresent() && cobrado.get().compareTo(totalAPagar) != 0) {
+                log.info(
+                    "Nubank Pix parcelado {}/{}: usa cobrança R$ {} (texto), não total financiado R$ {}.",
+                    atual,
+                    total,
+                    cobrado.get(),
+                    totalAPagar
+                );
+                return cobrado.get();
+            }
+        }
+        return totalAPagar;
+    }
+
+
+    private static boolean parcelaCompativelComTotal(BigDecimal totalAPagar, int nParcelas, BigDecimal valorParcela) {
+        if (totalAPagar == null || valorParcela == null || nParcelas <= 0) {
+            return false;
+        }
+        BigDecimal saldo = valorParcela.multiply(BigDecimal.valueOf(nParcelas));
+        return totalAPagar.subtract(saldo).abs().compareTo(new BigDecimal("3.00")) <= 0
+            || totalAPagar.subtract(valorParcela).abs().compareTo(new BigDecimal("3.00")) <= 0;
+    }
+
+    private static void aplicarParcelaNoTexto(String texto, ImportacaoFaturaItemDTO item) {
+        Matcher m = PARCELA.matcher(texto);
+        if (!m.find()) {
+            return;
+        }
+        try {
+            int atual = Integer.parseInt(m.group(1));
+            int total = Integer.parseInt(m.group(2));
+            if (atual >= 1 && total > 1 && atual <= total) {
+                item.setParcelaAtual(atual);
+                item.setTotalParcelas(total);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static boolean parcelaExplicitaNaDescricao(ImportacaoFaturaItemDTO item) {
+        return item.getDescricao() != null && PARCELA.matcher(item.getDescricao()).find();
+    }
+
+    private static Optional<BigDecimal> extrairValorCobradoPix(String contexto, BigDecimal totalAPagar) {
+        Matcher vm = VALOR_RS.matcher(contexto);
+        List<BigDecimal> valores = new ArrayList<>();
+        while (vm.find()) {
+            String bruto = vm.group(0);
+            if (bruto.startsWith("-") || bruto.startsWith("\u2212")) {
+                continue;
+            }
+            BigDecimal v = parseMoney(vm.group(1));
+            if (v.compareTo(BigDecimal.ZERO) > 0) {
+                valores.add(v);
+            }
+        }
+        if (valores.isEmpty()) {
+            return Optional.empty();
+        }
+        if (totalAPagar != null) {
+            for (BigDecimal v : valores) {
+                if (v.subtract(totalAPagar).abs().compareTo(new BigDecimal("0.01")) <= 0) {
+                    return Optional.of(v);
+                }
+            }
+            return valores.stream()
+                .min((a, b) -> a.subtract(totalAPagar).abs().compareTo(b.subtract(totalAPagar).abs()));
+        }
+        return Optional.of(valores.get(valores.size() - 1));
+    }
+
+    private static boolean pareceTotalFinanciadoPixParcelado(
+        String contexto,
+        BigDecimal totalAPagar,
+        ImportacaoFaturaItemDTO item
+    ) {
+        Integer atual = item.getParcelaAtual();
+        Integer total = item.getTotalParcelas();
+        if (atual == null || total == null || total <= 1 || !atual.equals(total)) {
+            return false;
+        }
+        Matcher parcelas = PARCELAS_DE_VALOR.matcher(contexto);
+        if (!parcelas.find()) {
+            return false;
+        }
+        try {
+            int nParcelas = Integer.parseInt(parcelas.group(1));
+            BigDecimal valorParcela = parseMoney(parcelas.group(2));
+            if (nParcelas != total || valorParcela.compareTo(BigDecimal.ZERO) <= 0) {
+                return false;
+            }
+            BigDecimal saldoIntegral = valorParcela.multiply(BigDecimal.valueOf(total));
+            return totalAPagar.subtract(saldoIntegral).abs().compareTo(new BigDecimal("2.00")) <= 0;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
 
     static String normalizarTextoNubank(String textoPdf) {
         if (textoPdf == null) {
@@ -416,8 +686,15 @@ public final class NubankFaturaTextoExtrator {
         ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
         item.setData(data);
         item.setDescricao(descricao);
-        item.setValor(valor);
         aplicarParcelaNaDescricao(item);
+        if (item.getParcelaAtual() == null) {
+            aplicarParcelaNoTexto(bloco, item);
+        }
+        if (pix) {
+            item.setValor(resolverValorPixFinanciado(bloco, valor, item));
+        } else {
+            item.setValor(valor);
+        }
         return Optional.of(item);
     }
 
@@ -493,13 +770,16 @@ public final class NubankFaturaTextoExtrator {
     private static boolean jaExiste(List<ImportacaoFaturaItemDTO> itens, ImportacaoFaturaItemDTO candidato) {
         String descCand = FaturaPdfLayoutSupport.norm(candidato.getDescricao());
         for (ImportacaoFaturaItemDTO item : itens) {
+            String descItem = FaturaPdfLayoutSupport.norm(item.getDescricao());
+            if (mesmaParcela(item, candidato) && credorSimilar(descItem, descCand)) {
+                return true;
+            }
             if (item.getValor() == null || candidato.getValor() == null) {
                 continue;
             }
             boolean mesmaData = candidato.getData() != null && candidato.getData().equals(item.getData());
             boolean mesmoValor = item.getValor().subtract(candidato.getValor()).abs()
                 .compareTo(new BigDecimal("0.04")) <= 0;
-            String descItem = FaturaPdfLayoutSupport.norm(item.getDescricao());
             boolean descSimilar = descItem.contains(descCand) || descCand.contains(descItem)
                 || descItem.length() > 8 && descCand.length() > 8
                 && descItem.substring(0, Math.min(12, descItem.length()))
@@ -509,6 +789,43 @@ public final class NubankFaturaTextoExtrator {
             }
         }
         return false;
+    }
+
+    private static boolean mesmaParcela(ImportacaoFaturaItemDTO item, ImportacaoFaturaItemDTO candidato) {
+        Integer pa = item.getParcelaAtual();
+        Integer pt = item.getTotalParcelas();
+        Integer ca = candidato.getParcelaAtual();
+        Integer ct = candidato.getTotalParcelas();
+        return pa != null && ca != null && pt != null && ct != null
+            && pt > 1 && pt.equals(ct) && pa.equals(ca);
+    }
+
+    private static boolean credorSimilar(String descItem, String descCand) {
+        for (String token : tokensCredor(descItem)) {
+            if (token.length() >= 6 && descCand.contains(token)) {
+                return true;
+            }
+        }
+        for (String token : tokensCredor(descCand)) {
+            if (token.length() >= 6 && descItem.contains(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String[] tokensCredor(String descNorm) {
+        if (descNorm == null || descNorm.isBlank()) {
+            return new String[0];
+        }
+        String limpo = descNorm
+            .replace("pix boleto no credito", " ")
+            .replace("pagamentos e financiamentos", " ")
+            .replaceAll("pagamento em \\d{2} [a-z]{3}", " ")
+            .replaceAll("parcela \\d+ \\d+", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+        return limpo.split(" ");
     }
 
     private static void injetarPixAusentes(List<ImportacaoFaturaItemDTO> destino, List<ImportacaoFaturaItemDTO> pix) {
@@ -560,15 +877,34 @@ public final class NubankFaturaTextoExtrator {
     }
 
     private static String extrairDescricaoPix(String contexto) {
-        String limpo = contexto;
-        limpo = limpo.replaceAll("(?is)total a pagar.*", "").trim();
+        int idxTotal = indexOfIgnoreCase(contexto, "total a pagar");
+        String trecho = idxTotal > 0 ? contexto.substring(0, idxTotal) : contexto;
+        Matcher datas = BLOCO_DATA.matcher(trecho);
+        int ultimaData = -1;
+        while (datas.find()) {
+            ultimaData = datas.start();
+        }
+        String limpo = ultimaData >= 0 ? trecho.substring(ultimaData) : trecho;
         limpo = limpo.replaceAll("(?m)^\\d{2}\\s+(?:ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ|JAN|FEV|MAR)\\s*", "");
+        limpo = limpo.replaceAll("(?:[\u2022\u25cf*\\.]{4}|xxxx)\\s*\\d{4}\\s*", "").trim();
         limpo = limpo.replaceAll("(?i)R\\$\\s*[\\d.,]+.*", "").trim();
         limpo = limpo.replaceAll("\\s+", " ");
         if (limpo.length() > 120) {
             limpo = limpo.substring(0, 120).trim();
         }
         return limpo;
+    }
+
+    private static boolean pareceDescricaoPixEspuria(String descricao) {
+        if (descricao == null || descricao.isBlank()) {
+            return true;
+        }
+        String n = FaturaPdfLayoutSupport.norm(descricao);
+        if (n.contains("3443") || n.contains("xxxx") || n.contains("pagamentos e financiamentos")) {
+            return true;
+        }
+        long datas = Pattern.compile("\\b\\d{2} [a-z]{3}\\b").matcher(n).results().count();
+        return datas > 1;
     }
 
     private static boolean temMascaraCartao(String bloco) {

@@ -56,7 +56,7 @@ class NubankFaturaAgostoProbeTest {
         assertEquals(new BigDecimal("4038.47"), json.path("valorTotal").decimalValue());
         assertTrue(sanitizados.size() >= 50 && sanitizados.size() <= 65,
             "esperado ~57 lançamentos, obteve " + sanitizados.size());
-        assertTrue(soma.subtract(totalCompras).abs().compareTo(new BigDecimal("280.00")) <= 0,
-            "soma " + soma + " deve estar próxima do total de compras " + totalCompras);
+        assertTrue(soma.subtract(totalCompras).abs().compareTo(new BigDecimal("6.00")) <= 0,
+            "soma " + soma + " deve bater com total de compras " + totalCompras);
     }
 }
