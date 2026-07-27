@@ -29,6 +29,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Month;
 import java.time.Year;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -69,8 +70,27 @@ public class FaturaPdfExtracaoDeterministicaService {
         int anoReferencia = vencimento.map(LocalDate::getYear).orElseGet(() -> Year.now().getValue());
         Optional<LocalDate> fechamento = extrairDataFechamento(textoPdf, layout.layout());
 
-        List<ImportacaoFaturaItemDTO> itensBrutos = extrairLancamentos(textoPdf, layout.layout(), anoReferencia);
+        Optional<BigDecimal> total = extrairTotal(textoPdf, layout.layout());
+        List<ImportacaoFaturaItemDTO> itensBrutos = new ArrayList<>(
+            extrairLancamentos(textoPdf, layout.layout(), anoReferencia)
+        );
+        // Faturas pagas e poda fina ficavam só em processarExtracao — sem isso extrair() falhava cedo.
+        layout.complementarLancamentosDoTexto(textoPdf, itensBrutos, anoReferencia);
+        layout.finalizarLancamentosDoTexto(
+            textoPdf,
+            itensBrutos,
+            total.orElse(BigDecimal.ZERO),
+            anoReferencia
+        );
         if (itensBrutos.isEmpty()) {
+            if (FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
+                throw new IllegalArgumentException(
+                    "Li a fatura "
+                        + layout.layout().getNomeExibicao()
+                        + " como já paga, mas o PDF não trouxe lançamentos legíveis (pode ser imagem escaneada). "
+                        + "Tente baixar de novo no app do banco ou envie com a senha do PDF."
+                );
+            }
             throw new IllegalArgumentException(
                 "Não consegui ler lançamentos desta fatura "
                     + layout.layout().getNomeExibicao()
@@ -78,7 +98,6 @@ public class FaturaPdfExtracaoDeterministicaService {
             );
         }
 
-        Optional<BigDecimal> total = extrairTotal(textoPdf, layout.layout());
         String bancoCartao = layout.sugerirBancoCartao(textoNorm, layout.layout().getNomeExibicao());
 
         List<LancamentoFaturaStructuredDTO> lancamentos = itensBrutos.stream()
