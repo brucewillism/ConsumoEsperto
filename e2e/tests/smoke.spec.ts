@@ -1,9 +1,9 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
+﻿import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
 const suffix = Date.now();
 const email = `e2e.${suffix}@test.local`;
 const password = 'SenhaTeste123!';
-const api = () => process.env.E2E_API_URL ?? 'http://localhost:18081';
+const api = () => process.env.E2E_API_URL ?? 'http://127.0.0.1:18081';
 
 async function registrarViaApi(request: APIRequestContext, addr = email) {
   return request.post(`${api()}/api/auth/registro`, {
@@ -19,13 +19,13 @@ async function loginUi(page: Page, addr = email, pass = password) {
 }
 
 test.describe('ConsumoEsperto E2E', () => {
-  test('login exibe formulário', async ({ page }) => {
+  test('login exibe formulÃ¡rio', async ({ page }) => {
     await page.goto('/login');
     await expect(page.locator('#login, input[formcontrolname="login"]')).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('input[formcontrolname="password"]')).toBeVisible();
   });
 
-  test('rotas protegidas redirecionam sem sessão', async ({ page }) => {
+  test('rotas protegidas redirecionam sem sessÃ£o', async ({ page }) => {
     await page.goto('/relatorios');
     await expect(page).toHaveURL(/login/, { timeout: 15_000 });
   });
@@ -37,17 +37,17 @@ test.describe('ConsumoEsperto E2E', () => {
     await expect(page).not.toHaveURL(/\/login$/, { timeout: 25_000 });
   });
 
-  test('motor financeiro exige autenticação', async ({ page }) => {
+  test('motor financeiro exige autenticaÃ§Ã£o', async ({ page }) => {
     await page.goto('/motor-financeiro');
     await expect(page).toHaveURL(/login/, { timeout: 15_000 });
   });
 
-  test('página de registro acessível', async ({ page }) => {
+  test('pÃ¡gina de registro acessÃ­vel', async ({ page }) => {
     await page.goto('/register');
     await expect(page.locator('input[formcontrolname="email"], input[type="email"]').first()).toBeVisible({ timeout: 15_000 });
   });
 
-  test('fluxo autenticado: relatórios e motor financeiro', async ({ page, request }) => {
+  test('fluxo autenticado: relatÃ³rios e motor financeiro', async ({ page, request }) => {
     const addr = `e2e.rel.${suffix}@test.local`;
     const reg = await registrarViaApi(request, addr);
     expect(reg.ok()).toBeTruthy();
@@ -70,7 +70,7 @@ test.describe('ConsumoEsperto E2E', () => {
     await expect(page.locator('app-agendamentos')).toBeVisible({ timeout: 20_000 });
   });
 
-  test('reload em rota autenticada mantém sessão em relatórios', async ({ page, request }) => {
+  test('reload em rota autenticada mantÃ©m sessÃ£o em relatÃ³rios', async ({ page, request }) => {
     const addr = `e2e.refresh.${suffix}@test.local`;
     const reg = await registrarViaApi(request, addr);
     expect(reg.ok()).toBeTruthy();

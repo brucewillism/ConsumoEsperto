@@ -34,6 +34,11 @@ jobs:
       DATABASE_URL: jdbc:postgresql://localhost:5432/consumoesperto_test
       DATABASE_USERNAME: consumo
       DATABASE_PASSWORD: consumo_ci
+      JWT_SECRET: ci_jwt_secret_for_integracao_pipeline_only_64_chars_minimum
+      TEST_DATASOURCE_DRIVER: org.postgresql.Driver
+      TEST_JPA_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      TEST_DDL_AUTO: validate
+      TEST_FLYWAY_ENABLED: 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -47,8 +52,8 @@ jobs:
       - name: Build and verify backend
         working-directory: backend
         env:
-          SPRING_FLYWAY_ENABLED: 'true'
           SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+          consumoesperto.schema.autopatch.enabled: 'false'
         run: mvn --batch-mode clean verify
 
       - name: Check duplicate Flyway versions

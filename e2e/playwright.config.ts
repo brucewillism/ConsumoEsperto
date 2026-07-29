@@ -1,7 +1,7 @@
-import { defineConfig, devices } from '@playwright/test';
+﻿import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:14200';
-const apiURL = process.env.E2E_API_URL ?? 'http://localhost:18081';
+const baseURL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:14200';
+const apiURL = process.env.E2E_API_URL ?? 'http://127.0.0.1:18081';
 
 export default defineConfig({
   testDir: './tests',
@@ -28,3 +28,4 @@ export default defineConfig({
         },
       ],
 });
+

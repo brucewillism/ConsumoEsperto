@@ -1,4 +1,4 @@
-import { ComponentType } from '@angular/cdk/overlay';
+﻿import { ComponentType } from '@angular/cdk/overlay';
 import { TemplateRef, ViewContainerRef } from '@angular/core';
 import { MatDialog, MatDialogConfig, MatDialogRef } from '@angular/material/dialog';
 
@@ -41,6 +41,7 @@ export function openCeFormDialog<T, D = unknown, R = unknown>(
       throw new Error('ViewContainerRef é obrigatório ao abrir TemplateRef no MatDialog');
     }
     merged.viewContainerRef = viewContainerRef;
+    merged.injector = viewContainerRef.injector;
   }
   const ref = dialog.open<T, D, R>(componentOrTemplate, merged);
   wireCeDialogBehavior(ref);

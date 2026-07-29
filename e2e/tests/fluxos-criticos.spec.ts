@@ -1,4 +1,4 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
+﻿import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -7,12 +7,14 @@ test.describe.configure({ timeout: 60_000 });
 
 const suffix = Date.now();
 const password = 'SenhaTeste123!';
-const api = () => process.env.E2E_API_URL ?? 'http://localhost:18081';
+const api = () => process.env.E2E_API_URL ?? 'http://127.0.0.1:18081';
 
 async function waitMatDialog(page: Page) {
-  const dlg = page.locator('.cdk-overlay-container mat-dialog-container');
+  const dlg = page.getByRole('dialog').last();
   await expect(dlg).toBeVisible({ timeout: 25_000 });
-  await expect(dlg.locator('[mat-dialog-title], h2').first()).toBeVisible({ timeout: 10_000 });
+  await expect(
+    dlg.locator('mat-dialog-content, [mat-dialog-content], input, textarea, mat-select').first()
+  ).toBeVisible({ timeout: 15_000 });
   return dlg;
 }
 
@@ -77,8 +79,8 @@ async function seedBasico(request: APIRequestContext, auth: { headers: Record<st
   return { catId, contaId, cartaoId };
 }
 
-test.describe('Fluxos críticos UI', () => {
-  test('logout encerra sessão', async ({ page, request }) => {
+test.describe('Fluxos crÃ­ticos UI', () => {
+  test('logout encerra sessÃ£o', async ({ page, request }) => {
     const auth = await registrarViaApi(request, 'logout');
     await loginUi(page, auth.email);
     await page.goto('/dashboard');
@@ -113,31 +115,31 @@ test.describe('Fluxos críticos UI', () => {
     await expect(page.getByText(`Conta UI ${suffix}`)).toBeVisible({ timeout: 20_000 });
   });
 
-  test('criar cartão pela UI', async ({ page, request }) => {
+  test('criar cartÃ£o pela UI', async ({ page, request }) => {
     const auth = await registrarViaApi(request, 'cartao');
     await loginUi(page, auth.email);
     await page.goto('/cartoes');
-    await page.getByRole('button', { name: /Novo Cartão/i }).click();
+    await page.getByRole('button', { name: /Novo CartÃ£o/i }).click();
     const dlg = await waitMatDialog(page);
     await dlg.locator('mat-select[formcontrolname="banco"]').click();
     await page.locator('mat-option').first().click();
-    await dlg.getByRole('textbox', { name: /Número do Cartão/i }).fill('4111111111111111');
+    await dlg.getByRole('textbox', { name: /NÃºmero do CartÃ£o/i }).fill('4111111111111111');
     await dlg.getByRole('textbox', { name: /Nome do Titular/i }).fill(`Titular ${suffix}`);
-    await dlg.getByRole('textbox', { name: /Limite de Crédito/i }).fill('3000');
+    await dlg.getByRole('textbox', { name: /Limite de CrÃ©dito/i }).fill('3000');
     await dlg.getByRole('textbox', { name: /Data de Vencimento/i }).click();
     await page.locator('.mat-calendar-body-cell-content').first().click();
-    await dlg.getByRole('button', { name: /Adicionar Cartão/i }).click();
+    await dlg.getByRole('button', { name: /Adicionar CartÃ£o/i }).click();
     await expect(page.locator('mat-card').filter({ hasText: /4111|Titular/ }).first()).toBeVisible({ timeout: 25_000 });
   });
 
-  test('criar transação pela UI', async ({ page, request }) => {
+  test('criar transaÃ§Ã£o pela UI', async ({ page, request }) => {
     const auth = await registrarViaApi(request, 'tx');
     const seed = await seedBasico(request, auth);
     await loginUi(page, auth.email);
     await page.goto('/transacoes');
-    await page.getByRole('button', { name: /Nova Transação/i }).click();
+    await page.getByRole('button', { name: /Nova TransaÃ§Ã£o/i }).click();
     const dlg = await waitMatDialog(page);
-    await dlg.getByRole('textbox', { name: /Descrição/i }).fill('Despesa UI');
+    await dlg.getByRole('textbox', { name: /DescriÃ§Ã£o/i }).fill('Despesa UI');
     await dlg.getByRole('textbox', { name: /Valor/i }).fill('42,50');
     await dlg.locator('mat-select[formcontrolname="categoriaId"]').click();
     await page.locator('mat-option').filter({ hasText: `Cat ${suffix}` }).click();
@@ -146,7 +148,7 @@ test.describe('Fluxos críticos UI', () => {
     expect(seed.catId).toBeTruthy();
   });
 
-  test('criar transação parcelada via API autenticada', async ({ request }) => {
+  test('criar transaÃ§Ã£o parcelada via API autenticada', async ({ request }) => {
     const auth = await registrarViaApi(request, 'parcelada');
     const seed = await seedBasico(request, auth);
     const dt = new Date().toISOString().slice(0, 19);
@@ -169,7 +171,7 @@ test.describe('Fluxos críticos UI', () => {
     expect(body.numeroParcelas ?? body.parcelaAtual).toBeTruthy();
   });
 
-  test('relatórios exibe quatro gráficos com dados', async ({ page, request }) => {
+  test('relatÃ³rios exibe quatro grÃ¡ficos com dados', async ({ page, request }) => {
     const auth = await registrarViaApi(request, 'graficos');
     const seed = await seedBasico(request, auth);
     const dt = new Date().toISOString().slice(0, 19);
@@ -199,26 +201,26 @@ test.describe('Fluxos críticos UI', () => {
     });
     await loginUi(page, auth.email);
     await page.goto('/relatorios');
-    await page.getByRole('button', { name: /Gerar Relatório/i }).click();
+    await page.getByRole('button', { name: /Gerar RelatÃ³rio/i }).click();
     for (const id of ['RELATORIO_PIZZA', 'RELATORIO_LINHA', 'RELATORIO_BARRAS', 'RELATORIO_ROSCA']) {
       await expect(page.locator(`app-chart-metodologia#${id}`)).toBeVisible({ timeout: 40_000 });
     }
     await expect(page.locator('.chart-container canvas')).toHaveCount(4, { timeout: 40_000 });
   });
 
-  test('aplicar filtros no relatório', async ({ page, request }) => {
+  test('aplicar filtros no relatÃ³rio', async ({ page, request }) => {
     const auth = await registrarViaApi(request, 'filtros');
     await seedBasico(request, auth);
     await loginUi(page, auth.email);
     await page.goto('/relatorios');
     await page.locator('mat-select[formcontrolname="tipoTransacao"]').click();
     await page.locator('mat-option').filter({ hasText: 'Despesas' }).click();
-    await page.getByRole('button', { name: /Gerar Relatório/i }).click();
+    await page.getByRole('button', { name: /Gerar RelatÃ³rio/i }).click();
     await expect(page.locator('app-relatorios')).toBeVisible();
     await expect(page.locator('.chart-container, app-chart-metodologia').first()).toBeVisible({ timeout: 20_000 });
   });
 
-  test('exportar CSV com download válido', async ({ page, request }) => {
+  test('exportar CSV com download vÃ¡lido', async ({ page, request }) => {
     const auth = await registrarViaApi(request, 'csv');
     const seed = await seedBasico(request, auth);
     const dt = new Date().toISOString().slice(0, 19);
@@ -279,7 +281,7 @@ test.describe('Fluxos críticos UI', () => {
     fs.unlinkSync(tmp);
   });
 
-  test('agendamento: criar, editar, pausar, ativar, executar, histórico, cancelar', async ({ page, request }) => {
+  test('agendamento: criar, editar, pausar, ativar, executar, histÃ³rico, cancelar', async ({ page, request }) => {
     const auth = await registrarViaApi(request, 'ag');
     await seedBasico(request, auth);
     await loginUi(page, auth.email);
@@ -307,7 +309,7 @@ test.describe('Fluxos críticos UI', () => {
 
     await page.getByRole('button', { name: 'Ativar' }).first().click();
     await page.getByRole('button', { name: 'Executar' }).first().click();
-    await page.getByRole('tab', { name: 'Histórico' }).click();
+    await page.getByRole('tab', { name: 'HistÃ³rico' }).click();
     await expect(page.locator('.historico-list .hist-item, .hist-item').first()).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole('tab', { name: 'Ativos' }).click();
@@ -315,7 +317,7 @@ test.describe('Fluxos críticos UI', () => {
     await page.getByRole('button', { name: 'Cancelar' }).first().click();
   });
 
-  test('sessão inválida redireciona ao login', async ({ page, request }) => {
+  test('sessÃ£o invÃ¡lida redireciona ao login', async ({ page, request }) => {
     const auth = await registrarViaApi(request, 'sessao');
     await loginUi(page, auth.email);
     await page.evaluate(() => localStorage.setItem('token', 'token-invalido-e2e'));
@@ -323,7 +325,7 @@ test.describe('Fluxos críticos UI', () => {
     await expect(page).toHaveURL(/login/, { timeout: 20_000 });
   });
 
-  test('isolamento visual entre usuários', async ({ page, request }) => {
+  test('isolamento visual entre usuÃ¡rios', async ({ page, request }) => {
     const authA = await registrarViaApi(request, 'isoA');
     const authB = await registrarViaApi(request, 'isoB');
     const seedA = await seedBasico(request, authA);
@@ -344,3 +346,4 @@ test.describe('Fluxos críticos UI', () => {
     await expect(page.getByText('Segredo777')).not.toBeVisible({ timeout: 10_000 });
   });
 });
+
