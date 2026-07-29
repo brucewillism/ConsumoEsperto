@@ -35,6 +35,11 @@ jobs:
       DATABASE_USERNAME: consumo
       DATABASE_PASSWORD: consumo_ci
       JWT_SECRET: ci_jwt_secret_for_integracao_pipeline_only_64_chars_minimum
+      TEST_DATASOURCE_DRIVER: org.postgresql.Driver
+      TEST_JPA_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      TEST_DDL_AUTO: validate
+      TEST_FLYWAY_ENABLED: 'true'
+      consumoesperto.schema.autopatch.enabled: 'false'
       E2E_BASE_URL: http://localhost:14200
       E2E_API_URL: http://localhost:8080
     steps:
@@ -49,11 +54,6 @@ jobs:
 
       - name: Maven verify (Flyway + validate)
         working-directory: backend
-        env:
-          SPRING_PROFILES_ACTIVE: integracao
-          SPRING_FLYWAY_ENABLED: 'true'
-          SPRING_JPA_HIBERNATE_DDL_AUTO: validate
-          consumoesperto.schema.autopatch.enabled: 'false'
         run: mvn --batch-mode clean verify
 
       - name: Start backend JAR
