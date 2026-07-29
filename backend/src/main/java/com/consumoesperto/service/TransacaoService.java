@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
@@ -228,11 +229,11 @@ public class TransacaoService {
     public TransacaoDTO buscarPorId(Long id, Long usuarioId) {
         // Busca a transação pelo ID ou lança exceção se não encontrar
         Transacao transacao = transacaoRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         
         // Verifica se a transação pertence ao usuário solicitante
         if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+            throw new ResourceNotFoundException("Transação não encontrada");
         }
         
         return converterParaDTO(transacao);
@@ -274,11 +275,11 @@ public class TransacaoService {
     public TransacaoDTO atualizarTransacao(Long id, TransacaoDTO transacaoDTO, Long usuarioId) {
         // Verifica se a transação existe antes de tentar atualizar
         Transacao transacao = transacaoRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         
         // Verifica se a transação pertence ao usuário solicitante
         if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+            throw new ResourceNotFoundException("Transação não encontrada");
         }
 
         Long faturaIdAntes = transacao.getFatura() != null ? transacao.getFatura().getId() : null;
@@ -354,10 +355,10 @@ public class TransacaoService {
         Long usuarioId
     ) {
         Transacao transacao = transacaoRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
 
         if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+            throw new ResourceNotFoundException("Transação não encontrada");
         }
 
         SaldoMovimentacaoService.MovimentacaoSnapshot snap = saldoMovimentacaoService.capturarSnapshot(transacao);
@@ -388,9 +389,9 @@ public class TransacaoService {
 
     public TransacaoDTO confirmarProvisaoFiscal(Long transacaoId, Long usuarioId, Long contaBancariaId) {
         Transacao transacao = transacaoRepository.findById(transacaoId)
-            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+            throw new ResourceNotFoundException("Transação não encontrada");
         }
         if (transacao.getOrigemFiscal() == null) {
             throw new RuntimeException("Esta transação não é uma provisão fiscal.");
@@ -419,11 +420,11 @@ public class TransacaoService {
     public void deletarTransacao(Long id, Long usuarioId) {
         // Verifica se a transação existe antes de tentar excluir
         Transacao transacao = transacaoRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         
         // Verifica se a transação pertence ao usuário solicitante
         if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+            throw new ResourceNotFoundException("Transação não encontrada");
         }
         if (transacao.getTipoTransacao() == Transacao.TipoTransacao.PAGAMENTO_FATURA) {
             throw new IllegalArgumentException(
@@ -451,9 +452,9 @@ public class TransacaoService {
      */
     public void deletarTransacaoComModoParcelamento(Long id, Long usuarioId, String modo) {
         Transacao transacao = transacaoRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("Acesso negado: Transação não pertence ao usuário");
+            throw new ResourceNotFoundException("Transação não encontrada");
         }
         String grupo = transacao.getGrupoParcelaId();
         String m = normalizarModoParcelamentoExclusao(modo);
@@ -890,7 +891,7 @@ public class TransacaoService {
      */
     public Transacao aplicarPatchDespesaRecorrente(Long usuarioId, Long transacaoId, String novaDescricao, BigDecimal novoValor) {
         Transacao t = transacaoRepository.findById(transacaoId)
-            .orElseThrow(() -> new RuntimeException("Transação não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         if (t.getUsuario() == null || !t.getUsuario().getId().equals(usuarioId)) {
             throw new RuntimeException("Transação não pertence ao usuário");
         }

@@ -94,7 +94,7 @@ public final class MercadoPagoFaturaTextoExtrator {
     }
 
     private static final Pattern CONSUMOS_PERIODO = Pattern.compile(
-        "(?i)consumos de[^\\d]{0,80}(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
+        "(?i)consumos de[\\s\\S]{0,120}?R\\$\\s*(\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
     );
     private static final Pattern TOTAL_A_PAGAR = Pattern.compile(
         "(?i)total\\s+a\\s+pagar[^\\d]{0,80}(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})"

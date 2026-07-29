@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.dto.CartaoCreditoDTO;
 import com.consumoesperto.dto.MatchResult;
 import com.consumoesperto.model.CartaoCredito;
@@ -195,7 +196,7 @@ public class CartaoCreditoService {
     public CartaoCreditoDTO buscarPorId(Long id, Long usuarioId) {
         // Busca o cartão pelo ID e valida se pertence ao usuário
         CartaoCredito cartaoCredito = cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
         return converterParaDTO(cartaoCredito);
     }
 
@@ -319,7 +320,7 @@ public class CartaoCreditoService {
     @Transactional
     public CartaoCreditoDTO reativarCartao(Long cartaoId, Long usuarioId) {
         CartaoCredito cartao = cartaoCreditoRepository.findByIdAndUsuarioId(cartaoId, usuarioId)
-            .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+            .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
         if (Boolean.TRUE.equals(cartao.getAtivo())) {
             throw new IllegalStateException("Este cartão já está ativo.");
         }
@@ -376,7 +377,7 @@ public class CartaoCreditoService {
             BigDecimal novoLimiteCredito, BigDecimal novoLimiteDisponivel, String novoApelido,
             String novoBanco, String novaCor, String novoIcone, Integer novoDiaVencimento) {
         CartaoCredito c = cartaoCreditoRepository.findByIdAndUsuarioId(cartaoId, usuarioId)
-            .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+            .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
 
         if (novoLimiteCredito != null || novoLimiteDisponivel != null) {
             log.info("[ACCOUNT-LOG] Atualizando limite do cartão {} (id={}) para o usuário {}...",
@@ -452,7 +453,7 @@ public class CartaoCreditoService {
     public CartaoCreditoDTO atualizarCartaoCredito(Long id, CartaoCreditoDTO cartaoCreditoDTO, Long usuarioId) {
         // Verifica se o cartão existe e pertence ao usuário antes de tentar atualizar
         CartaoCredito cartaoExistente = cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
 
         // Trata PUT como atualização parcial para não apagar campos omitidos pelo frontend.
         if (cartaoCreditoDTO.getNome() != null && !cartaoCreditoDTO.getNome().isBlank()) {
@@ -508,7 +509,7 @@ public class CartaoCreditoService {
     public void deletarCartaoCredito(Long id, Long usuarioId) {
         // Verifica se o cartão existe e pertence ao usuário antes de tentar desativar
         CartaoCredito cartaoCredito = cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
         
         // Soft delete: marca o cartão como inativo em vez de removê-lo fisicamente
         cartaoCredito.setAtivo(false);
@@ -517,7 +518,7 @@ public class CartaoCreditoService {
 
     public long contarFaturasDoCartao(Long cartaoId, Long usuarioId) {
         cartaoCreditoRepository.findByIdAndUsuarioId(cartaoId, usuarioId)
-            .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+            .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
         return faturaRepository.countByCartaoCreditoId(cartaoId);
     }
 

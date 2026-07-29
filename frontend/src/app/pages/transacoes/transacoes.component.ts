@@ -1,4 +1,4 @@
-import { Component, DestroyRef, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, ViewChild, ViewContainerRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -65,6 +65,7 @@ export class TransacoesComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   @ViewChild('dialogoTransacao') dialogoTransacao: unknown;
+  @ViewChild('dialogoAgendamento') dialogoAgendamento: unknown;
 
   transacoes: Transacao[] = [];
   transacoesFiltradas: Transacao[] = [];
@@ -92,6 +93,8 @@ export class TransacoesComponent implements OnInit {
   agendamentos: AgendamentoPagamento[] = [];
   loadingAgendamentos = false;
   cancelandoAgendamentoId: number | null = null;
+  salvandoAgendamento = false;
+  agendamentoForm: FormGroup;
 
   tipoTransacao = TipoTransacao;
 
@@ -104,7 +107,8 @@ export class TransacoesComponent implements OnInit {
     private readonly confirmDialog: ConfirmDialogService,
     private readonly snackBar: MatSnackBar,
     private readonly financaAlteracao: FinancaAlteracaoService,
-    private readonly agendamentoService: AgendamentoPagamentoService
+    private readonly agendamentoService: AgendamentoPagamentoService,
+    private readonly viewContainerRef: ViewContainerRef
   ) {
     this.transacaoForm = this.fb.group({
       descricao: ['', Validators.required],
@@ -113,6 +117,13 @@ export class TransacoesComponent implements OnInit {
       dataTransacao: [new Date(), Validators.required],
       categoriaId: [''],
       contaBancariaId: ['']
+    });
+    this.agendamentoForm = this.fb.group({
+      beneficiario: ['', Validators.required],
+      valor: ['', [Validators.required, valorMonetarioBrValidator]],
+      dataVencimento: [new Date(), Validators.required],
+      contaDebitoId: ['', Validators.required],
+      codigoBarrasOuPix: [''],
     });
   }
 
@@ -187,6 +198,50 @@ export class TransacoesComponent implements OnInit {
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('pt-BR');
   }
 
+  abrirDialogoAgendamento(): void {
+    this.agendamentoForm.reset({
+      beneficiario: '',
+      valor: '',
+      dataVencimento: new Date(),
+      contaDebitoId: this.contas.find((c) => c.padrao)?.id ?? this.contas[0]?.id ?? '',
+      codigoBarrasOuPix: '',
+    });
+    openCeFormDialog(this.dialog, this.dialogoAgendamento as any, {
+      width: '520px',
+      autoFocus: 'first-titled-element',
+    }, this.viewContainerRef);
+  }
+
+  salvarAgendamento(): void {
+    if (this.agendamentoForm.invalid) {
+      markAllControlsTouched(this.agendamentoForm);
+      return;
+    }
+    const raw = this.agendamentoForm.getRawValue();
+    const dataRaw = raw.dataVencimento instanceof Date ? raw.dataVencimento : new Date(String(raw.dataVencimento));
+    this.salvandoAgendamento = true;
+    this.agendamentoService.criar({
+      contaDebitoId: Number(raw.contaDebitoId),
+      beneficiario: String(raw.beneficiario).trim(),
+      valor: parseValorBrasileiro(String(raw.valor ?? '')) ?? 0,
+      dataVencimento: TransacaoService.toYmdLocal(dataRaw),
+      codigoBarrasOuPix: String(raw.codigoBarrasOuPix ?? '').trim() || undefined,
+    }).pipe(finalize(() => { this.salvandoAgendamento = false; }))
+      .subscribe({
+        next: () => {
+          this.dialog.closeAll();
+          this.snackBar.open('Pagamento agendado.', 'Fechar', { duration: 3000, panelClass: ['success-snackbar'] });
+          this.carregarAgendamentos();
+        },
+        error: (err) => {
+          this.snackBar.open(resolveHttpError(err, 'Erro ao agendar pagamento.'), 'Fechar', {
+            duration: 4000,
+            panelClass: ['error-snackbar'],
+          });
+        },
+      });
+  }
+
   abrirDialogoTransacao(transacao?: Transacao): void {
     this.transacaoEditando = transacao ?? null;
 
@@ -211,7 +266,7 @@ export class TransacoesComponent implements OnInit {
     const ref = openCeFormDialog(this.dialog, this.dialogoTransacao as any, {
       width: '560px',
       autoFocus: 'first-titled-element'
-    });
+    }, this.viewContainerRef);
     ref.afterClosed().subscribe(() => {
       this.transacaoEditando = null;
       this.transacaoForm.reset({
@@ -225,7 +280,13 @@ export class TransacoesComponent implements OnInit {
 
   private carregarContas(): void {
     this.contaBancariaService.listar(true).subscribe({
-      next: (contas) => (this.contas = contas ?? []),
+      next: (contas) => {
+        this.contas = contas ?? [];
+        if (!this.agendamentoForm.get('contaDebitoId')?.value && this.contas.length) {
+          const padrao = this.contas.find((c) => c.padrao)?.id ?? this.contas[0].id;
+          this.agendamentoForm.patchValue({ contaDebitoId: padrao });
+        }
+      },
       error: () => (this.contas = []),
     });
   }

@@ -1,4 +1,4 @@
-import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, ViewContainerRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -53,7 +53,7 @@ import { switchMap } from 'rxjs/operators';
 export class ContasBancariasComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
-  @ViewChild('formTpl') formTpl!: TemplateRef<unknown>;
+  @ViewChild('formTpl', { static: true }) formTpl!: TemplateRef<unknown>;
   @ViewChild('correcaoTpl') correcaoTpl!: TemplateRef<unknown>;
 
   contas: ContaBancaria[] = [];
@@ -75,7 +75,8 @@ export class ContasBancariasComponent implements OnInit {
     private dialog: MatDialog,
     private confirmDialog: ConfirmDialogService,
     private financaAlteracao: FinancaAlteracaoService,
-    private transferenciaService: TransferenciaService
+    private transferenciaService: TransferenciaService,
+    private viewContainerRef: ViewContainerRef
   ) {
     this.form = this.fb.group({
       nome: ['', [Validators.required, Validators.maxLength(100)]],
@@ -182,7 +183,7 @@ export class ContasBancariasComponent implements OnInit {
       width: '480px',
       panelClass: 'conta-form-dialog',
       autoFocus: 'first-titled-element',
-    });
+    }, this.viewContainerRef);
   }
 
   salvar(): void {
@@ -282,7 +283,7 @@ export class ContasBancariasComponent implements OnInit {
       width: '520px',
       panelClass: 'conta-correcao-dialog',
       autoFocus: 'first-titled-element',
-    });
+    }, this.viewContainerRef);
   }
 
   abrirCorrigirConta(conta: ContaBancaria): void {
@@ -299,7 +300,7 @@ export class ContasBancariasComponent implements OnInit {
       width: '480px',
       panelClass: 'conta-correcao-dialog',
       autoFocus: 'first-titled-element',
-    });
+    }, this.viewContainerRef);
   }
 
   salvarCorrecaoSaldos(): void {

@@ -1,5 +1,5 @@
 import { ComponentType } from '@angular/cdk/overlay';
-import { TemplateRef } from '@angular/core';
+import { TemplateRef, ViewContainerRef } from '@angular/core';
 import { MatDialog, MatDialogConfig, MatDialogRef } from '@angular/material/dialog';
 
 function mergePanelClass(config?: MatDialogConfig): string | string[] {
@@ -27,15 +27,22 @@ export function wireCeDialogBehavior<T, R = unknown>(
 export function openCeFormDialog<T, D = unknown, R = unknown>(
   dialog: MatDialog,
   componentOrTemplate: ComponentType<T> | TemplateRef<T>,
-  config?: MatDialogConfig<D>
+  config?: MatDialogConfig<D>,
+  viewContainerRef?: ViewContainerRef
 ): MatDialogRef<T, R> {
-  const ref = dialog.open<T, D, R>(componentOrTemplate, {
+  const merged: MatDialogConfig<D> = {
     maxWidth: '96vw',
     disableClose: true,
     ...config,
     panelClass: mergePanelClass(config),
-  });
-
+  };
+  if (componentOrTemplate instanceof TemplateRef) {
+    if (!viewContainerRef) {
+      throw new Error('ViewContainerRef é obrigatório ao abrir TemplateRef no MatDialog');
+    }
+    merged.viewContainerRef = viewContainerRef;
+  }
+  const ref = dialog.open<T, D, R>(componentOrTemplate, merged);
   wireCeDialogBehavior(ref);
   return ref;
 }

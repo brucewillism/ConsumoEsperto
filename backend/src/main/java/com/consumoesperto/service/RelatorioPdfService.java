@@ -7,6 +7,7 @@ import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.CartaoCreditoRepository;
+import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class RelatorioPdfService {
     private final TransacaoRepository transacaoRepository;
     private final FaturaRepository faturaRepository;
     private final CartaoCreditoRepository cartaoCreditoRepository;
+    private final UsuarioRepository usuarioRepository;
 
     /**
      * Gera relatório financeiro completo em PDF
@@ -128,13 +130,8 @@ public class RelatorioPdfService {
      * Busca usuário por ID
      */
     private Usuario buscarUsuario(Long usuarioId) {
-        // Implementar busca do usuário
-        // TODO: Implementar busca do usuário do banco de dados
-        Usuario usuario = new Usuario();
-        usuario.setId(usuarioId);
-        usuario.setNome("Bruce Willis");
-        usuario.setEmail("bruce.willis.br07@gmail.com");
-        return usuario;
+        return usuarioRepository.findById(usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado: " + usuarioId));
     }
     
     /**

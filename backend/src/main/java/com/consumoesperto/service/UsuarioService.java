@@ -8,6 +8,7 @@ import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -67,32 +68,41 @@ public class UsuarioService {
      * @throws RuntimeException se username ou email já existirem no sistema
      */
     public UsuarioDTO criarUsuario(UsuarioDTO usuarioDTO) {
-        // Validação de unicidade: verifica se o username já existe
-        if (usuarioRepository.existsByUsername(usuarioDTO.getUsername())) {
-            throw new DataConflictException("Username já existe");
+        String username = normalizarUsername(usuarioDTO.getUsername());
+        String email = normalizarEmail(usuarioDTO.getEmail());
+        String nome = normalizarNome(usuarioDTO.getNome());
+
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username é obrigatório");
+        }
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email é obrigatório");
         }
 
-        // Validação de unicidade: verifica se o email já está cadastrado
-        if (usuarioRepository.existsByEmail(usuarioDTO.getEmail())) {
+        if (usuarioRepository.existsByUsername(username)) {
+            throw new DataConflictException("Username já existe");
+        }
+        if (usuarioRepository.existsByEmailIgnoreCase(email)) {
             throw new DataConflictException("Email já existe");
         }
 
-        // Cria uma nova instância de usuário a partir dos dados do DTO
         Usuario usuario = new Usuario();
-        usuario.setUsername(usuarioDTO.getUsername());
+        usuario.setUsername(username);
         
         // CRÍTICO: Criptografa a senha antes de salvar no banco
         // Nunca armazene senhas em texto plano
         usuario.setPassword(passwordEncoder.encode(usuarioDTO.getPassword()));
         
-        usuario.setEmail(usuarioDTO.getEmail());
-        usuario.setNome(usuarioDTO.getNome());
-        
-        // Define automaticamente a data de criação do usuário
+        usuario.setEmail(email);
+        usuario.setNome(nome);
         usuario.setDataCriacao(LocalDateTime.now());
 
-        // Persiste o usuário no banco de dados
-        Usuario usuarioSalvo = usuarioRepository.save(usuario);
+        Usuario usuarioSalvo;
+        try {
+            usuarioSalvo = usuarioRepository.save(usuario);
+        } catch (DataIntegrityViolationException ex) {
+            throw new DataConflictException("Registro já existe", ex);
+        }
         
         // Converte para DTO e retorna (sem informações sensíveis)
         return converterParaDTO(usuarioSalvo);
@@ -403,6 +413,18 @@ public class UsuarioService {
      * @param usuario Entidade Usuario a ser convertida
      * @return UsuarioDTO sem informações sensíveis
      */
+    static String normalizarUsername(String raw) {
+        return raw == null ? null : raw.trim();
+    }
+
+    static String normalizarEmail(String raw) {
+        return raw == null ? null : raw.trim().toLowerCase(Locale.ROOT);
+    }
+
+    static String normalizarNome(String raw) {
+        return raw == null ? null : raw.trim();
+    }
+
     private UsuarioDTO converterParaDTO(Usuario usuario) {
         UsuarioDTO dto = new UsuarioDTO();
         dto.setId(usuario.getId());

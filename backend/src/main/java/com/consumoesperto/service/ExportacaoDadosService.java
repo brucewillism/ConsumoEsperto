@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dto.ExportacaoTransacaoFiltro;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Fatura;
@@ -7,6 +8,7 @@ import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.CartaoCreditoRepository;
+import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,8 @@ public class ExportacaoDadosService {
     private final TransacaoRepository transacaoRepository;
     private final FaturaRepository faturaRepository;
     private final CartaoCreditoRepository cartaoCreditoRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final TransacaoExportacaoQueryService transacaoExportacaoQueryService;
 
     /**
      * Exporta dados completos em CSV
@@ -111,44 +115,70 @@ public class ExportacaoDadosService {
     }
 
     /**
-     * Exporta transações em CSV
+     * Exporta transações em CSV com filtros opcionais combináveis.
      */
-    public byte[] exportarTransacoesCsv(Long usuarioId, LocalDate dataInicio, LocalDate dataFim) {
+    public byte[] exportarTransacoesCsv(Long usuarioId, ExportacaoTransacaoFiltro filtro) {
         try {
-            log.info("💳 Exportando transações em CSV para usuário: {} ({} a {})", 
-                    usuarioId, dataInicio, dataFim);
-            
+            LocalDate inicio = filtro.getDataInicio() != null ? filtro.getDataInicio() : LocalDate.now().minusMonths(1);
+            LocalDate fim = filtro.getDataFim() != null ? filtro.getDataFim() : LocalDate.now();
+            log.info("💳 Exportando transações CSV userId={} ({} a {}) filtros={}", usuarioId, inicio, fim, filtro);
+
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            baos.write(0xEF);
+            baos.write(0xBB);
+            baos.write(0xBF);
             Writer writer = new OutputStreamWriter(baos, "UTF-8");
-            
-            List<Transacao> transacoes = transacaoRepository
-                .findByUsuarioIdAndDataTransacaoBetween(usuarioId, dataInicio.atStartOfDay(), dataFim.atTime(23, 59, 59));
-            
-            // Escrever cabeçalho
-            writer.write("TRANSAÇÕES - CONSUMO ESPERTO\n");
-            writer.write("Período: " + dataInicio + " a " + dataFim + "\n");
-            writer.write("Data de exportação: " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")) + "\n\n");
-            
-            // Escrever dados
-            writer.write("Data,Descrição,Tipo,Valor,Categoria\n");
-            for (Transacao transacao : transacoes) {
-                writer.write(transacao.getDataTransacao().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) + ",");
-                writer.write("\"" + transacao.getDescricao() + "\",");
-                writer.write(transacao.getTipoTransacao() + ",");
-                writer.write(transacao.getValor().toString() + ",");
-                writer.write(transacao.getCategoria() != null ? transacao.getCategoria().getNome() : "Sem categoria");
+
+            List<Transacao> transacoes = transacaoExportacaoQueryService.buscarParaExportacao(usuarioId, filtro);
+
+            writer.write("Data,Descrição,Tipo,Valor,Categoria,Conta,Cartão,Status\n");
+            DateTimeFormatter df = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+            for (Transacao t : transacoes) {
+                LocalDateTime dt = t.getDataTransacao() != null ? t.getDataTransacao() : t.getDataCriacao();
+                writer.write((dt != null ? dt.format(df) : "") + ",");
+                writer.write("\"" + escaparCsv(t.getDescricao()) + "\",");
+                writer.write(t.getTipoTransacao() + ",");
+                writer.write(formatarMoedaBr(t.getValor()) + ",");
+                writer.write(t.getCategoria() != null ? escaparCsv(t.getCategoria().getNome()) : "Sem categoria");
+                writer.write(",");
+                writer.write(t.getContaBancaria() != null ? escaparCsv(t.getContaBancaria().getNome()) : "");
+                writer.write(",");
+                String cartao = t.getFatura() != null && t.getFatura().getCartaoCredito() != null
+                    ? t.getFatura().getCartaoCredito().getNome() : "";
+                writer.write(escaparCsv(cartao));
+                writer.write(",");
+                writer.write(t.getStatusConferencia() != null ? t.getStatusConferencia().name() : "");
                 writer.write("\n");
             }
-            
             writer.close();
-            
-            log.info("✅ Transações exportadas em CSV com sucesso - {} bytes", baos.size());
+            log.info("✅ CSV transações: {} linha(s), {} bytes", transacoes.size(), baos.size());
             return baos.toByteArray();
-            
         } catch (IOException e) {
-            log.error("❌ Erro ao exportar transações em CSV: {}", e.getMessage(), e);
+            log.error("❌ Erro ao exportar transações CSV: {}", e.getMessage(), e);
             throw new RuntimeException("Erro ao exportar transações: " + e.getMessage());
         }
+    }
+
+    /** @deprecated Use {@link #exportarTransacoesCsv(Long, ExportacaoTransacaoFiltro)} */
+    public byte[] exportarTransacoesCsv(Long usuarioId, LocalDate dataInicio, LocalDate dataFim) {
+        ExportacaoTransacaoFiltro f = new ExportacaoTransacaoFiltro();
+        f.setDataInicio(dataInicio);
+        f.setDataFim(dataFim);
+        return exportarTransacoesCsv(usuarioId, f);
+    }
+
+    private static String escaparCsv(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replace("\"", "\"\"");
+    }
+
+    private static String formatarMoedaBr(BigDecimal v) {
+        if (v == null) {
+            return "0,00";
+        }
+        return v.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString().replace('.', ',');
     }
 
     /**
@@ -330,13 +360,8 @@ public class ExportacaoDadosService {
      * Busca usuário por ID
      */
     private Usuario buscarUsuario(Long usuarioId) {
-        // Implementar busca do usuário
-        // TODO: Implementar busca do usuário do banco de dados
-        Usuario usuario = new Usuario();
-        usuario.setId(usuarioId);
-        usuario.setNome("Bruce Willis");
-        usuario.setEmail("bruce.willis.br07@gmail.com");
-        return usuario;
+        return usuarioRepository.findById(usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado: " + usuarioId));
     }
 
     /**

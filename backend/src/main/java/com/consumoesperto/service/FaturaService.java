@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.dto.FaturaDTO;
 import com.consumoesperto.dto.MelhorDiaCompraCalculado;
 import com.consumoesperto.model.CartaoCredito;
@@ -128,7 +129,7 @@ public class FaturaService {
     public FaturaDTO buscarPorId(Long id, Long usuarioId) {
         // Busca a fatura pelo ID e valida se pertence ao usuário através do cartão
         Fatura fatura = faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Fatura não encontrada"));
         faturaConciliacaoService.reconciliarStatusPagamento(fatura);
         return converterParaDTO(fatura);
     }
@@ -209,7 +210,7 @@ public class FaturaService {
     public FaturaDTO atualizarFatura(Long id, FaturaDTO faturaDTO, Long usuarioId) {
         // Verifica se a fatura existe e pertence ao usuário antes de tentar atualizar
         Fatura faturaExistente = faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Fatura não encontrada"));
 
         // Atualiza campos enviados (não sobrescrever número obrigatório com null quando o front omite o campo)
         if (faturaDTO.getValorFatura() != null) {
@@ -283,7 +284,7 @@ public class FaturaService {
     @Transactional
     public void deletarFatura(Long id, Long usuarioId) {
         Fatura fatura = faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Fatura não encontrada"));
         Long cartaoId = fatura.getCartaoCredito() != null ? fatura.getCartaoCredito().getId() : null;
         java.time.LocalDateTime vencimento = fatura.getDataVencimento();
         removerTransacoesDaFatura(fatura.getId(), usuarioId, true, fatura.getStatusFatura());

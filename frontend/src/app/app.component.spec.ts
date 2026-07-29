@@ -1,29 +1,40 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { of } from 'rxjs';
 import { AppComponent } from './app.component';
+import { AuthService } from './services/auth.service';
+import { LoadingService } from './services/loading.service';
+import { NotificacaoInboxService } from './services/notificacao-inbox.service';
+import { ScoreService } from './services/score.service';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
+      providers: [
+        provideRouter([]),
+        provideNoopAnimations(),
+        { provide: AuthService, useValue: { currentUser$: of(null) } },
+        {
+          provide: LoadingService,
+          useValue: {
+            shellOverlay$: of({ active: false, message: '' }),
+            isAuthFlowActive: () => false,
+            endAuthFlow: () => undefined,
+          },
+        },
+        { provide: NotificacaoInboxService, useValue: { listar: () => of([]) } },
+        { provide: ScoreService, useValue: { obter: () => of(null) } },
+      ],
     }).compileComponents();
   });
 
-  it('should create the app', () => {
+  it('cria a aplicação', () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
-  });
-
-  it(`should have the 'frontend' title`, () => {
-    const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
-    expect(app.title).toEqual('frontend');
-  });
-
-  it('should render title', () => {
-    const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, frontend');
+    expect(app.isAuthenticated).toBeFalse();
   });
 });

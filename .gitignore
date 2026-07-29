@@ -11,6 +11,7 @@ tools/
 *.temp
 *.log
 *.sql
+!backend/src/main/resources/db/migration/*.sql
 
 # Downloads temporários
 %TEMP%/
@@ -20,9 +21,10 @@ temp/
 .env
 application-local.properties
 
-# Logs
+# Logs e relatorios locais (podem conter dados sensiveis)
 logs/
-*.log
+backend/target/surefire-reports/
+backend/backups/
 
 # Arquivos de build
 target/

@@ -1,4 +1,4 @@
-import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, ViewContainerRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -83,7 +83,8 @@ export class MetasComponent implements OnInit {
     private toast: ToastService,
     private dialog: MatDialog,
     private confirmDialog: ConfirmDialogService,
-    private financaAlteracao: FinancaAlteracaoService
+    private financaAlteracao: FinancaAlteracaoService,
+    private viewContainerRef: ViewContainerRef
   ) {}
 
   ngOnInit(): void {
@@ -196,7 +197,7 @@ export class MetasComponent implements OnInit {
     this.editValor = m.valorTotal;
     this.editPercentual = m.percentualComprometimento;
     this.editPrioridade = m.prioridade;
-    openCeFormDialog(this.dialog, this.editMetaTpl, { width: '460px' });
+    openCeFormDialog(this.dialog, this.editMetaTpl, { width: '460px' }, this.viewContainerRef);
   }
 
   confirmarEdicaoMeta(): void {

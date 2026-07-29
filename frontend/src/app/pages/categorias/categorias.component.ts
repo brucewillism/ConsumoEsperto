@@ -1,4 +1,4 @@
-import { Component, OnInit, TemplateRef, ViewChild } from '@angular/core';
+import { Component, OnInit, TemplateRef, ViewChild, ViewContainerRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -39,7 +39,7 @@ import {
   styleUrl: './categorias.component.scss',
 })
 export class CategoriasComponent implements OnInit {
-  @ViewChild('formTpl') formTpl!: TemplateRef<unknown>;
+  @ViewChild('formTpl', { static: true }) formTpl!: TemplateRef<unknown>;
 
   categorias: Categoria[] = [];
   loading = false;
@@ -62,7 +62,8 @@ export class CategoriasComponent implements OnInit {
     private categoriaService: CategoriaService,
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
-    private confirmDialog: ConfirmDialogService
+    private confirmDialog: ConfirmDialogService,
+    private viewContainerRef: ViewContainerRef
   ) {
     this.form = this.fb.group({
       nome: ['', [Validators.required, Validators.maxLength(100)]],
@@ -100,7 +101,7 @@ export class CategoriasComponent implements OnInit {
     } else {
       this.form.reset({ nome: '', descricao: '', cor: '' });
     }
-    openCeFormDialog(this.dialog, this.formTpl, { width: '460px' });
+    openCeFormDialog(this.dialog, this.formTpl, { width: '460px' }, this.viewContainerRef);
   }
 
   selecionarCor(hex: string): void {

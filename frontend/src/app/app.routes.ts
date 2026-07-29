@@ -143,6 +143,18 @@ export const routes: Routes = [
   },
 
   {
+    path: 'agendamentos',
+    loadComponent: () => import('./pages/agendamentos/agendamentos.component').then(m => m.AgendamentosComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
+    path: 'motor-financeiro',
+    loadComponent: () => import('./pages/motor-financeiro/motor-financeiro.component').then(m => m.MotorFinanceiroComponent),
+    canActivate: [AuthGuard]
+  },
+
+  {
     path: 'importacoes-pendentes',
     loadComponent: () => import('./pages/importacoes-pendentes/importacoes-pendentes.component').then(m => m.ImportacoesPendentesComponent),
     canActivate: [AuthGuard]

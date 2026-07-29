@@ -51,6 +51,36 @@ public class AgendamentoPagamento {
     @Column(name = "mensagem_erro", length = 500)
     private String mensagemErro;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "recorrencia", length = 16)
+    private RecorrenciaAgendamento recorrencia = RecorrenciaAgendamento.UNICA;
+
+    @Column(name = "data_fim")
+    private LocalDate dataFim;
+
+    @Column(name = "proxima_execucao")
+    private LocalDate proximaExecucao;
+
+    @Column(name = "ultima_execucao")
+    private LocalDate ultimaExecucao;
+
+    @Column(name = "dia_vencimento_mensal")
+    private Integer diaVencimentoMensal;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "categoria_id")
+    private Categoria categoria;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cartao_credito_id")
+    private CartaoCredito cartaoCredito;
+
+    @Column(name = "falhas_consecutivas", nullable = false)
+    private int falhasConsecutivas = 0;
+
+    @Column(name = "ultima_chave_execucao", length = 64)
+    private String ultimaChaveExecucao;
+
     @PrePersist
     protected void onCreate() {
         if (dataCriacao == null) {
@@ -62,7 +92,11 @@ public class AgendamentoPagamento {
     }
 
     public enum StatusAgendamento {
-        AGENDADO, PAGO, FALHOU, CANCELADO
+        AGENDADO, PAUSADO, PAGO, FALHOU, CANCELADO
+    }
+
+    public enum RecorrenciaAgendamento {
+        UNICA, DIARIA, SEMANAL, QUINZENAL, MENSAL, BIMESTRAL, TRIMESTRAL, SEMESTRAL, ANUAL
     }
 
     public Long getId() { return id; }
@@ -97,4 +131,23 @@ public class AgendamentoPagamento {
 
     public String getMensagemErro() { return mensagemErro; }
     public void setMensagemErro(String mensagemErro) { this.mensagemErro = mensagemErro; }
+
+    public RecorrenciaAgendamento getRecorrencia() { return recorrencia; }
+    public void setRecorrencia(RecorrenciaAgendamento recorrencia) { this.recorrencia = recorrencia; }
+    public LocalDate getDataFim() { return dataFim; }
+    public void setDataFim(LocalDate dataFim) { this.dataFim = dataFim; }
+    public LocalDate getProximaExecucao() { return proximaExecucao; }
+    public void setProximaExecucao(LocalDate proximaExecucao) { this.proximaExecucao = proximaExecucao; }
+    public LocalDate getUltimaExecucao() { return ultimaExecucao; }
+    public void setUltimaExecucao(LocalDate ultimaExecucao) { this.ultimaExecucao = ultimaExecucao; }
+    public Integer getDiaVencimentoMensal() { return diaVencimentoMensal; }
+    public void setDiaVencimentoMensal(Integer diaVencimentoMensal) { this.diaVencimentoMensal = diaVencimentoMensal; }
+    public Categoria getCategoria() { return categoria; }
+    public void setCategoria(Categoria categoria) { this.categoria = categoria; }
+    public CartaoCredito getCartaoCredito() { return cartaoCredito; }
+    public void setCartaoCredito(CartaoCredito cartaoCredito) { this.cartaoCredito = cartaoCredito; }
+    public int getFalhasConsecutivas() { return falhasConsecutivas; }
+    public void setFalhasConsecutivas(int falhasConsecutivas) { this.falhasConsecutivas = falhasConsecutivas; }
+    public String getUltimaChaveExecucao() { return ultimaChaveExecucao; }
+    public void setUltimaChaveExecucao(String ultimaChaveExecucao) { this.ultimaChaveExecucao = ultimaChaveExecucao; }
 }

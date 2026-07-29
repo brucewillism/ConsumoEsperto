@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.config.SchemaAutoPatchProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -21,6 +22,7 @@ public class SchemaAutoPatchService {
 
     private final JdbcTemplate jdbcTemplate;
     private final DadosLegadosSanitizationService dadosLegadosSanitizationService;
+    private final SchemaAutoPatchProperties schemaAutoPatchProperties;
 
     /** Extensão {@code vector} (pgvector) instalada nesta base. */
     private boolean isPgVectorExtensionInstalled() {
@@ -51,6 +53,10 @@ public class SchemaAutoPatchService {
 
     @PostConstruct
     public void applyPatches() {
+        if (!schemaAutoPatchProperties.isEnabled()) {
+            log.info("SchemaAutoPatch desabilitado — schema gerenciado por Flyway.");
+            return;
+        }
         ensureUsuarioAiConfigTable();
         ensureUsuarioAiConfigEvolutionApiKeyColumn();
         ensureUsuarioAiConfigEvolutionSessionSuppressedColumn();
@@ -605,8 +611,30 @@ public class SchemaAutoPatchService {
                     + "ON public.agendamentos_pagamentos(usuario_id, status, data_vencimento)"
             );
             log.info("Schema patch: tabela public.agendamentos_pagamentos verificada.");
+            patchAgendamentosPagamentosColunas();
         } catch (Exception e) {
             log.warn("Falha ao CREATE agendamentos_pagamentos: {}", e.getMessage());
+        }
+    }
+
+    private void patchAgendamentosPagamentosColunas() {
+        String[] alters = {
+            "ALTER TABLE public.agendamentos_pagamentos ADD COLUMN IF NOT EXISTS recorrencia VARCHAR(16) DEFAULT 'UNICA'",
+            "ALTER TABLE public.agendamentos_pagamentos ADD COLUMN IF NOT EXISTS data_fim DATE",
+            "ALTER TABLE public.agendamentos_pagamentos ADD COLUMN IF NOT EXISTS proxima_execucao DATE",
+            "ALTER TABLE public.agendamentos_pagamentos ADD COLUMN IF NOT EXISTS ultima_execucao DATE",
+            "ALTER TABLE public.agendamentos_pagamentos ADD COLUMN IF NOT EXISTS dia_vencimento_mensal INTEGER",
+            "ALTER TABLE public.agendamentos_pagamentos ADD COLUMN IF NOT EXISTS categoria_id BIGINT REFERENCES public.categorias(id)",
+            "ALTER TABLE public.agendamentos_pagamentos ADD COLUMN IF NOT EXISTS cartao_credito_id BIGINT REFERENCES public.cartoes_credito(id)",
+            "ALTER TABLE public.agendamentos_pagamentos ADD COLUMN IF NOT EXISTS falhas_consecutivas INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE public.agendamentos_pagamentos ADD COLUMN IF NOT EXISTS ultima_chave_execucao VARCHAR(64)"
+        };
+        for (String ddl : alters) {
+            try {
+                executeDdlAutocommit(ddl);
+            } catch (Exception e) {
+                log.debug("Patch agendamentos coluna ignorado: {}", e.getMessage());
+            }
         }
     }
 

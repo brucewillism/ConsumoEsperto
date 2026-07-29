@@ -55,6 +55,35 @@
           </mat-form-field>
 
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Conta bancária</mat-label>
+            <mat-select formControlName="contaId" panelClass="exec-select-panel">
+              <mat-option value="">🏦 Todas</mat-option>
+              <mat-option *ngFor="let conta of contas" [value]="conta.id">🏦 {{ conta.nome }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Categoria</mat-label>
+            <mat-select formControlName="categoriaId" panelClass="exec-select-panel">
+              <mat-option value="">🏷️ Todas</mat-option>
+              <mat-option *ngFor="let cat of categorias" [value]="cat.id">🏷️ {{ cat.nome }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Status conferência</mat-label>
+            <mat-select formControlName="statusConferencia" panelClass="exec-select-panel">
+              <mat-option value="">✓ Todos</mat-option>
+              <mat-option *ngFor="let s of statusConferenciaOpcoes" [value]="s">{{ s }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="descricao-field">
+            <mat-label>Descrição contém</mat-label>
+            <input matInput formControlName="descricaoContem" placeholder="Ex.: mercado" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Ano-calendário (IR)</mat-label>
             <mat-select formControlName="anoIr" panelClass="exec-select-panel">
               <mat-option *ngFor="let a of anosIrCalendario" [value]="a">{{ a }}</mat-option>
@@ -73,7 +102,35 @@
             [disabled]="exportandoIr"
             (click)="baixarRelatorioIr()">
             <mat-icon>picture_as_pdf</mat-icon>
-            {{ exportandoIr ? 'Gerando PDF...' : 'Gerar Relatório para IR (PDF)' }}
+            {{ exportandoIr ? 'Gerando PDF...' : 'Relatório IR (PDF)' }}
+          </button>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="pdf-mes-field">
+            <mat-label>Mês PDF</mat-label>
+            <mat-select formControlName="mesPdf" panelClass="exec-select-panel">
+              <mat-option *ngFor="let m of [1,2,3,4,5,6,7,8,9,10,11,12]" [value]="m">{{ m }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="pdf-mes-field">
+            <mat-label>Ano PDF</mat-label>
+            <mat-select formControlName="anoPdf" panelClass="exec-select-panel">
+              <mat-option *ngFor="let a of anosIrCalendario" [value]="a">{{ a }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <button
+            mat-stroked-button
+            type="button"
+            [disabled]="exportandoPdfMensal"
+            (click)="baixarPdfMensal()">
+            <mat-icon>description</mat-icon>
+            {{ exportandoPdfMensal ? 'Gerando...' : 'Exportar PDF mensal' }}
+          </button>
+          <button
+            mat-stroked-button
+            type="button"
+            [disabled]="exportandoCsv || carregando"
+            (click)="baixarCsv()">
+            <mat-icon>download</mat-icon>
+            {{ exportandoCsv ? 'Exportando...' : 'Exportar CSV' }}
           </button>
         </div>
         <app-chart-metodologia id="RELATORIO_IR_PDF" [compact]="true"></app-chart-metodologia>
@@ -141,44 +198,32 @@
     <mat-tab-group>
       <mat-tab label="📊 Receitas vs Despesas">
         <div class="chart-container">
-          <div class="chart-placeholder">
-            <div class="chart-placeholder__icon" aria-hidden="true">📈</div>
-            <p class="chart-placeholder__title">Gráfico de Pizza</p>
-            <p class="chart-placeholder__sub">Comparativo entre receitas e despesas</p>
-          </div>
+          <div class="chart-empty" *ngIf="!temDadosGrafico()">Sem transações no período filtrado.</div>
+          <canvas *ngIf="temDadosGrafico()" baseChart [type]="'doughnut'" [data]="pizzaData" [options]="chartOpts"></canvas>
         </div>
         <app-chart-metodologia id="RELATORIO_PIZZA"></app-chart-metodologia>
       </mat-tab>
 
       <mat-tab label="📅 Evolução Temporal">
         <div class="chart-container">
-          <div class="chart-placeholder">
-            <div class="chart-placeholder__icon" aria-hidden="true">📊</div>
-            <p class="chart-placeholder__title">Gráfico de Linha</p>
-            <p class="chart-placeholder__sub">Evolução financeira ao longo do tempo</p>
-          </div>
+          <div class="chart-empty" *ngIf="!temDadosGrafico()">Sem transações no período filtrado.</div>
+          <canvas *ngIf="temDadosGrafico()" baseChart [type]="'line'" [data]="linhaData" [options]="linhaOpts"></canvas>
         </div>
         <app-chart-metodologia id="RELATORIO_LINHA"></app-chart-metodologia>
       </mat-tab>
 
       <mat-tab label="🏷️ Por Categoria">
         <div class="chart-container">
-          <div class="chart-placeholder">
-            <div class="chart-placeholder__icon" aria-hidden="true">📊</div>
-            <p class="chart-placeholder__title">Gráfico de Barras</p>
-            <p class="chart-placeholder__sub">Distribuição por categorias de gastos</p>
-          </div>
+          <div class="chart-empty" *ngIf="!temDespesasGrafico()">Sem despesas no período filtrado.</div>
+          <canvas *ngIf="temDespesasGrafico()" baseChart [type]="'bar'" [data]="barrasData" [options]="barrasOpts"></canvas>
         </div>
         <app-chart-metodologia id="RELATORIO_BARRAS"></app-chart-metodologia>
       </mat-tab>
 
       <mat-tab label="💳 Por Cartão">
         <div class="chart-container">
-          <div class="chart-placeholder">
-            <div class="chart-placeholder__icon" aria-hidden="true">📊</div>
-            <p class="chart-placeholder__title">Gráfico de Rosca</p>
-            <p class="chart-placeholder__sub">Distribuição por cartões de crédito</p>
-          </div>
+          <div class="chart-empty" *ngIf="!temDespesasGrafico()">Sem despesas no período filtrado.</div>
+          <canvas *ngIf="temDespesasGrafico()" baseChart [type]="'doughnut'" [data]="roscaData" [options]="chartOpts"></canvas>
         </div>
         <app-chart-metodologia id="RELATORIO_ROSCA"></app-chart-metodologia>
       </mat-tab>
@@ -194,7 +239,7 @@
       </mat-card-title>
       <mat-card-subtitle>
         <mat-icon class="subtitle-icon">info</mat-icon>
-        {{ transacoes.length }} transações encontradas
+        {{ transacoesFiltradas.length }} transações encontradas
       </mat-card-subtitle>
     </mat-card-header>
     <mat-card-content>
@@ -211,7 +256,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let transacao of transacoes.slice(0, 20)">
+            <tr *ngFor="let transacao of transacoesFiltradas.slice(0, 20)">
               <td data-label="Data">{{ (transacao.dataTransacao ?? transacao.data) | date:'dd/MM/yyyy' }}</td>
               <td class="td-ellipsis" data-label="Descrição" [title]="descricaoRelatorio(transacao)">{{ descricaoRelatorio(transacao) }}</td>
               <td class="td-categoria" data-label="Categoria" [title]="categoriaRotulo(transacao)">

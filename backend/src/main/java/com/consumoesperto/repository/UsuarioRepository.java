@@ -61,6 +61,9 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
      */
     boolean existsByEmail(String email);
 
+    @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM Usuario u WHERE LOWER(u.email) = LOWER(:email)")
+    boolean existsByEmailIgnoreCase(@Param("email") String email);
+
     /**
      * Busca um usuário pelo Google ID (OAuth2)
      * 

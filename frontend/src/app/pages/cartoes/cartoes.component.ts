@@ -1,4 +1,4 @@
-import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, TemplateRef, ViewChild, ViewContainerRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -67,7 +67,8 @@ export class CartoesComponent implements OnInit {
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
     private confirmDialog: ConfirmDialogService,
-    private financaAlteracao: FinancaAlteracaoService
+    private financaAlteracao: FinancaAlteracaoService,
+    private viewContainerRef: ViewContainerRef
   ) {}
 
   ngOnInit(): void {
@@ -172,7 +173,7 @@ export class CartoesComponent implements OnInit {
     }
     this.cartaoEmEdicao = { ...cartao };
     this.editLimite = cartao.limiteCredito ?? 0;
-    openCeFormDialog(this.dialog, this.editCartaoTpl, { width: '400px' });
+    openCeFormDialog(this.dialog, this.editCartaoTpl, { width: '400px' }, this.viewContainerRef);
   }
 
   salvarEdicaoCartao(): void {

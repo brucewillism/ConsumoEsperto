@@ -1,0 +1,10 @@
+# Copie para application-local.properties (gitignored) ou use .env na raiz do repo.
+# O ConsumoEspertoApplication carrega .env automaticamente antes do Spring.
+
+DATABASE_URL=jdbc:postgresql://localhost:5432/consumoesperto
+DATABASE_USERNAME=seu_usuario_local
+DATABASE_PASSWORD=defina_senha_local_forte
+
+JWT_SECRET=defina_uma_chave_jwt_local_com_pelo_menos_32_caracteres
+
+# Profile opcional: spring.profiles.active=dev,local

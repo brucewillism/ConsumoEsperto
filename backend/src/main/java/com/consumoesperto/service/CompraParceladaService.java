@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.dto.CompraParceladaDTO;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
@@ -82,7 +83,7 @@ public class CompraParceladaService {
     public CompraParceladaDTO buscarPorId(Long id, Long usuarioId) {
         // Busca a compra pelo ID e valida se pertence ao usuário através do cartão
         CompraParcelada compraParcelada = compraParceladaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Compra parcelada não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Compra parcelada não encontrada"));
         return converterParaDTO(compraParcelada);
     }
 
@@ -148,7 +149,7 @@ public class CompraParceladaService {
     public CompraParceladaDTO atualizarCompraParcelada(Long id, CompraParceladaDTO compraParceladaDTO, Long usuarioId) {
         // Verifica se a compra existe e pertence ao usuário antes de tentar atualizar
         CompraParcelada compraExistente = compraParceladaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Compra parcelada não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Compra parcelada não encontrada"));
 
         // Atualiza todos os campos da compra com os novos valores
         compraExistente.setDescricao(compraParceladaDTO.getDescricao());
@@ -188,7 +189,7 @@ public class CompraParceladaService {
     public void deletarCompraParcelada(Long id, Long usuarioId) {
         // Verifica se a compra existe e pertence ao usuário antes de tentar excluir
         CompraParcelada compraParcelada = compraParceladaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Compra parcelada não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Compra parcelada não encontrada"));
         
         // Remove a compra do banco de dados
         compraParceladaRepository.delete(compraParcelada);

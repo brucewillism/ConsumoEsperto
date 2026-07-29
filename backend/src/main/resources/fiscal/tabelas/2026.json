@@ -1,0 +1,77 @@
+{
+  "ano": 2026,
+  "versoes": [
+    {
+      "inicioVigencia": "2026-01-01",
+      "fimVigencia": null,
+      "inss": {
+        "tipoSegurado": "EMPREGADO",
+        "tiposSuportadosPeloSistema": ["EMPREGADO"],
+        "descricaoTipo": "Empregado, empregado doméstico e trabalhador avulso (mesma tabela progressiva INSS)",
+        "teto": 8475.55,
+        "salarioMinimo": 1621.00,
+        "faixas": [
+          { "limiteSuperior": 1621.00, "aliquotaPct": 7.5 },
+          { "limiteSuperior": 2902.84, "aliquotaPct": 9.0 },
+          { "limiteSuperior": 4354.27, "aliquotaPct": 12.0 },
+          { "limiteSuperior": 8475.55, "aliquotaPct": 14.0 }
+        ],
+        "fonteNormativa": {
+          "orgao": "Ministério da Previdência Social / Ministério da Fazenda",
+          "ato": "Portaria Interministerial MPS/MF",
+          "numero": "13",
+          "dataAto": "2026-01-09",
+          "inicioVigencia": "2026-01-01",
+          "dataConsulta": "2026-07-28",
+          "url": "https://www.gov.br/inss/pt-br/direitos-e-deveres/inscricao-e-contribuicao/tabela-de-contribuicao-mensal/tabela-de-contribuicao-mensal",
+          "urlAto": "https://www.gov.br/previdencia/pt-br/assuntos/rpps/documentos/PortariaInterministerialMPSMF13de9dejaneirode2026.pdf",
+          "urlEsocial": "https://www.gov.br/esocial/pt-br/noticias/liberado-o-envio-de-eventos-de-folha-para-o-esocial-apos-publicacao-de-portaria-que-reajusta-valores-previdenciarios-em-2026-1"
+        }
+      },
+      "irrf": {
+        "faixas": [
+          { "limiteSuperior": 2428.80, "aliquotaPct": 0, "parcelaDeduzir": 0 },
+          { "limiteSuperior": 2826.65, "aliquotaPct": 7.5, "parcelaDeduzir": 182.16 },
+          { "limiteSuperior": 3751.05, "aliquotaPct": 15.0, "parcelaDeduzir": 394.16 },
+          { "limiteSuperior": 4664.68, "aliquotaPct": 22.5, "parcelaDeduzir": 675.49 },
+          { "limiteSuperior": null, "aliquotaPct": 27.5, "parcelaDeduzir": 908.73 }
+        ],
+        "deducaoDependente": 189.59,
+        "descontoSimplificadoMax": 607.20,
+        "descontoSimplificadoPctLimiteIsento": 25,
+        "limiteIsentoProgressivo": 2428.80,
+        "reducaoAdicional": {
+          "lei": "Lei nº 15.270/2025",
+          "variavelReducao": "RENDIMENTO_TRIBUTAVEL_MENSAL",
+          "faixas": [
+            {
+              "rendimentoAte": 5000.00,
+              "reducaoMaxima": 312.89,
+              "formula": "MIN(imposto_progressivo, 312.89)"
+            },
+            {
+              "rendimentoDe": 5000.01,
+              "rendimentoAte": 7350.00,
+              "constante": 978.62,
+              "coeficienteRendimento": 0.133145,
+              "formula": "978.62 - (0.133145 * rendimento_tributavel_mensal)"
+            }
+          ],
+          "fonte": "https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2026",
+          "fonteExemplos": "https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/exemplos-de-aplicacao-da-lei-15-270-2025"
+        },
+        "fonteNormativa": {
+          "orgao": "Receita Federal do Brasil",
+          "ato": "Lei nº 15.191/2025 (tabela progressiva) e Lei nº 15.270/2025 (redução adicional)",
+          "inicioVigencia": "2026-01-01",
+          "dataConsulta": "2026-07-28",
+          "url": "https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2026"
+        }
+      },
+      "dependente": {
+        "deducaoMensal": 189.59
+      },
+      "observacoes": "INSS: empregado/doméstico/avulso — Portaria Interministerial MPS/MF 13/2026, competência jan/2026. IRRF mensal com redução Lei 15.270/2025. Não calcula contribuinte individual, MEI, facultativo ou RPPS."
+    }
+  ]
+}

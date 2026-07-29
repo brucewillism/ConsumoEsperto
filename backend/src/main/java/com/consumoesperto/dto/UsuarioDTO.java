@@ -8,6 +8,7 @@ import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 /**
  * DTO (Data Transfer Object) para transferência de dados de usuário
@@ -149,4 +150,16 @@ public class UsuarioDTO {
 
     /** Saudação do dashboard (ex.: Que bom te ver de volta, chefa!). */
     private String saudacaoDashboard;
+
+    public void setUsername(String username) {
+        this.username = username == null ? null : username.trim();
+    }
+
+    public void setEmail(String email) {
+        this.email = email == null ? null : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    public void setNome(String nome) {
+        this.nome = nome == null ? null : nome.trim();
+    }
 }

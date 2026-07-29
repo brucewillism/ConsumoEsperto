@@ -122,6 +122,18 @@
           </a>
         </li>
         <li class="nav-item">
+          <a routerLink="/agendamentos" routerLinkActive="active" class="nav-link" title="Agendamentos" (click)="navigateSidebar('/agendamentos', $event)">
+            <i class="fas fa-calendar-check"></i>
+            <span class="nav-label">Agendamentos</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a routerLink="/motor-financeiro" routerLinkActive="active" class="nav-link" title="Motor Financeiro" (click)="navigateSidebar('/motor-financeiro', $event)">
+            <i class="fas fa-brain"></i>
+            <span class="nav-label">Motor Financeiro</span>
+          </a>
+        </li>
+        <li class="nav-item">
           <a routerLink="/importacoes-pendentes" routerLinkActive="active" class="nav-link" title="Importações Pendentes" (click)="navigateSidebar('/importacoes-pendentes', $event)">
             <i class="fas fa-file-invoice-dollar"></i>
             <span class="nav-label">Importações</span>

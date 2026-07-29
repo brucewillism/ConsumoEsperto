@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.dto.MetaFinanceiraDTO;
 import com.consumoesperto.dto.MetaFinanceiraListResponse;
 import com.consumoesperto.dto.MetaFinanceiraRequest;
@@ -171,7 +172,7 @@ public class MetaFinanceiraService {
     @Transactional
     public MetaFinanceiraDTO aplicarPatchWhatsApp(Long usuarioId, Long metaId, JsonNode updates) {
         MetaFinanceira m = metaFinanceiraRepository.findByIdAndUsuarioId(metaId, usuarioId)
-            .orElseThrow(() -> new RuntimeException("Meta não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Meta não encontrada"));
         boolean recalcPadrao = false;
         boolean prazoManual = false;
         var it = updates.fields();
@@ -308,7 +309,7 @@ public class MetaFinanceiraService {
     @Transactional
     public MetaFinanceiraDTO atualizar(Long id, MetaFinanceiraRequest request, Long usuarioId) {
         MetaFinanceira m = metaFinanceiraRepository.findByIdAndUsuarioId(id, usuarioId)
-            .orElseThrow(() -> new RuntimeException("Meta não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Meta não encontrada"));
         BigDecimal renda = calcularRendaMensalMediaUltimosTresMeses(usuarioId)
             .orElseThrow(() -> new RuntimeException("Sem receitas nos últimos 3 meses para recalcular a meta."));
         BigDecimal poupado = calcularValorPoupadoMensal(renda, request.getPercentualComprometimento());
@@ -332,7 +333,7 @@ public class MetaFinanceiraService {
     @Transactional
     public void excluir(Long id, Long usuarioId) {
         MetaFinanceira m = metaFinanceiraRepository.findByIdAndUsuarioId(id, usuarioId)
-            .orElseThrow(() -> new RuntimeException("Meta não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Meta não encontrada"));
         metaFinanceiraRepository.delete(m);
         log.info("[META-LOG] Meta financeira removida id={} usuario={}", id, usuarioId);
     }

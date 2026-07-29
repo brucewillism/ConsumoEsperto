@@ -1,4 +1,4 @@
-import { Component, DestroyRef, OnInit, OnDestroy, TemplateRef, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, OnDestroy, TemplateRef, ViewContainerRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -98,7 +98,8 @@ export class FaturasComponent implements OnInit, OnDestroy {
     private dialog: MatDialog,
     private confirmDialog: ConfirmDialogService,
     private snackBar: MatSnackBar,
-    private financaAlteracao: FinancaAlteracaoService
+    private financaAlteracao: FinancaAlteracaoService,
+    private viewContainerRef: ViewContainerRef
   ) {}
 
   ngOnInit(): void {
@@ -333,7 +334,7 @@ export class FaturasComponent implements OnInit, OnDestroy {
       maxHeight: '90vh',
       panelClass: 'fatura-transacoes-dialog',
       autoFocus: false,
-    });
+    }, this.viewContainerRef);
   }
 
   badgeCategoria(t: any): string {

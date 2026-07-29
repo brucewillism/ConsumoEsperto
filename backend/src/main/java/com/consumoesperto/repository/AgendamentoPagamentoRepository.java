@@ -24,6 +24,10 @@ public interface AgendamentoPagamentoRepository extends JpaRepository<Agendament
         + "WHERE a.usuario.id = :usuarioId ORDER BY a.dataVencimento ASC, a.id ASC")
     List<AgendamentoPagamento> findByUsuarioIdOrderByVencimento(@Param("usuarioId") Long usuarioId);
 
+    @Query("SELECT a FROM AgendamentoPagamento a LEFT JOIN FETCH a.contaDebito LEFT JOIN FETCH a.categoria "
+        + "WHERE a.usuario.id = :usuarioId ORDER BY a.dataCriacao DESC, a.id DESC")
+    List<AgendamentoPagamento> findByUsuarioIdOrderByVencimentoDesc(@Param("usuarioId") Long usuarioId);
+
     Optional<AgendamentoPagamento> findByIdAndUsuarioId(Long id, Long usuarioId);
 
     @Query("SELECT a FROM AgendamentoPagamento a JOIN FETCH a.contaDebito JOIN FETCH a.usuario "

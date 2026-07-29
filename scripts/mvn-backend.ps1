@@ -6,9 +6,9 @@
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
-function Test-JavaBin([string]$home) {
-    if (-not $home) { return $false }
-    return (Test-Path (Join-Path $home "bin/java")) -or (Test-Path (Join-Path $home "bin/java.exe"))
+function Test-JavaBin([string]$javaHome) {
+    if (-not $javaHome) { return $false }
+    return (Test-Path (Join-Path $javaHome "bin/java")) -or (Test-Path (Join-Path $javaHome "bin/java.exe"))
 }
 
 function Resolve-JavaHomeFromPath {

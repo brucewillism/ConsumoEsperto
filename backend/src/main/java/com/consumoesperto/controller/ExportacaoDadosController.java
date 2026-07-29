@@ -8,6 +8,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import com.consumoesperto.dto.ExportacaoTransacaoFiltro;
+import com.consumoesperto.model.Transacao;
 import com.consumoesperto.security.UserPrincipal;
 
 import java.time.LocalDate;
@@ -81,41 +83,64 @@ public class ExportacaoDadosController {
     public ResponseEntity<byte[]> exportarTransacoesCsv(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @RequestParam(required = false) String dataInicio,
-            @RequestParam(required = false) String dataFim) {
-        
+            @RequestParam(required = false) String dataFim,
+            @RequestParam(required = false) Long contaId,
+            @RequestParam(required = false) Long cartaoId,
+            @RequestParam(required = false) Long categoriaId,
+            @RequestParam(required = false) String tipoTransacao,
+            @RequestParam(required = false) String statusConferencia,
+            @RequestParam(required = false) String descricaoContem) {
+
         try {
-            log.info("💳 Exportando transações em CSV para usuário: {}", currentUser.getId());
-            
-            // Definir período padrão se não informado
-            LocalDate inicio = dataInicio != null ? 
-                LocalDate.parse(dataInicio, DateTimeFormatter.ofPattern("yyyy-MM-dd")) :
-                LocalDate.now().minusMonths(1);
-                
-            LocalDate fim = dataFim != null ? 
-                LocalDate.parse(dataFim, DateTimeFormatter.ofPattern("yyyy-MM-dd")) :
-                LocalDate.now();
-            
-            // Exportar dados
-            byte[] csvBytes = exportacaoDadosService.exportarTransacoesCsv(
-                currentUser.getId(), inicio, fim);
-            
-            // Configurar headers para download
+            ExportacaoTransacaoFiltro filtro = montarFiltro(
+                dataInicio, dataFim, contaId, cartaoId, categoriaId, tipoTransacao, statusConferencia, descricaoContem
+            );
+            byte[] csvBytes = exportacaoDadosService.exportarTransacoesCsv(currentUser.getId(), filtro);
+
             HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.TEXT_PLAIN);
-            headers.setContentDispositionFormData("attachment", 
-                "transacoes-" + currentUser.getId() + ".csv");
+            headers.setContentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8));
+            headers.setContentDispositionFormData("attachment", "transacoes-" + currentUser.getId() + ".csv");
             headers.setContentLength(csvBytes.length);
-            
-            log.info("✅ Transações exportadas em CSV com sucesso - {} bytes", csvBytes.length);
-            
-            return ResponseEntity.ok()
-                .headers(headers)
-                .body(csvBytes);
-                
+
+            return ResponseEntity.ok().headers(headers).body(csvBytes);
+        } catch (IllegalArgumentException e) {
+            log.warn("Exportação CSV rejeitada: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
         } catch (Exception e) {
             log.error("❌ Erro ao exportar transações em CSV: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    private static ExportacaoTransacaoFiltro montarFiltro(
+        String dataInicio,
+        String dataFim,
+        Long contaId,
+        Long cartaoId,
+        Long categoriaId,
+        String tipoTransacao,
+        String statusConferencia,
+        String descricaoContem
+    ) {
+        ExportacaoTransacaoFiltro filtro = new ExportacaoTransacaoFiltro();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        if (dataInicio != null && !dataInicio.isBlank()) {
+            filtro.setDataInicio(LocalDate.parse(dataInicio, fmt));
+        }
+        if (dataFim != null && !dataFim.isBlank()) {
+            filtro.setDataFim(LocalDate.parse(dataFim, fmt));
+        }
+        filtro.setContaId(contaId);
+        filtro.setCartaoId(cartaoId);
+        filtro.setCategoriaId(categoriaId);
+        if (tipoTransacao != null && !tipoTransacao.isBlank()) {
+            filtro.setTipoTransacao(Transacao.TipoTransacao.valueOf(tipoTransacao.trim().toUpperCase()));
+        }
+        if (statusConferencia != null && !statusConferencia.isBlank()) {
+            filtro.setStatusConferencia(Transacao.StatusConferencia.valueOf(statusConferencia.trim().toUpperCase()));
+        }
+        filtro.setDescricaoContem(descricaoContem);
+        return filtro;
     }
 
     /**

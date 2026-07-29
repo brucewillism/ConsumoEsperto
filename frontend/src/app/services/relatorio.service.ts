@@ -103,4 +103,12 @@ export class RelatorioService {
       responseType: 'blob'
     });
   }
+
+  exportarMensalPdf(mes: number, ano: number): Observable<Blob> {
+    return this.http.get(`${this.API_URL}/mensal.pdf`, {
+      headers: this.getAuthHeaders(),
+      params: { mes: String(mes), ano: String(ano) },
+      responseType: 'blob',
+    });
+  }
 }

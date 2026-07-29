@@ -95,6 +95,8 @@ config/db-local.properties
 application-prod.properties
 application-prod.yml
 application-prod.yaml
+application-local.properties
+config/db-local.properties
 
 # Logs
 logs/
@@ -173,8 +175,9 @@ coverage/
 *.ear
 *.nar
 
-# Database dumps
+# Database dumps (exceto migrations Flyway versionadas)
 *.sql
+!src/main/resources/db/migration/*.sql
 *.dump
 *.backup
 

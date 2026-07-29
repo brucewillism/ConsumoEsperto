@@ -1,0 +1,100 @@
+<div class="motor-page">
+  <app-whatsapp-parity-hint rota="/motor-financeiro"></app-whatsapp-parity-hint>
+
+  <header class="hero">
+    <div>
+      <p>Diagnóstico determinístico</p>
+      <h1>Motor Financeiro</h1>
+      <span>Cálculos por regra — narrativa por IA é opcional e não altera os números.</span>
+    </div>
+    <div class="hero-actions">
+      <button mat-stroked-button type="button" (click)="alternarNarrativa()" [disabled]="carregando">
+        <mat-icon>{{ incluirNarrativa ? 'smart_toy' : 'rule' }}</mat-icon>
+        {{ incluirNarrativa ? 'Com narrativa IA' : 'Só determinístico' }}
+      </button>
+      <button mat-raised-button color="primary" type="button" (click)="carregar()" [disabled]="carregando">
+        <mat-icon>refresh</mat-icon>
+        Atualizar
+      </button>
+    </div>
+  </header>
+
+  <app-page-loading *ngIf="carregando" message="Calculando diagnóstico…"></app-page-loading>
+
+  <ng-container *ngIf="!carregando && dados">
+    <section class="grid-2" *ngIf="dados.perfilComportamental as perfil">
+      <mat-card>
+        <h2>Perfil comportamental</h2>
+        <p class="destaque">{{ perfil.perfil }}</p>
+        <p class="hint">Confiança: {{ pct(perfil.confiancaPct) }}</p>
+        <ul class="fatores" *ngIf="perfil.pontuacaoPorPerfil">
+          <li *ngFor="let item of perfil.pontuacaoPorPerfil | keyvalue">
+            {{ item.key }}: {{ item.value }} pts
+          </li>
+        </ul>
+      </mat-card>
+
+      <mat-card *ngIf="dados.scoreExplicavel as score">
+        <h2>Score explicável</h2>
+        <p class="score-total">{{ score.scoreTotal }}</p>
+        <div class="componente" *ngFor="let c of score.componentes">
+          <strong>{{ c.nome }}</strong>
+          <span>{{ c.pontos }}/{{ c.maximo }}</span>
+          <small>{{ c.detalhe }}</small>
+          <em>{{ c.comoRecuperar }}</em>
+        </div>
+      </mat-card>
+    </section>
+
+    <mat-card *ngIf="dados.forecastInteligente as f" class="forecast-card">
+      <h2>Projeção do mês</h2>
+      <div class="forecast-grid">
+        <div><span>Saldo previsto</span><strong>{{ brl(f.saldoPrevisto) }}</strong></div>
+        <div><span>Receitas previstas</span><strong>{{ brl(f.receitasPrevistas) }}</strong></div>
+        <div><span>Despesas previstas</span><strong>{{ brl(f.despesasPrevistas) }}</strong></div>
+        <div><span>Chance mês positivo</span><strong>{{ pct(f.chanceMesPositivoPct) }}</strong></div>
+        <div><span>Chance cheque especial</span><strong>{{ pct(f.chanceChequeEspecialPct) }}</strong></div>
+        <div><span>Chance estourar orçamento</span><strong>{{ pct(f.chanceEstourarOrcamentoPct) }}</strong></div>
+      </div>
+      <p class="explicacao">{{ f.explicacaoDeterministica }}</p>
+      <p class="narrativa-ia" *ngIf="f.explicacaoNarrativa">{{ f.explicacaoNarrativa }}</p>
+    </mat-card>
+
+    <mat-card *ngIf="dados.metasInteligentes?.length">
+      <h2>Metas — probabilidade de sucesso</h2>
+      <div class="meta-row" *ngFor="let m of dados.metasInteligentes">
+        <div>
+          <strong>{{ m.descricao }}</strong>
+          <small>Ritmo atual {{ brl(m.ritmoAtualMensal) }}/mês · necessário {{ brl(m.ritmoNecessarioMensal) }}/mês</small>
+        </div>
+        <span class="prob">{{ pct(m.probabilidadeSucessoPct) }}</span>
+        <p>{{ m.recomendacaoDeterministica }}</p>
+      </div>
+    </mat-card>
+
+    <mat-card *ngIf="dados.advisorInvestimento as adv">
+      <h2>Advisor educacional</h2>
+      <p><strong>Perfil investidor:</strong> {{ adv.perfilInvestidor }}</p>
+      <p>{{ adv.textoDeterministico }}</p>
+      <ul *ngIf="adv.produtosCompativeis?.length">
+        <li *ngFor="let p of adv.produtosCompativeis">{{ p }}</li>
+      </ul>
+      <p class="aviso">{{ adv.avisoLegal }}</p>
+    </mat-card>
+
+    <mat-card *ngIf="dados.narrativaIa" class="narrativa-card">
+      <h2>Narrativa complementar (IA)</h2>
+      <p>{{ dados.narrativaIa }}</p>
+      <p class="aviso">Texto gerado por IA — use apenas como complemento ao diagnóstico determinístico.</p>
+    </mat-card>
+
+    <p class="calculado-em" *ngIf="dados.calculadoEm">
+      Calculado em {{ dados.calculadoEm | date:'dd/MM/yyyy HH:mm' }}
+    </p>
+  </ng-container>
+
+  <mat-card *ngIf="!carregando && !dados" class="empty-state">
+    <p>Nenhum dado disponível. Configure contas, transações e metas para gerar o diagnóstico.</p>
+    <button mat-raised-button color="primary" (click)="carregar()">Tentar novamente</button>
+  </mat-card>
+</div>

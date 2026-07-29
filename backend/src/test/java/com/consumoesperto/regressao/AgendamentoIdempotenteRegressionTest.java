@@ -6,6 +6,8 @@ import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.AgendamentoPagamentoRepository;
+import com.consumoesperto.repository.CartaoCreditoRepository;
+import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.service.AgendamentoPagamentoService;
@@ -52,6 +54,8 @@ class AgendamentoIdempotenteRegressionTest {
     @Mock private AgendamentoPagamentoRepository agendamentoRepository;
     @Mock private TransacaoRepository transacaoRepository;
     @Mock private UsuarioRepository usuarioRepository;
+    @Mock private CategoriaRepository categoriaRepository;
+    @Mock private CartaoCreditoRepository cartaoCreditoRepository;
     @Mock private ContaBancariaService contaBancariaService;
     @Mock private TransacaoService transacaoService;
     @Mock private UsuarioSessaoContextoService sessaoContextoService;

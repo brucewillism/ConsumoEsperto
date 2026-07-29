@@ -1,0 +1,93 @@
+{
+  "ano": 2025,
+  "versoes": [
+    {
+      "inicioVigencia": "2025-01-01",
+      "fimVigencia": "2025-04-30",
+      "inss": {
+        "tipoSegurado": "EMPREGADO",
+        "tiposSuportadosPeloSistema": ["EMPREGADO"],
+        "teto": 8157.41,
+        "salarioMinimo": 1518.00,
+        "faixas": [
+          { "limiteSuperior": 1518.00, "aliquotaPct": 7.5 },
+          { "limiteSuperior": 2793.88, "aliquotaPct": 9.0 },
+          { "limiteSuperior": 4190.83, "aliquotaPct": 12.0 },
+          { "limiteSuperior": 8157.41, "aliquotaPct": 14.0 }
+        ],
+        "fonteNormativa": {
+          "orgao": "Ministério da Previdência Social / Ministério da Fazenda",
+          "ato": "Portaria Interministerial MPS/MF",
+          "numero": "6",
+          "dataAto": "2025-01-10",
+          "inicioVigencia": "2025-01-01",
+          "dataConsulta": "2026-07-28",
+          "url": "https://www.gov.br/esocial/pt-br/noticias/liberado-o-envio-de-eventos-de-folha-para-o-esocial-apos-publicacao-de-portaria-que-reajusta-valores-previdenciarios-em-2025"
+        }
+      },
+      "irrf": {
+        "faixas": [
+          { "limiteSuperior": 2259.20, "aliquotaPct": 0, "parcelaDeduzir": 0 },
+          { "limiteSuperior": 2826.65, "aliquotaPct": 7.5, "parcelaDeduzir": 169.44 },
+          { "limiteSuperior": 3751.05, "aliquotaPct": 15.0, "parcelaDeduzir": 381.44 },
+          { "limiteSuperior": 4664.68, "aliquotaPct": 22.5, "parcelaDeduzir": 662.77 },
+          { "limiteSuperior": null, "aliquotaPct": 27.5, "parcelaDeduzir": 896.00 }
+        ],
+        "deducaoDependente": 189.59,
+        "descontoSimplificadoMax": 564.80,
+        "fonteNormativa": {
+          "orgao": "Receita Federal do Brasil",
+          "url": "https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2025",
+          "inicioVigencia": "2025-01-01",
+          "dataConsulta": "2026-07-28"
+        }
+      },
+      "dependente": { "deducaoMensal": 189.59 },
+      "observacoes": "IRRF jan-abr/2025 sem redução adicional Lei 15.270. INSS Portaria MPS/MF 6/2025."
+    },
+    {
+      "inicioVigencia": "2025-05-01",
+      "fimVigencia": "2025-12-31",
+      "inss": {
+        "tipoSegurado": "EMPREGADO",
+        "tiposSuportadosPeloSistema": ["EMPREGADO"],
+        "teto": 8157.41,
+        "salarioMinimo": 1518.00,
+        "faixas": [
+          { "limiteSuperior": 1518.00, "aliquotaPct": 7.5 },
+          { "limiteSuperior": 2793.88, "aliquotaPct": 9.0 },
+          { "limiteSuperior": 4190.83, "aliquotaPct": 12.0 },
+          { "limiteSuperior": 8157.41, "aliquotaPct": 14.0 }
+        ],
+        "fonteNormativa": {
+          "orgao": "Ministério da Previdência Social / Ministério da Fazenda",
+          "ato": "Portaria Interministerial MPS/MF",
+          "numero": "6",
+          "dataAto": "2025-01-10",
+          "inicioVigencia": "2025-01-01",
+          "dataConsulta": "2026-07-28"
+        }
+      },
+      "irrf": {
+        "faixas": [
+          { "limiteSuperior": 2428.80, "aliquotaPct": 0, "parcelaDeduzir": 0 },
+          { "limiteSuperior": 2826.65, "aliquotaPct": 7.5, "parcelaDeduzir": 182.16 },
+          { "limiteSuperior": 3751.05, "aliquotaPct": 15.0, "parcelaDeduzir": 394.16 },
+          { "limiteSuperior": 4664.68, "aliquotaPct": 22.5, "parcelaDeduzir": 675.49 },
+          { "limiteSuperior": null, "aliquotaPct": 27.5, "parcelaDeduzir": 908.73 }
+        ],
+        "deducaoDependente": 189.59,
+        "descontoSimplificadoMax": 607.20,
+        "fonteNormativa": {
+          "orgao": "Receita Federal do Brasil",
+          "ato": "Lei nº 15.191/2025",
+          "url": "https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2025",
+          "inicioVigencia": "2025-05-01",
+          "dataConsulta": "2026-07-28"
+        }
+      },
+      "dependente": { "deducaoMensal": 189.59 },
+      "observacoes": "IRRF a partir de mai/2025 (Lei 15.191/2025), sem redução adicional de 2026."
+    }
+  ]
+}

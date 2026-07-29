@@ -21,6 +21,11 @@ import java.util.List;
  * Este controller permite gerar e baixar relatórios em PDF
  * com dados financeiros do usuário.
  */
+/**
+ * @deprecated Preferir {@link com.consumoesperto.controller.RelatorioController#relatorioMensalPdf(int, int, UserPrincipal)}
+ * ({@code GET /api/relatorios/mensal.pdf}). Este controller gera texto plano, não PDF binário real.
+ */
+@Deprecated
 @RestController
 @RequestMapping("/api/relatorios")
 @RequiredArgsConstructor

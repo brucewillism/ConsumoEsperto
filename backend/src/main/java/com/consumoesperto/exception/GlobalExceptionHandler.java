@@ -71,16 +71,29 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
+    @ExceptionHandler(DataConflictException.class)
+    public ResponseEntity<ApiError> handleDataConflict(DataConflictException ex, WebRequest request) {
+        log.warn("Conflito de dados: {}", ex.getMessage());
+        String path = pathFrom(request);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+            "DUPLICATE_RECORD",
+            JarvisErrorCopy.DUPLICATE_RECORD_MESSAGE,
+            JarvisErrorCopy.DUPLICATE_RECORD_INSTRUCAO,
+            HttpStatus.CONFLICT.value(),
+            path
+        ));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
         log.warn("Integridade de dados: {}", ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage());
         String path = pathFrom(request);
         if (isUniqueOrDuplicate(ex)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError(
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
                 "DUPLICATE_RECORD",
                 JarvisErrorCopy.DUPLICATE_RECORD_MESSAGE,
                 JarvisErrorCopy.DUPLICATE_RECORD_INSTRUCAO,
-                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.CONFLICT.value(),
                 path
             ));
         }
@@ -225,11 +238,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         String raw = ex.getMessage() != null ? ex.getMessage() : "";
 
         if (pareceDuplicidadeOuUnicidade(raw)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError(
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
                 "DUPLICATE_OR_CONFLICT",
                 JarvisErrorCopy.DUPLICATE_RECORD_MESSAGE,
                 JarvisErrorCopy.DUPLICATE_RECORD_INSTRUCAO,
-                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.CONFLICT.value(),
                 path
             ));
         }

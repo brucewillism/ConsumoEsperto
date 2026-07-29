@@ -116,8 +116,7 @@ public class ReportService {
         }
 
         String insight = totalLinhas > 0
-            ? openAiService.gerarInsightRelatorioMaiorGasto(
-                userId, mes, ano, maiorCategoria, maiorValor, totalDespesa)
+            ? insightRelatorioMaiorGasto(userId, mes, ano, maiorCategoria, maiorValor, totalDespesa)
             : "Sem despesas confirmadas neste mês — use o WhatsApp ou o app para lançar movimentos.";
 
         List<RelatorioMetaVm> metaVms = new ArrayList<>();
@@ -217,6 +216,33 @@ public class ReportService {
         String nomeArquivo = "consumo-esperto-ir-" + anoCalendario + ".pdf";
         log.info("[PDF-IR] Gerado userId={} ano={} bytes={}", userId, anoCalendario, pdf.length);
         return new RelatorioPdf(pdf, nomeArquivo);
+    }
+
+    /** Insight do PDF mensal: tenta IA com timeout curto; fallback determinístico. */
+    private String insightRelatorioMaiorGasto(
+        Long userId, int mes, int ano, String maiorCategoria, BigDecimal maiorValor, BigDecimal totalDespesa
+    ) {
+        String fallback = String.format(
+            Locale.forLanguageTag("pt-BR"),
+            "Em %02d/%d, a categoria \"%s\" concentrou %s (%s do total de despesas).",
+            mes,
+            ano,
+            maiorCategoria,
+            BRL.format(maiorValor),
+            totalDespesa.compareTo(BigDecimal.ZERO) > 0
+                ? maiorValor.multiply(BigDecimal.valueOf(100)).divide(totalDespesa, 0, RoundingMode.HALF_UP) + "%"
+                : "—"
+        );
+        try {
+            String ia = openAiService.gerarInsightRelatorioMaiorGasto(
+                userId, mes, ano, maiorCategoria, maiorValor, totalDespesa);
+            if (ia != null && !ia.isBlank()) {
+                return ia.trim();
+            }
+        } catch (Exception e) {
+            log.debug("Insight IA indisponível no PDF mensal userId={}: {}", userId, e.getMessage());
+        }
+        return fallback;
     }
 
     private BigDecimal calcularLimiteGastoReferencia(Long userId, List<MetaFinanceira> metas, BigDecimal totalDespesa) {

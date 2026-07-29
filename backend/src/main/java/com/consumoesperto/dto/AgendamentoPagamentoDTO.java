@@ -25,4 +25,14 @@ public class AgendamentoPagamentoDTO {
     private LocalDateTime dataCriacao;
     private LocalDateTime dataProcessamento;
     private String mensagemErro;
+    private String recorrencia;
+    private LocalDate dataFim;
+    private LocalDate proximaExecucao;
+    private LocalDate ultimaExecucao;
+    private Integer diaVencimentoMensal;
+    private Long categoriaId;
+    private String categoriaNome;
+    private Long cartaoCreditoId;
+    private String cartaoCreditoNome;
+    private Integer falhasConsecutivas;
 }

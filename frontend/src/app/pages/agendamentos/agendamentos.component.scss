@@ -1,0 +1,141 @@
+.agendamentos-page {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+
+  h1 { margin: 0.25rem 0; color: #f1f5f9; }
+  p { margin: 0; color: #94a3b8; font-size: 0.85rem; }
+  span { color: #cbd5e1; font-size: 0.9rem; }
+}
+
+.filtros {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.busca { flex: 1; min-width: 200px; }
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: #94a3b8;
+
+  &.inline { flex-direction: row; padding: 1rem; }
+}
+
+.erro, .empty {
+  text-align: center;
+  padding: 2rem;
+  color: #94a3b8;
+
+  mat-icon { font-size: 2.5rem; width: 2.5rem; height: 2.5rem; margin-bottom: 0.5rem; }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.item-card {
+  background: rgba(15, 23, 42, 0.75);
+  &.pausado { opacity: 0.85; border-left: 3px solid #fbbf24; }
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+
+  h2 { margin: 0; font-size: 1.1rem; color: #f1f5f9; }
+}
+
+.valor { font-size: 1.25rem; font-weight: 600; color: #34d399; margin: 0.5rem 0; }
+.meta { color: #94a3b8; font-size: 0.85rem; margin: 0.25rem 0; }
+
+.erro-falha {
+  color: #f87171;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1000;
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
+  width: min(520px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+  background: #1e293b;
+
+  h2 { margin-top: 0; color: #f1f5f9; }
+  .full { width: 100%; }
+}
+
+.modal-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.historico-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.hist-item {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: rgba(15, 23, 42, 0.6);
+
+  span { color: #94a3b8; font-size: 0.85rem; }
+  small { color: #f87171; }
+}
+
+.status-agendado { background: #1d4ed8 !important; }
+.status-pausado { background: #b45309 !important; }
+.status-pago { background: #047857 !important; }
+.status-falhou { background: #b91c1c !important; }
+.status-cancelado { background: #475569 !important; }

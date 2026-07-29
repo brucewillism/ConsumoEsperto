@@ -5,6 +5,7 @@
       <h1>Transações</h1>
       <p class="periodo">{{ obterNomePeriodoAtual() }}</p>
     </div>
+    <div class="header-actions">
     <button
       mat-raised-button
       color="primary"
@@ -13,12 +14,22 @@
       <mat-icon>add_circle</mat-icon>
       Nova Transação
     </button>
+    <button
+      mat-stroked-button
+      type="button"
+      (click)="abrirDialogoAgendamento()"
+      [disabled]="loadingAgendamentos || salvandoAgendamento">
+      <mat-icon>event</mat-icon>
+      Agendar pagamento
+    </button>
+    </div>
   </div>
 
-  <section class="agendamentos-panel" *ngIf="agendamentos.length || loadingAgendamentos">
+  <section class="agendamentos-panel">
     <h2>Pagamentos agendados</h2>
-    <p class="agendamentos-hint">Boletos e Pix enviados pelo J.A.R.V.I.S. no WhatsApp — débito automático no vencimento (06h).</p>
+    <p class="agendamentos-hint">Boletos e Pix — débito automático no vencimento (06h). Crie pelo app ou envie comprovante no WhatsApp.</p>
     <div class="agendamentos-loading" *ngIf="loadingAgendamentos">Carregando…</div>
+    <p class="agendamentos-empty" *ngIf="!loadingAgendamentos && !agendamentos.length">Nenhum pagamento agendado.</p>
     <div class="agendamento-card" *ngFor="let a of agendamentos" [class.falhou]="a.status === 'FALHOU'">
       <div class="agendamento-info">
         <strong>{{ a.beneficiario }}</strong>
@@ -129,6 +140,58 @@
       <button mat-button mat-dialog-close [disabled]="salvandoTransacao">Cancelar</button>
       <button mat-raised-button color="primary" type="submit" [disabled]="salvandoTransacao">
         {{ salvandoTransacao ? 'Salvando...' : (transacaoEditando ? 'Atualizar' : 'Salvar') }}
+      </button>
+    </mat-dialog-actions>
+  </form>
+</ng-template>
+
+<ng-template #dialogoAgendamento>
+  <h2 mat-dialog-title>Agendar pagamento</h2>
+  <form [formGroup]="agendamentoForm" (ngSubmit)="salvarAgendamento()">
+    <mat-dialog-content class="ce-form-body">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Beneficiário</mat-label>
+        <input matInput formControlName="beneficiario" placeholder="Ex.: Concessionária, Aluguel">
+        <mat-error *ngIf="agendamentoForm.get('beneficiario')?.hasError('required')">Informe o beneficiário</mat-error>
+      </mat-form-field>
+
+      <div class="ce-form-row">
+        <mat-form-field appearance="outline">
+          <mat-label>Valor (R$)</mat-label>
+          <input matInput type="text" inputmode="decimal" formControlName="valor" ceMask="decimal" placeholder="0,00">
+          <mat-error *ngIf="agendamentoForm.get('valor')?.hasError('required')">Informe o valor</mat-error>
+          <mat-error *ngIf="agendamentoForm.get('valor')?.hasError('valorInvalido')">Valor inválido</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Vencimento</mat-label>
+          <input matInput [matDatepicker]="vencPicker" formControlName="dataVencimento">
+          <mat-datepicker-toggle matSuffix [for]="vencPicker"></mat-datepicker-toggle>
+          <mat-datepicker #vencPicker></mat-datepicker>
+          <mat-error *ngIf="agendamentoForm.get('dataVencimento')?.hasError('required')">Informe a data</mat-error>
+        </mat-form-field>
+      </div>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Conta para débito</mat-label>
+        <mat-select formControlName="contaDebitoId" panelClass="exec-select-panel">
+          <mat-option *ngFor="let conta of contas" [value]="conta.id">
+            {{ conta.nome }} — {{ conta.saldoAtual | currency:'BRL':'symbol':'1.2-2':'pt' }}
+          </mat-option>
+        </mat-select>
+        <mat-error *ngIf="agendamentoForm.get('contaDebitoId')?.hasError('required')">Selecione a conta</mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Código de barras ou Pix (opcional)</mat-label>
+        <input matInput formControlName="codigoBarrasOuPix" placeholder="Linha digitável ou chave Pix">
+      </mat-form-field>
+    </mat-dialog-content>
+
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close [disabled]="salvandoAgendamento">Cancelar</button>
+      <button mat-raised-button color="primary" type="submit" [disabled]="salvandoAgendamento">
+        {{ salvandoAgendamento ? 'Agendando...' : 'Agendar' }}
       </button>
     </mat-dialog-actions>
   </form>

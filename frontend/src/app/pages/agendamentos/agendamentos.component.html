@@ -1,0 +1,188 @@
+<div class="agendamentos-page">
+  <app-whatsapp-parity-hint rota="/agendamentos"></app-whatsapp-parity-hint>
+
+  <section class="hero">
+    <div>
+      <p>J.A.R.V.I.S.</p>
+      <h1>Agendamentos de Pagamento</h1>
+      <span>Boletos e Pix com recorrência, pausa, execução manual e histórico.</span>
+    </div>
+    <button mat-raised-button color="primary" (click)="abrirNova()" [disabled]="carregando">
+      <mat-icon>add</mat-icon>
+      Novo agendamento
+    </button>
+  </section>
+
+  <mat-card class="filtros" *ngIf="!carregando && !erroCarregamento">
+    <mat-form-field appearance="outline" class="busca">
+      <mat-label>Pesquisar</mat-label>
+      <input matInput [(ngModel)]="busca" placeholder="Beneficiário, valor..." />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Status</mat-label>
+      <mat-select [(ngModel)]="filtroStatus">
+        <mat-option value="">Todos</mat-option>
+        <mat-option *ngFor="let s of statusOpcoes" [value]="s">{{ statusLabel(s) }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+  </mat-card>
+
+  <div class="loading" *ngIf="carregando">
+    <mat-spinner diameter="40"></mat-spinner>
+    <span>Carregando agendamentos...</span>
+  </div>
+
+  <mat-card class="erro" *ngIf="!carregando && erroCarregamento">
+    <mat-icon>error_outline</mat-icon>
+    <p>Não foi possível carregar os agendamentos.</p>
+    <button mat-stroked-button (click)="carregarTudo()">Tentar novamente</button>
+  </mat-card>
+
+  <mat-tab-group *ngIf="!carregando && !erroCarregamento" [(selectedIndex)]="abaAtiva" (selectedIndexChange)="onTabChange($event)">
+    <mat-tab label="Ativos">
+      <mat-card class="empty" *ngIf="!listaFiltrada.length">
+        <mat-icon>event_busy</mat-icon>
+        <p>Nenhum agendamento encontrado.</p>
+        <button mat-stroked-button (click)="abrirNova()">Criar agendamento</button>
+      </mat-card>
+
+      <div class="grid" *ngIf="listaFiltrada.length">
+        <mat-card class="item-card" *ngFor="let a of listaFiltrada" [class.pausado]="a.status === 'PAUSADO'">
+          <div class="card-head">
+            <h2>{{ a.beneficiario }}</h2>
+            <mat-chip [class]="'status-' + a.status.toLowerCase()">{{ statusLabel(a.status) }}</mat-chip>
+          </div>
+          <p class="valor">{{ brl(a.valor) }}</p>
+          <p class="meta">
+            Vencimento: <strong>{{ formatarData(a.dataVencimento) }}</strong>
+            · {{ descricaoRec(a) }}
+          </p>
+          <p class="meta" *ngIf="a.contaDebitoNome">Conta: {{ a.contaDebitoNome }}</p>
+          <p class="meta" *ngIf="a.proximaExecucao">
+            Próxima execução: {{ formatarData(a.proximaExecucao) }}
+          </p>
+          <p class="meta" *ngIf="a.ultimaExecucao">
+            Última execução: {{ formatarData(a.ultimaExecucao) }}
+          </p>
+          <p class="erro-falha" *ngIf="a.mensagemErro" matTooltip="{{ a.mensagemErro }}">
+            <mat-icon>warning</mat-icon> {{ a.mensagemErro }}
+          </p>
+          <div class="acoes">
+            <button mat-button (click)="abrirDetalhe(a)">Detalhes</button>
+            <button mat-button (click)="abrirEditar(a)" [disabled]="a.status === 'CANCELADO' || a.status === 'PAGO'">Editar</button>
+            <button mat-button *ngIf="a.status === 'AGENDADO'" (click)="pausar(a)" [disabled]="acaoBloqueada(a.id)">Pausar</button>
+            <button mat-button *ngIf="a.status === 'PAUSADO'" (click)="ativar(a)" [disabled]="acaoBloqueada(a.id)">Ativar</button>
+            <button mat-button color="primary" (click)="executar(a)" [disabled]="acaoBloqueada(a.id) || a.status === 'CANCELADO'">Executar</button>
+            <button mat-button (click)="marcarPago(a)" [disabled]="acaoBloqueada(a.id)">Marcar pago</button>
+            <button mat-button color="warn" *ngIf="podeCancelar(a)" (click)="cancelar(a)" [disabled]="acaoBloqueada(a.id)">Cancelar</button>
+          </div>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <mat-tab label="Histórico">
+      <div class="loading inline" *ngIf="carregandoHistorico">
+        <mat-spinner diameter="32"></mat-spinner>
+      </div>
+      <mat-card class="empty" *ngIf="!carregandoHistorico && !historico.length">
+        <p>Sem histórico de execuções.</p>
+      </mat-card>
+      <div class="historico-list" *ngIf="!carregandoHistorico && historico.length">
+        <mat-card class="hist-item" *ngFor="let h of historico">
+          <strong>{{ h.beneficiario }}</strong> — {{ brl(h.valor) }}
+          <span>{{ statusLabel(h.status) }} · {{ formatarData(h.dataProcessamento || h.dataVencimento) }}</span>
+          <small *ngIf="h.mensagemErro">{{ h.mensagemErro }}</small>
+        </mat-card>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+
+  <div class="modal-backdrop" *ngIf="modalAberto" (click)="fecharModal()"></div>
+  <mat-card class="modal" *ngIf="modalAberto" (click)="$event.stopPropagation()">
+    <h2>{{ editando ? 'Editar agendamento' : 'Novo agendamento' }}</h2>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Descrição / beneficiário</mat-label>
+      <input matInput [(ngModel)]="form.beneficiario" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Valor (R$)</mat-label>
+      <input matInput type="number" step="0.01" [(ngModel)]="form.valor" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Conta</mat-label>
+      <mat-select [(ngModel)]="form.contaDebitoId">
+        <mat-option *ngFor="let c of contas" [value]="c.id">{{ c.nome }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Cartão (opcional)</mat-label>
+      <mat-select [(ngModel)]="form.cartaoCreditoId">
+        <mat-option [value]="undefined">Nenhum</mat-option>
+        <mat-option *ngFor="let c of cartoes" [value]="c.id">{{ c.nome }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Categoria (opcional)</mat-label>
+      <mat-select [(ngModel)]="form.categoriaId">
+        <mat-option [value]="undefined">Nenhuma</mat-option>
+        <mat-option *ngFor="let cat of categorias" [value]="cat.id">{{ cat.nome }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Recorrência</mat-label>
+      <mat-select [(ngModel)]="form.recorrencia">
+        <mat-option *ngFor="let r of recorrencias" [value]="r">{{ labelRecorrencia(r) }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Data inicial / vencimento</mat-label>
+      <input matInput type="date" [(ngModel)]="form.dataVencimento" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full" *ngIf="form.recorrencia !== 'UNICA'">
+      <mat-label>Data final (opcional)</mat-label>
+      <input matInput type="date" [(ngModel)]="form.dataFim" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full" *ngIf="['MENSAL','BIMESTRAL','TRIMESTRAL','SEMESTRAL'].includes(form.recorrencia || '')">
+      <mat-label>Dia da execução (1–31)</mat-label>
+      <input matInput type="number" min="1" max="31" [(ngModel)]="form.diaVencimentoMensal" />
+      <mat-hint *ngIf="form.diaVencimentoMensal && form.diaVencimentoMensal >= 29">
+        Em meses sem este dia, usa o último dia válido do mês.
+      </mat-hint>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Código boleto / Pix (opcional)</mat-label>
+      <textarea matInput rows="2" [(ngModel)]="form.codigoBarrasOuPix"></textarea>
+    </mat-form-field>
+
+    <div class="modal-acoes">
+      <button mat-button (click)="fecharModal()">Cancelar</button>
+      <button mat-raised-button color="primary" (click)="salvar()" [disabled]="salvando">
+        {{ salvando ? 'Salvando…' : 'Salvar' }}
+      </button>
+    </div>
+  </mat-card>
+
+  <div class="modal-backdrop" *ngIf="detalheAberto" (click)="fecharDetalhe()"></div>
+  <mat-card class="modal detalhe" *ngIf="detalheAberto" (click)="$event.stopPropagation()">
+    <h2>Detalhes</h2>
+    <p><strong>Beneficiário:</strong> {{ detalheAberto.beneficiario }}</p>
+    <p><strong>Valor:</strong> {{ brl(detalheAberto.valor) }}</p>
+    <p><strong>Status:</strong> {{ statusLabel(detalheAberto.status) }}</p>
+    <p><strong>Recorrência:</strong> {{ descricaoRec(detalheAberto) }}</p>
+    <p><strong>Próxima execução:</strong> {{ formatarData(detalheAberto.proximaExecucao) }}</p>
+    <p><strong>Última execução:</strong> {{ formatarData(detalheAberto.ultimaExecucao) }}</p>
+    <p *ngIf="detalheAberto.mensagemErro"><strong>Última falha:</strong> {{ detalheAberto.mensagemErro }}</p>
+    <p *ngIf="detalheAberto.falhasConsecutivas"><strong>Falhas consecutivas:</strong> {{ detalheAberto.falhasConsecutivas }}</p>
+    <button mat-button (click)="fecharDetalhe()">Fechar</button>
+  </mat-card>
+</div>

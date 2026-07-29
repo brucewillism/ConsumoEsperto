@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.dto.CategoriaDTO;
 import com.consumoesperto.dto.MatchResult;
+import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.CategoriaRepository;
@@ -92,9 +93,9 @@ public class CategoriaService {
     @Transactional
     public CategoriaDTO atualizar(Long usuarioId, Long categoriaId, CategoriaDTO dto) {
         Categoria categoria = categoriaRepository.findById(categoriaId)
-            .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada"));
         if (!categoria.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("Categoria não pertence ao usuário");
+            throw new ResourceNotFoundException("Categoria não encontrada");
         }
         categoria.setNome(dto.getNome());
         categoria.setDescricao(dto.getDescricao());
@@ -106,9 +107,9 @@ public class CategoriaService {
     @Transactional
     public void deletar(Long usuarioId, Long categoriaId) {
         Categoria categoria = categoriaRepository.findById(categoriaId)
-            .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
+            .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada"));
         if (!categoria.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("Categoria não pertence ao usuário");
+            throw new ResourceNotFoundException("Categoria não encontrada");
         }
         categoriaRepository.delete(categoria);
     }

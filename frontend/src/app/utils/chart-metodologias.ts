@@ -109,36 +109,37 @@ export const CHART_METODOLOGIAS: Record<ChartMetodologiaId, ChartMetodologia> = 
     fonte: 'GET /api/relatorios/mensal?ano=&mes= e GET /api/transacoes (período).',
   },
   RELATORIO_PIZZA: {
-    titulo: 'Receitas vs Despesas (previsto)',
+    titulo: 'Receitas vs Despesas',
     itens: [
-      'Gráfico planejado: duas fatias comparando total de receitas e total de despesas do período filtrado.',
-      'Considerará apenas transações confirmadas no intervalo selecionado nos filtros acima.',
+      'Gráfico de rosca com duas fatias: total de receitas e total de despesas do período filtrado.',
+      'Considera transações confirmadas após filtros locais (tipo e cartão).',
+      'Valores formatados em pt-BR no tooltip.',
     ],
-    fonte: 'Mesmos dados do resumo do relatório (em implementação).',
+    fonte: 'Transações do período (GET /api/transacoes) após filtros locais.',
   },
   RELATORIO_LINHA: {
-    titulo: 'Evolução temporal (previsto)',
+    titulo: 'Evolução temporal',
     itens: [
-      'Gráfico planejado: saldo acumulado dia a dia ou mês a mês no período filtrado.',
+      'Linha com saldo acumulado dia a dia no período filtrado.',
       'Cada ponto = receitas − despesas acumuladas até aquela data.',
     ],
-    fonte: 'Transações do período (em implementação).',
+    fonte: 'Transações do período filtrado.',
   },
   RELATORIO_BARRAS: {
-    titulo: 'Por categoria (previsto)',
+    titulo: 'Por categoria',
     itens: [
-      'Gráfico planejado: barras com despesas agrupadas por categoria no período filtrado.',
-      'Equivalente ao gráfico de pizza do dashboard, porém para o intervalo customizado.',
+      'Barras horizontais com despesas agrupadas por categoria (até 12 categorias).',
+      'Equivalente ao gráfico do dashboard, porém para o intervalo customizado.',
     ],
-    fonte: 'GET /api/relatorios/categoria (em implementação).',
+    fonte: 'Transações DESPESA do período filtrado.',
   },
   RELATORIO_ROSCA: {
-    titulo: 'Por cartão (previsto)',
+    titulo: 'Por cartão ou forma de pagamento',
     itens: [
-      'Gráfico planejado: despesas vinculadas a cada cartão de crédito no período.',
+      'Rosca com despesas vinculadas a cada cartão de crédito ou conta/débito.',
       'Inclui compras na fatura e lançamentos diretos associados ao cartão.',
     ],
-    fonte: 'Transações filtradas por cartaoId (em implementação).',
+    fonte: 'Transações DESPESA filtradas por cartaoId quando aplicável.',
   },
   RELATORIO_IR_PDF: {
     titulo: 'Relatório para IR (PDF)',

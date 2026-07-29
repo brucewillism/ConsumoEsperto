@@ -1,11 +1,16 @@
 package com.consumoesperto.service;
 
 import com.consumoesperto.dto.AgendamentoPagamentoDTO;
+import com.consumoesperto.dto.AgendamentoPagamentoRequest;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.AgendamentoPagamento;
+import com.consumoesperto.model.CartaoCredito;
+import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.AgendamentoPagamentoRepository;
+import com.consumoesperto.repository.CategoriaRepository;
+import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.service.jarvis.TratamentoUsuarioService;
@@ -48,6 +53,8 @@ public class AgendamentoPagamentoService {
     private final AgendamentoPagamentoRepository agendamentoRepository;
     private final TransacaoRepository transacaoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final CategoriaRepository categoriaRepository;
+    private final CartaoCreditoRepository cartaoCreditoRepository;
     private final ContaBancariaService contaBancariaService;
     private final TransacaoService transacaoService;
     private final UsuarioSessaoContextoService sessaoContextoService;
@@ -173,6 +180,173 @@ public class AgendamentoPagamentoService {
         ).isPresent();
     }
 
+    @Transactional
+    public AgendamentoPagamentoDTO criarManual(Long usuarioId, AgendamentoPagamentoRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Informe os dados do agendamento.");
+        }
+        if (request.getContaDebitoId() == null) {
+            throw new IllegalArgumentException("Selecione a conta de débito.");
+        }
+        String beneficiario = request.getBeneficiario() != null ? request.getBeneficiario().trim() : "";
+        if (beneficiario.isBlank()) {
+            throw new IllegalArgumentException("Informe o beneficiário.");
+        }
+        if (request.getValor() == null || request.getValor().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Informe um valor positivo.");
+        }
+        if (request.getDataVencimento() == null) {
+            throw new IllegalArgumentException("Informe a data de vencimento.");
+        }
+        DadosPagamento dados = new DadosPagamento(
+            "MANUAL",
+            beneficiario,
+            request.getValor().setScale(SCALE, RoundingMode.HALF_UP),
+            request.getDataVencimento(),
+            higienizarCodigo(request.getCodigoBarrasOuPix())
+        );
+        validarParaAgendamento(dados);
+
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
+        ContaBancaria conta = contaBancariaService.buscarEntidade(request.getContaDebitoId(), usuarioId);
+
+        AgendamentoPagamento ag = new AgendamentoPagamento();
+        ag.setUsuario(usuario);
+        ag.setContaDebito(conta);
+        ag.setBeneficiario(dados.beneficiario());
+        ag.setValor(dados.valor());
+        ag.setDataVencimento(dados.dataVencimento());
+        ag.setCodigoBarrasOuPix(dados.codigoBarrasOuPix());
+        ag.setStatus(AgendamentoPagamento.StatusAgendamento.AGENDADO);
+        aplicarRecorrenciaRequest(ag, request);
+        vincularCategoriaECartao(ag, usuarioId, request.getCategoriaId(), request.getCartaoCreditoId());
+        ag.setProximaExecucao(ag.getDataVencimento());
+        return toDto(agendamentoRepository.save(ag));
+    }
+
+    @Transactional(readOnly = true)
+    public AgendamentoPagamentoDTO buscar(Long usuarioId, Long id) {
+        return toDto(buscarEntidade(usuarioId, id));
+    }
+
+    @Transactional
+    public AgendamentoPagamentoDTO atualizar(Long usuarioId, Long id, AgendamentoPagamentoRequest request) {
+        AgendamentoPagamento ag = buscarEntidade(usuarioId, id);
+        if (ag.getStatus() != AgendamentoPagamento.StatusAgendamento.AGENDADO
+            && ag.getStatus() != AgendamentoPagamento.StatusAgendamento.PAUSADO) {
+            throw new IllegalStateException("Só é possível editar agendamentos ativos ou pausados.");
+        }
+        if (request.getContaDebitoId() != null) {
+            ag.setContaDebito(contaBancariaService.buscarEntidade(request.getContaDebitoId(), usuarioId));
+        }
+        if (request.getBeneficiario() != null && !request.getBeneficiario().isBlank()) {
+            ag.setBeneficiario(request.getBeneficiario().trim());
+        }
+        if (request.getValor() != null && request.getValor().compareTo(BigDecimal.ZERO) > 0) {
+            ag.setValor(request.getValor().setScale(SCALE, RoundingMode.HALF_UP));
+        }
+        if (request.getDataVencimento() != null) {
+            ag.setDataVencimento(request.getDataVencimento());
+            ag.setProximaExecucao(request.getDataVencimento());
+        }
+        if (request.getCodigoBarrasOuPix() != null) {
+            ag.setCodigoBarrasOuPix(higienizarCodigo(request.getCodigoBarrasOuPix()));
+        }
+        aplicarRecorrenciaRequest(ag, request);
+        vincularCategoriaECartao(ag, usuarioId, request.getCategoriaId(), request.getCartaoCreditoId());
+        return toDto(agendamentoRepository.save(ag));
+    }
+
+    @Transactional
+    public AgendamentoPagamentoDTO pausar(Long usuarioId, Long id) {
+        AgendamentoPagamento ag = buscarEntidade(usuarioId, id);
+        if (ag.getStatus() != AgendamentoPagamento.StatusAgendamento.AGENDADO) {
+            throw new IllegalStateException("Só agendamentos ativos podem ser pausados.");
+        }
+        ag.setStatus(AgendamentoPagamento.StatusAgendamento.PAUSADO);
+        return toDto(agendamentoRepository.save(ag));
+    }
+
+    @Transactional
+    public AgendamentoPagamentoDTO ativar(Long usuarioId, Long id) {
+        AgendamentoPagamento ag = buscarEntidade(usuarioId, id);
+        if (ag.getStatus() != AgendamentoPagamento.StatusAgendamento.PAUSADO) {
+            throw new IllegalStateException("Só agendamentos pausados podem ser reativados.");
+        }
+        ag.setStatus(AgendamentoPagamento.StatusAgendamento.AGENDADO);
+        if (ag.getProximaExecucao() == null) {
+            ag.setProximaExecucao(ag.getDataVencimento());
+        }
+        return toDto(agendamentoRepository.save(ag));
+    }
+
+    @Transactional
+    public AgendamentoPagamentoDTO marcarComoPago(Long usuarioId, Long id) {
+        AgendamentoPagamento ag = buscarEntidade(usuarioId, id);
+        if (ag.getStatus() == AgendamentoPagamento.StatusAgendamento.CANCELADO) {
+            throw new IllegalStateException("Agendamento cancelado.");
+        }
+        ag.setStatus(AgendamentoPagamento.StatusAgendamento.PAGO);
+        ag.setDataProcessamento(AppTimeZone.agora());
+        ag.setUltimaExecucao(AppTimeZone.hoje());
+        return toDto(agendamentoRepository.save(ag));
+    }
+
+    @Transactional
+    public AgendamentoPagamentoDTO executarManual(Long usuarioId, Long id) {
+        processarUmComLock(id);
+        return buscar(usuarioId, id);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AgendamentoPagamentoDTO> historico(Long usuarioId) {
+        return agendamentoRepository.findByUsuarioIdOrderByVencimentoDesc(usuarioId).stream()
+            .map(this::toDto)
+            .collect(Collectors.toList());
+    }
+
+    private AgendamentoPagamento buscarEntidade(Long usuarioId, Long id) {
+        return agendamentoRepository.findByIdAndUsuarioId(id, usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Agendamento não encontrado."));
+    }
+
+    private void aplicarRecorrenciaRequest(AgendamentoPagamento ag, AgendamentoPagamentoRequest request) {
+        if (request == null) {
+            return;
+        }
+        if (request.getRecorrencia() != null && !request.getRecorrencia().isBlank()) {
+            ag.setRecorrencia(AgendamentoPagamento.RecorrenciaAgendamento.valueOf(
+                request.getRecorrencia().trim().toUpperCase(Locale.ROOT)));
+        } else if (ag.getRecorrencia() == null) {
+            ag.setRecorrencia(AgendamentoPagamento.RecorrenciaAgendamento.UNICA);
+        }
+        ag.setDataFim(request.getDataFim());
+        if (request.getDiaVencimentoMensal() != null) {
+            ag.setDiaVencimentoMensal(request.getDiaVencimentoMensal());
+        } else if (ag.getDataVencimento() != null) {
+            ag.setDiaVencimentoMensal(ag.getDataVencimento().getDayOfMonth());
+        }
+    }
+
+    private void vincularCategoriaECartao(
+        AgendamentoPagamento ag,
+        Long usuarioId,
+        Long categoriaId,
+        Long cartaoId
+    ) {
+        if (categoriaId != null) {
+            Categoria cat = categoriaRepository.findByIdAndUsuarioId(categoriaId, usuarioId)
+                .orElseThrow(() -> new IllegalArgumentException("Categoria não encontrada."));
+            ag.setCategoria(cat);
+        }
+        if (cartaoId != null) {
+            CartaoCredito cartao = cartaoCreditoRepository.findByIdAndUsuarioId(cartaoId, usuarioId)
+                .orElseThrow(() -> new IllegalArgumentException("Cartão não encontrado."));
+            ag.setCartaoCredito(cartao);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<AgendamentoPagamentoDTO> listar(Long usuarioId) {
         return agendamentoRepository.findByUsuarioIdOrderByVencimento(usuarioId).stream()
@@ -270,8 +444,35 @@ public class AgendamentoPagamentoService {
 
         ag.setStatus(AgendamentoPagamento.StatusAgendamento.PAGO);
         ag.setDataProcessamento(AppTimeZone.agora());
+        ag.setUltimaExecucao(AppTimeZone.hoje());
+        ag.setUltimaChaveExecucao(chaveExecucao(ag, dataTx));
         agendamentoRepository.save(ag);
         log.info("[AGENDAMENTO] Pago id={} userId={} valor={}", ag.getId(), usuarioId, ag.getValor());
+        reagendarSeRecorrente(ag);
+    }
+
+    private void reagendarSeRecorrente(AgendamentoPagamento ag) {
+        if (ag.getRecorrencia() == null || ag.getRecorrencia() == AgendamentoPagamento.RecorrenciaAgendamento.UNICA) {
+            return;
+        }
+        LocalDate prox = AgendamentoRecorrenciaUtil.calcularProximaExecucao(
+            ag.getDataVencimento(), ag.getRecorrencia(), ag.getDiaVencimentoMensal());
+        if (prox == null) {
+            return;
+        }
+        if (ag.getDataFim() != null && prox.isAfter(ag.getDataFim())) {
+            return;
+        }
+        ag.setDataVencimento(prox);
+        ag.setProximaExecucao(prox);
+        ag.setStatus(AgendamentoPagamento.StatusAgendamento.AGENDADO);
+        ag.setDataProcessamento(null);
+        ag.setMensagemErro(null);
+        agendamentoRepository.save(ag);
+    }
+
+    private static String chaveExecucao(AgendamentoPagamento ag, LocalDateTime dataTx) {
+        return ag.getId() + ":" + dataTx.toLocalDate();
     }
 
     private void notificarFalha(AgendamentoPagamento ag, ContaBancaria conta) {
@@ -430,6 +631,16 @@ public class AgendamentoPagamentoService {
             .dataCriacao(a.getDataCriacao())
             .dataProcessamento(a.getDataProcessamento())
             .mensagemErro(a.getMensagemErro())
+            .recorrencia(a.getRecorrencia() != null ? a.getRecorrencia().name() : null)
+            .dataFim(a.getDataFim())
+            .proximaExecucao(a.getProximaExecucao())
+            .ultimaExecucao(a.getUltimaExecucao())
+            .diaVencimentoMensal(a.getDiaVencimentoMensal())
+            .categoriaId(a.getCategoria() != null ? a.getCategoria().getId() : null)
+            .categoriaNome(a.getCategoria() != null ? a.getCategoria().getNome() : null)
+            .cartaoCreditoId(a.getCartaoCredito() != null ? a.getCartaoCredito().getId() : null)
+            .cartaoCreditoNome(a.getCartaoCredito() != null ? a.getCartaoCredito().getNome() : null)
+            .falhasConsecutivas(a.getFalhasConsecutivas())
             .build();
     }
 }
