@@ -34,7 +34,7 @@ jobs:
       DATABASE_URL: jdbc:postgresql://localhost:5432/consumoesperto_test
       DATABASE_USERNAME: consumo
       DATABASE_PASSWORD: consumo_ci
-      JWT_SECRET: ci_jwt_secret_for_integracao_pipeline_only_64_chars_minimum
+      JWT_SECRET: ci_jwt_secret_consumoesperto_github_actions_hs512_minimum_sixty_four_chars
       TEST_DATASOURCE_DRIVER: org.postgresql.Driver
       TEST_JPA_DIALECT: org.hibernate.dialect.PostgreSQLDialect
       TEST_DDL_AUTO: validate

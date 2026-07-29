@@ -42,8 +42,10 @@ public class RequiredProductionEnvValidator {
             );
         }
         String jwt = environment.getProperty("jwt.secret", "");
-        if (jwt.length() < 32) {
-            throw new IllegalStateException("JWT_SECRET deve ter pelo menos 32 caracteres.");
+        if (jwt.length() < 64) {
+            throw new IllegalStateException(
+                "JWT_SECRET deve ter pelo menos 64 caracteres (HS512 exige chave >= 512 bits)."
+            );
         }
     }
 

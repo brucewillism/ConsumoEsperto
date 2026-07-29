@@ -28,7 +28,8 @@ jobs:
       DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/consumoesperto_ci
       DATABASE_USERNAME: consumo
       DATABASE_PASSWORD: consumo_ci
-      JWT_SECRET: ci-jwt-secret-minimo-32-chars-long!!
+      JWT_SECRET: ci_jwt_secret_consumoesperto_github_actions_hs512_minimum_sixty_four_chars
+      SPRING_PROFILES_ACTIVE: integracao
     steps:
       - uses: actions/checkout@v4
 
