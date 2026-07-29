@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, '..', 'dist', 'frontend', 'browser');
 const forbidden = ['consumoesperto.brucew07.com.br', 'brucew07.com.br/api'];
-const required = 'localhost:18081';
+const required = process.env.INTEGRACAO_REQUIRED_API ?? 'localhost:18081';
 
 if (!fs.existsSync(distDir)) {
   console.error(`Dist ausente: ${distDir}`);
@@ -31,13 +31,11 @@ if (hits.length) {
   process.exit(1);
 }
 
-const mainJs = files.find((f) => f.startsWith('main-') && f.endsWith('.js'));
-if (mainJs) {
-  const main = fs.readFileSync(path.join(distDir, mainJs), 'utf8');
-  if (!main.includes(required)) {
-    console.error(`Bundle de integração não referencia API local (${required}) em ${mainJs}`);
-    process.exit(1);
-  }
+const jsFiles = files.filter((f) => f.endsWith('.js'));
+const bundleText = jsFiles.map((f) => fs.readFileSync(path.join(distDir, f), 'utf8')).join('\n');
+if (!bundleText.includes(required)) {
+  console.error(`Bundle de integração não referencia API local (${required}) em nenhum chunk JS`);
+  process.exit(1);
 }
 
 console.log(`OK: ${files.length} arquivos verificados em dist/frontend/browser`);

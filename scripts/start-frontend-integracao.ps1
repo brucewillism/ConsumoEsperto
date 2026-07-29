@@ -1,4 +1,4 @@
-# Sobe frontend na porta 14200 para integracao/E2E (dist estatico — evita falha de budget do ng serve)
+# Sobe frontend na porta 14200 para integracao local (dist estatico — evita falha de budget do ng serve)
 param([switch]$Rebuild)
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent

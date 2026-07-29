@@ -10,7 +10,7 @@
 | Frontend | `cd frontend && npm ci && npm run build` | idem | `frontend-ci.yml` | idem |
 | Testes frontend | `cd frontend && npm test` | idem | idem | idem |
 | PostgreSQL | serviço Windows local | container Compose | service container CI | VPS |
-| E2E Playwright | `cd e2e && npm ci && npx playwright test` | stack completa | `e2e-ci.yml` | staging |
+| Smoke integração HTTP | `.\scripts\smoke-integracao.ps1` | stack completa | `integracao-completa-ci.yml` | manual |
 | Docker stack | **LIMITADO PELO AMBIENTE** se Docker ausente | `docker compose up` | opcional | VPS |
 | Fiscal | JSON em `backend/src/main/resources/fiscal/tabelas/` | idem | testes unitários | idem |
 | Migração CompraParcelada | dry-run via serviço (não produção) | banco teste | não automático | documentado |
@@ -28,14 +28,11 @@ npm ci
 npm test
 npm run build
 
+# Integração completa (backend + smoke HTTP)
+.\scripts\run-integracao-completa.ps1
+
 # PostgreSQL smoke (não destrutivo em produção)
 .\scripts\postgres-smoke.ps1
-
-# E2E
-cd e2e
-npm ci
-npx playwright install chromium
-npm test
 ```
 
 ## Variáveis (ver `.env.example`)
