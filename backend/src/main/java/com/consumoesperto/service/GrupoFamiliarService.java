@@ -4,6 +4,7 @@ import com.consumoesperto.dto.ConviteGrupoFamiliarRequest;
 import com.consumoesperto.dto.GrupoFamiliarDTO;
 import com.consumoesperto.dto.GrupoFamiliarMembroDTO;
 import com.consumoesperto.dto.GrupoFamiliarRequest;
+import com.consumoesperto.exception.AuthorizationException;
 import com.consumoesperto.model.GrupoFamiliar;
 import com.consumoesperto.model.GrupoFamiliarMembro;
 import com.consumoesperto.model.Usuario;
@@ -30,6 +31,9 @@ public class GrupoFamiliarService {
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final WhatsAppUserMappingService whatsAppUserMappingService;
 
+    /** Prazo de validade de um convite pendente. */
+    static final int CONVITE_VALIDADE_DIAS = 7;
+
     @Transactional
     public GrupoFamiliarDTO criar(Long usuarioId, GrupoFamiliarRequest request) {
         Usuario usuario = usuarioRepository.findById(usuarioId)
@@ -46,6 +50,7 @@ public class GrupoFamiliarService {
         membro.setUsuario(usuario);
         membro.setConvidadoPor(usuario);
         membro.setStatus(GrupoFamiliarMembro.Status.ACEITO);
+        membro.setPapel(GrupoFamiliarMembro.Papel.OWNER);
         membro.setTokenConvite(UUID.randomUUID().toString());
         membro.setDataResposta(LocalDateTime.now());
         membroRepository.save(membro);
@@ -61,6 +66,7 @@ public class GrupoFamiliarService {
     public GrupoFamiliarDTO convidar(Long usuarioId, ConviteGrupoFamiliarRequest request) {
         GrupoFamiliar grupo = grupoAceitoDoUsuario(usuarioId)
             .orElseThrow(() -> new IllegalArgumentException("Crie um grupo antes de convidar."));
+        exigirOwner(grupo.getId(), usuarioId);
         Usuario convidador = usuarioRepository.findById(usuarioId).orElseThrow();
         String email = request != null && request.getEmail() != null ? request.getEmail().trim() : "";
         String whatsapp = request != null && request.getWhatsapp() != null ? request.getWhatsapp().trim() : "";
@@ -77,8 +83,26 @@ public class GrupoFamiliarService {
         }
 
         Usuario convidado = resolveUsuario(email, whatsapp).orElse(null);
-        if (convidado != null && membroRepository.findByGrupoFamiliarIdAndUsuarioId(grupo.getId(), convidado.getId()).isPresent()) {
-            throw new IllegalArgumentException("Usuário já faz parte deste grupo.");
+        if (convidado != null) {
+            GrupoFamiliarMembro existente = membroRepository
+                .findByGrupoFamiliarIdAndUsuarioId(grupo.getId(), convidado.getId())
+                .orElse(null);
+            if (existente != null
+                && (existente.getStatus() == GrupoFamiliarMembro.Status.ACEITO
+                    || existente.getStatus() == GrupoFamiliarMembro.Status.PENDENTE)) {
+                throw new IllegalArgumentException("Usuário já faz parte deste grupo ou tem convite ativo.");
+            }
+        }
+        // Impede convite duplicado ativo para a mesma identidade (e-mail/WhatsApp)
+        final String emailAlvo = email;
+        final String whatsappAlvo = whatsapp;
+        boolean duplicadoAtivo = membroRepository.findByGrupoFamiliarIdFetchUsuario(grupo.getId()).stream()
+            .filter(m -> m.getStatus() == GrupoFamiliarMembro.Status.PENDENTE && !conviteExpirado(m))
+            .anyMatch(m ->
+                (!emailAlvo.isBlank() && emailAlvo.equalsIgnoreCase(m.getConviteEmail()))
+                    || (!whatsappAlvo.isBlank() && whatsappAlvo.equals(m.getConviteWhatsapp())));
+        if (duplicadoAtivo) {
+            throw new IllegalArgumentException("Já existe um convite ativo para este contato.");
         }
 
         GrupoFamiliarMembro convite = new GrupoFamiliarMembro();
@@ -89,6 +113,7 @@ public class GrupoFamiliarService {
         convite.setConviteWhatsapp(whatsapp.isBlank() ? null : whatsapp);
         convite.setTokenConvite(UUID.randomUUID().toString());
         convite.setStatus(GrupoFamiliarMembro.Status.PENDENTE);
+        convite.setPapel(GrupoFamiliarMembro.Papel.MEMBER);
         membroRepository.save(convite);
 
         if (convidado != null) {
@@ -105,6 +130,7 @@ public class GrupoFamiliarService {
         String email = usuario.getEmail() != null ? usuario.getEmail() : "";
         String whatsapp = usuario.getWhatsappNumero() != null ? usuario.getWhatsappNumero() : "";
         return membroRepository.findPendentesParaIdentidade(email, whatsapp).stream()
+            .filter(m -> !conviteExpirado(m))
             .map(m -> toMembroDto(m, usuarioId))
             .collect(Collectors.toList());
     }
@@ -115,13 +141,62 @@ public class GrupoFamiliarService {
             .orElseThrow(() -> new IllegalArgumentException("Convite não encontrado"));
         Usuario usuario = usuarioRepository.findById(usuarioId).orElseThrow();
         if (!identidadeConviteCombina(convite, usuario)) {
-            throw new IllegalArgumentException("Convite não pertence ao usuário.");
+            // Não revelar existência do convite a terceiros
+            throw new IllegalArgumentException("Convite não encontrado");
+        }
+        if (convite.getStatus() != GrupoFamiliarMembro.Status.PENDENTE) {
+            throw new IllegalArgumentException("Este convite já foi respondido ou cancelado.");
+        }
+        if (conviteExpirado(convite)) {
+            convite.setStatus(GrupoFamiliarMembro.Status.EXPIRADO);
+            convite.setDataResposta(LocalDateTime.now());
+            membroRepository.save(convite);
+            throw new IllegalArgumentException("Este convite expirou. Peça um novo convite ao administrador do grupo.");
         }
         convite.setUsuario(usuario);
         convite.setStatus(aceitar ? GrupoFamiliarMembro.Status.ACEITO : GrupoFamiliarMembro.Status.RECUSADO);
         convite.setDataResposta(LocalDateTime.now());
         membroRepository.save(convite);
         return toDto(convite.getGrupoFamiliar(), usuarioId);
+    }
+
+    /** Cancela um convite pendente do grupo — somente OWNER. */
+    @Transactional
+    public GrupoFamiliarDTO cancelarConvite(Long usuarioId, Long membroId) {
+        GrupoFamiliar grupo = grupoAceitoDoUsuario(usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Você não participa de um grupo familiar."));
+        exigirOwner(grupo.getId(), usuarioId);
+        GrupoFamiliarMembro convite = membroRepository.findById(membroId)
+            .filter(m -> m.getGrupoFamiliar() != null && grupo.getId().equals(m.getGrupoFamiliar().getId()))
+            .orElseThrow(() -> new IllegalArgumentException("Convite não encontrado"));
+        if (convite.getStatus() != GrupoFamiliarMembro.Status.PENDENTE) {
+            throw new IllegalArgumentException("Somente convites pendentes podem ser cancelados.");
+        }
+        convite.setStatus(GrupoFamiliarMembro.Status.CANCELADO);
+        convite.setDataResposta(LocalDateTime.now());
+        membroRepository.save(convite);
+        return toDto(grupo, usuarioId);
+    }
+
+    /** Remove um membro aceito do grupo — somente OWNER; OWNER não remove a si mesmo (use sair). */
+    @Transactional
+    public GrupoFamiliarDTO removerMembro(Long usuarioId, Long membroId) {
+        GrupoFamiliar grupo = grupoAceitoDoUsuario(usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Você não participa de um grupo familiar."));
+        exigirOwner(grupo.getId(), usuarioId);
+        GrupoFamiliarMembro membro = membroRepository.findById(membroId)
+            .filter(m -> m.getGrupoFamiliar() != null && grupo.getId().equals(m.getGrupoFamiliar().getId()))
+            .orElseThrow(() -> new IllegalArgumentException("Membro não encontrado"));
+        if (membro.getStatus() != GrupoFamiliarMembro.Status.ACEITO) {
+            throw new IllegalArgumentException("Somente membros ativos podem ser removidos.");
+        }
+        if (membro.getUsuario() != null && usuarioId.equals(membro.getUsuario().getId())) {
+            throw new IllegalArgumentException("Para deixar o grupo use a opção sair.");
+        }
+        membro.setStatus(GrupoFamiliarMembro.Status.CANCELADO);
+        membro.setDataResposta(LocalDateTime.now());
+        membroRepository.save(membro);
+        return toDto(grupo, usuarioId);
     }
 
     @Transactional(readOnly = true)
@@ -151,6 +226,7 @@ public class GrupoFamiliarService {
     public GrupoFamiliarDTO renomear(Long usuarioId, GrupoFamiliarRequest request) {
         GrupoFamiliar grupo = grupoAceitoDoUsuario(usuarioId)
             .orElseThrow(() -> new IllegalArgumentException("Você não participa de um grupo familiar."));
+        exigirOwner(grupo.getId(), usuarioId);
         String nome = request != null && request.getNome() != null ? request.getNome().trim() : "";
         if (nome.isBlank()) {
             throw new IllegalArgumentException("Informe um nome para o grupo.");
@@ -168,9 +244,36 @@ public class GrupoFamiliarService {
         GrupoFamiliarMembro membro = membroRepository.findAceitosByUsuarioId(usuarioId).stream()
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("Você não participa de um grupo familiar."));
+        if (membro.getPapel() == GrupoFamiliarMembro.Papel.OWNER) {
+            long outrosAtivos = membroRepository
+                .findByGrupoFamiliarIdFetchUsuario(membro.getGrupoFamiliar().getId()).stream()
+                .filter(m -> m.getStatus() == GrupoFamiliarMembro.Status.ACEITO)
+                .filter(m -> m.getUsuario() == null || !usuarioId.equals(m.getUsuario().getId()))
+                .count();
+            if (outrosAtivos > 0) {
+                throw new IllegalArgumentException(
+                    "O administrador só pode encerrar o grupo depois de remover os demais membros.");
+            }
+        }
         membro.setStatus(GrupoFamiliarMembro.Status.CANCELADO);
         membro.setDataResposta(LocalDateTime.now());
         membroRepository.save(membro);
+    }
+
+    /** Lança 403 quando o usuário não é OWNER ativo do grupo. */
+    private void exigirOwner(Long grupoId, Long usuarioId) {
+        GrupoFamiliarMembro membro = membroRepository.findByGrupoFamiliarIdAndUsuarioId(grupoId, usuarioId)
+            .orElseThrow(() -> new AuthorizationException("Apenas o administrador do grupo pode executar esta ação."));
+        if (membro.getStatus() != GrupoFamiliarMembro.Status.ACEITO
+            || membro.getPapel() != GrupoFamiliarMembro.Papel.OWNER) {
+            throw new AuthorizationException("Apenas o administrador do grupo pode executar esta ação.");
+        }
+    }
+
+    private static boolean conviteExpirado(GrupoFamiliarMembro convite) {
+        return convite.getStatus() == GrupoFamiliarMembro.Status.PENDENTE
+            && convite.getDataConvite() != null
+            && convite.getDataConvite().isBefore(LocalDateTime.now().minusDays(CONVITE_VALIDADE_DIAS));
     }
 
     private Optional<Usuario> resolveUsuario(String email, String whatsapp) {
@@ -215,6 +318,7 @@ public class GrupoFamiliarService {
         dto.setEmail(u != null ? u.getEmail() : m.getConviteEmail());
         dto.setWhatsapp(u != null ? u.getWhatsappNumero() : m.getConviteWhatsapp());
         dto.setStatus(m.getStatus() != null ? m.getStatus().name() : null);
+        dto.setPapel(m.getPapel() != null ? m.getPapel().name() : GrupoFamiliarMembro.Papel.MEMBER.name());
         dto.setEu(u != null && u.getId().equals(usuarioId));
         return dto;
     }

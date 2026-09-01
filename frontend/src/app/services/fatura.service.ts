@@ -234,9 +234,7 @@ export class FaturaService {
       case 'PAGA':
         return 'PAID';
       case StatusFatura.PARCIAL:
-      case StatusFatura.PARCIALMENTE_PAGA:
       case 'PARCIAL':
-      case 'PARCIALMENTE_PAGA':
         return 'PARTIAL';
       case StatusFatura.VENCIDA:
       case 'VENCIDA':

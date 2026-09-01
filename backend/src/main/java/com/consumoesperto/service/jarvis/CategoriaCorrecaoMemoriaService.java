@@ -25,7 +25,7 @@ public class CategoriaCorrecaoMemoriaService {
         if (userId == null || descricaoTransacao == null || descricaoTransacao.isBlank() || categoriaIdNova == null) {
             return;
         }
-        String catNome = categoriaRepository.findById(categoriaIdNova)
+        String catNome = categoriaRepository.findByIdAndUsuarioId(categoriaIdNova, userId)
             .map(c -> c.getNome())
             .orElse("Categoria");
         String ctx = "Correção: despesas com descrição «" + descricaoTransacao.trim()

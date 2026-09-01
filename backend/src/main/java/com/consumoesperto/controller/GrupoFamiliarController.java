@@ -65,6 +65,24 @@ public class GrupoFamiliarController {
         return ResponseEntity.ok(grupoFamiliarService.convitesPendentes(user.getId()));
     }
 
+    /** Cancela um convite pendente — somente OWNER do grupo. */
+    @DeleteMapping("/convites/{membroId}")
+    public ResponseEntity<GrupoFamiliarDTO> cancelarConvite(
+        @AuthenticationPrincipal UserPrincipal user,
+        @PathVariable Long membroId
+    ) {
+        return ResponseEntity.ok(grupoFamiliarService.cancelarConvite(user.getId(), membroId));
+    }
+
+    /** Remove um membro ativo — somente OWNER do grupo. */
+    @DeleteMapping("/membros/{membroId}")
+    public ResponseEntity<GrupoFamiliarDTO> removerMembro(
+        @AuthenticationPrincipal UserPrincipal user,
+        @PathVariable Long membroId
+    ) {
+        return ResponseEntity.ok(grupoFamiliarService.removerMembro(user.getId(), membroId));
+    }
+
     @PostMapping("/convites/{membroId}/responder")
     public ResponseEntity<GrupoFamiliarDTO> responder(
         @AuthenticationPrincipal UserPrincipal user,

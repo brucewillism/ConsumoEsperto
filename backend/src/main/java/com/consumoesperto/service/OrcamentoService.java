@@ -171,7 +171,7 @@ public class OrcamentoService {
         Optional<Orcamento> opt = orcamentoRepository.findByUsuarioIdAndCategoriaIdAndMesAndAno(
             usuarioId, categoriaId, ym.getMonthValue(), ym.getYear());
         if (opt.isEmpty()) {
-            opt = categoriaRepository.findById(categoriaId).flatMap(cat ->
+            opt = categoriaRepository.findByIdAndUsuarioId(categoriaId, usuarioId).flatMap(cat ->
                 grupoFamiliarService.grupoAceitoDoUsuario(usuarioId).stream()
                     .flatMap(g -> orcamentoRepository.findCompartilhadosByGrupoIdAndMesAndAno(
                         g.getId(), ym.getMonthValue(), ym.getYear()).stream())

@@ -10,6 +10,7 @@ import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
+import com.consumoesperto.service.AgendamentoExecucaoRegistroService;
 import com.consumoesperto.service.AgendamentoPagamentoService;
 import com.consumoesperto.service.ContaBancariaService;
 import com.consumoesperto.service.TransacaoService;
@@ -60,6 +61,7 @@ class AgendamentoIdempotenteRegressionTest {
     @Mock private TransacaoService transacaoService;
     @Mock private UsuarioSessaoContextoService sessaoContextoService;
     @Mock private WhatsAppNotificationService whatsAppNotificationService;
+    @Mock private AgendamentoExecucaoRegistroService execucaoRegistroService;
 
     @InjectMocks private AgendamentoPagamentoService service;
 
@@ -77,6 +79,8 @@ class AgendamentoIdempotenteRegressionTest {
         conta.setNome("Corrente");
         when(contaBancariaService.buscarEntidade(7L, 1L)).thenReturn(conta);
         when(agendamentoRepository.save(any(AgendamentoPagamento.class))).thenAnswer(inv -> inv.getArgument(0));
+        // No teste unitário não há proxy Spring: o self aponta para a própria instância
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "self", service);
     }
 
     private AgendamentoPagamento agendamento(Long id, LocalDate vencimento) {

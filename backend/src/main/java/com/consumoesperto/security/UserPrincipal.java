@@ -29,8 +29,11 @@ public class UserPrincipal implements UserDetails {
     private Collection<? extends GrantedAuthority> authorities;
 
     public static UserPrincipal create(Usuario usuario) {
-        List<GrantedAuthority> authorities = Collections.singletonList(
-                new SimpleGrantedAuthority("ROLE_USER"));
+        // Autoridades derivadas exclusivamente do papel persistido no banco —
+        // nunca de claims do token, e-mail ou parâmetros do cliente.
+        List<GrantedAuthority> authorities = "ADMIN".equalsIgnoreCase(usuario.getRole())
+                ? List.of(new SimpleGrantedAuthority("ROLE_ADMIN"), new SimpleGrantedAuthority("ROLE_USER"))
+                : Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
 
         return new UserPrincipal(
                 usuario.getId(),

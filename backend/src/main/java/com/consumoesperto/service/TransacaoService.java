@@ -177,11 +177,9 @@ public class TransacaoService {
                 .orElse(null);
         }
 
-        // Validação e associação da categoria (opcional)
+        // Validação e associação da categoria (opcional) — sempre restrita ao usuário autenticado
         if (categoriaId != null) {
-            Categoria categoria = categoriaRepository.findById(categoriaId)
-                .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
-            transacao.setCategoria(categoria);
+            transacao.setCategoria(buscarCategoriaDoUsuario(categoriaId, usuarioId));
         }
         
         // Cria um usuário temporário com o ID fornecido para associação
@@ -308,11 +306,9 @@ public class TransacaoService {
             transacao.setCnpj(normalizarCnpjOpcional(transacaoDTO.getCnpj()));
         }
 
-        // Atualiza a categoria se uma nova foi fornecida
+        // Atualiza a categoria se uma nova foi fornecida — sempre restrita ao usuário autenticado
         if (transacaoDTO.getCategoriaId() != null) {
-            Categoria categoria = categoriaRepository.findById(transacaoDTO.getCategoriaId())
-                .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
-            transacao.setCategoria(categoria);
+            transacao.setCategoria(buscarCategoriaDoUsuario(transacaoDTO.getCategoriaId(), usuarioId));
         }
 
         aplicarVinculoFatura(transacao, transacaoDTO, usuarioId, false);
@@ -858,6 +854,19 @@ public class TransacaoService {
             && transacao.getContaBancaria() == null) {
             transacao.setContaBancaria(contaBancariaService.resolverContaParaTransacao(usuarioId, null));
         }
+    }
+
+    /**
+     * Resolve a categoria garantindo ownership do usuário autenticado (anti-IDOR).
+     * Categoria de outro usuário ou inexistente → 404; categoria inativa → 400.
+     */
+    private Categoria buscarCategoriaDoUsuario(Long categoriaId, Long usuarioId) {
+        Categoria categoria = categoriaRepository.findByIdAndUsuarioId(categoriaId, usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada"));
+        if (Boolean.FALSE.equals(categoria.getAtivo())) {
+            throw new IllegalArgumentException("Categoria inativa não pode ser usada em transações");
+        }
+        return categoria;
     }
 
     private String normalizarCnpjOpcional(String raw) {

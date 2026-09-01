@@ -1,5 +1,6 @@
 package com.consumoesperto.exception;
 
+import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.util.AiErroHumanizer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -183,6 +184,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ));
     }
 
+    /** AccessDeniedException do @PreAuthorize deve virar 403 e não cair no handler genérico (500). */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleSpringAccessDenied(
+            org.springframework.security.access.AccessDeniedException ex, WebRequest request) {
+        log.warn("Acesso negado (method security): {}", ex.getMessage());
+        String path = pathFrom(request);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiError(
+            "AUTHORIZATION_ERROR",
+            JarvisErrorCopy.AUTH_DENIED_MESSAGE,
+            JarvisErrorCopy.AUTH_DENIED_INSTRUCAO,
+            HttpStatus.FORBIDDEN.value(),
+            path
+        ));
+    }
+
     @ExceptionHandler(ExternalApiException.class)
     public ResponseEntity<ApiError> handleExternalApiException(ExternalApiException ex, WebRequest request) {
         log.error("API externa: {}", ex.getMessage());
@@ -285,6 +301,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             msg,
             JarvisErrorCopy.CONFLICT_INSTRUCAO,
             HttpStatus.CONFLICT.value(),
+            path
+        ));
+    }
+
+    @ExceptionHandler(EdithException.class)
+    public ResponseEntity<ApiError> handleEdithException(EdithException ex, WebRequest request) {
+        String path = pathFrom(request);
+        log.warn("edith_error code={} path={}", ex.getCode(), path);
+        return ResponseEntity.status(ex.getHttpStatus()).body(new ApiError(
+            ex.getCode().name(),
+            ex.getMessage(),
+            HttpStatus.valueOf(ex.getHttpStatus().value()).getReasonPhrase(),
+            ex.getHttpStatus().value(),
             path
         ));
     }

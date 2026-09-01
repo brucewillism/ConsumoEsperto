@@ -10,7 +10,9 @@ export interface GrupoFamiliarMembro {
   nome: string;
   email?: string;
   whatsapp?: string;
-  status: 'PENDENTE' | 'ACEITO' | 'RECUSADO' | 'CANCELADO';
+  status: 'PENDENTE' | 'ACEITO' | 'RECUSADO' | 'CANCELADO' | 'EXPIRADO';
+  /** Papel persistido no grupo: OWNER administra; MEMBER consulta e participa. */
+  papel?: 'OWNER' | 'MEMBER';
   eu: boolean;
 }
 
@@ -65,6 +67,14 @@ export class FamiliaService {
 
   responderConvite(membroId: number, aceitar: boolean): Observable<GrupoFamiliar> {
     return this.http.post<GrupoFamiliar>(`${this.base}/convites/${membroId}/responder`, { aceitar });
+  }
+
+  cancelarConvite(membroId: number): Observable<GrupoFamiliar> {
+    return this.http.delete<GrupoFamiliar>(`${this.base}/convites/${membroId}`);
+  }
+
+  removerMembro(membroId: number): Observable<GrupoFamiliar> {
+    return this.http.delete<GrupoFamiliar>(`${this.base}/membros/${membroId}`);
   }
 
   orcamentosCompartilhados(mes?: number, ano?: number): Observable<Orcamento[]> {

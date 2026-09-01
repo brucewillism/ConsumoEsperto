@@ -222,7 +222,7 @@ public class ContencaoJarvisService {
             e.setAnoAlvo(alvo.getYear());
             e.setStatus(SugestaoContencaoJarvis.Status.PENDENTE);
             if (d.categoriaId() != null) {
-                categoriaRepository.findById(d.categoriaId()).ifPresent(e::setCategoria);
+                categoriaRepository.findByIdAndUsuarioId(d.categoriaId(), usuarioId).ifPresent(e::setCategoria);
             }
             sugestaoRepository.save(e);
         }
@@ -363,7 +363,7 @@ public class ContencaoJarvisService {
         req.setCompartilhado(false);
         orcamentoService.salvar(usuarioId, req);
         s.setStatus(SugestaoContencaoJarvis.Status.ACEITA);
-        categoriaRepository.findById(catId).ifPresent(s::setCategoria);
+        categoriaRepository.findByIdAndUsuarioId(catId, usuarioId).ifPresent(s::setCategoria);
         sugestaoRepository.save(s);
         removerIdDaFilaSeTopo(usuarioId, s.getId());
         scoreService.registrarEvento(usuarioId, ScoreService.EventoScore.ORCAMENTO_NO_VERDE,

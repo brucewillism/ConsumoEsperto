@@ -92,6 +92,9 @@ export interface Usuario {
   
   /** Indica se a conta está ativa (true) ou desativada (false) */
   ativo?: boolean;
+
+  /** Papel de autorização retornado pelo backend (USER | ADMIN) — somente leitura. */
+  role?: 'USER' | 'ADMIN' | string;
 }
 
 /**

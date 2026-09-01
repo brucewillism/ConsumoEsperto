@@ -36,7 +36,13 @@
       <div class="panel-head">
         <div class="grupo-titulo" *ngIf="!editandoNome">
           <h2>{{ grupo.nome }}</h2>
-          <button mat-icon-button type="button" (click)="iniciarRenomear()" aria-label="Renomear grupo">
+          <button
+            mat-icon-button
+            type="button"
+            *ngIf="souOwner()"
+            (click)="iniciarRenomear()"
+            aria-label="Renomear grupo"
+          >
             <mat-icon>edit</mat-icon>
           </button>
         </div>
@@ -63,7 +69,28 @@
           [class.you]="m.eu"
         >
           {{ m.nome }} · {{ statusLabel(m.status) }}
+          <strong *ngIf="m.papel === 'OWNER'">(admin)</strong>
           <strong *ngIf="m.eu">(você)</strong>
+          <button
+            mat-icon-button
+            type="button"
+            *ngIf="souOwner() && m.status === 'PENDENTE'"
+            (click)="cancelarConvite(m)"
+            aria-label="Cancelar convite"
+            matTooltip="Cancelar convite"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            type="button"
+            *ngIf="souOwner() && m.status === 'ACEITO' && !m.eu"
+            (click)="removerMembro(m)"
+            aria-label="Remover membro"
+            matTooltip="Remover membro"
+          >
+            <mat-icon>person_remove</mat-icon>
+          </button>
         </span>
       </div>
 

@@ -151,6 +151,9 @@ public class UsuarioDTO {
     /** Saudação do dashboard (ex.: Que bom te ver de volta, chefa!). */
     private String saudacaoDashboard;
 
+    /** Papel de autorização do usuário (USER | ADMIN) — somente leitura pelo cliente. */
+    private String role;
+
     public void setUsername(String username) {
         this.username = username == null ? null : username.trim();
     }

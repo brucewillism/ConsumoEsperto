@@ -199,6 +199,7 @@ public class UsuarioController {
             ? usuario.getGeneroGramatical().name() : com.consumoesperto.model.Usuario.GeneroGramatical.NEUTRO.name());
         usuarioDTO.setTratamentoConfigurado(Boolean.TRUE.equals(usuario.getTratamentoConfigurado()));
         usuarioDTO.setSaudacaoDashboard(tratamentoUsuarioService.bemVindoDeVolta(usuario));
+        usuarioDTO.setRole(usuario.getRole() != null ? usuario.getRole() : "USER");
         return usuarioDTO;
     }
 
@@ -360,8 +361,10 @@ public class UsuarioController {
     }
 
     /**
-     * Correcção em todas as instâncias conhecidas (Evolution + BD). Operação de manutenção.
+     * Correcção em todas as instâncias conhecidas (Evolution + BD). Operação de manutenção
+     * global — afeta sessões de TODOS os usuários, portanto exige papel ADMIN.
      */
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/whatsapp/evolution-privacy-settings-all")
     public ResponseEntity<Map<String, Object>> applyEvolutionPrivacySettingsAll() {
         Optional<com.consumoesperto.model.Usuario> usuarioOpt = securityService.getCurrentUser();

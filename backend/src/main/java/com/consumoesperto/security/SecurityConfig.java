@@ -62,13 +62,21 @@ public class SecurityConfig {
                     "/api/public/**",
                     "/api/extrator/webhook",
                     "/api/webhooks/notificacoes-celular",
-                    "/api/whatsapp/**",
+                    // Apenas o webhook da Evolution é público (validado por segredo no controller);
+                    // demais endpoints /api/whatsapp/** exigem autenticação.
+                    "/api/whatsapp/webhook",
+                    "/api/whatsapp/webhook/**",
+                    "/api/internal/edith/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/v3/api-docs/**",
-                    "/actuator/**",
                     "/error"
                 ).permitAll()
+                // Actuator: allowlist pública mínima; endpoints sensíveis exigem ROLE_ADMIN
+                .antMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
+                .antMatchers("/actuator/**").hasRole("ADMIN")
+                // Endpoints administrativos exigem papel ADMIN persistido (ou X-Admin-Api-Key de ops)
+                .antMatchers("/api/admin/**").hasRole("ADMIN")
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .anyRequest().authenticated();
 

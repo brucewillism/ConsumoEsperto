@@ -35,6 +35,7 @@ import { PrevisaoFuturoChartComponent } from '../../components/previsao-futuro-c
 import { ScoreService, UsuarioScore } from '../../services/score.service';
 import { InboxNotification, NotificacaoInboxService } from '../../services/notificacao-inbox.service';
 import { JarvisChatPanelComponent } from '../../shared/jarvis-chat/jarvis-chat-panel.component';
+import { EdithAssistantComponent } from '../../shared/edith-assistant/edith-assistant.component';
 import { ContencaoJarvisService, SugestaoContencaoJarvis } from '../../services/contencao-jarvis.service';
 import { ModoViagemJarvis, ModoViagemJarvisService } from '../../services/modo-viagem-jarvis.service';
 import { JarvisMemoriaService, JarvisMemoriaTimelineItem } from '../../services/jarvis-memoria.service';
@@ -131,6 +132,7 @@ interface ChartData {
     LoadingIndicatorComponent,
     ChartMetodologiaComponent,
     JarvisChatPanelComponent,
+    EdithAssistantComponent,
     WhatsappParityHintComponent,
   ],
   templateUrl: './dashboard.component.html',

@@ -162,10 +162,11 @@ public class CompraParceladaService {
         compraExistente.setDataUltimaParcela(compraParceladaDTO.getDataUltimaParcela());
         compraExistente.setStatusCompra(compraParceladaDTO.getStatusCompra());
 
-        // Atualiza a categoria se uma nova foi fornecida
+        // Atualiza a categoria se uma nova foi fornecida — restrita ao usuário autenticado (anti-IDOR)
         if (compraParceladaDTO.getCategoriaId() != null) {
-            Categoria categoria = categoriaRepository.findById(compraParceladaDTO.getCategoriaId())
-                    .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
+            Categoria categoria = categoriaRepository
+                    .findByIdAndUsuarioId(compraParceladaDTO.getCategoriaId(), usuarioId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada"));
             compraExistente.setCategoria(categoria);
         }
 

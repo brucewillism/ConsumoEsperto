@@ -1,0 +1,7 @@
+{
+  "secret": "edith-callback-test-secret-consumo",
+  "timestamp": "1735689600",
+  "nonce": "nonce-fixture-001",
+  "request_id": "req-fixture-001",
+  "body": "{\"request_id\":\"req-fixture-001\",\"tool\":\"finance.transactions.search\",\"version\":\"1\",\"arguments\":{\"context_ref\":\"ctx-fixture-a\"}}"
+}

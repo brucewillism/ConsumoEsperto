@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { AuthGuard } from './guards/auth.guard';
+import { AdminGuard } from './guards/admin.guard';
 
 /**
  * Configuração de rotas da aplicação ConsumoEsperto
@@ -85,7 +86,7 @@ export const routes: Routes = [
   {
     path: 'admin/evolution',
     loadComponent: () => import('./pages/admin-evolution/admin-evolution.component').then(m => m.AdminEvolutionComponent),
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard, AdminGuard]
   },
 
   {

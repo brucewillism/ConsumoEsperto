@@ -97,13 +97,18 @@ public class FaturaService {
      * 4. Persiste a fatura no banco de dados
      * 
      * @param faturaDTO DTO com os dados da fatura a ser criada
+     * @param usuarioId ID do usuário autenticado (ownership obrigatório do cartão)
      * @return FaturaDTO com os dados da fatura criada
-     * @throws RuntimeException se o cartão de crédito não for encontrado
+     * @throws ResourceNotFoundException se o cartão não existir ou não pertencer ao usuário
      */
-    public FaturaDTO criarFatura(FaturaDTO faturaDTO) {
-        // Valida se o cartão de crédito existe antes de criar a fatura
-        CartaoCredito cartaoCredito = cartaoCreditoRepository.findById(faturaDTO.getCartaoCreditoId())
-                .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+    public FaturaDTO criarFatura(FaturaDTO faturaDTO, Long usuarioId) {
+        // Valida se o cartão de crédito existe E pertence ao usuário autenticado (anti-IDOR)
+        CartaoCredito cartaoCredito = cartaoCreditoRepository
+                .findByIdAndUsuarioId(faturaDTO.getCartaoCreditoId(), usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
+        if (Boolean.FALSE.equals(cartaoCredito.getAtivo())) {
+            throw new IllegalArgumentException("Cartão de crédito inativo não pode receber novas faturas");
+        }
 
         // Converte o DTO para entidade e associa ao cartão de crédito
         Fatura fatura = converterParaEntidade(faturaDTO);
@@ -177,8 +182,9 @@ public class FaturaService {
      */
     public List<FaturaDTO> buscarPorCartaoCreditoId(Long cartaoCreditoId, Long usuarioId) {
         // Valida se o cartão de crédito pertence ao usuário antes de buscar as faturas
+        // (anti-IDOR: cartão alheio/inexistente → 404, nunca 500)
         cartaoCreditoRepository.findByIdAndUsuarioId(cartaoCreditoId, usuarioId)
-                .orElseThrow(() -> new RuntimeException("Cartão de crédito não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
 
         // Busca todas as faturas do cartão de crédito especificado
         List<Fatura> faturas = faturaRepository.findByCartaoCreditoId(cartaoCreditoId);
@@ -618,7 +624,19 @@ public class FaturaService {
         nova.setValorPago(BigDecimal.ZERO);
         nova.setPaga(false);
         nova.setNumeroFatura("PREV-" + cartao.getId() + "-" + targetYm + "-" + System.nanoTime());
-        return faturaRepository.save(nova);
+        try {
+            return faturaRepository.save(nova);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Corrida: outro nó/thread criou a fatura desta competência primeiro (índice único
+            // ux_faturas_cartao_competencia_nao_quitada). Reutiliza a fatura vencedora.
+            return faturaRepository.findByCartaoCreditoIdOrderByDataVencimentoAsc(cartao.getId()).stream()
+                .filter(f -> f.getDataVencimento() != null
+                    && YearMonth.from(f.getDataVencimento()).equals(targetYm)
+                    && f.getStatusFatura() != Fatura.StatusFatura.PAGA
+                    && f.getStatusFatura() != Fatura.StatusFatura.CANCELADA)
+                .findFirst()
+                .orElseThrow(() -> e);
+        }
     }
 
     /**

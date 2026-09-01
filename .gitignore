@@ -24,12 +24,17 @@ application-local.properties
 # Logs e relatorios locais (podem conter dados sensiveis)
 logs/
 backend/target/surefire-reports/
+backend/target-verify-log*.txt
 backend/backups/
 
 # Arquivos de build
 target/
 dist/
 node_modules/
+
+# Artefatos do Playwright (E2E)
+e2e/playwright-report/
+e2e/test-results/
 
 # Arquivos de IDE
 .idea/

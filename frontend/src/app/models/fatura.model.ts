@@ -75,35 +75,33 @@ export interface Fatura {
 }
 
 /**
- * Enum que define os possíveis status de uma fatura
- * 
- * Cada status representa uma etapa diferente no ciclo de vida da fatura,
- * desde sua abertura até o pagamento completo.
+ * Enum que define os possíveis status de uma fatura.
+ *
+ * CONTRATO: os valores devem ser idênticos ao enum do backend
+ * (`Fatura.StatusFatura` em backend/src/main/java/com/consumoesperto/model/Fatura.java).
+ * Não adicionar valores aqui sem implementar o estado correspondente no backend —
+ * ver teste de contrato `fatura-status-contrato.spec.mjs`.
+ * O "fechamento" da fatura é representado pela data de fechamento (closingDate),
+ * não por um status próprio.
  */
 export enum StatusFatura {
-  /** Fatura em aberto, aguardando fechamento */
+  /** Fatura em aberto (ciclo corrente) */
   ABERTA = 'ABERTA',
-  
-  /** Fatura fechada, aguardando pagamento */
-  FECHADA = 'FECHADA',
-  
-  /** Fatura paga integralmente */
-  PAGA = 'PAGA',
-  
+
   /** Fatura vencida sem pagamento */
   VENCIDA = 'VENCIDA',
-  
-  /** Fatura com pagamento pendente */
-  PENDENTE = 'PENDENTE',
-  
+
+  /** Fatura paga integralmente */
+  PAGA = 'PAGA',
+
   /** Fatura com pagamento parcial */
   PARCIAL = 'PARCIAL',
 
-  /** @deprecated alias legado — preferir PARCIAL */
-  PARCIALMENTE_PAGA = 'PARCIALMENTE_PAGA',
-
   /** Ciclo futuro (projeção de parcelas) */
-  PREVISTA = 'PREVISTA'
+  PREVISTA = 'PREVISTA',
+
+  /** Fatura cancelada */
+  CANCELADA = 'CANCELADA'
 }
 
 /**

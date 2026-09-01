@@ -40,8 +40,9 @@ public class FaturaConciliacaoService {
 
     @Transactional
     public TransacaoDTO pagarFatura(Long usuarioId, PagamentoFaturaRequest request) {
+        // Anti-IDOR: fatura alheia/inexistente → 404, nunca 500
         Fatura fatura = faturaRepository.findByIdAndCartaoCreditoUsuarioId(request.getFaturaId(), usuarioId)
-            .orElseThrow(() -> new RuntimeException("Fatura não encontrada"));
+            .orElseThrow(() -> new com.consumoesperto.exception.ResourceNotFoundException("Fatura não encontrada"));
         reconciliarStatusPagamento(fatura);
         if (Boolean.TRUE.equals(fatura.getPaga()) || fatura.getStatus() == Fatura.StatusFatura.PAGA) {
             throw new IllegalStateException("Fatura já está paga.");

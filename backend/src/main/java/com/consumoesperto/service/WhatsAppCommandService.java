@@ -146,6 +146,7 @@ public class WhatsAppCommandService {
     private final MemoriaCapturaAutomaticaService memoriaCapturaAutomaticaService;
     private final com.consumoesperto.service.jarvis.JarvisPipelineMetrics jarvisPipelineMetrics;
     private final com.consumoesperto.service.jarvis.JarvisFastPathParser jarvisFastPathParser;
+    private final com.consumoesperto.edith.EdithJarvisRoutingService edithJarvisRoutingService;
     private final com.consumoesperto.service.jarvis.JarvisConversaJanelaService jarvisConversaJanelaService;
     private final com.consumoesperto.service.jarvis.JarvisTratamentoWhatsappService jarvisTratamentoWhatsappService;
     private final com.consumoesperto.config.JarvisPerformanceProperties jarvisPerformanceProperties;
@@ -303,6 +304,17 @@ public class WhatsAppCommandService {
             jarvisPipelineMetrics.recordRoute("FAST_PATH");
             trace.route("FAST_PATH");
             String resp = executeCommand(fast.get(), userId, text);
+            jarvisConversaJanelaService.registrarUsuario(userId, text);
+            jarvisConversaJanelaService.registrarAssistente(userId, resp);
+            jarvisPipelineMetrics.finishTrace(trace);
+            return resp;
+        }
+
+        Optional<String> edithReply = edithJarvisRoutingService.tryCognitiveReply(userId, text);
+        if (edithReply.isPresent()) {
+            jarvisPipelineMetrics.recordRoute("EDITH");
+            trace.route("EDITH");
+            String resp = edithReply.get();
             jarvisConversaJanelaService.registrarUsuario(userId, text);
             jarvisConversaJanelaService.registrarAssistente(userId, resp);
             jarvisPipelineMetrics.finishTrace(trace);

@@ -67,6 +67,34 @@ public class CategoriaService {
         return categoriasDeMatch(usuarioId, match);
     }
 
+    /** Máximo de resultados devolvidos pela busca por nome (proteção contra consulta excessiva). */
+    private static final int LIMITE_BUSCA_POR_NOME = 50;
+
+    /**
+     * Busca categorias ativas do usuário por nome (contains, case-insensitive e
+     * insensível a acentos). Entrada vazia retorna lista vazia; resultados limitados
+     * a {@link #LIMITE_BUSCA_POR_NOME}.
+     */
+    @Transactional(readOnly = true)
+    public List<CategoriaDTO> buscarPorNome(Long usuarioId, String nome) {
+        String termo = nome == null ? "" : nome.trim();
+        if (termo.isEmpty()) {
+            return List.of();
+        }
+        String termoNormalizado = normalizarTexto(termo);
+        return listarAtivas(usuarioId).stream()
+            .filter(c -> c.getNome() != null && normalizarTexto(c.getNome()).contains(termoNormalizado))
+            .limit(LIMITE_BUSCA_POR_NOME)
+            .map(this::toDto)
+            .collect(Collectors.toList());
+    }
+
+    private static String normalizarTexto(String texto) {
+        String semAcentos = java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "");
+        return semAcentos.toLowerCase(java.util.Locale.ROOT);
+    }
+
     private List<Categoria> listarAtivas(Long usuarioId) {
         return categoriaRepository.findByUsuarioIdOrderByNome(usuarioId).stream()
             .filter(c -> c.getAtivo() == null || Boolean.TRUE.equals(c.getAtivo()))

@@ -23,11 +23,17 @@ $npm = if ($npmCmd) { $npmCmd.Source } else { "npm.cmd" }
 
 if ($Rebuild -or -not (Test-Path (Join-Path $dist "index.html"))) {
     Write-Host "Build frontend (ng build) ..." -ForegroundColor Cyan
+    if (Test-Path $logFile) {
+        try { Remove-Item $logFile -Force -ErrorAction Stop } catch {
+            $logFile = Join-Path $root ("logs\integracao-frontend-{0}.log" -f (Get-Date -Format "yyyyMMddHHmmss"))
+        }
+    }
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    & $npm run build:integracao --prefix $frontend 2>&1 | Tee-Object -FilePath $logFile | Out-Null
+    & $npm run build:integracao --prefix $frontend *> $logFile
+    $buildExit = $LASTEXITCODE
     $ErrorActionPreference = $prevEap
-    if ($LASTEXITCODE -ne 0) { Write-Error "Build frontend falhou (exit $LASTEXITCODE)" }
+    if ($buildExit -ne 0) { Write-Error "Build frontend falhou (exit $buildExit)" }
     & node (Join-Path $frontend "scripts\validate-integracao-bundle.mjs")
     if ($LASTEXITCODE -ne 0) { Write-Error "Validacao anti-producao do bundle falhou" }
 }

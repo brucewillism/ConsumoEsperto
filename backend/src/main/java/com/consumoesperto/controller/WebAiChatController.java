@@ -1,9 +1,13 @@
 package com.consumoesperto.controller;
 
+import com.consumoesperto.config.EdithProperties;
+import com.consumoesperto.edith.CognitiveGatewaySelector;
+import com.consumoesperto.edith.CognitiveRequest;
+import com.consumoesperto.edith.CognitiveResponse;
+import com.consumoesperto.edith.EdithIntegrationService;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.AiRateLimitService;
 import com.consumoesperto.service.JarvisProtocolService;
-import com.consumoesperto.service.WhatsAppCommandService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,7 +25,9 @@ import java.util.Map;
 @CrossOrigin(originPatterns = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
 public class WebAiChatController {
 
-    private final WhatsAppCommandService whatsAppCommandService;
+    private final CognitiveGatewaySelector cognitiveGatewaySelector;
+    private final EdithProperties edithProperties;
+    private final EdithIntegrationService edithIntegrationService;
     private final JarvisProtocolService jarvisProtocolService;
     private final AiRateLimitService aiRateLimitService;
 
@@ -31,8 +37,35 @@ public class WebAiChatController {
         @RequestBody Map<String, String> body
     ) {
         aiRateLimitService.checkOrThrow(user.getId(), "ia-chat-web");
-        String resposta = whatsAppCommandService.processWebCommand(user.getId(), body.getOrDefault("mensagem", ""));
-        String assinada = resposta != null ? jarvisProtocolService.assinaturaCondicional(user.getId(), resposta) : "";
+        String mensagem = body.getOrDefault("mensagem", "");
+
+        if (edithProperties.isEnabled()) {
+            if (!edithIntegrationService.isOperational()) {
+                return ResponseEntity.status(503).body(Map.of(
+                    "resposta", "",
+                    "error", "EDITH_UNAVAILABLE"
+                ));
+            }
+            CognitiveResponse response = cognitiveGatewaySelector.active().send(CognitiveRequest.builder()
+                .usuarioId(user.getId())
+                .content(mensagem)
+                .sourceAction("consumo.chat")
+                .awaitCompletion(true)
+                .build());
+            String texto = response.getResultText() != null ? response.getResultText() : "";
+            String assinada = jarvisProtocolService.assinaturaCondicional(user.getId(), texto);
+            return ResponseEntity.ok(Map.of("resposta", assinada != null ? assinada : ""));
+        }
+
+        CognitiveResponse legacy = cognitiveGatewaySelector.active().send(CognitiveRequest.builder()
+            .usuarioId(user.getId())
+            .content(mensagem)
+            .sourceAction("consumo.chat")
+            .awaitCompletion(true)
+            .build());
+        String assinada = legacy.getResultText() != null
+            ? jarvisProtocolService.assinaturaCondicional(user.getId(), legacy.getResultText())
+            : "";
         return ResponseEntity.ok(Map.of("resposta", assinada != null ? assinada : ""));
     }
 }

@@ -173,6 +173,13 @@ public class Usuario {
     private String whatsappNumero;
 
     /**
+     * Papel de autorização persistido (USER ou ADMIN). Não é inferido por e-mail,
+     * primeiro registro ou payload do cliente — promoção é operação administrativa no banco.
+     */
+    @Column(name = "role", nullable = false, length = 20)
+    private String role = "USER";
+
+    /**
      * Refresh token Google (escopo calendar.readonly) para integração Cronos — sensível; concedido via fluxo dedicado.
      */
     @Column(name = "google_calendar_refresh_token", columnDefinition = "TEXT")
@@ -229,6 +236,9 @@ public class Usuario {
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
+
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
 
     public String getNome() { return nome; }
     public void setNome(String nome) { this.nome = nome; }

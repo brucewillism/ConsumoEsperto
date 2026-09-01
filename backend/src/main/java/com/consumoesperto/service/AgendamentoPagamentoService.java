@@ -3,6 +3,7 @@ package com.consumoesperto.service;
 import com.consumoesperto.dto.AgendamentoPagamentoDTO;
 import com.consumoesperto.dto.AgendamentoPagamentoRequest;
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.model.AgendamentoExecucao;
 import com.consumoesperto.model.AgendamentoPagamento;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
@@ -60,6 +61,16 @@ public class AgendamentoPagamentoService {
     private final UsuarioSessaoContextoService sessaoContextoService;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final TratamentoUsuarioService tratamentoUsuarioService;
+    private final AgendamentoExecucaoRegistroService execucaoRegistroService;
+
+    /**
+     * Auto-referência via proxy: chamadas internas a {@link #processarUmComLock}
+     * precisam atravessar o proxy para que {@code REQUIRES_NEW} e o lock
+     * pessimista tenham efeito real (self-invocation os ignoraria).
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private AgendamentoPagamentoService self;
 
     /** Dados normalizados extraídos de boleto/Pix. */
     public record DadosPagamento(
@@ -293,9 +304,15 @@ public class AgendamentoPagamentoService {
         return toDto(agendamentoRepository.save(ag));
     }
 
-    @Transactional
     public AgendamentoPagamentoDTO executarManual(Long usuarioId, Long id) {
-        processarUmComLock(id);
+        // Ownership antes de qualquer processamento
+        buscar(usuarioId, id);
+        try {
+            self.processarUmComLock(id, AgendamentoExecucao.TipoExecucao.MANUAL);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Corrida com o scheduler/outro nó: a competência já foi processada.
+            log.info("[AGENDAMENTO] Execução manual id={} ignorada: competência já processada.", id);
+        }
         return buscar(usuarioId, id);
     }
 
@@ -380,7 +397,10 @@ public class AgendamentoPagamentoService {
         try {
             for (AgendamentoPagamento ag : pendentes) {
                 try {
-                    processarUmComLock(ag.getId());
+                    self.processarUmComLock(ag.getId(), AgendamentoExecucao.TipoExecucao.AUTOMATICA);
+                } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                    // Conflito da chave única = competência já processada por outro nó
+                    log.info("[AGENDAMENTO] Idempotente (constraint): id={} já processado.", ag.getId());
                 } catch (Exception e) {
                     log.warn("[AGENDAMENTO] Falha id={}: {}", ag.getId(), e.getMessage());
                 }
@@ -391,12 +411,12 @@ public class AgendamentoPagamentoService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    void processarUmComLock(Long agendamentoId) {
+    public void processarUmComLock(Long agendamentoId, AgendamentoExecucao.TipoExecucao tipoExecucao) {
         AgendamentoPagamento ag = agendamentoRepository.findByIdForUpdate(agendamentoId).orElse(null);
         if (ag == null || ag.getStatus() != AgendamentoPagamento.StatusAgendamento.AGENDADO) {
             return;
         }
-        processarUm(ag);
+        processarUm(ag, tipoExecucao);
     }
 
     @Transactional(readOnly = true)
@@ -405,7 +425,7 @@ public class AgendamentoPagamentoService {
         return sum != null ? sum.setScale(SCALE, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 
-    private void processarUm(AgendamentoPagamento ag) {
+    private void processarUm(AgendamentoPagamento ag, AgendamentoExecucao.TipoExecucao tipoExecucao) {
         Long usuarioId = ag.getUsuario().getId();
         ContaBancaria conta = contaBancariaService.buscarEntidade(ag.getContaDebito().getId(), usuarioId);
 
@@ -431,6 +451,12 @@ public class AgendamentoPagamentoService {
             notificarFalha(ag, conta);
             return;
         }
+
+        // Semáforo no banco: chave única (agendamento + competência) garante um
+        // único débito mesmo com dois nós/retry. Conflito propaga para o chamador,
+        // que o trata como "já processado" — nunca como erro 500. Se o débito
+        // falhar adiante, o rollback da transação desfaz também este registro.
+        execucaoRegistroService.registrar(ag.getId(), ag.getDataVencimento(), tipoExecucao);
 
         TransacaoDTO tx = new TransacaoDTO();
         tx.setDescricao(descricaoTx);

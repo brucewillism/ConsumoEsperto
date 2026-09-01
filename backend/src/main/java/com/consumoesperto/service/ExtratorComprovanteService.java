@@ -119,7 +119,7 @@ public class ExtratorComprovanteService {
         Map<String, Object> contexto = new HashMap<>();
         contexto.put("transacaoId", criada.getId());
         contexto.put("valor", valor);
-        contexto.put("categoriaNome", nomeCategoria(categoriaId, categoriaNome));
+        contexto.put("categoriaNome", nomeCategoria(usuarioId, categoriaId, categoriaNome));
         contexto.put("banco", request.getBanco());
         contexto.put("descricao", criada.getDescricao());
         contexto.put("tipo", tipo.name());
@@ -192,11 +192,11 @@ public class ExtratorComprovanteService {
         return null;
     }
 
-    private String nomeCategoria(Long categoriaId, String fallback) {
+    private String nomeCategoria(Long usuarioId, Long categoriaId, String fallback) {
         if (categoriaId == null) {
             return fallback;
         }
-        return categoriaRepository.findById(categoriaId)
+        return categoriaRepository.findByIdAndUsuarioId(categoriaId, usuarioId)
             .map(Categoria::getNome)
             .orElse(fallback);
     }

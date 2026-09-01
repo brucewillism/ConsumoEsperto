@@ -42,6 +42,14 @@ public class GrupoFamiliarMembro {
     @Column(name = "status", nullable = false, length = 32)
     private Status status;
 
+    /**
+     * Papel persistido do membro no grupo. OWNER administra (renomear, convidar,
+     * cancelar convite, remover membro); MEMBER consulta e participa.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "papel", nullable = false, length = 16)
+    private Papel papel = Papel.MEMBER;
+
     @Column(name = "data_convite", nullable = false)
     private LocalDateTime dataConvite;
 
@@ -76,11 +84,20 @@ public class GrupoFamiliarMembro {
     public void setDataConvite(LocalDateTime dataConvite) { this.dataConvite = dataConvite; }
     public LocalDateTime getDataResposta() { return dataResposta; }
     public void setDataResposta(LocalDateTime dataResposta) { this.dataResposta = dataResposta; }
+    public Papel getPapel() { return papel; }
+    public void setPapel(Papel papel) { this.papel = papel; }
 
     public enum Status {
         PENDENTE,
         ACEITO,
         RECUSADO,
-        CANCELADO
+        CANCELADO,
+        /** Convite não respondido dentro do prazo de validade. */
+        EXPIRADO
+    }
+
+    public enum Papel {
+        OWNER,
+        MEMBER
     }
 }

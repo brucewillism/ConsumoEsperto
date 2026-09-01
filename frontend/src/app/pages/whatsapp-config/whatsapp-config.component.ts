@@ -37,6 +37,8 @@ export class WhatsappConfigComponent implements OnInit {
   paridadeItens: WhatsappParityItem[] = [];
   paridadeCarregando = true;
   filtroParidade = '';
+  /** true somente quando o backend informa papel ADMIN persistido. */
+  isAdmin = false;
 
   constructor(
     private usuarioService: UsuarioService,
@@ -101,6 +103,7 @@ export class WhatsappConfigComponent implements OnInit {
       next: (usuario: Usuario) => {
         this.numeroAtual = usuario.whatsappNumero || '';
         this.numeroWhatsapp = this.numeroAtual;
+        this.isAdmin = usuario.role === 'ADMIN';
         this.carregando = false;
         this.atualizarStatusEvolution();
       },

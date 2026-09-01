@@ -21,9 +21,12 @@ import com.consumoesperto.service.WhatsAppWebhookPolicyService;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
@@ -51,11 +54,24 @@ public class EvolutionWebhookController {
     private final AiRateLimitService aiRateLimitService;
 
     /**
+     * Limite do corpo aceito pelo webhook (mídia base64 inclusa). Default 15 MiB.
+     * O segredo do webhook é validado antes, pelo {@link com.consumoesperto.security.EvolutionWebhookApiKeyFilter}.
+     */
+    @Value("${consumoesperto.whatsapp.webhook.max-payload-bytes:15728640}")
+    private long webhookMaxPayloadBytes;
+
+    /**
      * Evolution API v2.3+ também POSTa variantes como {@code /webhook/messages-upsert}; o destino nos logs
      * mostra suffix path. Sem {@code /**} respondíamos 404 e a Evolution retentava (log "Sucesso após N tentativas").
      */
     @PostMapping({"/webhook", "/webhook/**"})
-    public ResponseEntity<Map<String, String>> receiveEvolutionWebhook(@RequestBody(required = false) JsonNode payload) {
+    public ResponseEntity<Map<String, String>> receiveEvolutionWebhook(
+            HttpServletRequest request,
+            @RequestBody(required = false) JsonNode payload) {
+        ResponseEntity<Map<String, String>> rejeicao = validarSegurancaWebhook(request);
+        if (rejeicao != null) {
+            return rejeicao;
+        }
         com.consumoesperto.service.SaldoMovimentacaoContexto.definirOrigem(
             com.consumoesperto.model.MovimentacaoSaldoLog.OrigemMovimentacaoSaldo.WHATSAPP);
         try {
@@ -63,6 +79,22 @@ public class EvolutionWebhookController {
         } finally {
             com.consumoesperto.service.SaldoMovimentacaoContexto.limpar();
         }
+    }
+
+    /**
+     * Rejeita payloads acima do limite (proteção contra abuso de mídia base64 gigante).
+     *
+     * @return resposta 413 ou {@code null} quando a requisição é aceitável
+     */
+    private ResponseEntity<Map<String, String>> validarSegurancaWebhook(HttpServletRequest request) {
+        long contentLength = request.getContentLengthLong();
+        if (webhookMaxPayloadBytes > 0 && contentLength > webhookMaxPayloadBytes) {
+            log.warn("Evolution webhook rejeitado: payload de {} bytes excede o limite de {} bytes.",
+                contentLength, webhookMaxPayloadBytes);
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Map.of("status", "rejected", "reason", "payload-too-large"));
+        }
+        return null;
     }
 
     private ResponseEntity<Map<String, String>> processarWebhookEvolution(JsonNode payload) {

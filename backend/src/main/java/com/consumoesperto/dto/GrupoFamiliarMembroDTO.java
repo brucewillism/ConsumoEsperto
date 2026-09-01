@@ -7,6 +7,8 @@ public class GrupoFamiliarMembroDTO {
     private String email;
     private String whatsapp;
     private String status;
+    /** Papel persistido no grupo (OWNER | MEMBER). */
+    private String papel;
     private boolean eu;
 
     public Long getId() { return id; }
@@ -21,6 +23,8 @@ public class GrupoFamiliarMembroDTO {
     public void setWhatsapp(String whatsapp) { this.whatsapp = whatsapp; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getPapel() { return papel; }
+    public void setPapel(String papel) { this.papel = papel; }
     public boolean isEu() { return eu; }
     public void setEu(boolean eu) { this.eu = eu; }
 }

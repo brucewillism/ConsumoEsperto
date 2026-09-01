@@ -6,6 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog } from '@angular/material/dialog';
 import { CE_DIALOG_IMPORTS } from '../../shared/ce-dialog-imports';
 import { MatIconModule } from '@angular/material/icon';
@@ -44,6 +45,7 @@ import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-
     MatFormFieldModule,
     MatInputModule,
     MatProgressBarModule,
+    MatTooltipModule,
     ...CE_DIALOG_IMPORTS,
     MatIconModule,
     LoadingIndicatorComponent,
@@ -106,8 +108,13 @@ export class FamiliaComponent implements OnInit {
     return (this.grupo?.membros ?? []).filter((m) => m.status === 'ACEITO');
   }
 
+  /** OWNER administra o grupo (renomear, convidar, cancelar convite, remover membro). */
+  souOwner(): boolean {
+    return (this.grupo?.membros ?? []).some((m) => m.eu && m.papel === 'OWNER');
+  }
+
   podeConvidar(): boolean {
-    return this.membrosAceitos().length < 2;
+    return this.souOwner() && this.membrosAceitos().length < 2;
   }
 
   totalRachasPendentes(): number {
@@ -131,6 +138,8 @@ export class FamiliaComponent implements OnInit {
         return 'Recusado';
       case 'CANCELADO':
         return 'Cancelado';
+      case 'EXPIRADO':
+        return 'Expirado';
       default:
         return status;
     }
@@ -281,6 +290,35 @@ export class FamiliaComponent implements OnInit {
       () => this.toast.success('Link do convite copiado.'),
       () => this.toast.error('Não foi possível copiar o link.')
     );
+  }
+
+  cancelarConvite(convite: GrupoFamiliarMembro): void {
+    const ok = window.confirm('Cancelar este convite pendente?');
+    if (!ok) {
+      return;
+    }
+    this.familiaService.cancelarConvite(convite.id).subscribe({
+      next: (grupo) => {
+        this.grupo = grupo;
+        this.toast.success('Convite cancelado.');
+      },
+      error: (e) => this.toast.error(e?.error?.message || 'Erro ao cancelar convite.'),
+    });
+  }
+
+  removerMembro(membro: GrupoFamiliarMembro): void {
+    const ok = window.confirm(`Remover ${this.primeiroNome(membro.nome)} do grupo familiar?`);
+    if (!ok) {
+      return;
+    }
+    this.familiaService.removerMembro(membro.id).subscribe({
+      next: (grupo) => {
+        this.grupo = grupo;
+        this.toast.success('Membro removido do grupo.');
+        this.carregar();
+      },
+      error: (e) => this.toast.error(e?.error?.message || 'Erro ao remover membro.'),
+    });
   }
 
   responder(convite: GrupoFamiliarMembro, aceitar: boolean): void {

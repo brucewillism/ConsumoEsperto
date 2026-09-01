@@ -20,6 +20,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/ai/router")
 @RequiredArgsConstructor
+@org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
 @CrossOrigin(originPatterns = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
 public class AdminAiRouterController {
 

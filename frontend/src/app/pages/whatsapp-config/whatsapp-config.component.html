@@ -4,8 +4,8 @@
   <div class="card card--narrow">
     <h1>WhatsApp</h1>
     <p class="subtitle">
-      Vincule o número com o qual envia mensagens ao bot. O mesmo utilizador vê os dados no app e no WhatsApp em tempo real.
-      <a routerLink="/admin/evolution" class="admin-evo-link">Painel Evolution (admin)</a>
+      Vincule o número com o qual envia mensagens ao bot. App e WhatsApp compartilham os mesmos dados da sua conta.
+      <a *ngIf="isAdmin" routerLink="/admin/evolution" class="admin-evo-link">Painel Evolution (admin)</a>
     </p>
 
     <div class="status-box" [class.linked]="evolutionWaConnected === true" [class.partial]="numeroAtual && evolutionWaConnected !== true">

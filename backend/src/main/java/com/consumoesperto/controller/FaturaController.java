@@ -61,8 +61,8 @@ public class FaturaController {
             @Valid @RequestBody FaturaDTO faturaDTO,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
-        // Cria a fatura através do serviço
-        FaturaDTO faturaCriada = faturaService.criarFatura(faturaDTO);
+        // Cria a fatura através do serviço, garantindo ownership do cartão
+        FaturaDTO faturaCriada = faturaService.criarFatura(faturaDTO, currentUser.getId());
         return ResponseEntity.ok(faturaCriada);
     }
 

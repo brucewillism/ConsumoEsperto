@@ -233,12 +233,11 @@ public class CartaoCredito {
     // Método de compatibilidade para código existente
     public TipoCartao getTipoCartao() { return TipoCartao.CREDITO; } // Retorna valor padrão para compatibilidade
     
-    // Método de compatibilidade para código existente
-    public void setDiaFechamento(Integer diaFechamento) { /* Campo removido, ignora */ }
-    
-    // Método de compatibilidade para código existente
-    public Integer getDiaFechamento() { return diaVencimento; } // Usa diaVencimento como fallback
-    
+    // NOTA: o cartão NÃO possui dia de fechamento persistido. O fechamento da fatura é
+    // derivado do vencimento (vencimento − N dias, config
+    // consumoesperto.fatura.dias-entre-fechamento-e-vencimento). Os antigos
+    // setDiaFechamento/getDiaFechamento eram no-op enganosos e foram removidos.
+
     // Enum TipoCartao para compatibilidade
     public enum TipoCartao {
         CREDITO, DEBITO, CREDITO_DEBITO, STANDARD, GOLD, PLATINUM, BLACK

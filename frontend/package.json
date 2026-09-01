@@ -8,7 +8,7 @@
     "build:integracao": "ng build --configuration integracao",
     "watch": "ng build --watch --configuration development",
     "lint": "ng build",
-    "test:utils": "node --experimental-strip-types --test src/app/utils/chart-metodologias.spec.mjs src/app/utils/exportacao-csv.util.spec.mjs src/app/utils/agendamento-recorrencia.util.spec.mjs src/app/services/exportacao-dados.service.spec.mjs src/app/pages/agendamentos/agendamentos.component.spec.mjs src/app/pages/motor-financeiro/motor-financeiro.component.spec.mjs src/app/pages/relatorios/relatorios-charts.spec.mjs",
+    "test:utils": "node --experimental-strip-types --test src/app/utils/chart-metodologias.spec.mjs src/app/utils/exportacao-csv.util.spec.mjs src/app/utils/agendamento-recorrencia.util.spec.mjs src/app/services/exportacao-dados.service.spec.mjs src/app/pages/agendamentos/agendamentos.component.spec.mjs src/app/pages/motor-financeiro/motor-financeiro.component.spec.mjs src/app/pages/relatorios/relatorios-charts.spec.mjs src/app/models/fatura-status-contrato.spec.mjs",
     "test:angular": "ng test --no-watch --browsers=ChromeHeadless",
     "test": "npm run test:utils && npm run test:angular"
   },

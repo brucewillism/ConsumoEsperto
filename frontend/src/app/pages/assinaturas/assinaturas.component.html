@@ -33,7 +33,7 @@
       </div>
       <p class="valor">{{ formatarValor(a.valor) }}<span>/mês</span></p>
       <p class="meta">Vence todo dia <strong>{{ a.diaVencimento }}</strong>
-        <span *ngIf="a.contaDebitoPadraoNome"> · débito em {{ a.contaDebitoPadraoNome }}</span>
+        <span *ngIf="a.contaDebitoPadraoNome"> · lembrete considera o saldo de {{ a.contaDebitoPadraoNome }}</span>
       </p>
       <div class="acoes">
         <button mat-button color="primary" (click)="abrirEditar(a)">Editar</button>

@@ -24,6 +24,17 @@ public class CategoriaController {
         return ResponseEntity.ok(categoriaService.listarPorUsuario(currentUser.getId()));
     }
 
+    /**
+     * Busca categorias ativas do usuário autenticado por nome (parcial,
+     * case-insensitive, insensível a acentos, limitado a 50 resultados).
+     */
+    @GetMapping("/buscar")
+    public ResponseEntity<List<CategoriaDTO>> buscarPorNome(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestParam(name = "nome", required = false) String nome) {
+        return ResponseEntity.ok(categoriaService.buscarPorNome(currentUser.getId(), nome));
+    }
+
     @PostMapping
     public ResponseEntity<CategoriaDTO> criar(@AuthenticationPrincipal UserPrincipal currentUser,
                                               @Valid @RequestBody CategoriaDTO dto) {
