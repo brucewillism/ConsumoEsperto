@@ -10,6 +10,13 @@ export interface EdithStatus {
   state: EdithState;
 }
 
+export interface EdithAdminStatus extends EdithStatus {
+  envDefaultEnabled: boolean;
+  configured: boolean;
+  baseUrlConfigured: boolean;
+  apiKeyConfigured: boolean;
+}
+
 export interface EdithConversation {
   conversationId: string;
   createdAt?: string;
@@ -38,6 +45,14 @@ export class EdithService {
 
   status(): Observable<EdithStatus> {
     return this.http.get<EdithStatus>(`${this.apiUrl}/status`);
+  }
+
+  adminStatus(): Observable<EdithAdminStatus> {
+    return this.http.get<EdithAdminStatus>(`${environment.apiUrl}/admin/edith`);
+  }
+
+  setEnabled(enabled: boolean): Observable<EdithAdminStatus> {
+    return this.http.patch<EdithAdminStatus>(`${environment.apiUrl}/admin/edith`, { enabled });
   }
 
   createConversation(): Observable<EdithConversation> {

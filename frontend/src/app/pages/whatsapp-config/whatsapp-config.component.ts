@@ -17,6 +17,7 @@ import { wireCeDialogBehavior } from '../../shared/ce-form-dialog.util';
 import { CeInputMaskDirective } from '../../shared/directives/ce-input-mask.directive';
 import { PageLoadingComponent } from '../../shared/page-loading/page-loading.component';
 import { WhatsappParidadeService, WhatsappParityItem } from '../../services/whatsapp-paridade.service';
+import { EdithAdminStatus, EdithService } from '../../services/edith.service';
 
 @Component({
   selector: 'app-whatsapp-config',
@@ -40,11 +41,15 @@ export class WhatsappConfigComponent implements OnInit {
   /** true somente quando o backend informa papel ADMIN persistido. */
   isAdmin = false;
 
+  edithAdmin: EdithAdminStatus | null = null;
+  edithToggleLoading = false;
+
   constructor(
     private usuarioService: UsuarioService,
     private toastService: ToastService,
     private dialog: MatDialog,
     private paridadeService: WhatsappParidadeService,
+    private edithService: EdithService,
   ) {}
 
   ngOnInit(): void {
@@ -106,6 +111,9 @@ export class WhatsappConfigComponent implements OnInit {
         this.isAdmin = usuario.role === 'ADMIN';
         this.carregando = false;
         this.atualizarStatusEvolution();
+        if (this.isAdmin) {
+          this.carregarEdithAdmin();
+        }
       },
       error: () => {
         this.carregando = false;
@@ -231,6 +239,48 @@ export class WhatsappConfigComponent implements OnInit {
         this.toastService.error(error?.error?.message || 'Falha ao desligar Evolution.');
       },
     });
+  }
+
+  carregarEdithAdmin(): void {
+    this.edithService.adminStatus().subscribe({
+      next: (st) => (this.edithAdmin = st),
+      error: () => {
+        this.edithAdmin = null;
+      },
+    });
+  }
+
+  alternarEdith(): void {
+    if (!this.edithAdmin || this.edithToggleLoading) {
+      return;
+    }
+    const novoEstado = !this.edithAdmin.enabled;
+    this.edithToggleLoading = true;
+    this.edithService.setEnabled(novoEstado).subscribe({
+      next: (st) => {
+        this.edithAdmin = st;
+        this.edithToggleLoading = false;
+        this.toastService.success(
+          st.enabled ? 'E.D.I.T.H. ligada neste servidor.' : 'E.D.I.T.H. desligada neste servidor.'
+        );
+      },
+      error: (error) => {
+        this.edithToggleLoading = false;
+        this.toastService.error(error?.error?.message || 'Não foi possível alterar a E.D.I.T.H.');
+        this.carregarEdithAdmin();
+      },
+    });
+  }
+
+  edithStateLabel(state: string | undefined): string {
+    switch (state) {
+      case 'AVAILABLE':
+        return 'Disponível';
+      case 'UNAVAILABLE':
+        return 'Indisponível';
+      default:
+        return 'Desligada';
+    }
   }
 
   desvincular(): void {

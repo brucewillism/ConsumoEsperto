@@ -3,8 +3,6 @@ package com.consumoesperto.edith;
 import com.consumoesperto.config.EdithProperties;
 import com.consumoesperto.model.EdithConversationLink;
 import com.consumoesperto.repository.EdithConversationLinkRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,13 +12,21 @@ import java.util.Map;
  * Gateway cognitivo via E.D.I.T.H. — ativo somente quando {@code consumoesperto.edith.enabled=true}.
  */
 @Service
-@ConditionalOnProperty(name = "consumoesperto.edith.enabled", havingValue = "true")
-@RequiredArgsConstructor
 public class EdithCognitiveGateway implements CognitiveGateway {
 
     private final EdithProperties properties;
     private final EdithIntegrationService integrationService;
     private final EdithConversationLinkRepository conversationLinkRepository;
+
+    public EdithCognitiveGateway(
+        EdithProperties properties,
+        EdithIntegrationService integrationService,
+        EdithConversationLinkRepository conversationLinkRepository
+    ) {
+        this.properties = properties;
+        this.integrationService = integrationService;
+        this.conversationLinkRepository = conversationLinkRepository;
+    }
 
     @Override
     public boolean isActive() {

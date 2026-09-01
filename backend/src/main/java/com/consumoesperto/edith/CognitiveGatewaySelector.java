@@ -1,7 +1,6 @@
 package com.consumoesperto.edith;
 
 import com.consumoesperto.config.EdithProperties;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -16,8 +15,8 @@ public class CognitiveGatewaySelector {
 
     public CognitiveGatewaySelector(
         EdithProperties properties,
-        @Autowired(required = false) LegacyCognitiveGateway legacyGateway,
-        @Autowired(required = false) EdithCognitiveGateway edithGateway
+        LegacyCognitiveGateway legacyGateway,
+        EdithCognitiveGateway edithGateway
     ) {
         this.properties = properties;
         this.legacyGateway = legacyGateway;
@@ -26,13 +25,7 @@ public class CognitiveGatewaySelector {
 
     public CognitiveGateway active() {
         if (properties.isEnabled()) {
-            if (edithGateway == null) {
-                throw new EdithException(EdithErrorCode.EDITH_UNAVAILABLE, "E.D.I.T.H. indisponível");
-            }
             return edithGateway;
-        }
-        if (legacyGateway == null) {
-            throw new EdithException(EdithErrorCode.EDITH_DISABLED, "Gateway legado indisponível");
         }
         return legacyGateway;
     }

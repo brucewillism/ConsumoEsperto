@@ -2,7 +2,6 @@ package com.consumoesperto.edith;
 
 import com.consumoesperto.config.EdithProperties;
 import com.consumoesperto.service.WhatsAppCommandService;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Service;
  * Ativo quando E.D.I.T.H. está desabilitada (seleção explícita, sem fallback oculto).
  */
 @Service
-@ConditionalOnProperty(name = "consumoesperto.edith.enabled", havingValue = "false", matchIfMissing = true)
 public class LegacyCognitiveGateway implements CognitiveGateway {
 
     private final EdithProperties properties;

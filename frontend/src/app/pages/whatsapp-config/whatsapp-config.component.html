@@ -72,6 +72,43 @@
     </div>
   </div>
 
+  <div class="card card--narrow edith-admin-card" *ngIf="isAdmin">
+    <h2>E.D.I.T.H.</h2>
+    <p class="subtitle">
+      Assistente cognitivo central. Só administradores podem ligar ou desligar em runtime.
+      Ao reiniciar o backend, volta ao valor de <code>EDITH_ENABLED</code> no servidor.
+    </p>
+
+    <div class="status-box" [class.linked]="edithAdmin?.enabled && edithAdmin?.state === 'AVAILABLE'" [class.partial]="edithAdmin?.enabled && edithAdmin?.state !== 'AVAILABLE'">
+      <strong>Status</strong>
+      <div class="status-lines" *ngIf="edithAdmin; else edithLoading">
+        <span>
+          Estado: <strong>{{ edithStateLabel(edithAdmin.state) }}</strong>
+          <span class="muted"> — padrão do ambiente: {{ edithAdmin.envDefaultEnabled ? 'ligada' : 'desligada' }}</span>
+        </span>
+        <span *ngIf="!edithAdmin.configured" class="status-warn">
+          Credenciais incompletas no servidor (EDITH_BASE_URL / EDITH_API_KEY).
+        </span>
+      </div>
+      <ng-template #edithLoading>
+        <span class="status-muted">A carregar status da E.D.I.T.H.…</span>
+      </ng-template>
+    </div>
+
+    <div class="actions edith-actions">
+      <button
+        type="button"
+        class="btn"
+        [class.primary]="!edithAdmin?.enabled"
+        [class.danger]="edithAdmin?.enabled"
+        (click)="alternarEdith()"
+        [disabled]="edithToggleLoading || !edithAdmin || (!edithAdmin.enabled && !edithAdmin.configured)"
+      >
+        {{ edithToggleLoading ? 'A processar…' : (edithAdmin?.enabled ? 'Desligar E.D.I.T.H.' : 'Ligar E.D.I.T.H.') }}
+      </button>
+    </div>
+  </div>
+
   <div class="card card--wide">
     <h2>O que fazer em cada tela (app ↔ WhatsApp)</h2>
     <p class="subtitle">
