@@ -74,11 +74,6 @@ export class EdithAssistantComponent implements OnInit {
       next: (s) => {
         this.visible = s.enabled;
         this.state = s.state;
-        if (s.enabled && s.state === 'AVAILABLE' && !this.conversationId) {
-          this.edith.createConversation().subscribe({
-            next: (c) => (this.conversationId = c.conversationId),
-          });
-        }
       },
       error: () => {
         this.visible = false;
@@ -95,12 +90,32 @@ export class EdithAssistantComponent implements OnInit {
 
   enviar(): void {
     const texto = this.mensagem.trim();
-    if (!texto || this.carregando || !this.conversationId) return;
+    if (!texto || this.carregando) return;
     this.ultimoErro = false;
     this.carregando = true;
     this.historico.push({ autor: 'user', texto });
     this.mensagem = '';
     const clientRequestId = crypto.randomUUID();
+
+    if (!this.conversationId) {
+      this.edith.createConversation().subscribe({
+        next: (c) => {
+          this.conversationId = c.conversationId;
+          this.enviarMensagem(texto, clientRequestId);
+        },
+        error: () => this.onSendError(),
+      });
+      return;
+    }
+
+    this.enviarMensagem(texto, clientRequestId);
+  }
+
+  private enviarMensagem(texto: string, clientRequestId: string): void {
+    if (!this.conversationId) {
+      this.onSendError();
+      return;
+    }
 
     this.edith.sendMessage(this.conversationId, texto, clientRequestId).subscribe({
       next: (resp) => {

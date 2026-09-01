@@ -18,6 +18,11 @@ export const JARVIS_HTTP_ERROR_SKIP_PATH_SUBSTRINGS: readonly string[] = [
   '/score',
   '/importacoes/faturas',
   '/familia/convites',
+  '/edith',
+  '/jarvis/sugestoes-contencao',
+  '/jarvis/modo-viagem',
+  '/jarvis/memoria',
+  '/admin/edith',
 ];
 
 export function shouldSkipJarvisHttpError(url: string): boolean {
