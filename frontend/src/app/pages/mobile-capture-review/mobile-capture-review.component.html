@@ -1,0 +1,60 @@
+<div class="review-page">
+  <div class="card">
+    <a routerLink="/perfil" class="link-back"><i class="fas fa-arrow-left"></i> Voltar ao perfil</a>
+    <h1>Revisão de captura automática</h1>
+    <p class="hint">Eventos que o sistema não conseguiu registrar automaticamente com segurança.</p>
+
+    <div class="loading" *ngIf="carregando"><i class="fas fa-spinner fa-spin"></i> A carregar…</div>
+
+    <p class="empty" *ngIf="!carregando && !eventos.length">Nenhum evento pendente de revisão.</p>
+
+    <article class="event-card" *ngFor="let ev of eventos">
+      <header>
+        <strong>{{ ev.merchantRaw || ev.merchantNormalized || 'Estabelecimento desconhecido' }}</strong>
+        <span class="badge">{{ ev.source }}</span>
+      </header>
+      <p *ngIf="ev.amount">Valor: {{ ev.amount | currency : 'BRL' }}</p>
+      <p *ngIf="ev.packageName" class="meta">App: {{ ev.packageName }}</p>
+      <p *ngIf="ev.parserName" class="meta">Parser: {{ ev.parserName }}</p>
+
+      <label class="fld">
+        <span>Estabelecimento</span>
+        <input type="text" [(ngModel)]="forms[ev.id].merchant" [name]="'merchant' + ev.id" />
+      </label>
+      <label class="fld">
+        <span>Conta</span>
+        <select [(ngModel)]="forms[ev.id].contaBancariaId" [name]="'conta' + ev.id">
+          <option [ngValue]="null">—</option>
+          <option *ngFor="let c of contas" [ngValue]="c.id">{{ c.nome }}</option>
+        </select>
+      </label>
+      <label class="fld">
+        <span>Cartão</span>
+        <select [(ngModel)]="forms[ev.id].cartaoCreditoId" [name]="'cartao' + ev.id">
+          <option [ngValue]="null">—</option>
+          <option *ngFor="let c of cartoes" [ngValue]="c.id">{{ c.nome }}</option>
+        </select>
+      </label>
+      <label class="fld">
+        <span>Categoria</span>
+        <select [(ngModel)]="forms[ev.id].categoriaId" [name]="'cat' + ev.id">
+          <option [ngValue]="null">Pendente</option>
+          <option *ngFor="let c of categorias" [ngValue]="c.id">{{ c.nome }}</option>
+        </select>
+      </label>
+      <label class="fld check">
+        <input type="checkbox" [(ngModel)]="forms[ev.id].saveRule" [name]="'rule' + ev.id" />
+        <span>Usar esta categoria automaticamente para este estabelecimento nas próximas compras</span>
+      </label>
+
+      <div class="actions">
+        <button type="button" class="btn ghost" (click)="descartar(ev)" [disabled]="processandoId === ev.id">
+          Descartar
+        </button>
+        <button type="button" class="btn primary" (click)="confirmar(ev)" [disabled]="processandoId === ev.id">
+          Confirmar
+        </button>
+      </div>
+    </article>
+  </div>
+</div>

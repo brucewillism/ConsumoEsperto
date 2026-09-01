@@ -1,6 +1,7 @@
 package com.consumoesperto.exception;
 
 import com.consumoesperto.edith.EdithException;
+import com.consumoesperto.mobilecapture.security.MobileCaptureException;
 import com.consumoesperto.util.AiErroHumanizer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -301,6 +302,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             msg,
             JarvisErrorCopy.CONFLICT_INSTRUCAO,
             HttpStatus.CONFLICT.value(),
+            path
+        ));
+    }
+
+    @ExceptionHandler(MobileCaptureException.class)
+    public ResponseEntity<ApiError> handleMobileCapture(MobileCaptureException ex, WebRequest request) {
+        String path = pathFrom(request);
+        String msg = ex.getMessage() != null ? ex.getMessage() : "Captura móvel indisponível";
+        HttpStatus status = msg.toLowerCase().contains("limite")
+            ? HttpStatus.TOO_MANY_REQUESTS
+            : HttpStatus.BAD_REQUEST;
+        log.warn("mobile_capture_error path={} msg={}", path, msg);
+        return ResponseEntity.status(status).body(new ApiError(
+            "MOBILE_CAPTURE_ERROR",
+            msg,
+            "Verifique o token do dispositivo e o payload enviado.",
+            status.value(),
             path
         ));
     }

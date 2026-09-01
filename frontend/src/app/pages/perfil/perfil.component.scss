@@ -47,8 +47,64 @@ h1 {
 .alert-jarvis.calendar-box,
 .alert-jarvis.contas-box,
 .alert-jarvis.fixas-box,
-.alert-jarvis.notif-box {
+.alert-jarvis.notif-box,
+.alert-jarvis.mobile-box {
   margin-top: 16px;
+}
+
+.alert-jarvis.mobile-box {
+  flex-wrap: wrap;
+}
+
+.mobile-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-devices {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+}
+
+.mobile-devices li {
+  padding: 10px 0;
+  border-top: 1px solid #374151;
+}
+
+.mobile-devices .meta {
+  display: block;
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+.mobile-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 12px;
+}
+
+.cred-block {
+  margin: 12px 0;
+  display: grid;
+  gap: 6px;
+}
+
+.cred-block code {
+  display: block;
+  word-break: break-all;
+  background: #0f172a;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.cred-block code.token {
+  font-size: 0.8rem;
+}
+
+.hint.warning {
+  color: #fbbf24;
 }
 
 .alert-jarvis.notif-box {

@@ -161,6 +161,34 @@ public class Transacao {
     @Column(name = "valor_com_juros", precision = 19, scale = 2)
     private BigDecimal valorComJuros;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "origem_transacao", length = 40)
+    private OrigemTransacao origemTransacao;
+
+    @Column(name = "external_event_id", length = 128)
+    private String externalEventId;
+
+    @Column(name = "external_provider", length = 80)
+    private String externalProvider;
+
+    @Column(name = "merchant_raw", length = 300)
+    private String merchantRaw;
+
+    @Column(name = "merchant_normalized", length = 200)
+    private String merchantNormalized;
+
+    @Column(name = "ingestion_fingerprint", length = 128)
+    private String ingestionFingerprint;
+
+    @Column(name = "ingested_at")
+    private LocalDateTime ingestedAt;
+
+    @Column(name = "ingestion_confidence", precision = 5, scale = 4)
+    private BigDecimal ingestionConfidence;
+
+    @Column(name = "mobile_capture_event_id")
+    private Long mobileCaptureEventId;
+
     // Getters e Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -230,6 +258,33 @@ public class Transacao {
 
     public BigDecimal getValorComJuros() { return valorComJuros; }
     public void setValorComJuros(BigDecimal valorComJuros) { this.valorComJuros = valorComJuros; }
+
+    public OrigemTransacao getOrigemTransacao() { return origemTransacao; }
+    public void setOrigemTransacao(OrigemTransacao origemTransacao) { this.origemTransacao = origemTransacao; }
+
+    public String getExternalEventId() { return externalEventId; }
+    public void setExternalEventId(String externalEventId) { this.externalEventId = externalEventId; }
+
+    public String getExternalProvider() { return externalProvider; }
+    public void setExternalProvider(String externalProvider) { this.externalProvider = externalProvider; }
+
+    public String getMerchantRaw() { return merchantRaw; }
+    public void setMerchantRaw(String merchantRaw) { this.merchantRaw = merchantRaw; }
+
+    public String getMerchantNormalized() { return merchantNormalized; }
+    public void setMerchantNormalized(String merchantNormalized) { this.merchantNormalized = merchantNormalized; }
+
+    public String getIngestionFingerprint() { return ingestionFingerprint; }
+    public void setIngestionFingerprint(String ingestionFingerprint) { this.ingestionFingerprint = ingestionFingerprint; }
+
+    public LocalDateTime getIngestedAt() { return ingestedAt; }
+    public void setIngestedAt(LocalDateTime ingestedAt) { this.ingestedAt = ingestedAt; }
+
+    public BigDecimal getIngestionConfidence() { return ingestionConfidence; }
+    public void setIngestionConfidence(BigDecimal ingestionConfidence) { this.ingestionConfidence = ingestionConfidence; }
+
+    public Long getMobileCaptureEventId() { return mobileCaptureEventId; }
+    public void setMobileCaptureEventId(Long mobileCaptureEventId) { this.mobileCaptureEventId = mobileCaptureEventId; }
 
     public OrigemProvisionamentoFiscal getOrigemFiscal() { return origemFiscal; }
     public void setOrigemFiscal(OrigemProvisionamentoFiscal origemFiscal) { this.origemFiscal = origemFiscal; }

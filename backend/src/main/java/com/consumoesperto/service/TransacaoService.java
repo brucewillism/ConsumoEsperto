@@ -952,4 +952,30 @@ public class TransacaoService {
             jarvisContextoFinanceiroCacheService.invalidar(usuarioId);
         }
     }
+
+    @Transactional
+    public void atualizarMetadadosIngestao(
+        Long transacaoId,
+        com.consumoesperto.model.OrigemTransacao origem,
+        String externalEventId,
+        String externalProvider,
+        String merchantRaw,
+        String merchantNormalized,
+        String fingerprint,
+        java.math.BigDecimal confidence,
+        Long mobileCaptureEventId
+    ) {
+        Transacao transacao = transacaoRepository.findById(transacaoId)
+            .orElseThrow(() -> new IllegalArgumentException("Transação não encontrada"));
+        transacao.setOrigemTransacao(origem);
+        transacao.setExternalEventId(externalEventId);
+        transacao.setExternalProvider(externalProvider);
+        transacao.setMerchantRaw(merchantRaw);
+        transacao.setMerchantNormalized(merchantNormalized);
+        transacao.setIngestionFingerprint(fingerprint);
+        transacao.setIngestedAt(java.time.LocalDateTime.now());
+        transacao.setIngestionConfidence(confidence);
+        transacao.setMobileCaptureEventId(mobileCaptureEventId);
+        transacaoRepository.save(transacao);
+    }
 }

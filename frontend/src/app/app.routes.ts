@@ -41,6 +41,15 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
 
+  {
+    path: 'captura-automatica/revisao',
+    loadComponent: () =>
+      import('./pages/mobile-capture-review/mobile-capture-review.component').then(
+        m => m.MobileCaptureReviewComponent
+      ),
+    canActivate: [AuthGuard]
+  },
+
   // Gestão de transações financeiras (protegida)
   { 
     path: 'transacoes', 

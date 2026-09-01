@@ -12,6 +12,12 @@ import { DespesaFixa, DespesasFixaService } from '../../services/despesas-fixa.s
 import { ContaBancariaService } from '../../services/conta-bancaria.service';
 import { ContaBancaria } from '../../models/conta-bancaria.model';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
+import {
+  MobileCaptureDevice,
+  MobileCaptureService,
+  MobileDeviceRegistration,
+  MobilePlatform,
+} from '../../services/mobile-capture.service';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
@@ -106,6 +112,15 @@ export class PerfilComponent implements OnInit {
     },
   ];
 
+  vinculandoCalendar = false;
+
+  mobileDevices: MobileCaptureDevice[] = [];
+  mobileCarregando = false;
+  mobileModalAberto = false;
+  mobileCredenciais: MobileDeviceRegistration | null = null;
+  mobileNomeNovo = '';
+  mobilePlataforma: MobilePlatform = 'ANDROID_MACRODROID';
+
   constructor(
     private usuarioService: UsuarioService,
     private authService: AuthService,
@@ -113,7 +128,8 @@ export class PerfilComponent implements OnInit {
     private confirmDialog: ConfirmDialogService,
     private googleCalendarLink: GoogleCalendarLinkService,
     private despesasFixaService: DespesasFixaService,
-    private contaBancariaService: ContaBancariaService
+    private contaBancariaService: ContaBancariaService,
+    private mobileCaptureService: MobileCaptureService
   ) {}
 
   ngOnInit(): void {
@@ -130,6 +146,7 @@ export class PerfilComponent implements OnInit {
         this.carregando = false;
         this.carregarFixas();
         this.carregarNotifPrefs();
+        this.carregarMobileDevices();
       },
       error: () => {
         this.carregando = false;
@@ -333,8 +350,6 @@ export class PerfilComponent implements OnInit {
     });
   }
 
-  vinculandoCalendar = false;
-
   vincularGoogleCalendar(): void {
     this.vinculandoCalendar = true;
     this.googleCalendarLink.iniciarVinculacao().subscribe({
@@ -351,5 +366,101 @@ export class PerfilComponent implements OnInit {
         this.toastService.error('Não foi possível obter o link do Google Calendar.');
       },
     });
+  }
+
+  carregarMobileDevices(): void {
+    this.mobileCarregando = true;
+    this.mobileCaptureService.listDevices().subscribe({
+      next: (list) => {
+        this.mobileDevices = list;
+        this.mobileCarregando = false;
+      },
+      error: () => {
+        this.mobileDevices = [];
+        this.mobileCarregando = false;
+      },
+    });
+  }
+
+  abrirModalMobile(platform: MobilePlatform): void {
+    this.mobilePlataforma = platform;
+    this.mobileNomeNovo = platform === 'ANDROID_MACRODROID' ? 'Android' : 'iPhone';
+    this.mobileCredenciais = null;
+    this.mobileModalAberto = true;
+  }
+
+  fecharModalMobile(): void {
+    this.mobileModalAberto = false;
+    this.mobileCredenciais = null;
+  }
+
+  registrarDispositivoMobile(): void {
+    if (!this.mobileNomeNovo.trim()) {
+      this.toastService.error('Informe um nome para o dispositivo.');
+      return;
+    }
+    this.mobileCarregando = true;
+    this.mobileCaptureService.registerDevice(this.mobileNomeNovo.trim(), this.mobilePlataforma).subscribe({
+      next: (reg) => {
+        this.mobileCredenciais = reg;
+        this.mobileCarregando = false;
+        this.carregarMobileDevices();
+        this.toastService.success('Dispositivo criado. Guarde o token — ele não será exibido novamente.');
+      },
+      error: (err) => {
+        this.mobileCarregando = false;
+        this.toastService.error(resolveHttpError(err, 'Não foi possível registrar o dispositivo.'));
+      },
+    });
+  }
+
+  revogarDispositivoMobile(device: MobileCaptureDevice): void {
+    this.confirmDialog
+      .ask({
+        title: 'Revogar dispositivo',
+        message: `Revogar "${device.name}"? O token deixará de funcionar.`,
+        confirmLabel: 'Revogar',
+        destructive: true,
+      })
+      .subscribe((ok) => {
+        if (!ok || device.id == null) {
+          return;
+        }
+        this.mobileCaptureService.revokeDevice(device.id).subscribe({
+          next: () => {
+            this.toastService.success('Dispositivo revogado.');
+            this.carregarMobileDevices();
+          },
+          error: (err) => this.toastService.error(resolveHttpError(err, 'Não foi possível revogar.')),
+        });
+      });
+  }
+
+  rotacionarTokenMobile(device: MobileCaptureDevice): void {
+    if (device.id == null) {
+      return;
+    }
+    this.mobileCarregando = true;
+    this.mobileCaptureService.rotateToken(device.id).subscribe({
+      next: (reg) => {
+        this.mobileCredenciais = reg;
+        this.mobileModalAberto = true;
+        this.mobileCarregando = false;
+        this.carregarMobileDevices();
+        this.toastService.success('Novo token gerado. Atualize MacroDroid/Atalhos.');
+      },
+      error: (err) => {
+        this.mobileCarregando = false;
+        this.toastService.error(resolveHttpError(err, 'Não foi possível rotacionar o token.'));
+      },
+    });
+  }
+
+  copiarTextoMobile(valor: string): void {
+    navigator.clipboard?.writeText(valor).then(() => this.toastService.success('Copiado.'));
+  }
+
+  labelPlataforma(platform: MobilePlatform): string {
+    return platform === 'ANDROID_MACRODROID' ? 'Android (MacroDroid)' : 'iPhone (Atalhos)';
   }
 }

@@ -29,6 +29,8 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     Optional<Transacao> findByIdForUpdate(@Param("id") Long id);
 
     List<Transacao> findByUsuarioIdOrderByDataTransacaoDesc(Long usuarioId);
+
+    boolean existsByUsuarioIdAndIngestionFingerprint(Long usuarioId, String ingestionFingerprint);
     
     List<Transacao> findByUsuarioIdAndTipoTransacaoOrderByDataTransacaoDesc(Long usuarioId, TipoTransacao tipoTransacao);
     

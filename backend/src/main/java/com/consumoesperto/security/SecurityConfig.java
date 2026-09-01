@@ -31,6 +31,7 @@ public class SecurityConfig {
     private final JwtAccessDeniedHandler accessDeniedHandler;
     private final PasswordEncoder passwordEncoder;
     private final AdminApiKeyFilter adminApiKeyFilter;
+    private final com.consumoesperto.mobilecapture.security.MobileDeviceTokenFilter mobileDeviceTokenFilter;
 
     /**
      * Padrões permitidos (origins), separados por vírgula. Em produção use o domínio HTTPS do frontend
@@ -80,6 +81,10 @@ public class SecurityConfig {
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .anyRequest().authenticated();
 
+        http.addFilterBefore(
+            mobileDeviceTokenFilter,
+            UsernamePasswordAuthenticationFilter.class
+        );
         http.addFilterBefore(
             new JwtAuthenticationFilter(jwtTokenProvider, customUserDetailsService),
             UsernamePasswordAuthenticationFilter.class
