@@ -542,7 +542,15 @@ export class FaturasComponent implements OnInit, OnDestroy {
 
   textoContagemTransacoes(f: CreditCardInvoice): string {
     const total = this.contagemTransacoes(f);
+    if (total === 0 && (f.amount || 0) > 0 && this.isPagaAntecipada(f)) {
+      return 'Valor histórico (sem lançamentos vinculados)';
+    }
     return `${total} ${total === 1 ? 'transação' : 'transações'}`;
+  }
+
+  isPagaAntecipada(fatura: CreditCardInvoice): boolean {
+    return fatura.status === 'PAID'
+      && String(fatura.origemQuitacao || '').toUpperCase() === 'EXTERNA';
   }
 
   transacoesDaFatura(f: CreditCardInvoice | null): any[] {
@@ -653,6 +661,13 @@ export class FaturasComponent implements OnInit, OnDestroy {
       case 'PREVISTA': return 'Prevista';
       default: return 'Pendente';
     }
+  }
+
+  textoStatusFatura(fatura: CreditCardInvoice): string {
+    if (this.isPagaAntecipada(fatura)) {
+      return 'Paga no banco';
+    }
+    return this.getStatusText(fatura.status);
   }
 
   getBancoColor(bankName: string): string {

@@ -351,6 +351,21 @@ class ItauFaturaTextoExtratorTest {
         assertEquals(2, itens.size());
     }
 
+    @Test
+    void fallbackValorHistoricoQuandoFaturaPagaSemDetalhe() {
+        String texto = """
+            Itaú Unibanco
+            Total desta fatura R$ 1.250,40
+            Fatura paga em 05/08/2026
+            Total desta fatura R$ 0,00
+            """;
+        List<ImportacaoFaturaItemDTO> destino = new ArrayList<>();
+        ItauFaturaTextoExtrator.complementar(destino, texto, 2026);
+        assertEquals(1, destino.size());
+        assertEquals(new BigDecimal("1250.40"), destino.get(0).getValor());
+        assertEquals(ItauFaturaTextoExtrator.DESCRICAO_FALLBACK_FATURA_PAGA, destino.get(0).getDescricao());
+    }
+
     private static ImportacaoFaturaItemDTO item(
         String desc,
         java.math.BigDecimal valor,

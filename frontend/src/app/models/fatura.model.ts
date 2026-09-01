@@ -17,6 +17,9 @@ export interface Fatura {
   
   /** Valor já pago da fatura (pode ser parcial ou total) */
   valorPago: number;
+
+  /** APP = pago pelo app; EXTERNA = quitada no banco (importação antecipada). */
+  origemQuitacao?: 'APP' | 'EXTERNA' | string;
   
   /** Data de vencimento para pagamento da fatura */
   dataVencimento?: Date;

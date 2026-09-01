@@ -36,6 +36,16 @@ class FaturaImportConciliacaoSupportTest {
     }
 
     @Test
+    void permiteRevincularNoMesmoCicloQuandoImportacaoHistoricaPaga() {
+        Fatura alvo = fatura(1L, Fatura.StatusFatura.ABERTA, YearMonth.of(2026, 9));
+        Fatura pagaMesmoCiclo = fatura(3L, Fatura.StatusFatura.PAGA, YearMonth.of(2026, 9));
+        Transacao tx = txNaFatura(pagaMesmoCiclo, 3, 10);
+
+        assertTrue(FaturaImportConciliacaoSupport.deveVincularTransacaoExistenteNaFatura(
+            tx, alvo, item(3, 10), true));
+    }
+
+    @Test
     void permiteOrfaSemFatura() {
         Fatura alvo = fatura(1L, Fatura.StatusFatura.ABERTA, YearMonth.of(2026, 7));
         Transacao tx = new Transacao();

@@ -10,5 +10,7 @@ export interface CreditCardInvoice {
   closingDate: Date;
   status: 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'PREVISTA';
   valorPago?: number;
+  /** Quitação fora do app (importação de fatura já paga no banco). */
+  origemQuitacao?: 'APP' | 'EXTERNA' | string;
   transactions: any[];
 }

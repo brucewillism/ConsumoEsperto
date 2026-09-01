@@ -172,6 +172,7 @@ export class FaturaService {
       bankName: fatura.bankName || fatura.nomeCartao || fatura.banco || 'Banco',
       amount: fatura.valorFatura ?? fatura.valorTotal ?? fatura.valor ?? 0,
       valorPago: Number(fatura.valorPago) || 0,
+      origemQuitacao: fatura.origemQuitacao,
       dueDate: fatura.dataVencimento || fatura.dueDate || new Date(),
       closingDate: fatura.dataFechamento || fatura.closingDate || new Date(),
       status: this.converterStatusParaCreditCard(

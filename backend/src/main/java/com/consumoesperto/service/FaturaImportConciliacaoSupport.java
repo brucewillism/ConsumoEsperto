@@ -18,6 +18,15 @@ final class FaturaImportConciliacaoSupport {
         Fatura faturaAlvo,
         ImportacaoFaturaItemDTO item
     ) {
+        return deveVincularTransacaoExistenteNaFatura(tx, faturaAlvo, item, false);
+    }
+
+    static boolean deveVincularTransacaoExistenteNaFatura(
+        Transacao tx,
+        Fatura faturaAlvo,
+        ImportacaoFaturaItemDTO item,
+        boolean importacaoHistoricaPagaNoBanco
+    ) {
         if (tx == null || faturaAlvo == null) {
             return false;
         }
@@ -30,7 +39,15 @@ final class FaturaImportConciliacaoSupport {
         }
 
         Fatura.StatusFatura statusTx = faturaTx.getStatusFatura();
-        if (statusTx == Fatura.StatusFatura.PAGA || statusTx == Fatura.StatusFatura.CANCELADA) {
+        if (statusTx == Fatura.StatusFatura.CANCELADA) {
+            return false;
+        }
+        if (statusTx == Fatura.StatusFatura.PAGA) {
+            if (importacaoHistoricaPagaNoBanco
+                && mesmoCartao(faturaTx, faturaAlvo)
+                && mesmoMesVencimento(faturaTx, faturaAlvo)) {
+                return true;
+            }
             return false;
         }
 
@@ -65,5 +82,20 @@ final class FaturaImportConciliacaoSupport {
             return null;
         }
         return YearMonth.from(f.getDataVencimento());
+    }
+
+    private static boolean mesmoCartao(Fatura a, Fatura b) {
+        if (a == null || b == null || a.getCartaoCredito() == null || b.getCartaoCredito() == null) {
+            return false;
+        }
+        Long idA = a.getCartaoCredito().getId();
+        Long idB = b.getCartaoCredito().getId();
+        return idA != null && idA.equals(idB);
+    }
+
+    private static boolean mesmoMesVencimento(Fatura a, Fatura b) {
+        YearMonth ymA = mesVencimento(a);
+        YearMonth ymB = mesVencimento(b);
+        return ymA != null && ymA.equals(ymB);
     }
 }

@@ -683,6 +683,28 @@ public class FaturaService {
                     return;
                 }
             }
+            // Fatura quitada fora do app (importação antecipada): preserva valor histórico sem transações vinculadas.
+            if (f.getStatusFatura() == Fatura.StatusFatura.PAGA
+                && f.getOrigemQuitacao() == Fatura.OrigemQuitacao.EXTERNA) {
+                BigDecimal mantido = f.getValorTotal() != null && f.getValorTotal().compareTo(BigDecimal.ZERO) > 0
+                    ? f.getValorTotal()
+                    : f.getValorFatura();
+                if (mantido != null && mantido.compareTo(BigDecimal.ZERO) > 0) {
+                    return;
+                }
+            }
+        }
+        if (sum.compareTo(BigDecimal.ZERO) > 0
+            && f.getStatusFatura() == Fatura.StatusFatura.PAGA
+            && f.getOrigemQuitacao() == Fatura.OrigemQuitacao.EXTERNA) {
+            BigDecimal mantido = f.getValorTotal() != null && f.getValorTotal().compareTo(BigDecimal.ZERO) > 0
+                ? f.getValorTotal()
+                : f.getValorFatura();
+            if (mantido != null && mantido.compareTo(sum) > 0) {
+                f.setValorPago(mantido);
+                faturaRepository.save(f);
+                return;
+            }
         }
         f.setValorFatura(sum);
         f.setValorTotal(sum);
@@ -803,10 +825,11 @@ public class FaturaService {
         dto.setNumeroFatura(fatura.getNumeroFatura());
         dto.setNomeCartao(fatura.getCartaoCredito().getNome());
         dto.setBanco(fatura.getCartaoCredito().getBanco());
-        dto.setValorTotal(fatura.getValorFatura());
-        dto.setValorMinimo(fatura.getValorFatura());
+        dto.setValorTotal(fatura.getValorTotal() != null ? fatura.getValorTotal() : fatura.getValorFatura());
+        dto.setValorMinimo(fatura.getValorMinimo() != null ? fatura.getValorMinimo() : fatura.getValorFatura());
         dto.setStatus(fatura.getStatusFatura() != null ? fatura.getStatusFatura().name() : null);
-        dto.setPaga(Fatura.StatusFatura.PAGA.equals(fatura.getStatusFatura()));
+        dto.setPaga(fatura.isPaga() || Fatura.StatusFatura.PAGA.equals(fatura.getStatusFatura()));
+        dto.setOrigemQuitacao(fatura.getOrigemQuitacao());
         
         // Inclui informações do cartão de crédito associado
         dto.setCartaoCreditoId(fatura.getCartaoCredito().getId());

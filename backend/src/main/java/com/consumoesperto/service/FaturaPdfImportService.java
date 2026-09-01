@@ -468,7 +468,7 @@ public class FaturaPdfImportService {
             boolean selecionado = indices == null ? item.isSelecionado() : indices.contains(i);
             List<com.consumoesperto.model.Transacao> existentes = buscarExistentes(usuarioId, item);
             if (!existentes.isEmpty()) {
-                conciliadas += conciliarExistentesComFatura(existentes, fatura, item);
+                conciliadas += conciliarExistentesComFatura(existentes, fatura, item, faturaPagaNoPdf);
                 futuras += criarParcelasFuturasSeNecessario(usuarioId, imp, fatura, item, faturasParaSincronizar);
                 continue;
             }
@@ -525,6 +525,9 @@ public class FaturaPdfImportService {
         persistirValorTotalImportacaoNaFatura(fatura, imp, itens);
         for (Long faturaId : faturasParaSincronizar) {
             faturaService.sincronizarValorFaturaComTransacoes(faturaId);
+        }
+        if (faturaPagaNoPdf) {
+            finalizarFaturaImportadaPagaNoBanco(fatura.getId(), imp, itensContabilizados);
         }
         saldoService.notificarAlteracaoSaldo(usuarioId);
         descartarPrevistasObsoletasDoMes(imp.getCartaoCredito().getId(), fatura);
@@ -925,12 +928,18 @@ public class FaturaPdfImportService {
         return MoedaUtil.nz(a).compareTo(MoedaUtil.nz(b)) == 0;
     }
 
-    private int conciliarExistentesComFatura(List<com.consumoesperto.model.Transacao> existentes, Fatura fatura, ImportacaoFaturaItemDTO item) {
+    private int conciliarExistentesComFatura(
+        List<com.consumoesperto.model.Transacao> existentes,
+        Fatura fatura,
+        ImportacaoFaturaItemDTO item,
+        boolean importacaoHistoricaPagaNoBanco
+    ) {
         enriquecerParcelasNosItens(List.of(item));
         int count = 0;
         boolean parcelasAtualizadas = false;
         for (com.consumoesperto.model.Transacao tx : existentes) {
-            if (!FaturaImportConciliacaoSupport.deveVincularTransacaoExistenteNaFatura(tx, fatura, item)) {
+            if (!FaturaImportConciliacaoSupport.deveVincularTransacaoExistenteNaFatura(
+                tx, fatura, item, importacaoHistoricaPagaNoBanco)) {
                 continue;
             }
             if (tx.getFatura() == null || tx.getFatura().getId() == null || !tx.getFatura().getId().equals(fatura.getId())) {
@@ -1492,6 +1501,9 @@ public class FaturaPdfImportService {
     }
 
     private Fatura atualizarFaturaParaImportacao(Fatura f, ImportacaoFaturaCartao imp, String numeroCanonico) {
+        boolean faturaPagaNoPdf = lerSituacaoLeitura(readAuditorias(imp.getAuditoriaJson()))
+            .map(s -> s == FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO)
+            .orElse(false);
         boolean eraPrevista = f.getStatusFatura() == Fatura.StatusFatura.PREVISTA;
         if (eraPrevista && f.getId() != null) {
             limparLancamentosProjetadosDaFatura(f.getId());
@@ -1507,7 +1519,9 @@ public class FaturaPdfImportService {
             f.setValorTotal(totalPdf);
             f.setValorFatura(totalPdf);
             BigDecimal minimo = nz(imp.getPagamentoMinimo());
-            f.setValorMinimo(minimo.compareTo(BigDecimal.ZERO) > 0 ? minimo : totalPdf);
+            if (!jaPaga || faturaPagaNoPdf) {
+                f.setValorMinimo(minimo.compareTo(BigDecimal.ZERO) > 0 ? minimo : totalPdf);
+            }
         }
         if (imp.getDataVencimento() != null) {
             f.setDataVencimento(imp.getDataVencimento());
@@ -1538,6 +1552,49 @@ public class FaturaPdfImportService {
             fatura.setValorMinimo(minimo.compareTo(BigDecimal.ZERO) > 0 ? minimo : total);
         }
         faturaRepository.save(fatura);
+    }
+
+    /**
+     * Fatura já quitada no banco (pagamento antecipado): registra histórico com valor do PDF
+     * e quitação externa, sem exigir débito em conta no app.
+     */
+    private void finalizarFaturaImportadaPagaNoBanco(
+        Long faturaId,
+        ImportacaoFaturaCartao imp,
+        List<ImportacaoFaturaItemDTO> itens
+    ) {
+        if (faturaId == null || imp == null) {
+            return;
+        }
+        Fatura f = faturaRepository.findById(faturaId).orElse(null);
+        if (f == null) {
+            return;
+        }
+        BigDecimal total = resolverValorTotalParaFatura(imp, itens);
+        if (total.compareTo(BigDecimal.ZERO) <= 0) {
+            BigDecimal sum = transacaoRepository.sumDespesaConfirmadaPorFaturaId(faturaId);
+            if (sum != null && sum.compareTo(BigDecimal.ZERO) > 0) {
+                total = sum.setScale(2, RoundingMode.HALF_UP);
+            }
+        }
+        if (total.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("Importação PAGA_NO_BANCO sem valor histórico faturaId={}", faturaId);
+            return;
+        }
+        f.setValorTotal(total);
+        f.setValorFatura(total);
+        f.setValorPago(total);
+        f.setPaga(true);
+        f.setStatusFatura(Fatura.StatusFatura.PAGA);
+        f.setOrigemQuitacao(Fatura.OrigemQuitacao.EXTERNA);
+        if (f.getDataPagamento() == null) {
+            LocalDateTime dataRef = imp.getDataVencimento() != null
+                ? imp.getDataVencimento()
+                : (imp.getDataFechamento() != null ? imp.getDataFechamento() : LocalDateTime.now());
+            f.setDataPagamento(dataRef);
+        }
+        faturaRepository.save(f);
+        log.info("Fatura importada como quitada no banco faturaId={} valor={}", faturaId, total);
     }
 
     /**

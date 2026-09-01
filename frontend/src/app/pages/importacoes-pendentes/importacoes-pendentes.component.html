@@ -116,11 +116,11 @@
 
     <p class="conciliacao-hint" *ngIf="faturaPagaNoBanco(imp) && imp.novosDetectados === 0">
       Os {{ imp.itens.length }} lançamentos do PDF já estão no app (WhatsApp, notificações ou importação anterior).
-      «Já lançado» não é erro — confirme para criar a fatura no histórico e vincular essas compras, sem duplicar.
+      «Já lançado» não é erro — confirme para criar a fatura no histórico como <strong>paga antecipadamente</strong>.
     </p>
     <p class="conciliacao-hint" *ngIf="faturaPagaNoBanco(imp) && imp.novosDetectados > 0">
       Fatura já paga no banco (total zerado no PDF). O sistema usa a soma dos lançamentos como valor —
-      confirme para registrar no histórico e depois marque como paga em Faturas.
+      ao confirmar, a fatura entra no histórico como <strong>paga antecipadamente</strong> (sem débito em conta).
     </p>
 
     <p class="conciliacao-hint" *ngIf="!faturaTotalZerada(imp) && !conciliacaoOk(imp)">

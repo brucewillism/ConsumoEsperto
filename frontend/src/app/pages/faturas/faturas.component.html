@@ -213,7 +213,7 @@
                   [color]="getStatusColor(fatura.status)"
                   [class.chip-fatura-prevista]="fatura.status === 'PREVISTA'"
                   selected>
-                  {{ getStatusText(fatura.status) }}
+                  {{ textoStatusFatura(fatura) }}
                 </mat-chip>
                 <div *ngIf="fatura.status === 'PENDING'" class="vencimento-info">
                   <span *ngIf="isVencendo(fatura)" class="vencendo">
@@ -273,7 +273,13 @@
 
             <div *ngIf="isPaga(fatura)" class="alerta paga">
               <mat-icon>check_circle</mat-icon>
-              <span>Fatura paga</span>
+              <span *ngIf="isPagaAntecipada(fatura); else faturaPagaNormal">
+                Paga antecipadamente no banco
+                <ng-container *ngIf="fatura.valorPago"> — {{ formatarMoeda(fatura.valorPago) }}</ng-container>
+              </span>
+              <ng-template #faturaPagaNormal>
+                <span>Fatura paga</span>
+              </ng-template>
             </div>
 
             <div *ngIf="isParcial(fatura)" class="alerta parcial">

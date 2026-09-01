@@ -183,6 +183,9 @@ public final class ItauFaturaTextoExtrator {
         List<ImportacaoFaturaItemDTO> doTexto = new ArrayList<>(extrairLancamentos(textoPdf, anoReferencia));
         mesclarItensComParcelas(extrairLancamentosDemonstrativo(textoPdf, anoReferencia), doTexto);
         if (doTexto.isEmpty()) {
+            if (destino == null || destino.isEmpty()) {
+                aplicarFallbackFaturaPagaSemDetalhe(destino, textoPdf, anoReferencia);
+            }
             return;
         }
         Optional<BigDecimal> totalPdf = extrairTotalFatura(textoPdf);
@@ -1260,5 +1263,49 @@ public final class ItauFaturaTextoExtrator {
         aplicarParcelaNoItem(item, atualRaw, totalRaw);
         return (item.getParcelaAtual() != null && item.getParcelaAtual() != antesAtual)
             || (item.getTotalParcelas() != null && item.getTotalParcelas() != antesTotal);
+    }
+
+    public static final String DESCRICAO_FALLBACK_FATURA_PAGA = "Despesas do cartão no período";
+
+    /**
+     * Em faturas já pagas, o PDF pode trazer total a pagar R$ 0,00 mas ainda exibir o valor histórico do ciclo.
+     */
+    public static Optional<BigDecimal> extrairValorHistoricoFaturaPaga(String textoPdf) {
+        if (textoPdf == null || textoPdf.isBlank() || !FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
+            return Optional.empty();
+        }
+        BigDecimal max = null;
+        Matcher m = TOTAL_FATURA.matcher(textoPdf);
+        while (m.find()) {
+            BigDecimal lido = parseMoney(m.group(1));
+            if (lido.compareTo(BigDecimal.ZERO) > 0) {
+                max = max == null || lido.compareTo(max) > 0 ? lido : max;
+            }
+        }
+        return Optional.ofNullable(max);
+    }
+
+    private static void aplicarFallbackFaturaPagaSemDetalhe(
+        List<ImportacaoFaturaItemDTO> destino,
+        String textoPdf,
+        int anoReferencia
+    ) {
+        if (destino == null) {
+            return;
+        }
+        if (!destino.isEmpty()) {
+            return;
+        }
+        Optional<BigDecimal> historico = extrairValorHistoricoFaturaPaga(textoPdf);
+        if (historico.isEmpty() || historico.get().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        ImportacaoFaturaItemDTO item = new ImportacaoFaturaItemDTO();
+        item.setDescricao(DESCRICAO_FALLBACK_FATURA_PAGA);
+        item.setValor(historico.get());
+        int ano = anoReferencia > 0 ? anoReferencia : YearMonth.now().getYear();
+        item.setData(LocalDate.of(ano, 6, 1));
+        destino.add(item);
+        log.info("Itaú fallback fatura paga: valor histórico R$ {} (detalhe indisponível no PDF).", historico.get());
     }
 }
