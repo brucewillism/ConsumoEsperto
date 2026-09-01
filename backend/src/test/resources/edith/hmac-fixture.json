@@ -3,5 +3,6 @@
   "timestamp": "1735689600",
   "nonce": "nonce-fixture-001",
   "request_id": "req-fixture-001",
-  "body": "{\"request_id\":\"req-fixture-001\",\"tool\":\"finance.transactions.search\",\"version\":\"1\",\"arguments\":{\"context_ref\":\"ctx-fixture-a\"}}"
+  "body": "{\"request_id\":\"req-fixture-001\",\"tool\":\"finance.transactions.search\",\"version\":\"1\",\"arguments\":{\"context_ref\":\"ctx-fixture-a\"}}",
+  "expected_signature": "eca51b13986ad6497e33c327ea5c075cac3996606dd3c6a8e8408b13f6237641"
 }
