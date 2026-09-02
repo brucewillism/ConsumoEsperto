@@ -77,6 +77,13 @@ export class NovaFaturaDialogComponent implements OnInit {
       fechamento: [fatura ? this.parseDataCampo(fatura.closingDate) : '', Validators.required],
       status: [fatura?.status ?? 'PENDING', Validators.required],
     });
+
+    // Fatura importada já paga pode vir com 0,00 (PDF sem detalhe dos lançamentos). Sem marcar o
+    // campo como tocado, o erro fica oculto e o botão desabilitado parece não responder ao clique.
+    const valorCtrl = this.form.get('valor');
+    if (this.modoEdicao && valorCtrl?.invalid) {
+      valorCtrl.markAsTouched();
+    }
   }
 
   private parseDataCampo(raw: Date | string | undefined): Date | '' {
