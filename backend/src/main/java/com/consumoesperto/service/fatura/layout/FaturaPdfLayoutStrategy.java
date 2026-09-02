@@ -64,6 +64,15 @@ public interface FaturaPdfLayoutStrategy {
         return Optional.empty();
     }
 
+    /**
+     * Valor do ciclo declarado em fatura já quitada no banco, onde o total a pagar vem zerado.
+     * É mais fiel que a soma dos lançamentos, porque o extrato desconta créditos e estornos que
+     * não entram como despesa no app.
+     */
+    default Optional<BigDecimal> extrairValorHistoricoFaturaPagaDoTexto(String textoPdf) {
+        return Optional.empty();
+    }
+
     /** Segunda passagem de poda/conciliação com o total conhecido. */
     default void finalizarLancamentosDoTexto(
         String textoPdf,

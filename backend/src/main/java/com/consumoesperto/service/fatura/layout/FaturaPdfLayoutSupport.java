@@ -135,9 +135,7 @@ public final class FaturaPdfLayoutSupport {
         if (texto != null && pareceTotalAPagarZerado(texto)) {
             return SituacaoLeituraFaturaPdf.PAGA_NO_BANCO;
         }
-        if (texto != null && texto.matches(
-            "(?is).*(?:valor da fatura|total desta fatura|total para pagamento)[^\\d]{0,80}R\\$\\s*0[,.]00.*"
-        )) {
+        if (pareceTotalDaFaturaZerado(texto)) {
             return SituacaoLeituraFaturaPdf.PAGA_NO_BANCO;
         }
         return SituacaoLeituraFaturaPdf.ABERTA;
@@ -166,10 +164,32 @@ public final class FaturaPdfLayoutSupport {
         if (contem(n, "fatura paga", "pagamento efetuado", "fatura quitada")) {
             return true;
         }
-        boolean totalZerado = texto.matches(
-            "(?is).*(?:valor da fatura|total desta fatura)[^\\d]{0,80}R\\$\\s*0[,.]00.*"
+        return pareceSaldoQuitadoNoTexto(texto);
+    }
+
+    /**
+     * Itaú envia a fatura quitada «para simples conferência»: nunca escreve «fatura paga» e omite o
+     * «R$» na linha «Total desta fatura 0,00». Exige o aviso explícito de saldo zero junto do total
+     * zerado, para não classificar fatura em aberto como quitada.
+     */
+    private static boolean pareceSaldoQuitadoNoTexto(String texto) {
+        if (!pareceTotalDaFaturaZerado(texto)) {
+            return false;
+        }
+        return contem(
+            norm(texto),
+            "nao sera necessario efetuar o pagamento",
+            "saldo apresentado foi igual a zero",
+            "nao possui valor a ser pago"
         );
-        return totalZerado && contem(n, "fatura paga", "pagamento efetuado", "fatura quitada");
+    }
+
+    /** Total da fatura zerado, com «R$» opcional (o Itaú imprime só «Total desta fatura 0,00»). */
+    private static boolean pareceTotalDaFaturaZerado(String texto) {
+        return texto != null && texto.matches(
+            "(?is).*(?:valor da fatura|total desta fatura|total da sua fatura|total para pagamento)"
+                + "[^\\d]{0,80}(?:R\\$\\s*)?0[,.]00.*"
+        );
     }
 
     /** Um item genérico da IA («Lançamento da fatura») indica falha na extração detalhada. */

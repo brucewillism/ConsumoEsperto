@@ -64,4 +64,34 @@ class FaturaPdfLayoutSupportSituacaoTest {
     void pareceFaturaPagaComMarcadorExplicito() {
         assertTrue(FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto("Resumo\nFatura paga\nTotal R$ 0,00"));
     }
+
+    /** Itaú de conferência: não escreve «fatura paga» e omite o «R$» na linha do total. */
+    @Test
+    void detectaFaturaItauQuitadaComSaldoZeradoSemCifrao() {
+        String texto = """
+            Estamos lhe enviando esta fatura para simples conferência.
+            Este mês não será necessário efetuar o pagamento de sua fatura, pois o saldo apresentado foi
+            igual a zero.
+            Resumo da fatura em R$
+            Pagamentos efetuados  -1.615,98
+            Lançamentos atuais 1.556,08
+            Total desta fatura 0,00
+            """;
+
+        assertTrue(FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(texto));
+        assertEquals(
+            FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO,
+            FaturaPdfLayoutSupport.detectarSituacaoLeituraFatura(texto, null)
+        );
+    }
+
+    @Test
+    void avisoDeSaldoZeroSemTotalZeradoNaoMarcaComoPaga() {
+        String texto = """
+            Este mês você não possui valor a ser pago em outro cartão.
+            Total desta fatura 1.556,08
+            """;
+
+        assertFalse(FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(texto));
+    }
 }

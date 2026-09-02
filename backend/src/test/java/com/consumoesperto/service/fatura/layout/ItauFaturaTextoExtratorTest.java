@@ -366,6 +366,49 @@ class ItauFaturaTextoExtratorTest {
         assertEquals(ItauFaturaTextoExtrator.DESCRICAO_FALLBACK_FATURA_PAGA, destino.get(0).getDescricao());
     }
 
+    /** Fatura de conferência: total zerado sem «R$» e valor do ciclo em «Lançamentos atuais». */
+    @Test
+    void valorHistoricoVemDosLancamentosAtuaisNaFaturaQuitada() {
+        String texto = """
+            Estamos lhe enviando esta fatura para simples conferência.
+            Este mês não será necessário efetuar o pagamento de sua fatura, pois o saldo apresentado foi
+            igual a zero.
+            Resumo da fatura em R$
+            Total da fatura anterior 59,90
+            Pagamentos efetuados  -1.615,98
+            Saldo financiado -1.556,08
+            Lançamentos atuais 1.556,08
+            Total desta fatura 0,00
+            """;
+
+        assertEquals(
+            new BigDecimal("1556.08"),
+            ItauFaturaTextoExtrator.extrairValorHistoricoFaturaPaga(texto).orElseThrow()
+        );
+    }
+
+    @Test
+    void mantemDespesasDistintasDeMesmoValorNoMesmoDia() {
+        String texto = """
+            Itaú Unibanco
+            LANÇAMENTOS: compras e saques
+            DATA ESTABELECIMENTO VALOR EM R$
+            11/08 BAR E RESTAURANTE DA CR 53,20
+            restaurante  RECIFE
+            11/08 RESTAURANTE DO BIURECIF 53,20
+            supermercado  RECIFE
+            Total desta fatura R$ 106,40
+            """;
+
+        List<ImportacaoFaturaItemDTO> itens = ItauFaturaTextoExtrator.extrairLancamentos(texto, 2026);
+
+        assertEquals(2, itens.size(), "estabelecimentos diferentes não são duplicata");
+        assertEquals(
+            new BigDecimal("106.40"),
+            itens.stream().map(ImportacaoFaturaItemDTO::getValor).reduce(BigDecimal.ZERO, BigDecimal::add)
+        );
+    }
+
     private static ImportacaoFaturaItemDTO item(
         String desc,
         java.math.BigDecimal valor,

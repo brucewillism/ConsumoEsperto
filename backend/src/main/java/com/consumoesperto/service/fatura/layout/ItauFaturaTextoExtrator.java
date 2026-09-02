@@ -147,6 +147,14 @@ public final class ItauFaturaTextoExtrator {
     private static final Pattern PAGAMENTO_MINIMO = Pattern.compile(
         "(?i)pagamento\\s+m[ií]nimo[^\\d]{0,60}(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
     );
+    /**
+     * Valor do ciclo em fatura quitada: o «Total desta fatura» vem zerado, mas o resumo mantém
+     * «Lançamentos atuais». O sinal negativo fica fora da captura para não ler «Saldo financiado».
+     */
+    private static final Pattern TOTAL_LANCAMENTOS_ATUAIS = Pattern.compile(
+        "(?i)(?:total\\s+dos\\s+)?lan[çc]amentos\\s+atuais[^\\d\\-]{0,40}(?:R\\$\\s*)?"
+            + "(\\d{1,3}(?:\\.\\d{3})*,\\d{2})"
+    );
 
     private ItauFaturaTextoExtrator() {
     }
@@ -1212,12 +1220,15 @@ public final class ItauFaturaTextoExtrator {
             if (item.getValor() == null || candidato.getValor() == null) {
                 continue;
             }
+            // Duplicata é o mesmo lançamento vindo de duas fontes (IA e texto): exige dia, valor e
+            // descrição compatíveis. Só dia e valor descartava compras distintas de mesmo preço no
+            // mesmo dia; só valor e descrição descartava compras recorrentes em dias diferentes.
             boolean mesmaData = candidato.getData() != null && candidato.getData().equals(item.getData());
             boolean mesmoValor = item.getValor().subtract(candidato.getValor()).abs()
                 .compareTo(new BigDecimal("0.04")) <= 0;
             String descItem = FaturaPdfLayoutSupport.norm(item.getDescricao());
             boolean descSimilar = descItem.contains(descCand) || descCand.contains(descItem);
-            if (mesmoValor && (mesmaData || descSimilar)) {
+            if (mesmaData && mesmoValor && descSimilar) {
                 return true;
             }
         }
@@ -1273,6 +1284,17 @@ public final class ItauFaturaTextoExtrator {
     public static Optional<BigDecimal> extrairValorHistoricoFaturaPaga(String textoPdf) {
         if (textoPdf == null || textoPdf.isBlank() || !FaturaPdfLayoutSupport.pareceFaturaPagaNoTexto(textoPdf)) {
             return Optional.empty();
+        }
+        Matcher atuais = TOTAL_LANCAMENTOS_ATUAIS.matcher(textoPdf);
+        BigDecimal ciclo = null;
+        while (atuais.find()) {
+            BigDecimal lido = parseMoney(atuais.group(1));
+            if (lido.compareTo(BigDecimal.ZERO) > 0) {
+                ciclo = ciclo == null || lido.compareTo(ciclo) > 0 ? lido : ciclo;
+            }
+        }
+        if (ciclo != null) {
+            return Optional.of(ciclo);
         }
         BigDecimal max = null;
         Matcher m = TOTAL_FATURA.matcher(textoPdf);

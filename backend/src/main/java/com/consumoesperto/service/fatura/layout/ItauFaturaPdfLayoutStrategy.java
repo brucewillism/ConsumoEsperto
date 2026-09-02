@@ -103,6 +103,11 @@ public class ItauFaturaPdfLayoutStrategy implements FaturaPdfLayoutStrategy {
     }
 
     @Override
+    public Optional<BigDecimal> extrairValorHistoricoFaturaPagaDoTexto(String textoPdf) {
+        return ItauFaturaTextoExtrator.extrairValorHistoricoFaturaPaga(textoPdf);
+    }
+
+    @Override
     public void finalizarLancamentosDoTexto(
         String textoPdf,
         List<ImportacaoFaturaItemDTO> itens,

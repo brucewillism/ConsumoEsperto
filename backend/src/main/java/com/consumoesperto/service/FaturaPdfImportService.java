@@ -250,10 +250,14 @@ public class FaturaPdfImportService {
             FaturaPdfLayoutSupport.detectarSituacaoLeituraFatura(textoPdf, valorTotalPdf);
         auditorias.add(META_SITUACAO_LEITURA_PREFIX + situacao.name());
         if (situacao == FaturaPdfLayoutSupport.SituacaoLeituraFaturaPdf.PAGA_NO_BANCO) {
-            valorTotal = somaPosFinalizar.setScale(2, RoundingMode.HALF_UP);
+            valorTotal = layoutEfetivo.extrairValorHistoricoFaturaPagaDoTexto(textoPdf)
+                .filter(v -> v.compareTo(BigDecimal.ZERO) > 0)
+                .map(v -> v.setScale(2, RoundingMode.HALF_UP))
+                .orElseGet(() -> somaPosFinalizar.setScale(2, RoundingMode.HALF_UP));
             auditorias.add(
                 "Leitura automática: fatura já paga no banco (total zerado no PDF). "
-                    + "O valor registrado será a soma dos lançamentos para histórico e pagamento no app.");
+                    + "Registrei R$ " + formatBrl(valorTotal).trim()
+                    + " como valor do ciclo, para preservar o histórico e a quitação no app.");
         } else if (valorTotal.compareTo(BigDecimal.ZERO) > 0) {
             auditorias.add("Leitura automática: fatura em aberto — total do PDF usado para conciliação.");
         } else if (somaPosFinalizar.compareTo(BigDecimal.ZERO) > 0) {
@@ -434,7 +438,11 @@ public class FaturaPdfImportService {
                     "Fatura já paga no banco, mas não há lançamentos para registrar. "
                         + "Descarte esta importação e reenvie o PDF do Inter com a senha correta.");
             }
-            imp.setValorTotal(somaPdf);
+            // Preserva o valor do ciclo apurado na leitura; a soma dos itens é só o fallback, pois
+            // exclui créditos e estornos que o extrato do banco já abateu do total pago.
+            if (nz(imp.getValorTotal()).compareTo(BigDecimal.ZERO) <= 0) {
+                imp.setValorTotal(somaPdf);
+            }
         } else if (nz(imp.getValorTotal()).compareTo(BigDecimal.ZERO) <= 0) {
             BigDecimal totalResolvido = resolverValorTotalParaFatura(imp, itensContabilizados);
             if (totalResolvido.compareTo(BigDecimal.ZERO) > 0) {
@@ -683,10 +691,13 @@ public class FaturaPdfImportService {
         List<ImportacaoFaturaItemDTO> itens,
         boolean faturaPagaNoPdf
     ) {
-        if (faturaPagaNoPdf) {
+        // Em fatura quitada o valor do ciclo já é apurado na leitura do PDF, então vale mais que a
+        // soma dos itens, que exclui créditos e estornos. A soma segue como fallback, o que também
+        // atende importações antigas, gravadas com total zerado.
+        BigDecimal doImp = valorImportacao != null ? valorImportacao : BigDecimal.ZERO;
+        if (faturaPagaNoPdf && doImp.compareTo(BigDecimal.ZERO) <= 0) {
             return somaValoresItens(itens);
         }
-        BigDecimal doImp = valorImportacao != null ? valorImportacao : BigDecimal.ZERO;
         if (doImp.compareTo(BigDecimal.ZERO) > 0) {
             return doImp.setScale(2, RoundingMode.HALF_UP);
         }
