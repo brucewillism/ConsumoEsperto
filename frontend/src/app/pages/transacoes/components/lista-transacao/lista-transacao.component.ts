@@ -80,6 +80,16 @@ export class ListaTransacaoComponent implements OnChanges {
     return descricaoComIndicadorParcela(t);
   }
 
+  rotuloPagamento(t: Transacao): string {
+    if (t.cartaoCreditoId || t.cartaoCreditoNome) {
+      return t.cartaoCreditoNome ? `Cartão · ${t.cartaoCreditoNome}` : 'Cartão de crédito';
+    }
+    if (t.contaBancariaNome) {
+      return `Pix · ${t.contaBancariaNome}`;
+    }
+    return '—';
+  }
+
   mostrarBadgeJuros(t: Transacao): boolean {
     return transacaoMostraBadgeJuros(t, this.gruposComJuros);
   }

@@ -40,6 +40,8 @@ public class TransacaoDTO {
     private Long faturaId;
     /** Despesa no cartão: resolve a fatura aberta do cartão (opcional; ignorado se faturaId preenchido). */
     private Long cartaoCreditoId;
+    /** Apelido do cartão para exibição (preenchido na leitura). */
+    private String cartaoCreditoNome;
     /** Conta bancária/carteira movimentada (opcional — usa conta padrão se omitido). */
     private Long contaBancariaId;
     private String contaBancariaNome;

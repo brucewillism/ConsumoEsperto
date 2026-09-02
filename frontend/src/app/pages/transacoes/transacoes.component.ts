@@ -1,5 +1,6 @@
 import { Component, DestroyRef, OnInit, ViewChild, ViewContainerRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -23,6 +24,8 @@ import { ModoParcelamentoDelete, StatusConferencia, TipoTransacao, Transacao } f
 import { CategoriaService } from '../../services/categoria.service';
 import { ContaBancariaService } from '../../services/conta-bancaria.service';
 import { ContaBancaria } from '../../models/conta-bancaria.model';
+import { CartaoCredito } from '../../models/cartao-credito.model';
+import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import {
   OrdenacaoTransacao,
   TransacaoFiltros,
@@ -42,6 +45,7 @@ import { timeout, finalize } from 'rxjs/operators';
   standalone: true,
   imports: [
     CommonModule,
+    RouterLink,
     ReactiveFormsModule,
     FormsModule,
     MatCardModule,
@@ -71,6 +75,7 @@ export class TransacoesComponent implements OnInit {
   transacoesFiltradas: Transacao[] = [];
   categorias: Categoria[] = [];
   contas: ContaBancaria[] = [];
+  cartoes: CartaoCredito[] = [];
   transacaoForm: FormGroup;
   transacaoEditando: Transacao | null = null;
 
@@ -103,6 +108,7 @@ export class TransacoesComponent implements OnInit {
     private readonly transacaoService: TransacaoService,
     private readonly categoriaService: CategoriaService,
     private readonly contaBancariaService: ContaBancariaService,
+    private readonly cartaoCreditoService: CartaoCreditoService,
     private readonly dialog: MatDialog,
     private readonly confirmDialog: ConfirmDialogService,
     private readonly snackBar: MatSnackBar,
@@ -116,8 +122,12 @@ export class TransacoesComponent implements OnInit {
       tipoTransacao: [TipoTransacao.DESPESA, Validators.required],
       dataTransacao: [new Date(), Validators.required],
       categoriaId: [''],
-      contaBancariaId: ['']
+      formaPagamento: ['PIX'],
+      contaBancariaId: [''],
+      cartaoCreditoId: [''],
     });
+    this.transacaoForm.get('tipoTransacao')?.valueChanges.subscribe(() => this.sincronizarPagamento());
+    this.transacaoForm.get('formaPagamento')?.valueChanges.subscribe(() => this.sincronizarPagamento());
     this.agendamentoForm = this.fb.group({
       beneficiario: ['', Validators.required],
       valor: ['', [Validators.required, valorMonetarioBrValidator]],
@@ -141,7 +151,25 @@ export class TransacoesComponent implements OnInit {
     this.carregarTransacoes();
     this.carregarCategorias();
     this.carregarContas();
+    this.carregarCartoes();
     this.carregarAgendamentos();
+  }
+
+  ehDespesa(): boolean {
+    return this.transacaoForm?.get('tipoTransacao')?.value === TipoTransacao.DESPESA;
+  }
+
+  noCartao(): boolean {
+    return this.ehDespesa() && this.transacaoForm.get('formaPagamento')?.value === 'CARTAO';
+  }
+
+  rotuloCartao(cartao: CartaoCredito): string {
+    const banco = (cartao.banco || '').trim();
+    const nome = (cartao.nome || '').trim();
+    if (banco && nome && banco.toLowerCase() !== nome.toLowerCase()) {
+      return `${banco} · ${nome}`;
+    }
+    return nome || banco || 'Cartão';
   }
 
   carregarAgendamentos(): void {
@@ -252,16 +280,21 @@ export class TransacoesComponent implements OnInit {
         tipoTransacao: transacao.tipoTransacao,
         dataTransacao: transacao.dataTransacao ? new Date(transacao.dataTransacao) : new Date(),
         categoriaId: transacao.categoriaId ?? '',
-        contaBancariaId: transacao.contaBancariaId ?? ''
-      });
+        formaPagamento: transacao.cartaoCreditoId ? 'CARTAO' : 'PIX',
+        contaBancariaId: transacao.contaBancariaId ?? '',
+        cartaoCreditoId: transacao.cartaoCreditoId ?? '',
+      }, { emitEvent: false });
     } else {
       this.transacaoForm.reset({
         tipoTransacao: TipoTransacao.DESPESA,
         dataTransacao: new Date(),
         categoriaId: '',
-        contaBancariaId: this.contas.find((c) => c.padrao)?.id ?? ''
-      });
+        formaPagamento: 'PIX',
+        contaBancariaId: this.contas.find((c) => c.padrao)?.id ?? '',
+        cartaoCreditoId: '',
+      }, { emitEvent: false });
     }
+    this.sincronizarPagamento();
 
     const ref = openCeFormDialog(this.dialog, this.dialogoTransacao as any, {
       width: '560px',
@@ -273,8 +306,10 @@ export class TransacoesComponent implements OnInit {
         tipoTransacao: TipoTransacao.DESPESA,
         dataTransacao: new Date(),
         categoriaId: '',
-        contaBancariaId: ''
-      });
+        formaPagamento: 'PIX',
+        contaBancariaId: '',
+        cartaoCreditoId: '',
+      }, { emitEvent: false });
     });
   }
 
@@ -289,6 +324,37 @@ export class TransacoesComponent implements OnInit {
       },
       error: () => (this.contas = []),
     });
+  }
+
+  private carregarCartoes(): void {
+    this.cartaoCreditoService.buscarPorUsuario().subscribe({
+      next: (cartoes) => {
+        this.cartoes = (cartoes ?? []).filter((c) => c.id != null && c.ativo !== false);
+      },
+      error: () => (this.cartoes = []),
+    });
+  }
+
+  private sincronizarPagamento(): void {
+    const cartaoCtrl = this.transacaoForm.get('cartaoCreditoId');
+    if (!cartaoCtrl) {
+      return;
+    }
+    if (!this.ehDespesa() && this.transacaoForm.get('formaPagamento')?.value !== 'PIX') {
+      this.transacaoForm.patchValue({ formaPagamento: 'PIX' }, { emitEvent: false });
+    }
+    if (this.noCartao()) {
+      cartaoCtrl.setValidators(Validators.required);
+      if (!this.cartoes.length) {
+        cartaoCtrl.setErrors({ required: true });
+      }
+    } else {
+      cartaoCtrl.clearValidators();
+      if (cartaoCtrl.value) {
+        cartaoCtrl.setValue('', { emitEvent: false });
+      }
+    }
+    cartaoCtrl.updateValueAndValidity({ emitEvent: false });
   }
 
   salvarTransacao(): void {
@@ -345,6 +411,13 @@ export class TransacoesComponent implements OnInit {
       contaRaw === '' || contaRaw == null || contaRaw === undefined
         ? undefined
         : Number(contaRaw);
+    const noCartao =
+      raw['tipoTransacao'] === TipoTransacao.DESPESA && raw['formaPagamento'] === 'CARTAO';
+    const cartaoRaw = raw['cartaoCreditoId'];
+    const cartaoCreditoId =
+      cartaoRaw === '' || cartaoRaw == null || cartaoRaw === undefined
+        ? undefined
+        : Number(cartaoRaw);
     return {
       descricao: String(raw['descricao'] ?? '').trim(),
       valor: parseValorBrasileiro(String(raw['valor'] ?? '')) ?? 0,
@@ -354,7 +427,12 @@ export class TransacoesComponent implements OnInit {
         raw['categoriaId'] === '' || raw['categoriaId'] == null
           ? undefined
           : Number(raw['categoriaId']),
-      contaBancariaId: Number.isFinite(contaBancariaId) ? contaBancariaId : undefined,
+      contaBancariaId: noCartao
+        ? undefined
+        : Number.isFinite(contaBancariaId)
+          ? contaBancariaId
+          : this.contas.find((c) => c.padrao)?.id,
+      cartaoCreditoId: noCartao && Number.isFinite(cartaoCreditoId) ? cartaoCreditoId : undefined,
     };
   }
 

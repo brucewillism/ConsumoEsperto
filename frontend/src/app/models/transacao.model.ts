@@ -52,6 +52,8 @@ export interface Transacao {
   
   /** ID do cartão de crédito associado (opcional) */
   cartaoCreditoId?: number;
+  /** Apelido do cartão para exibição */
+  cartaoCreditoNome?: string;
 
   /** Conferência (ex.: lançamentos via OCR/WhatsApp) */
   statusConferencia?: StatusConferencia;

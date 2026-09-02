@@ -125,7 +125,40 @@
         </mat-form-field>
       </div>
 
-      <mat-form-field appearance="outline" class="full-width">
+      <mat-form-field
+        appearance="outline"
+        class="full-width"
+        *ngIf="ehDespesa()">
+        <mat-label>Pagamento</mat-label>
+        <mat-select formControlName="formaPagamento" panelClass="exec-select-panel">
+          <mat-option value="PIX">Pix / débito na conta</mat-option>
+          <mat-option value="CARTAO">Cartão de crédito</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="outline"
+        class="full-width"
+        *ngIf="noCartao()">
+        <mat-label>Cartão</mat-label>
+        <mat-select formControlName="cartaoCreditoId" panelClass="exec-select-panel">
+          <mat-option *ngFor="let cartao of cartoes" [value]="cartao.id">
+            {{ rotuloCartao(cartao) }}
+          </mat-option>
+        </mat-select>
+        <mat-error *ngIf="transacaoForm.get('cartaoCreditoId')?.hasError('required')">
+          Selecione o cartão
+        </mat-error>
+        <mat-hint>Entra na fatura aberta. Não mexe no saldo da conta.</mat-hint>
+      </mat-form-field>
+      <p class="pagamento-hint" *ngIf="noCartao() && !cartoes.length">
+        Nenhum cartão ativo. Cadastre um em <a routerLink="/cartoes">Cartões</a> antes de lançar nesta forma.
+      </p>
+
+      <mat-form-field
+        appearance="outline"
+        class="full-width"
+        *ngIf="!noCartao()">
         <mat-label>Conta / carteira</mat-label>
         <mat-select formControlName="contaBancariaId" panelClass="exec-select-panel">
           <mat-option value="">Sem conta (ou padrão automático)</mat-option>
@@ -133,12 +166,13 @@
             {{ conta.nome }} — {{ conta.saldoAtual | currency:'BRL':'symbol':'1.2-2':'pt' }}
           </mat-option>
         </mat-select>
+        <mat-hint *ngIf="ehDespesa()">Pix, TED ou débito — sai do saldo agora.</mat-hint>
       </mat-form-field>
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close [disabled]="salvandoTransacao">Cancelar</button>
-      <button mat-raised-button color="primary" type="submit" [disabled]="salvandoTransacao">
+      <button mat-raised-button color="primary" type="submit" [disabled]="salvandoTransacao || transacaoForm.invalid">
         {{ salvandoTransacao ? 'Salvando...' : (transacaoEditando ? 'Atualizar' : 'Salvar') }}
       </button>
     </mat-dialog-actions>

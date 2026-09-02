@@ -42,8 +42,8 @@
             <dd>{{ transacao.categoriaNome || 'Sem categoria' }}</dd>
           </div>
           <div>
-            <dt>Conta</dt>
-            <dd>{{ transacao.contaBancariaNome || '—' }}</dd>
+            <dt>Pagamento</dt>
+            <dd>{{ rotuloPagamento(transacao) }}</dd>
           </div>
           <div>
             <dt>Data</dt>
@@ -136,9 +136,9 @@
       </ng-container>
 
       <ng-container matColumnDef="conta">
-        <th mat-header-cell *matHeaderCellDef>Conta</th>
+        <th mat-header-cell *matHeaderCellDef>Pagamento</th>
         <td mat-cell *matCellDef="let transacao">
-          {{ transacao.contaBancariaNome || '—' }}
+          {{ rotuloPagamento(transacao) }}
         </td>
       </ng-container>
 

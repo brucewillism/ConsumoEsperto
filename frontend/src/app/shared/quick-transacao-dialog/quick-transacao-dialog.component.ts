@@ -66,13 +66,11 @@ export class QuickTransacaoDialogComponent implements OnInit {
       valor: ['', [Validators.required, valorMonetarioBrValidator]],
       tipoTransacao: [TipoTransacao.DESPESA, Validators.required],
       categoriaId: [''],
+      formaPagamento: ['PIX'],
       cartaoCreditoId: [''],
     });
-    this.form.get('tipoTransacao')?.valueChanges.subscribe((tipo) => {
-      if (tipo === TipoTransacao.RECEITA) {
-        this.form.patchValue({ cartaoCreditoId: '' }, { emitEvent: false });
-      }
-    });
+    this.form.get('tipoTransacao')?.valueChanges.subscribe(() => this.sincronizarPagamento());
+    this.form.get('formaPagamento')?.valueChanges.subscribe(() => this.sincronizarPagamento());
     forkJoin({
       categorias: this.categoriaService.buscarTodas(),
       cartoes: this.cartaoCreditoService.buscarPorUsuario(),
@@ -107,7 +105,12 @@ export class QuickTransacaoDialogComponent implements OnInit {
     if (cat !== '' && cat != null) {
       body.categoriaId = Number(cat);
     }
-    if (raw.tipoTransacao === TipoTransacao.DESPESA && raw.cartaoCreditoId !== '' && raw.cartaoCreditoId != null) {
+    if (
+      raw.tipoTransacao === TipoTransacao.DESPESA
+      && raw.formaPagamento === 'CARTAO'
+      && raw.cartaoCreditoId !== ''
+      && raw.cartaoCreditoId != null
+    ) {
       body.cartaoCreditoId = Number(raw.cartaoCreditoId);
     }
 
@@ -130,5 +133,26 @@ export class QuickTransacaoDialogComponent implements OnInit {
         );
       },
     });
+  }
+
+  private sincronizarPagamento(): void {
+    const cartaoCtrl = this.form.get('cartaoCreditoId');
+    if (!cartaoCtrl) {
+      return;
+    }
+    const despesa = this.form.get('tipoTransacao')?.value === TipoTransacao.DESPESA;
+    const noCartao = despesa && this.form.get('formaPagamento')?.value === 'CARTAO';
+    if (!despesa && this.form.get('formaPagamento')?.value !== 'PIX') {
+      this.form.patchValue({ formaPagamento: 'PIX' }, { emitEvent: false });
+    }
+    if (noCartao) {
+      cartaoCtrl.setValidators(Validators.required);
+    } else {
+      cartaoCtrl.clearValidators();
+      if (cartaoCtrl.value) {
+        cartaoCtrl.setValue('', { emitEvent: false });
+      }
+    }
+    cartaoCtrl.updateValueAndValidity({ emitEvent: false });
   }
 }

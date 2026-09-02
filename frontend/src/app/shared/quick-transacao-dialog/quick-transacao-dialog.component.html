@@ -1,7 +1,7 @@
 <h2 mat-dialog-title>Novo lançamento</h2>
 <form [formGroup]="form" (ngSubmit)="salvar()">
   <mat-dialog-content class="ce-form-body">
-    <p class="hint">Despesas no cartão usam a fatura aberta; débito/dinheiro impactam o saldo em conta.</p>
+    <p class="hint">Escolha se o gasto foi no cartão (fatura) ou no Pix/débito (sai da conta agora).</p>
 
     <mat-form-field appearance="outline" class="full">
       <mat-label>Descrição</mat-label>
@@ -39,11 +39,23 @@
       appearance="outline"
       class="full"
       *ngIf="form.get('tipoTransacao')?.value === tipoTransacaoEnum.DESPESA">
-      <mat-label>Cartão de crédito</mat-label>
+      <mat-label>Pagamento</mat-label>
+      <mat-select formControlName="formaPagamento" panelClass="exec-select-panel">
+        <mat-option value="PIX">Pix / débito na conta</mat-option>
+        <mat-option value="CARTAO">Cartão de crédito</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field
+      appearance="outline"
+      class="full"
+      *ngIf="form.get('tipoTransacao')?.value === tipoTransacaoEnum.DESPESA && form.get('formaPagamento')?.value === 'CARTAO'">
+      <mat-label>Cartão</mat-label>
       <mat-select formControlName="cartaoCreditoId" panelClass="exec-select-panel">
-        <mat-option value="">Nenhum (Débito/Dinheiro)</mat-option>
         <mat-option *ngFor="let c of cartoes" [value]="c.id">{{ c.banco }} · {{ c.nome }}</mat-option>
       </mat-select>
+      <mat-error *ngIf="form.get('cartaoCreditoId')?.hasError('required')">Selecione o cartão</mat-error>
+      <mat-hint>Entra na fatura aberta. Não mexe no saldo da conta.</mat-hint>
     </mat-form-field>
   </mat-dialog-content>
   <mat-dialog-actions align="end">

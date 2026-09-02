@@ -770,7 +770,9 @@ public class TransacaoService {
         if (transacao.getFatura() != null) {
             dto.setFaturaId(transacao.getFatura().getId());
             if (transacao.getFatura().getCartaoCredito() != null) {
-                dto.setCartaoCreditoId(transacao.getFatura().getCartaoCredito().getId());
+                CartaoCredito cartao = transacao.getFatura().getCartaoCredito();
+                dto.setCartaoCreditoId(cartao.getId());
+                dto.setCartaoCreditoNome(nomeExibicaoCartao(cartao));
             }
         }
         if (transacao.getContaBancaria() != null) {
@@ -810,6 +812,10 @@ public class TransacaoService {
             return;
         }
         if (!criacaoNova) {
+            // Formulário completo: conta sem cartão = Pix/débito — solta o vínculo da fatura.
+            if (dto.getContaBancariaId() != null) {
+                transacao.setFatura(null);
+            }
             return;
         }
         transacao.setFatura(null);
@@ -867,6 +873,21 @@ public class TransacaoService {
             throw new IllegalArgumentException("Categoria inativa não pode ser usada em transações");
         }
         return categoria;
+    }
+
+    private static String nomeExibicaoCartao(CartaoCredito cartao) {
+        if (cartao == null) {
+            return null;
+        }
+        String banco = cartao.getBanco() == null ? "" : cartao.getBanco().trim();
+        String nome = cartao.getNome() == null ? "" : cartao.getNome().trim();
+        if (!banco.isEmpty() && !nome.isEmpty() && !banco.equalsIgnoreCase(nome)) {
+            return banco + " · " + nome;
+        }
+        if (!nome.isEmpty()) {
+            return nome;
+        }
+        return banco.isEmpty() ? null : banco;
     }
 
     private String normalizarCnpjOpcional(String raw) {

@@ -122,6 +122,16 @@ h1 {
   width: 100%;
 }
 
+.pagamento-hint {
+  margin: -4px 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+
+  a {
+    color: #93c5fd;
+  }
+}
+
 @media (max-width: 768px) {
   .transacoes-container {
     padding: 16px;
