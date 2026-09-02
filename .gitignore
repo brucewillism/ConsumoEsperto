@@ -2,8 +2,8 @@
 # GITIGNORE - CONSUMO ESPERTO
 # =============================================================================
 
-# Ferramentas locais (não versionar)
-tools/
+# Ferramentas locais (não versionar) — somente pasta tools/ na raiz do repo
+/tools/
 !tools/.gitkeep
 
 # Arquivos temporários

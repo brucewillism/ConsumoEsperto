@@ -76,8 +76,8 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# JDK and JRE
-tools/
+# JDK and JRE (somente pasta tools/ na raiz do backend)
+/tools/
 jdk*/
 jre*/
 *.jdk
@@ -213,7 +213,7 @@ temp/
 !**/src/main/resources/application-h2.properties
 
 # Exclude large files and directories
-tools/
+/tools/
 jdk*/
 jre*/
 *.jdk
