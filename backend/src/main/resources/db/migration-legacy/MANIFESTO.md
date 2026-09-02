@@ -88,11 +88,27 @@ Não usar `ddl-auto=update`. Não usar `baselineOnMigrate=true` indiscriminado.
 4. **Nunca** apagar `flyway_schema_history` em produção.
 5. Novos ambientes usam apenas V1/V2 ativos.
 
+### Numeração obrigatória em bancos legados (produção)
+
+O `flyway_schema_history` da VPS tem versões **1–23** mais timestamps até **`202605021400000`**.
+Como `out-of-order=false` e `validate-on-migrate=false`, o Flyway **ignora em silêncio** qualquer
+migração cuja versão seja inferior a esse máximo — foi assim que V4–V8 nunca chegaram a rodar
+(faltavam `usuarios.role`, tabelas `edith_*`/`mobile_capture_*` e as colunas de ingestão em
+`transacoes`, quebrando todo `SELECT` da entidade `Transacao`).
+
+**Regra:** novas migrações destinadas a produção usam versão no formato timestamp **acima**
+de `202605021400000` (ex.: `V202609021500000__…`). Sequenciais `V9`, `V10`… só valem para
+bancos criados a partir da baseline V1 e nunca serão aplicadas no banco legado.
+
+`V202609021500000__catchup_v3_v8_banco_legado.sql` reaplica V3–V8 de forma idempotente e é
+no-op em bancos novos.
+
 ### Risco para bancos antigos
 
 | Risco | Mitigação |
 | ----- | --------- |
 | Histórico Flyway referencia scripts removidos do classpath | Manter este manifesto + checksums; usar `flyway repair` ou baseline controlada |
+| Migração nova com versão abaixo do máximo legado nunca roda | Usar timestamp acima de `202605021400000` (ver regra acima) |
 | Coluna `whatsapp_numero` vs `whatsapp_number` | V2 legado fazia rename; V1 já nasce com `whatsapp_number` |
 | Tabelas legadas dropadas por V2 legado | Só executar DROP se confirmado que não há dados necessários |
 | pgvector ausente | BYTEA fallback; busca vetorial limitada |
