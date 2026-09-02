@@ -111,9 +111,7 @@ export class WhatsappConfigComponent implements OnInit {
         this.isAdmin = usuario.role === 'ADMIN';
         this.carregando = false;
         this.atualizarStatusEvolution();
-        if (this.isAdmin) {
-          this.carregarEdithAdmin();
-        }
+        this.carregarEdithAdmin();
       },
       error: () => {
         this.carregando = false;

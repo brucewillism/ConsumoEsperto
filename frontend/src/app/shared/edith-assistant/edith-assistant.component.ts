@@ -72,11 +72,11 @@ export class EdithAssistantComponent implements OnInit {
   ngOnInit(): void {
     this.edith.status().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (s) => {
-        this.visible = s.enabled;
+        this.visible = true;
         this.state = s.state;
       },
       error: () => {
-        this.visible = false;
+        this.visible = true;
         this.state = 'UNAVAILABLE';
       },
     });
