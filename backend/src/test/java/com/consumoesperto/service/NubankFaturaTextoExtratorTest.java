@@ -175,6 +175,85 @@ class NubankFaturaTextoExtratorTest {
         );
     }
 
+    @Test
+    void mantemComprasRecorrentesDeMesmoValorEmDatasDiferentes() {
+        String trecho = """
+            TRANSAÇÕES DE 26 JUL A 26 AGO
+            08 AGO •••• 3443 Claro Flex R$ 44,99
+            24 AGO •••• 3443 Claro Flex R$ 44,99
+            """;
+
+        List<ImportacaoFaturaItemDTO> itens = NubankFaturaTextoExtrator.extrairLancamentos(trecho, 2026);
+
+        assertEquals(2, itens.size(), "mesma loja e mesmo valor em dias distintos são compras distintas");
+        assertEquals(new BigDecimal("89.98"), soma(itens));
+    }
+
+    @Test
+    void aindaDescartaDuplicataDoMesmoDia() {
+        String trecho = """
+            TRANSAÇÕES DE 26 JUL A 26 AGO
+            08 AGO •••• 3443 Claro Flex R$ 44,99
+            08 AGO •••• 3443 Claro Flex R$ 44,99
+            """;
+
+        List<ImportacaoFaturaItemDTO> itens = NubankFaturaTextoExtrator.extrairLancamentos(trecho, 2026);
+
+        assertEquals(1, itens.size(), "mesmo dia, valor e estabelecimento é o mesmo lançamento em duas fontes");
+    }
+
+    @Test
+    void mantemLancamentoQueFechaAPaginaAntesDoRodape() {
+        String trecho = """
+            TRANSAÇÕES DE 26 JUL A 26 AGO
+            15 AGO •••• 3443 Restaurante e Pizzari R$ 16,00
+            6 de 7
+
+            BRUCE WILLIS MARINHO DA SILVA
+            FATURA 02 SET 2026 EMISSÃO E ENVIO 26 AGO 2026
+            TRANSAÇÕES DE 26 JUL A 26 AGO
+            17 AGO •••• 3443 Wellhub Pamela Priscil R$ 99,99
+            """;
+
+        List<ImportacaoFaturaItemDTO> itens = NubankFaturaTextoExtrator.extrairLancamentos(trecho, 2026);
+
+        assertEquals(2, itens.size(), "o rodapé de paginação não pode levar o lançamento embora");
+        assertEquals(new BigDecimal("115.99"), soma(itens));
+    }
+
+    @Test
+    void mantemLancamentoQueFechaOBlocoAntesDaSecaoDePagamentos() {
+        String trecho = """
+            TRANSAÇÕES DE 26 JUL A 26 AGO
+            25 AGO •••• 3443 Quotidiano Cafe R$ 15,00
+            Pagamentos e Financiamentos -R$ 3.009,60
+            30 JUL Pagamento em 30 JUL −R$ 2.274,23
+            """;
+
+        List<ImportacaoFaturaItemDTO> itens = NubankFaturaTextoExtrator.extrairLancamentos(trecho, 2026);
+
+        assertEquals(1, itens.size(), "o pagamento é crédito e não entra; a compra do dia 25 entra");
+        assertEquals(new BigDecimal("15.00"), itens.get(0).getValor());
+    }
+
+    @Test
+    void pixParceladoNaUltimaParcelaUsaValorDaParcelaENaoOFinanciamento() {
+        String trecho = """
+            Pagamentos e Financiamentos
+            26 JUL PAMELA PRISCILA RIBEIRO DE ALCANTARA - Parcela 2/2
+            Total a pagar: R$ 529,25 (valor da transação de R$ 400,00 + R$ 4,26 de IOF
+            + R$ 124,99 de juros) divididos em 2 parcelas de R$ 264,63.
+            R$ 264,63
+            """;
+
+        List<ImportacaoFaturaItemDTO> itens = NubankFaturaTextoExtrator.extrairLancamentos(trecho, 2026);
+
+        assertEquals(1, itens.size());
+        assertEquals(new BigDecimal("264.63"), itens.get(0).getValor());
+        assertEquals(2, itens.get(0).getParcelaAtual());
+        assertEquals(2, itens.get(0).getTotalParcelas());
+    }
+
     private static ImportacaoFaturaItemDTO item(LocalDate data, String desc, String valor) {
         ImportacaoFaturaItemDTO dto = new ImportacaoFaturaItemDTO();
         dto.setData(data);

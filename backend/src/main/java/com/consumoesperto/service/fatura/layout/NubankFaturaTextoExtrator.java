@@ -65,6 +65,10 @@ public final class NubankFaturaTextoExtrator {
         "(?:[•●*\\.]{4}|xxxx)\\s*\\d{4}|(?m)^\\d{4}\\s*$",
         Pattern.CASE_INSENSITIVE | Pattern.MULTILINE
     );
+    /** Rodapé de paginação do Nubank («5 de 7»), sempre em linha própria. */
+    private static final Pattern RODAPE_PAGINA = Pattern.compile(
+        "(?m)^\\s*\\d{1,2}\\s+de\\s+\\d{1,2}\\s*$"
+    );
 
     private NubankFaturaTextoExtrator() {
     }
@@ -478,26 +482,28 @@ public final class NubankFaturaTextoExtrator {
         if (atual == null || total == null || total <= 1) {
             return totalAPagar;
         }
-        if (atual < total) {
-            Matcher parcelas = PARCELAS_DE_VALOR.matcher(contexto);
-            if (parcelas.find()) {
-                try {
-                    int nParcelas = Integer.parseInt(parcelas.group(1));
-                    BigDecimal valorParcela = parseMoney(parcelas.group(2));
-                    if (nParcelas == total && valorParcela.compareTo(BigDecimal.ZERO) > 0
-                        && parcelaCompativelComTotal(totalAPagar, nParcelas, valorParcela)) {
-                        log.info(
-                            "Nubank Pix parcelado {}/{}: usa parcela R$ {} (texto), não total R$ {}.",
-                            atual,
-                            total,
-                            valorParcela,
-                            totalAPagar
-                        );
-                        return valorParcela;
-                    }
-                } catch (Exception ignored) {
+        // «divididos em N parcelas de R$ X» declara a cobrança do mês — inclusive na última parcela,
+        // onde o «Total a pagar» do bloco continua sendo o financiamento inteiro.
+        Matcher parcelas = PARCELAS_DE_VALOR.matcher(contexto);
+        if (parcelas.find()) {
+            try {
+                int nParcelas = Integer.parseInt(parcelas.group(1));
+                BigDecimal valorParcela = parseMoney(parcelas.group(2));
+                if (nParcelas == total && valorParcela.compareTo(BigDecimal.ZERO) > 0
+                    && parcelaCompativelComTotal(totalAPagar, nParcelas, valorParcela)) {
+                    log.info(
+                        "Nubank Pix parcelado {}/{}: usa parcela R$ {} (texto), não total R$ {}.",
+                        atual,
+                        total,
+                        valorParcela,
+                        totalAPagar
+                    );
+                    return valorParcela;
                 }
+            } catch (Exception ignored) {
             }
+        }
+        if (atual < total) {
             BigDecimal dividido = totalAPagar.divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP);
             log.info(
                 "Nubank Pix parcelado {}/{}: usa R$ {} (total/{}) em vez de R$ {}.",
@@ -631,16 +637,32 @@ public final class NubankFaturaTextoExtrator {
         return out;
     }
 
-    private static Optional<ImportacaoFaturaItemDTO> parseBloco(String bloco, int anoReferencia) {
-        Matcher dm = BLOCO_DATA.matcher(bloco);
+    /**
+     * O bloco do último lançamento de cada página arrasta o rodapé de paginação, o cabeçalho da
+     * página seguinte e o título da seção de pagamentos. Descartar o bloco por causa desse ruído
+     * apagava o lançamento; aqui o ruído é cortado e o lançamento é preservado.
+     */
+    private static String cortarRuidoAposLancamento(String bloco) {
+        int corte = bloco.length();
+        Matcher rodape = RODAPE_PAGINA.matcher(bloco);
+        if (rodape.find()) {
+            corte = Math.min(corte, rodape.start());
+        }
+        int secaoPagamentos = indexOfIgnoreCase(bloco, "Pagamentos e Financiamentos");
+        if (secaoPagamentos > 0) {
+            corte = Math.min(corte, secaoPagamentos);
+        }
+        return corte < bloco.length() ? bloco.substring(0, corte).trim() : bloco;
+    }
+
+    private static Optional<ImportacaoFaturaItemDTO> parseBloco(String blocoBruto, int anoReferencia) {
+        Matcher dm = BLOCO_DATA.matcher(blocoBruto);
         if (!dm.find()) {
             return Optional.empty();
         }
+        String bloco = cortarRuidoAposLancamento(blocoBruto);
         String norm = FaturaPdfLayoutSupport.norm(bloco);
         if (norm.contains("pagamentos e financiamentos") && !norm.contains("total a pagar")) {
-            return Optional.empty();
-        }
-        if (norm.contains(" de 7 ") && norm.contains("fatura")) {
             return Optional.empty();
         }
         if (parecePagamentoOuCredito(bloco) && !norm.contains("total a pagar")) {
@@ -777,6 +799,9 @@ public final class NubankFaturaTextoExtrator {
             if (item.getValor() == null || candidato.getValor() == null) {
                 continue;
             }
+            // Duplicata é o mesmo lançamento vindo de duas fontes (IA e texto): exige dia, valor e
+            // descrição compatíveis. Só valor e descrição descartava compras recorrentes em dias
+            // diferentes; só dia e valor descartaria compras distintas de mesmo preço no mesmo dia.
             boolean mesmaData = candidato.getData() != null && candidato.getData().equals(item.getData());
             boolean mesmoValor = item.getValor().subtract(candidato.getValor()).abs()
                 .compareTo(new BigDecimal("0.04")) <= 0;
@@ -784,7 +809,7 @@ public final class NubankFaturaTextoExtrator {
                 || descItem.length() > 8 && descCand.length() > 8
                 && descItem.substring(0, Math.min(12, descItem.length()))
                     .equals(descCand.substring(0, Math.min(12, descCand.length())));
-            if (mesmoValor && (mesmaData || descSimilar)) {
+            if (mesmaData && mesmoValor && descSimilar) {
                 return true;
             }
         }
