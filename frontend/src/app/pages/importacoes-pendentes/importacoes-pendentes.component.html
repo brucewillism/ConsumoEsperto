@@ -2,9 +2,9 @@
   <app-whatsapp-parity-hint rota="/importacoes-pendentes"></app-whatsapp-parity-hint>
   <section class="hero">
     <div>
-      <p>Conferência de PDF</p>
+      <p>Conferência de fatura e extrato</p>
       <h1>Importações Pendentes</h1>
-      <span>Revise os lançamentos extraídos das faturas antes de gravar no banco.</span>
+      <span>Revise PDF de fatura ou CSV de extrato antes de gravar no banco.</span>
     </div>
     <div class="hero-actions">
       <button mat-stroked-button color="warn" (click)="apagarTodas()" [disabled]="!importacoes.length || apagandoTodas || carregando">
@@ -18,6 +18,17 @@
     </div>
   </section>
 
+  <mat-card class="relatorio-card" *ngIf="ultimoRelatorio">
+    <h2>Arquivo importado com sucesso</h2>
+    <pre>{{ ultimoRelatorio.mensagem }}</pre>
+    <ul *ngIf="ultimoRelatorio.faturas?.length">
+      <li *ngFor="let f of ultimoRelatorio.faturas">
+        {{ f.rotulo }}: {{ brl(f.totalAntes) }} → {{ brl(f.totalDepois) }}
+        ({{ f.transacoesAdicionadas }} lançamentos)
+      </li>
+    </ul>
+  </mat-card>
+
   <mat-card
     class="drop-zone"
     [class.drag-over]="dragOver && !enviandoPdf"
@@ -29,16 +40,16 @@
       <app-loading-indicator
         mode="panel"
         size="lg"
-        message="A IA está lendo sua fatura">
+        [message]="loadingMessage()">
       </app-loading-indicator>
-      <p class="loading-hint">Faturas grandes podem levar alguns minutos. Não feche esta página.</p>
+      <p class="loading-hint">Arquivos grandes podem levar alguns minutos. Não feche esta página.</p>
     </div>
     <ng-container *ngIf="!enviandoPdf">
       <mat-icon>cloud_upload</mat-icon>
-      <h2>Arraste a fatura PDF aqui</h2>
-      <p>A IA faz a leitura e mostra a conferência dos valores para você revisar antes de confirmar.</p>
+      <h2>Importar fatura ou extrato</h2>
+      <p>PDF de fatura de cartão ou CSV de extrato bancário/cartão. A conferência aparece antes de gravar.</p>
       <label class="senha-pdf-field">
-        <span>Senha do PDF — só se o arquivo pedir (Itaú: 5 primeiros dígitos do CPF; Inter: 6, com zero à esquerda se houver). Nubank e outros: deixe vazio.</span>
+        <span>Senha do PDF — só se o arquivo pedir (Itaú: 5 primeiros dígitos do CPF; Inter: 6). CSV e Nubank: deixe vazio.</span>
         <input
           type="password"
           inputmode="numeric"
@@ -48,9 +59,9 @@
           autocomplete="off"
         />
       </label>
-      <input #invoiceFile type="file" accept="application/pdf,.pdf" hidden (change)="onFileSelected($event)">
+      <input #invoiceFile type="file" accept="application/pdf,.pdf,text/csv,application/csv,text/plain,.csv" hidden (change)="onFileSelected($event)">
       <button mat-raised-button color="primary" (click)="invoiceFile.click()">
-        Selecionar PDF
+        Selecionar PDF ou CSV
       </button>
     </ng-container>
   </mat-card>
@@ -71,12 +82,44 @@
     <div class="import-head">
       <div>
         <h2>{{ imp.bancoCartao }}</h2>
+        <span class="situacao-badge aberta">{{ tipoDetectadoLabel(imp) }}</span>
         <span class="situacao-badge" *ngIf="faturaPagaNoBanco(imp)">Já paga no banco</span>
         <span class="situacao-badge aberta" *ngIf="imp.situacaoLeituraPdf === 'ABERTA'">Em aberto</span>
+        <span *ngIf="imp.arquivoNome">Arquivo: <strong>{{ imp.arquivoNome }}</strong> · </span>
         <span *ngIf="imp.cartaoCreditoNome">Cartão vinculado: <strong>{{ imp.cartaoCreditoNome }}</strong> · </span>
-        <span>Vencimento: {{ imp.dataVencimento | date:'dd/MM/yyyy' }} · Total {{ brl(imp.valorTotal) }}</span>
+        <span *ngIf="imp.contaBancariaNome">Conta: <strong>{{ imp.contaBancariaNome }}</strong> · </span>
+        <span *ngIf="!isCsv(imp)">Vencimento: {{ imp.dataVencimento | date:'dd/MM/yyyy' }} · Total {{ brl(imp.valorTotal) }}</span>
+        <span *ngIf="isCsv(imp) && imp.periodoInicio">
+          Período: {{ imp.periodoInicio | date:'dd/MM/yyyy' }} – {{ imp.periodoFim | date:'dd/MM/yyyy' }}
+          · {{ imp.quantidadeLinhas || imp.itens.length }} linhas
+        </span>
       </div>
       <strong>{{ imp.novosDetectados }} novos</strong>
+    </div>
+
+    <div class="recurso-choice" *ngIf="imp.precisaEscolhaRecurso || imp.tipoArquivo === 'NEEDS_REVIEW'">
+      <p>Esse CSV é de:</p>
+      <mat-radio-group [(ngModel)]="escolhaTipo[imp.id]">
+        <mat-radio-button value="CONTA">Conta bancária</mat-radio-button>
+        <mat-radio-button value="CARTAO">Cartão de crédito</mat-radio-button>
+      </mat-radio-group>
+      <div class="recurso-selects">
+        <mat-form-field appearance="outline" *ngIf="escolhaTipo[imp.id] === 'CONTA'">
+          <mat-label>Conta</mat-label>
+          <mat-select [(ngModel)]="escolhaContaId[imp.id]">
+            <mat-option *ngFor="let c of contas" [value]="c.id">{{ c.nome }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field appearance="outline" *ngIf="escolhaTipo[imp.id] === 'CARTAO'">
+          <mat-label>Cartão</mat-label>
+          <mat-select [(ngModel)]="escolhaCartaoId[imp.id]">
+            <mat-option *ngFor="let c of cartoes" [value]="c.id">{{ c.nome }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <button mat-raised-button color="primary" (click)="confirmarEscolhaRecurso(imp)" [disabled]="confirmandoId === imp.id">
+          Aplicar
+        </button>
+      </div>
     </div>
 
     <div class="saldo-anterior-choice" *ngIf="imp.aguardandoEscolhaSaldoAnterior">
@@ -96,15 +139,31 @@
     </div>
 
     <div class="conciliacao-bar" [class.ok]="conciliacaoOk(imp)" [class.warn]="!conciliacaoOk(imp)">
-      <div class="conciliacao-item">
+      <div class="conciliacao-item" *ngIf="isCsv(imp)">
+        <span>Despesas</span>
+        <strong>{{ brl(imp.totalDespesas) }}</strong>
+      </div>
+      <div class="conciliacao-item" *ngIf="isCsv(imp)">
+        <span>Receitas</span>
+        <strong>{{ brl(imp.totalReceitas) }}</strong>
+      </div>
+      <div class="conciliacao-item" *ngIf="isCsv(imp)">
+        <span>Duplicadas</span>
+        <strong>{{ imp.duplicadas || 0 }}</strong>
+      </div>
+      <div class="conciliacao-item" *ngIf="isCsv(imp)">
+        <span>Revisão</span>
+        <strong>{{ imp.necessitamRevisao || 0 }}</strong>
+      </div>
+      <div class="conciliacao-item" *ngIf="!isCsv(imp)">
         <span>Soma dos lançamentos</span>
         <strong>{{ brl(imp.somaLancamentos) }}</strong>
       </div>
-      <div class="conciliacao-item">
+      <div class="conciliacao-item" *ngIf="!isCsv(imp)">
         <span>Total da fatura</span>
         <strong>{{ brl(imp.valorTotal) }}</strong>
       </div>
-      <div class="conciliacao-item" *ngIf="!conciliacaoOk(imp)">
+      <div class="conciliacao-item" *ngIf="!isCsv(imp) && !conciliacaoOk(imp)">
         <span>Diferença</span>
         <strong class="diff">{{ brl(imp.diferencaLancamentos) }}</strong>
       </div>
@@ -123,7 +182,7 @@
       ao confirmar, a fatura entra no histórico como <strong>paga antecipadamente</strong> (sem débito em conta).
     </p>
 
-    <p class="conciliacao-hint" *ngIf="!faturaTotalZerada(imp) && !conciliacaoOk(imp)">
+    <p class="conciliacao-hint" *ngIf="!isCsv(imp) && !faturaTotalZerada(imp) && !conciliacaoOk(imp)">
       A IA pode ter omitido lançamentos do PDF. Revise a lista, reimporte o arquivo ou confirme mesmo assim
       e complete os faltantes depois em Transações.
     </p>
@@ -142,7 +201,7 @@
         </mat-panel-description>
       </mat-expansion-panel-header>
 
-      <div class="items">
+      <div class="items" *ngIf="!isCsv(imp)">
         <label class="item-row" *ngFor="let item of imp.itens">
           <mat-checkbox [(ngModel)]="item.selecionado" [disabled]="!item.novo"></mat-checkbox>
           <span class="date">{{ item.data | date:'dd/MM' }}</span>
@@ -154,10 +213,60 @@
           <em [class.old]="!item.novo">{{ item.novo ? 'novo' : 'já lançado' }}</em>
         </label>
       </div>
+
+      <div class="csv-table" *ngIf="isCsv(imp)">
+        <div class="csv-head">
+          <span></span>
+          <span>Data</span>
+          <span>Descrição</span>
+          <span>Valor</span>
+          <span>Tipo</span>
+          <span>Conta/Cartão</span>
+          <span>Fatura</span>
+          <span>Status</span>
+        </div>
+        <div class="csv-row" *ngFor="let item of imp.itens; let i = index">
+          <mat-checkbox
+            [(ngModel)]="item.selecionado"
+            [disabled]="checkboxDisabled(imp, item)"
+            (ngModelChange)="onItemChanged(imp)">
+          </mat-checkbox>
+          <input class="date-input" type="date" [(ngModel)]="item.data" (change)="onItemChanged(imp)">
+          <span class="desc">
+            {{ item.descricao }}
+            <small *ngIf="item.totalParcelas">Parcela {{ item.parcelaAtual }}/{{ item.totalParcelas }}</small>
+            <small *ngIf="item.invalidReason">{{ item.invalidReason }}</small>
+          </span>
+          <strong>{{ brl(item.valor) }}</strong>
+          <select class="mini-select" [(ngModel)]="item.tipoLinha" (change)="onItemChanged(imp)">
+            <option value="DESPESA">Despesa</option>
+            <option value="RECEITA">Receita</option>
+            <option value="PAGAMENTO_FATURA">Pagamento fatura</option>
+            <option value="ESTORNO">Estorno</option>
+            <option value="TRANSFERENCIA">Transferência</option>
+          </select>
+          <span>
+            <select class="mini-select" *ngIf="imp.tipoArquivo === 'BANK_STATEMENT_CSV'" [(ngModel)]="item.contaBancariaId" (change)="onItemChanged(imp)">
+              <option [ngValue]="null">Conta</option>
+              <option *ngFor="let c of contas" [ngValue]="c.id">{{ c.nome }}</option>
+            </select>
+            <select class="mini-select" *ngIf="imp.tipoArquivo === 'CARD_STATEMENT_CSV'" [(ngModel)]="item.cartaoCreditoId" (change)="onItemChanged(imp)">
+              <option [ngValue]="null">Cartão</option>
+              <option *ngFor="let c of cartoes" [ngValue]="c.id">{{ c.nome }}</option>
+            </select>
+            <select class="mini-select" [(ngModel)]="item.categoriaId" (change)="onItemChanged(imp)">
+              <option [ngValue]="null">Categoria</option>
+              <option *ngFor="let c of categorias" [ngValue]="c.id">{{ c.nome }}</option>
+            </select>
+          </span>
+          <span class="fatura-prevista">{{ item.faturaPrevistaLabel || '—' }}</span>
+          <em [class.old]="item.statusPreview !== 'NOVO'">{{ statusLabel(item.statusPreview) || (item.novo ? 'NOVO' : 'já lançado') }}</em>
+        </div>
+      </div>
     </mat-expansion-panel>
 
     <div class="actions">
-      <button mat-raised-button color="primary" (click)="confirmar(imp)" [disabled]="confirmandoId === imp.id || imp.aguardandoEscolhaSaldoAnterior || apagandoId === imp.id">
+      <button mat-raised-button color="primary" (click)="confirmar(imp)" [disabled]="confirmandoId === imp.id || imp.aguardandoEscolhaSaldoAnterior || apagandoId === imp.id || imp.precisaEscolhaRecurso">
         {{ confirmarLabel(imp) }}
       </button>
       <button mat-stroked-button color="warn" (click)="apagarUma(imp)" [disabled]="confirmandoId === imp.id || apagandoId === imp.id">

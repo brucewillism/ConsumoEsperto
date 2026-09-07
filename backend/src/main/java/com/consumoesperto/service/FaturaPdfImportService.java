@@ -635,6 +635,7 @@ public class FaturaPdfImportService {
         if (imp.getValorTotal() != null) {
             dto.setDiferencaLancamentos(imp.getValorTotal().subtract(soma).abs().setScale(2, RoundingMode.HALF_UP));
         }
+        com.consumoesperto.service.importacao.ImportacaoCsvPreviewSupport.fillSummary(dto, imp, dto.getItens());
         return dto;
     }
 

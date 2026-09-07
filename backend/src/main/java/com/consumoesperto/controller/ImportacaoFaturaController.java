@@ -1,10 +1,18 @@
 package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.ConfirmarImportacaoFaturaRequest;
+import com.consumoesperto.dto.EscolhaRecursoImportacaoRequest;
+import com.consumoesperto.dto.ImportacaoConfirmacaoDTO;
 import com.consumoesperto.dto.ImportacaoFaturaDTO;
+import com.consumoesperto.model.FinancialImportFileType;
+import com.consumoesperto.model.ImportacaoFaturaCartao;
+import com.consumoesperto.repository.ImportacaoFaturaCartaoRepository;
 import com.consumoesperto.security.UserPrincipal;
 import com.consumoesperto.service.FaturaPdfImportService;
 import com.consumoesperto.service.WhatsAppCommandService;
+import com.consumoesperto.service.importacao.FinancialCsvImportService;
+import com.consumoesperto.service.importacao.FinancialImportDetection;
+import com.consumoesperto.service.importacao.FinancialImportFileTypeDetector;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,6 +30,9 @@ import java.util.Map;
 public class ImportacaoFaturaController {
 
     private final FaturaPdfImportService faturaPdfImportService;
+    private final FinancialCsvImportService financialCsvImportService;
+    private final FinancialImportFileTypeDetector fileTypeDetector;
+    private final ImportacaoFaturaCartaoRepository importacaoRepository;
     private final WhatsAppCommandService whatsAppCommandService;
 
     @GetMapping("/pendentes")
@@ -51,17 +62,34 @@ public class ImportacaoFaturaController {
         @AuthenticationPrincipal UserPrincipal user,
         @RequestPart(value = "file", required = false) MultipartFile filePart,
         @RequestParam(value = "file", required = false) MultipartFile fileParam,
-        @RequestParam(value = "senhaPdf", required = false) String senhaPdf
+        @RequestParam(value = "senhaPdf", required = false) String senhaPdf,
+        @RequestParam(value = "tipoRecurso", required = false) String tipoRecurso,
+        @RequestParam(value = "contaBancariaId", required = false) Long contaBancariaId,
+        @RequestParam(value = "cartaoCreditoId", required = false) Long cartaoCreditoId
     ) throws java.io.IOException {
         MultipartFile file = escolherArquivoMultipart(filePart, fileParam);
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Envie um ficheiro PDF no campo «file».");
+            throw new IllegalArgumentException("Envie um ficheiro PDF ou CSV no campo «file».");
         }
-        String nome = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
-        if (!nome.endsWith(".pdf") && !"application/pdf".equalsIgnoreCase(file.getContentType())) {
-            throw new IllegalArgumentException("O ficheiro deve ser um PDF de fatura de cartão.");
+        byte[] bytes = file.getBytes();
+        FinancialImportDetection detection = fileTypeDetector.detect(
+            file.getOriginalFilename(), file.getContentType(), bytes);
+        if (detection.type() == FinancialImportFileType.UNKNOWN) {
+            throw new IllegalArgumentException(
+                "Arquivo não reconhecido. Envie um PDF de fatura ou um CSV de extrato.");
         }
-        return ResponseEntity.ok(faturaPdfImportService.processarPdf(user.getId(), file.getBytes(), senhaPdf));
+        if (detection.isPdf()) {
+            return ResponseEntity.ok(faturaPdfImportService.processarPdf(user.getId(), bytes, senhaPdf));
+        }
+        return ResponseEntity.ok(financialCsvImportService.processar(
+            user.getId(),
+            file.getOriginalFilename(),
+            bytes,
+            detection,
+            tipoRecurso,
+            contaBancariaId,
+            cartaoCreditoId
+        ));
     }
 
     private static MultipartFile escolherArquivoMultipart(MultipartFile part, MultipartFile param) {
@@ -85,20 +113,46 @@ public class ImportacaoFaturaController {
         return ResponseEntity.ok(dto);
     }
 
-    @PostMapping("/{id}/confirmar")
-    public ResponseEntity<Map<String, Integer>> confirmar(
+    @PostMapping("/{id}/escolha-recurso")
+    public ResponseEntity<ImportacaoFaturaDTO> escolhaRecurso(
+        @AuthenticationPrincipal UserPrincipal user,
+        @PathVariable Long id,
+        @RequestBody EscolhaRecursoImportacaoRequest request
+    ) {
+        return ResponseEntity.ok(financialCsvImportService.escolherRecurso(user.getId(), id, request));
+    }
+
+    @PostMapping("/{id}/itens")
+    public ResponseEntity<ImportacaoFaturaDTO> atualizarItens(
         @AuthenticationPrincipal UserPrincipal user,
         @PathVariable Long id,
         @RequestBody(required = false) ConfirmarImportacaoFaturaRequest request
     ) {
+        return ResponseEntity.ok(financialCsvImportService.atualizarItens(user.getId(), id, request));
+    }
+
+    @PostMapping("/{id}/confirmar")
+    public ResponseEntity<ImportacaoConfirmacaoDTO> confirmar(
+        @AuthenticationPrincipal UserPrincipal user,
+        @PathVariable Long id,
+        @RequestBody(required = false) ConfirmarImportacaoFaturaRequest request
+    ) {
+        ImportacaoFaturaCartao imp = importacaoRepository.findByIdAndUsuarioId(id, user.getId())
+            .orElseThrow(() -> new com.consumoesperto.exception.ResourceNotFoundException("Importação não encontrada"));
+        if (FinancialCsvImportService.isCsv(imp)) {
+            ImportacaoConfirmacaoDTO resultado = financialCsvImportService.confirmar(user.getId(), id, request);
+            whatsAppCommandService.sincronizarFaturaResolvidaNoApp(user.getId());
+            return ResponseEntity.ok(resultado);
+        }
         FaturaPdfImportService.ResultadoConfirmacaoFatura resultado =
             faturaPdfImportService.confirmarComResumo(user.getId(), id, request, true);
         whatsAppCommandService.sincronizarFaturaResolvidaNoApp(user.getId());
-        return ResponseEntity.ok(Map.of(
-            "criadas", resultado.criadas(),
-            "conciliadas", resultado.conciliadas(),
-            "futuras", resultado.futuras(),
-            "registrosNaFaturaAtual", resultado.registrosNaFaturaAtual()
-        ));
+        ImportacaoConfirmacaoDTO dto = new ImportacaoConfirmacaoDTO();
+        dto.setCriadas(resultado.criadas());
+        dto.setConciliadas(resultado.conciliadas());
+        dto.setFuturas(resultado.futuras());
+        dto.setRegistrosNaFaturaAtual(resultado.registrosNaFaturaAtual());
+        dto.setMensagem(faturaPdfImportService.mensagemResumoImportacao(resultado));
+        return ResponseEntity.ok(dto);
     }
 }

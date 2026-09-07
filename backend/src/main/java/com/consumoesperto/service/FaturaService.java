@@ -578,6 +578,71 @@ public class FaturaService {
         return faturaRepository.save(faturaAlvo);
     }
 
+    /**
+     * Mesma regra de {@link #resolverFaturaParaCompra}, sem persistir fatura nova.
+     * Usado na preview de CSV para mostrar a competência antes da confirmação.
+     */
+    @Transactional(readOnly = true)
+    public PrevisaoCompetenciaFatura preverCompetenciaParaCompra(
+        Long usuarioId,
+        CartaoCredito cartao,
+        LocalDateTime dataCompra
+    ) {
+        if (cartao == null) {
+            throw new RuntimeException("Cartão inválido");
+        }
+        if (!Objects.equals(cartao.getUsuario().getId(), usuarioId)) {
+            throw new com.consumoesperto.exception.ResourceNotFoundException("Cartão não encontrado");
+        }
+        LocalDateTime ref = dataCompra != null ? dataCompra : AppTimeZone.agora();
+        List<Fatura.StatusFatura> statusesCicloAberto = List.of(
+            Fatura.StatusFatura.ABERTA,
+            Fatura.StatusFatura.PARCIAL,
+            Fatura.StatusFatura.PREVISTA
+        );
+        LocalDate hoje = ref.toLocalDate();
+        List<Fatura> abertas = faturaRepository.findByCartaoCreditoIdAndStatusInOrderByDataVencimentoAsc(
+            cartao.getId(),
+            statusesCicloAberto
+        );
+        Fatura existente = abertas.stream()
+            .filter(f -> f.getDataVencimento() != null)
+            .filter(f -> f.getStatusFatura() != Fatura.StatusFatura.VENCIDA)
+            .filter(f -> !f.getDataVencimento().toLocalDate().isBefore(hoje))
+            .filter(f -> !ref.isAfter(fechamentoEfetivo(f)))
+            .min(Comparator.comparing(Fatura::getDataVencimento))
+            .orElse(null);
+        if (existente != null) {
+            LocalDate venc = existente.getDataVencimento().toLocalDate();
+            LocalDate fech = fechamentoEfetivo(existente).toLocalDate();
+            return new PrevisaoCompetenciaFatura(
+                existente.getId(), venc, fech, YearMonth.from(venc), rotuloCompetencia(YearMonth.from(venc)));
+        }
+        LocalDate venc = calcularProximoVencimentoAposFechamento(cartao, ref.toLocalDate());
+        LocalDate fech = venc.minusDays(Math.max(1, diasEntreFechamentoEVencimento));
+        YearMonth ym = YearMonth.from(venc);
+        return new PrevisaoCompetenciaFatura(null, venc, fech, ym, rotuloCompetencia(ym));
+    }
+
+    public static String rotuloCompetencia(YearMonth ym) {
+        if (ym == null) {
+            return null;
+        }
+        String mes = ym.getMonth().getDisplayName(java.time.format.TextStyle.FULL, Locale.forLanguageTag("pt-BR"));
+        if (mes == null || mes.isEmpty()) {
+            return ym.toString();
+        }
+        return Character.toUpperCase(mes.charAt(0)) + mes.substring(1) + "/" + ym.getYear();
+    }
+
+    public record PrevisaoCompetenciaFatura(
+        Long faturaId,
+        LocalDate vencimento,
+        LocalDate fechamento,
+        YearMonth competencia,
+        String rotulo
+    ) {}
+
     /** Fechamento da fatura; quando ausente, estima por vencimento − N dias (config). */
     private LocalDateTime fechamentoEfetivo(Fatura f) {
         if (f.getDataFechamento() != null) {

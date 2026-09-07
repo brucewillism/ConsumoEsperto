@@ -273,6 +273,8 @@ public class TransactionIngestionService {
       case "IOS_WALLET", "IOS_SHORTCUTS" -> OrigemTransacao.IOS_WALLET;
       case "WHATSAPP" -> OrigemTransacao.WHATSAPP;
       case "FATURA_PDF" -> OrigemTransacao.FATURA_PDF;
+      case "CSV_BANK_STATEMENT" -> OrigemTransacao.CSV_BANK_STATEMENT;
+      case "CSV_CARD_STATEMENT" -> OrigemTransacao.CSV_CARD_STATEMENT;
       case "PIX" -> OrigemTransacao.PIX;
       case "OPEN_FINANCE" -> OrigemTransacao.OPEN_FINANCE;
       default -> OrigemTransacao.MANUAL;

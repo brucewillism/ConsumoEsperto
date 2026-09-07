@@ -10,6 +10,8 @@ public enum OrigemTransacao {
     OPEN_FINANCE,
     WHATSAPP,
     FATURA_PDF,
+    CSV_BANK_STATEMENT,
+    CSV_CARD_STATEMENT,
     PIX,
     NFC_E,
     AGENDAMENTO,

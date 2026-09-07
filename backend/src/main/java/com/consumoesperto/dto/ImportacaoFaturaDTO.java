@@ -29,6 +29,22 @@ public class ImportacaoFaturaDTO {
     /** ABERTA ou PAGA_NO_BANCO — detectado automaticamente no PDF. */
     private String situacaoLeituraPdf;
 
+    private String tipoArquivo;
+    private String arquivoNome;
+    private Long contaBancariaId;
+    private String contaBancariaNome;
+    private Boolean precisaEscolhaRecurso;
+    private LocalDateTime periodoInicio;
+    private LocalDateTime periodoFim;
+    private Integer quantidadeLinhas;
+    private Integer quantidadeValidas;
+    private Integer quantidadeInvalidas;
+    private BigDecimal totalDespesas;
+    private BigDecimal totalReceitas;
+    private Integer duplicadas;
+    private Integer matchedExistentes;
+    private Integer necessitamRevisao;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -87,4 +103,49 @@ public class ImportacaoFaturaDTO {
 
     public String getSituacaoLeituraPdf() { return situacaoLeituraPdf; }
     public void setSituacaoLeituraPdf(String situacaoLeituraPdf) { this.situacaoLeituraPdf = situacaoLeituraPdf; }
+
+    public String getTipoArquivo() { return tipoArquivo; }
+    public void setTipoArquivo(String tipoArquivo) { this.tipoArquivo = tipoArquivo; }
+
+    public String getArquivoNome() { return arquivoNome; }
+    public void setArquivoNome(String arquivoNome) { this.arquivoNome = arquivoNome; }
+
+    public Long getContaBancariaId() { return contaBancariaId; }
+    public void setContaBancariaId(Long contaBancariaId) { this.contaBancariaId = contaBancariaId; }
+
+    public String getContaBancariaNome() { return contaBancariaNome; }
+    public void setContaBancariaNome(String contaBancariaNome) { this.contaBancariaNome = contaBancariaNome; }
+
+    public Boolean getPrecisaEscolhaRecurso() { return precisaEscolhaRecurso; }
+    public void setPrecisaEscolhaRecurso(Boolean precisaEscolhaRecurso) { this.precisaEscolhaRecurso = precisaEscolhaRecurso; }
+
+    public LocalDateTime getPeriodoInicio() { return periodoInicio; }
+    public void setPeriodoInicio(LocalDateTime periodoInicio) { this.periodoInicio = periodoInicio; }
+
+    public LocalDateTime getPeriodoFim() { return periodoFim; }
+    public void setPeriodoFim(LocalDateTime periodoFim) { this.periodoFim = periodoFim; }
+
+    public Integer getQuantidadeLinhas() { return quantidadeLinhas; }
+    public void setQuantidadeLinhas(Integer quantidadeLinhas) { this.quantidadeLinhas = quantidadeLinhas; }
+
+    public Integer getQuantidadeValidas() { return quantidadeValidas; }
+    public void setQuantidadeValidas(Integer quantidadeValidas) { this.quantidadeValidas = quantidadeValidas; }
+
+    public Integer getQuantidadeInvalidas() { return quantidadeInvalidas; }
+    public void setQuantidadeInvalidas(Integer quantidadeInvalidas) { this.quantidadeInvalidas = quantidadeInvalidas; }
+
+    public BigDecimal getTotalDespesas() { return totalDespesas; }
+    public void setTotalDespesas(BigDecimal totalDespesas) { this.totalDespesas = totalDespesas; }
+
+    public BigDecimal getTotalReceitas() { return totalReceitas; }
+    public void setTotalReceitas(BigDecimal totalReceitas) { this.totalReceitas = totalReceitas; }
+
+    public Integer getDuplicadas() { return duplicadas; }
+    public void setDuplicadas(Integer duplicadas) { this.duplicadas = duplicadas; }
+
+    public Integer getMatchedExistentes() { return matchedExistentes; }
+    public void setMatchedExistentes(Integer matchedExistentes) { this.matchedExistentes = matchedExistentes; }
+
+    public Integer getNecessitamRevisao() { return necessitamRevisao; }
+    public void setNecessitamRevisao(Integer necessitamRevisao) { this.necessitamRevisao = necessitamRevisao; }
 }

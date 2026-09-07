@@ -31,6 +31,10 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     List<Transacao> findByUsuarioIdOrderByDataTransacaoDesc(Long usuarioId);
 
     boolean existsByUsuarioIdAndIngestionFingerprint(Long usuarioId, String ingestionFingerprint);
+
+    Optional<Transacao> findFirstByUsuarioIdAndIngestionFingerprint(Long usuarioId, String ingestionFingerprint);
+
+    Optional<Transacao> findFirstByUsuarioIdAndExternalEventId(Long usuarioId, String externalEventId);
     
     List<Transacao> findByUsuarioIdAndTipoTransacaoOrderByDataTransacaoDesc(Long usuarioId, TipoTransacao tipoTransacao);
     

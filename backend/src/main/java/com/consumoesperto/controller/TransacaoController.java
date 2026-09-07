@@ -1,6 +1,7 @@
 package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Transacao;
 import com.consumoesperto.repository.CartaoCreditoRepository;
@@ -75,6 +76,7 @@ public class TransacaoController {
         if (!parcelar) {
             return transacaoService.criarTransacao(dto, usuarioId);
         }
+        transacaoService.exigirCategoriaDoUsuario(dto.getCategoriaId(), usuarioId);
         if (n > 48) {
             throw new IllegalArgumentException("Parcelamento admite no máximo 48 vezes.");
         }
@@ -83,7 +85,7 @@ public class TransacaoController {
         }
         CartaoCredito cartao = cartaoCreditoRepository
             .findByIdAndUsuarioId(dto.getCartaoCreditoId(), usuarioId)
-            .orElseThrow(() -> new IllegalArgumentException("Cartão de crédito não encontrado."));
+            .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado."));
         List<TransacaoDTO> criadas = parcelamentoService.criarParcelamentoSemJuros(
             usuarioId,
             cartao,

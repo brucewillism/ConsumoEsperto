@@ -6,10 +6,24 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
-import { ImportacaoFatura, ImportacaoFaturaService } from '../../services/importacao-fatura.service';
+import { MatInputModule } from '@angular/material/input';
+import { MatRadioModule } from '@angular/material/radio';
+import { MatSelectModule } from '@angular/material/select';
+import {
+  ImportacaoConfirmacao,
+  ImportacaoFatura,
+  ImportacaoFaturaService,
+} from '../../services/importacao-fatura.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { ToastService } from '../../services/toast.service';
+import { ContaBancariaService } from '../../services/conta-bancaria.service';
+import { CartaoCreditoService } from '../../services/cartao-credito.service';
+import { CategoriaService } from '../../services/categoria.service';
+import { ContaBancaria } from '../../models/conta-bancaria.model';
+import { CartaoCredito } from '../../models/cartao-credito.model';
+import { Categoria } from '../../models/categoria.model';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
@@ -24,7 +38,11 @@ import { LoadingIndicatorComponent } from '../../components/loading-indicator/lo
     MatCardModule,
     MatCheckboxModule,
     MatExpansionModule,
+    MatFormFieldModule,
     MatIconModule,
+    MatInputModule,
+    MatRadioModule,
+    MatSelectModule,
     WhatsappParityHintComponent,
     LoadingIndicatorComponent,
   ],
@@ -39,17 +57,29 @@ export class ImportacoesPendentesComponent implements OnInit {
   enviandoPdf = false;
   apagandoTodas = false;
   apagandoId: number | null = null;
-  /** PDFs protegidos: Itaú 5 dígitos CPF; Inter 6 dígitos CPF. */
   senhaPdf = '';
+  contas: ContaBancaria[] = [];
+  cartoes: CartaoCredito[] = [];
+  categorias: Categoria[] = [];
+  escolhaTipo: Record<number, 'CONTA' | 'CARTAO'> = {};
+  escolhaContaId: Record<number, number | null> = {};
+  escolhaCartaoId: Record<number, number | null> = {};
+  ultimoRelatorio: ImportacaoConfirmacao | null = null;
 
   constructor(
     private importacaoService: ImportacaoFaturaService,
     private toast: ToastService,
-    private confirmDialog: ConfirmDialogService
+    private confirmDialog: ConfirmDialogService,
+    private contaService: ContaBancariaService,
+    private cartaoService: CartaoCreditoService,
+    private categoriaService: CategoriaService
   ) {}
 
   ngOnInit(): void {
     this.carregar();
+    this.contaService.listarContasAtivas().subscribe({ next: (c) => (this.contas = c || []) });
+    this.cartaoService.getCartoes().subscribe({ next: (c) => (this.cartoes = c || []) });
+    this.categoriaService.buscarPorUsuario().subscribe({ next: (c) => (this.categorias = c || []) });
   }
 
   carregar(): void {
@@ -64,6 +94,45 @@ export class ImportacoesPendentesComponent implements OnInit {
         this.carregando = false;
       }
     });
+  }
+
+  isCsv(imp: ImportacaoFatura): boolean {
+    const t = imp.tipoArquivo || 'INVOICE_PDF';
+    return t === 'BANK_STATEMENT_CSV' || t === 'CARD_STATEMENT_CSV' || t === 'NEEDS_REVIEW';
+  }
+
+  tipoDetectadoLabel(imp: ImportacaoFatura): string {
+    switch (imp.tipoArquivo) {
+      case 'INVOICE_PDF':
+        return 'Fatura PDF';
+      case 'BANK_STATEMENT_CSV':
+        return 'Extrato bancário CSV';
+      case 'CARD_STATEMENT_CSV':
+        return 'Extrato de cartão CSV';
+      case 'NEEDS_REVIEW':
+        return 'CSV — indicar se é conta ou cartão';
+      default:
+        return this.isCsv(imp) ? 'Extrato CSV' : 'Fatura PDF';
+    }
+  }
+
+  statusLabel(status?: string | null): string {
+    switch (status) {
+      case 'NOVO':
+        return 'NOVO';
+      case 'DUPLICATE':
+        return 'DUPLICATE';
+      case 'MATCHED_EXISTING':
+        return 'MATCHED_EXISTING';
+      case 'NEEDS_REVIEW':
+        return 'NEEDS_REVIEW';
+      case 'IGNORED':
+        return 'IGNORED';
+      case 'INVALID':
+        return 'INVALID';
+      default:
+        return status || '';
+    }
   }
 
   escolhaSaldoAnterior(imp: ImportacaoFatura, somar: boolean): void {
@@ -81,6 +150,63 @@ export class ImportacoesPendentesComponent implements OnInit {
       error: (e: HttpErrorResponse) => {
         this.toast.errorFromHttpResponse(e, 'Erro ao aplicar escolha do saldo.');
         this.confirmandoId = null;
+      }
+    });
+  }
+
+  confirmarEscolhaRecurso(imp: ImportacaoFatura): void {
+    const tipo = this.escolhaTipo[imp.id];
+    if (!tipo) {
+      this.toast.warning('Indique se este CSV é de conta bancária ou de cartão.');
+      return;
+    }
+    const contaId = tipo === 'CONTA' ? this.escolhaContaId[imp.id] : null;
+    const cartaoId = tipo === 'CARTAO' ? this.escolhaCartaoId[imp.id] : null;
+    if (tipo === 'CONTA' && !contaId) {
+      this.toast.warning('Selecione a conta bancária.');
+      return;
+    }
+    if (tipo === 'CARTAO' && !cartaoId) {
+      this.toast.warning('Selecione o cartão.');
+      return;
+    }
+    this.confirmandoId = imp.id;
+    this.importacaoService.escolhaRecurso(imp.id, tipo, contaId, cartaoId).subscribe({
+      next: () => {
+        this.toast.success('Recurso associado. Revise os lançamentos.');
+        this.confirmandoId = null;
+        this.carregar();
+      },
+      error: (e: HttpErrorResponse) => {
+        this.toast.errorFromHttpResponse(e, 'Não foi possível associar a conta ou o cartão.');
+        this.confirmandoId = null;
+      }
+    });
+  }
+
+  onItemChanged(imp: ImportacaoFatura): void {
+    if (!this.isCsv(imp)) {
+      return;
+    }
+    const ajustes = imp.itens.map((item, index) => ({
+      index,
+      selecionado: item.selecionado,
+      data: item.data,
+      tipoLinha: item.tipoLinha || undefined,
+      categoriaId: item.categoriaId,
+      contaBancariaId: item.contaBancariaId,
+      cartaoCreditoId: item.cartaoCreditoId,
+      statusPreview: item.statusPreview || undefined,
+    }));
+    this.importacaoService.atualizarItens(imp.id, ajustes).subscribe({
+      next: (atualizado) => {
+        const idx = this.importacoes.findIndex((i) => i.id === imp.id);
+        if (idx >= 0) {
+          this.importacoes[idx] = atualizado;
+        }
+      },
+      error: () => {
+        /* preview local permanece; a confirmação revalida */
       }
     });
   }
@@ -147,9 +273,13 @@ export class ImportacoesPendentesComponent implements OnInit {
       this.toast.warning('Escolha primeiro se deseja somar o saldo anterior ou importar só o saldo atual.');
       return;
     }
+    if (imp.precisaEscolhaRecurso || imp.tipoArquivo === 'NEEDS_REVIEW') {
+      this.toast.warning('Indique se este CSV é de conta bancária ou de cartão.');
+      return;
+    }
     const indices = imp.itens
       .map((item, index) => ({ item, index }))
-      .filter(({ item }) => item.novo && item.selecionado)
+      .filter(({ item }) => this.itemConfirmavel(imp, item))
       .map(({ index }) => index);
     if (!indices.length) {
       if (this.podeRegistrarSoHistorico(imp)) {
@@ -162,7 +292,13 @@ export class ImportacoesPendentesComponent implements OnInit {
     this.executarConfirmacao(imp, indices, false);
   }
 
-  /** Fatura paga no banco: mesmo com 0 novos, registra a fatura e vincula compras já existentes. */
+  private itemConfirmavel(imp: ImportacaoFatura, item: ImportacaoFatura['itens'][number]): boolean {
+    if (this.isCsv(imp)) {
+      return !!item.selecionado && (item.statusPreview === 'NOVO' || item.novo);
+    }
+    return item.novo && item.selecionado;
+  }
+
   podeRegistrarSoHistorico(imp: ImportacaoFatura): boolean {
     return this.faturaPagaNoBanco(imp) && (imp.itens?.length ?? 0) > 0 && this.conciliacaoOk(imp);
   }
@@ -179,20 +315,36 @@ export class ImportacoesPendentesComponent implements OnInit {
 
   private executarConfirmacao(imp: ImportacaoFatura, indices: number[], ignorarDivergencia: boolean): void {
     this.confirmandoId = imp.id;
-    this.importacaoService.confirmar(imp.id, indices, ignorarDivergencia).subscribe({
+    const extra = this.isCsv(imp)
+      ? {
+          ajustes: imp.itens.map((item, index) => ({
+            index,
+            selecionado: item.selecionado,
+            data: item.data,
+            tipoLinha: item.tipoLinha || undefined,
+            categoriaId: item.categoriaId,
+            contaBancariaId: item.contaBancariaId,
+            cartaoCreditoId: item.cartaoCreditoId,
+            statusPreview: item.statusPreview || undefined,
+          })),
+        }
+      : undefined;
+    this.importacaoService.confirmar(imp.id, indices, ignorarDivergencia, extra).subscribe({
       next: (res) => {
-        const msg = res.criadas > 0
-          ? `${res.criadas} lançamento(s) importado(s). Veja no Dashboard se há protocolos de teto sugeridos.`
-          : res.conciliadas > 0
-            ? `Fatura registrada: ${res.conciliadas} compra(s) já existente(s) vinculada(s) à fatura.`
-            : 'Fatura registrada no histórico.';
+        this.ultimoRelatorio = res;
+        const msg = res.mensagem
+          ? res.mensagem.split('\n')[0]
+          : res.criadas > 0
+            ? `${res.criadas} lançamento(s) importado(s). Veja no Dashboard se há protocolos de teto sugeridos.`
+            : res.conciliadas > 0
+              ? `Fatura registrada: ${res.conciliadas} compra(s) já existente(s) vinculada(s) à fatura.`
+              : 'Fatura registrada no histórico.';
         this.toast.success(msg);
         this.confirmandoId = null;
         this.carregar();
       },
       error: (e: HttpErrorResponse) => {
         this.confirmandoId = null;
-        // 422 = soma dos lançamentos não bate com o total: avisa e deixa confirmar mesmo assim.
         if (e.status === 422) {
           const msg = (e.error && (e.error.message || e.error.error)) || 'A soma dos lançamentos não bate com o total da fatura.';
           this.confirmDialog.ask({
@@ -215,7 +367,7 @@ export class ImportacoesPendentesComponent implements OnInit {
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
-    if (file) this.enviarPdf(file);
+    if (file) this.enviarArquivo(file);
     input.value = '';
   }
 
@@ -239,25 +391,33 @@ export class ImportacoesPendentesComponent implements OnInit {
       return;
     }
     const file = event.dataTransfer?.files?.[0];
-    if (file) this.enviarPdf(file);
+    if (file) this.enviarArquivo(file);
   }
 
-  enviarPdf(file: File): void {
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      this.toast.warning('Arraste ou selecione uma fatura em PDF.');
+  enviarArquivo(file: File): void {
+    const name = file.name.toLowerCase();
+    const csv = name.endsWith('.csv') || name.endsWith('.txt')
+      || file.type === 'text/csv' || file.type === 'application/csv' || file.type === 'text/plain';
+    const pdf = name.endsWith('.pdf') || file.type === 'application/pdf';
+    if (!csv && !pdf) {
+      this.toast.warning('Arraste ou selecione uma fatura em PDF ou um extrato em CSV.');
       return;
     }
     this.enviandoPdf = true;
-    const senha = this.senhaPdf?.trim() || undefined;
+    const senha = pdf ? (this.senhaPdf?.trim() || undefined) : undefined;
     this.importacaoService.upload(file, senha).subscribe({
-      next: () => {
-        this.toast.success('Fatura processada. Revise a conciliação antes de confirmar.');
+      next: (imp) => {
+        this.toast.success(
+          this.isCsv(imp)
+            ? 'Extrato processado. Revise os lançamentos antes de confirmar.'
+            : 'Fatura processada. Revise a conciliação antes de confirmar.'
+        );
         this.senhaPdf = '';
         this.enviandoPdf = false;
         this.carregar();
       },
       error: (e: HttpErrorResponse) => {
-        this.toast.errorFromHttpResponse(e, resolveHttpError(e, 'Erro ao processar PDF.'));
+        this.toast.errorFromHttpResponse(e, resolveHttpError(e, 'Erro ao processar o arquivo.'));
         this.enviandoPdf = false;
       }
     });
@@ -270,13 +430,16 @@ export class ImportacoesPendentesComponent implements OnInit {
   somaSelecionados(imp: ImportacaoFatura): number {
     const incluir = this.faturaPagaNoBanco(imp)
       ? (i: ImportacaoFatura['itens'][number]) => i.selecionado
-      : (i: ImportacaoFatura['itens'][number]) => i.novo && i.selecionado;
+      : (i: ImportacaoFatura['itens'][number]) => this.itemConfirmavel(imp, i);
     return imp.itens
       .filter(incluir)
       .reduce((acc, i) => acc + Number(i.valor || 0), 0);
   }
 
   resumoSelecionados(imp: ImportacaoFatura): string {
+    if (this.isCsv(imp)) {
+      return `${imp.novosDetectados} novos · ${imp.duplicadas || 0} dup. · ${imp.matchedExistentes || 0} conciliados · ${imp.necessitamRevisao || 0} revisão`;
+    }
     if (this.faturaPagaNoBanco(imp) && imp.novosDetectados === 0) {
       return `${imp.itens.length} já lançados · ${this.brl(imp.somaLancamentos)} na fatura`;
     }
@@ -284,6 +447,9 @@ export class ImportacoesPendentesComponent implements OnInit {
   }
 
   conciliacaoOk(imp: ImportacaoFatura): boolean {
+    if (this.isCsv(imp)) {
+      return true;
+    }
     if (imp.situacaoLeituraPdf === 'PAGA_NO_BANCO') {
       return (imp.itens?.length ?? 0) > 0 && Number(imp.somaLancamentos || 0) > 0;
     }
@@ -297,5 +463,18 @@ export class ImportacoesPendentesComponent implements OnInit {
 
   faturaTotalZerada(imp: ImportacaoFatura): boolean {
     return this.faturaPagaNoBanco(imp);
+  }
+
+  checkboxDisabled(imp: ImportacaoFatura, item: ImportacaoFatura['itens'][number]): boolean {
+    if (this.isCsv(imp)) {
+      return item.statusPreview === 'DUPLICATE'
+        || item.statusPreview === 'MATCHED_EXISTING'
+        || item.statusPreview === 'INVALID';
+    }
+    return !item.novo;
+  }
+
+  loadingMessage(): string {
+    return 'Lendo o arquivo enviado';
   }
 }

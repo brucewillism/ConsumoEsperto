@@ -77,6 +77,100 @@
   gap: 10px;
 }
 
+.relatorio-card {
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 16px 18px;
+}
+
+.relatorio-card h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.relatorio-card pre {
+  white-space: pre-wrap;
+  margin: 0 0 8px;
+  font-family: inherit;
+  color: #d1fae5;
+}
+
+.recurso-choice {
+  margin: 12px 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+}
+
+.recurso-choice p {
+  margin: 0 0 8px;
+}
+
+.recurso-selects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.csv-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.csv-head,
+.csv-row {
+  display: grid;
+  grid-template-columns: 36px 118px minmax(140px, 1.4fr) 92px 130px minmax(140px, 1fr) 110px 88px;
+  gap: 8px;
+  align-items: center;
+}
+
+.csv-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9ca3af;
+  padding: 4px 8px;
+}
+
+.csv-row {
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.date-input,
+.mini-select {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e5e7eb;
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.fatura-prevista {
+  font-size: 12px;
+  color: #93c5fd;
+}
+
+@media (max-width: 760px) {
+  .csv-head {
+    display: none;
+  }
+
+  .csv-row {
+    grid-template-columns: 32px 1fr auto;
+  }
+}
+
 .drop-zone {
   text-align: center;
   padding: 28px;

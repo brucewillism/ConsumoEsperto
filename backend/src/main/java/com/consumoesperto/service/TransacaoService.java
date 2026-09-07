@@ -875,6 +875,13 @@ public class TransacaoService {
         return categoria;
     }
 
+    /** Ownership de categoria para fluxos HTTP que não passam imediatamente por criarTransacao. */
+    public void exigirCategoriaDoUsuario(Long categoriaId, Long usuarioId) {
+        if (categoriaId != null) {
+            buscarCategoriaDoUsuario(categoriaId, usuarioId);
+        }
+    }
+
     private static String nomeExibicaoCartao(CartaoCredito cartao) {
         if (cartao == null) {
             return null;
@@ -988,15 +995,31 @@ public class TransacaoService {
     ) {
         Transacao transacao = transacaoRepository.findById(transacaoId)
             .orElseThrow(() -> new IllegalArgumentException("Transação não encontrada"));
-        transacao.setOrigemTransacao(origem);
-        transacao.setExternalEventId(externalEventId);
-        transacao.setExternalProvider(externalProvider);
-        transacao.setMerchantRaw(merchantRaw);
-        transacao.setMerchantNormalized(merchantNormalized);
-        transacao.setIngestionFingerprint(fingerprint);
+        if (origem != null) {
+            transacao.setOrigemTransacao(origem);
+        }
+        if (externalEventId != null && !externalEventId.isBlank()) {
+            transacao.setExternalEventId(externalEventId);
+        }
+        if (externalProvider != null) {
+            transacao.setExternalProvider(externalProvider);
+        }
+        if (merchantRaw != null) {
+            transacao.setMerchantRaw(merchantRaw);
+        }
+        if (merchantNormalized != null) {
+            transacao.setMerchantNormalized(merchantNormalized);
+        }
+        if (fingerprint != null) {
+            transacao.setIngestionFingerprint(fingerprint);
+        }
         transacao.setIngestedAt(java.time.LocalDateTime.now());
-        transacao.setIngestionConfidence(confidence);
-        transacao.setMobileCaptureEventId(mobileCaptureEventId);
+        if (confidence != null) {
+            transacao.setIngestionConfidence(confidence);
+        }
+        if (mobileCaptureEventId != null) {
+            transacao.setMobileCaptureEventId(mobileCaptureEventId);
+        }
         transacaoRepository.save(transacao);
     }
 }

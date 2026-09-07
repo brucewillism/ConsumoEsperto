@@ -60,11 +60,28 @@ public class ImportacaoFaturaCartao {
     @Column(name = "data_confirmacao")
     private LocalDateTime dataConfirmacao;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_arquivo", length = 40)
+    private FinancialImportFileType tipoArquivo;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "conta_bancaria_id")
+    private ContaBancaria contaBancaria;
+
+    @Column(name = "arquivo_nome", length = 255)
+    private String arquivoNome;
+
+    @Column(name = "precisa_escolha_recurso", nullable = false)
+    private boolean precisaEscolhaRecurso;
+
     @PrePersist
     protected void onCreate() {
         dataCriacao = LocalDateTime.now();
         if (status == null) {
             status = Status.PENDENTE;
+        }
+        if (tipoArquivo == null) {
+            tipoArquivo = FinancialImportFileType.INVOICE_PDF;
         }
     }
 
@@ -112,6 +129,18 @@ public class ImportacaoFaturaCartao {
 
     public LocalDateTime getDataConfirmacao() { return dataConfirmacao; }
     public void setDataConfirmacao(LocalDateTime dataConfirmacao) { this.dataConfirmacao = dataConfirmacao; }
+
+    public FinancialImportFileType getTipoArquivo() { return tipoArquivo; }
+    public void setTipoArquivo(FinancialImportFileType tipoArquivo) { this.tipoArquivo = tipoArquivo; }
+
+    public ContaBancaria getContaBancaria() { return contaBancaria; }
+    public void setContaBancaria(ContaBancaria contaBancaria) { this.contaBancaria = contaBancaria; }
+
+    public String getArquivoNome() { return arquivoNome; }
+    public void setArquivoNome(String arquivoNome) { this.arquivoNome = arquivoNome; }
+
+    public boolean isPrecisaEscolhaRecurso() { return precisaEscolhaRecurso; }
+    public void setPrecisaEscolhaRecurso(boolean precisaEscolhaRecurso) { this.precisaEscolhaRecurso = precisaEscolhaRecurso; }
 
     public enum Status {
         PENDENTE,
