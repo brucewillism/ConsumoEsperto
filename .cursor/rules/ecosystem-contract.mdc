@@ -1,0 +1,25 @@
+---
+description: Contrato congelado do ecossistema (JARVIS, E.D.I.T.H., ConsumoEsperto, ATS)
+alwaysApply: true
+---
+
+# Contrato do ecossistema — ler antes de implementar
+
+Antes de **qualquer** implementação neste repositório, leia e obedeça:
+
+- `00-CONTRATO-COMPARTILHADO.md`
+- `docs/ECOSYSTEM_CONTRACT.md` (cópia canônica no repo)
+
+É o contrato **v1 congelado**. Nenhum projeto altera sozinho. Mudança exige os quatro repos (`jarvis`, `edith`, `consumo-esperto`, `ats`) e bump de versão.
+
+Não invente envelope, path, código de erro, capability, health ou HMAC paralelo. Se o pedido conflitar com o contrato, o contrato vence e avise o usuário.
+
+Pontos que não são negociáveis neste repo:
+
+- ConsumoEsperto é dono do domínio financeiro; E.D.I.T.H. não acessa o Postgres financeiro.
+- Capabilities determinísticas (`local_resolvable` / path `INSTANT`) não passam por LLM.
+- `finance:write` default deny / desabilitado nesta versão.
+- Dado `FINANCIAL`/`PERSONAL`: sem dump de tabela para modelo; sensitivity só sobe.
+- Envelope `X-Eco-*`: `trace_id` nasce na borda e não se regenera; deadline absoluto, nunca estendido.
+- Erros só com os códigos da seção 6 do contrato.
+- Ollama só via E.D.I.T.H.; Postgres/Redis isolados por banco/prefixo.
