@@ -1,8 +1,11 @@
 package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Transacao;
+import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.security.UserPrincipal;
+import com.consumoesperto.service.ParcelamentoService;
 import com.consumoesperto.service.TransacaoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,8 +44,9 @@ import java.util.List;
 @CrossOrigin(origins = {"http://localhost:14200", "https://0d723f1e294f.ngrok-free.app", "https://*.ngrok-free.app"})
 public class TransacaoController {
 
-    // Serviço responsável pela lógica de negócio das transações
     private final TransacaoService transacaoService;
+    private final ParcelamentoService parcelamentoService;
+    private final CartaoCreditoRepository cartaoCreditoRepository;
 
     /**
      * Cria uma nova transação financeira para o usuário autenticado
@@ -60,9 +64,37 @@ public class TransacaoController {
             @Valid @RequestBody TransacaoDTO transacaoDTO,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         
-        // Cria a transação associada ao usuário logado
-        TransacaoDTO transacaoCriada = transacaoService.criarTransacao(transacaoDTO, currentUser.getId());
+        TransacaoDTO transacaoCriada = criarOuParcelar(transacaoDTO, currentUser.getId());
         return ResponseEntity.ok(transacaoCriada);
+    }
+
+    private TransacaoDTO criarOuParcelar(TransacaoDTO dto, Long usuarioId) {
+        Integer n = dto.getTotalParcelas();
+        boolean parcelar = n != null && n >= 2
+            && dto.getTipoTransacao() == TransacaoDTO.TipoTransacao.DESPESA;
+        if (!parcelar) {
+            return transacaoService.criarTransacao(dto, usuarioId);
+        }
+        if (n > 48) {
+            throw new IllegalArgumentException("Parcelamento admite no máximo 48 vezes.");
+        }
+        if (dto.getCartaoCreditoId() == null) {
+            throw new IllegalArgumentException("Para parcelar, selecione o cartão de crédito.");
+        }
+        CartaoCredito cartao = cartaoCreditoRepository
+            .findByIdAndUsuarioId(dto.getCartaoCreditoId(), usuarioId)
+            .orElseThrow(() -> new IllegalArgumentException("Cartão de crédito não encontrado."));
+        List<TransacaoDTO> criadas = parcelamentoService.criarParcelamentoSemJuros(
+            usuarioId,
+            cartao,
+            dto.getDescricao(),
+            dto.getValor(),
+            n,
+            dto.getStatusConferencia() != null ? dto.getStatusConferencia() : TransacaoDTO.StatusConferencia.CONFIRMADA,
+            dto.getDataTransacao(),
+            dto.getCategoriaId()
+        );
+        return criadas.get(0);
     }
 
     /**

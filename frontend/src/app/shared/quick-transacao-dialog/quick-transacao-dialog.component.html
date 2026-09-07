@@ -57,6 +57,19 @@
       <mat-error *ngIf="form.get('cartaoCreditoId')?.hasError('required')">Selecione o cartão</mat-error>
       <mat-hint>Entra na fatura aberta. Não mexe no saldo da conta.</mat-hint>
     </mat-form-field>
+
+    <mat-form-field
+      appearance="outline"
+      class="full"
+      *ngIf="form.get('tipoTransacao')?.value === tipoTransacaoEnum.DESPESA && form.get('formaPagamento')?.value === 'CARTAO'">
+      <mat-label>Parcelas</mat-label>
+      <mat-select formControlName="numeroParcelas" panelClass="exec-select-panel">
+        <mat-option *ngFor="let n of opcoesParcelas" [value]="n">
+          {{ n === 1 ? '1x (à vista)' : n + 'x' }}
+        </mat-option>
+      </mat-select>
+      <mat-hint>{{ resumoParcelas() }}</mat-hint>
+    </mat-form-field>
   </mat-dialog-content>
   <mat-dialog-actions align="end">
     <button mat-button mat-dialog-close type="button" [disabled]="salvando">Cancelar</button>

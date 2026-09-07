@@ -46,6 +46,7 @@ import {
 })
 export class QuickTransacaoDialogComponent implements OnInit {
   readonly tipoTransacaoEnum = TipoTransacao;
+  readonly opcoesParcelas = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 18, 21, 24, 36, 48];
   form!: FormGroup;
   categorias: Categoria[] = [];
   cartoes: CartaoCredito[] = [];
@@ -68,6 +69,7 @@ export class QuickTransacaoDialogComponent implements OnInit {
       categoriaId: [''],
       formaPagamento: ['PIX'],
       cartaoCreditoId: [''],
+      numeroParcelas: [1],
     });
     this.form.get('tipoTransacao')?.valueChanges.subscribe(() => this.sincronizarPagamento());
     this.form.get('formaPagamento')?.valueChanges.subscribe(() => this.sincronizarPagamento());
@@ -112,14 +114,23 @@ export class QuickTransacaoDialogComponent implements OnInit {
       && raw.cartaoCreditoId != null
     ) {
       body.cartaoCreditoId = Number(raw.cartaoCreditoId);
+      const n = Number(raw.numeroParcelas);
+      if (Number.isFinite(n) && n >= 2) {
+        body.totalParcelas = n;
+      }
     }
 
+    const nParcelas = Number(raw.numeroParcelas) || 1;
+    const noCartao = raw.tipoTransacao === TipoTransacao.DESPESA && raw.formaPagamento === 'CARTAO';
     this.salvando = true;
     this.transacaoService.criarTransacao(body).subscribe({
       next: () => {
         this.salvando = false;
-        this.snackBar.open('Transação registrada com sucesso.', 'Fechar', {
-          duration: 3000,
+        const msg = noCartao && nParcelas >= 2
+          ? `Criei ${nParcelas} parcelas no cartão, sem juros.`
+          : 'Transação registrada com sucesso.';
+        this.snackBar.open(msg, 'Fechar', {
+          duration: 3500,
           panelClass: ['success-snackbar'],
         });
         this.dialogRef.close(true);
@@ -152,7 +163,22 @@ export class QuickTransacaoDialogComponent implements OnInit {
       if (cartaoCtrl.value) {
         cartaoCtrl.setValue('', { emitEvent: false });
       }
+      this.form.patchValue({ numeroParcelas: 1 }, { emitEvent: false });
     }
     cartaoCtrl.updateValueAndValidity({ emitEvent: false });
+  }
+
+  resumoParcelas(): string {
+    const n = Number(this.form.get('numeroParcelas')?.value) || 1;
+    if (n < 2) {
+      return 'À vista na fatura aberta.';
+    }
+    const total = parseValorBrasileiro(String(this.form.get('valor')?.value ?? '')) ?? 0;
+    if (total <= 0) {
+      return `${n}x nas próximas faturas, sem juros.`;
+    }
+    const base = Math.floor(Math.round(total * 100) / n) / 100;
+    const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(base);
+    return `${n}x de ${brl} — sem juros, cada parcela na fatura do mês.`;
   }
 }

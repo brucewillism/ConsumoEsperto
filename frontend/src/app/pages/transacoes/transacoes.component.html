@@ -158,6 +158,19 @@
       <mat-form-field
         appearance="outline"
         class="full-width"
+        *ngIf="noCartao() && !transacaoEditando">
+        <mat-label>Parcelas</mat-label>
+        <mat-select formControlName="numeroParcelas" panelClass="exec-select-panel">
+          <mat-option *ngFor="let n of opcoesParcelas" [value]="n">
+            {{ n === 1 ? '1x (à vista)' : n + 'x' }}
+          </mat-option>
+        </mat-select>
+        <mat-hint>{{ resumoParcelas() }}</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field
+        appearance="outline"
+        class="full-width"
         *ngIf="!noCartao()">
         <mat-label>Conta / carteira</mat-label>
         <mat-select formControlName="contaBancariaId" panelClass="exec-select-panel">

@@ -102,6 +102,7 @@ export class TransacoesComponent implements OnInit {
   agendamentoForm: FormGroup;
 
   tipoTransacao = TipoTransacao;
+  readonly opcoesParcelas = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 18, 21, 24, 36, 48];
 
   constructor(
     private readonly fb: FormBuilder,
@@ -125,6 +126,7 @@ export class TransacoesComponent implements OnInit {
       formaPagamento: ['PIX'],
       contaBancariaId: [''],
       cartaoCreditoId: [''],
+      numeroParcelas: [1],
     });
     this.transacaoForm.get('tipoTransacao')?.valueChanges.subscribe(() => this.sincronizarPagamento());
     this.transacaoForm.get('formaPagamento')?.valueChanges.subscribe(() => this.sincronizarPagamento());
@@ -170,6 +172,20 @@ export class TransacoesComponent implements OnInit {
       return `${banco} · ${nome}`;
     }
     return nome || banco || 'Cartão';
+  }
+
+  resumoParcelas(): string {
+    const n = Number(this.transacaoForm.get('numeroParcelas')?.value) || 1;
+    if (n < 2) {
+      return 'À vista na fatura aberta.';
+    }
+    const total = parseValorBrasileiro(String(this.transacaoForm.get('valor')?.value ?? '')) ?? 0;
+    if (total <= 0) {
+      return `${n}x nas próximas faturas, sem juros.`;
+    }
+    const centavos = Math.round(total * 100);
+    const base = Math.floor(centavos / n) / 100;
+    return `${n}x de ${this.brl(base)} — sem juros, cada parcela na fatura do mês.`;
   }
 
   carregarAgendamentos(): void {
@@ -283,6 +299,7 @@ export class TransacoesComponent implements OnInit {
         formaPagamento: transacao.cartaoCreditoId ? 'CARTAO' : 'PIX',
         contaBancariaId: transacao.contaBancariaId ?? '',
         cartaoCreditoId: transacao.cartaoCreditoId ?? '',
+        numeroParcelas: transacao.totalParcelas && transacao.totalParcelas > 1 ? transacao.totalParcelas : 1,
       }, { emitEvent: false });
     } else {
       this.transacaoForm.reset({
@@ -292,6 +309,7 @@ export class TransacoesComponent implements OnInit {
         formaPagamento: 'PIX',
         contaBancariaId: this.contas.find((c) => c.padrao)?.id ?? '',
         cartaoCreditoId: '',
+        numeroParcelas: 1,
       }, { emitEvent: false });
     }
     this.sincronizarPagamento();
@@ -309,6 +327,7 @@ export class TransacoesComponent implements OnInit {
         formaPagamento: 'PIX',
         contaBancariaId: '',
         cartaoCreditoId: '',
+        numeroParcelas: 1,
       }, { emitEvent: false });
     });
   }
@@ -353,6 +372,7 @@ export class TransacoesComponent implements OnInit {
       if (cartaoCtrl.value) {
         cartaoCtrl.setValue('', { emitEvent: false });
       }
+      this.transacaoForm.patchValue({ numeroParcelas: 1 }, { emitEvent: false });
     }
     cartaoCtrl.updateValueAndValidity({ emitEvent: false });
   }
@@ -379,12 +399,9 @@ export class TransacoesComponent implements OnInit {
       )
       .subscribe({
         next: () => {
+          const msg = this.mensagemSucessoSalvar();
           this.dialog.closeAll();
-          this.snackBar.open(
-            this.transacaoEditando ? 'Transação atualizada com sucesso!' : 'Transação criada com sucesso!',
-            'Fechar',
-            { duration: 3000, panelClass: ['success-snackbar'] }
-          );
+          this.snackBar.open(msg, 'Fechar', { duration: 3500, panelClass: ['success-snackbar'] });
           this.financaAlteracao.notificar('transacoes');
           this.carregarTransacoes({ silent: true });
         },
@@ -433,7 +450,24 @@ export class TransacoesComponent implements OnInit {
           ? contaBancariaId
           : this.contas.find((c) => c.padrao)?.id,
       cartaoCreditoId: noCartao && Number.isFinite(cartaoCreditoId) ? cartaoCreditoId : undefined,
+      totalParcelas: noCartao && !this.transacaoEditando ? this.lerNumeroParcelas(raw) : undefined,
     };
+  }
+
+  private lerNumeroParcelas(raw: Record<string, unknown>): number | undefined {
+    const n = Number(raw['numeroParcelas']);
+    return Number.isFinite(n) && n >= 2 ? n : undefined;
+  }
+
+  private mensagemSucessoSalvar(): string {
+    if (this.transacaoEditando) {
+      return 'Transação atualizada com sucesso!';
+    }
+    const n = Number(this.transacaoForm.get('numeroParcelas')?.value) || 1;
+    if (this.noCartao() && n >= 2) {
+      return `Criei ${n} parcelas no cartão, sem juros. Cada uma entra na fatura do mês.`;
+    }
+    return 'Transação criada com sucesso!';
   }
 
   editarTransacao(transacao: Transacao): void {

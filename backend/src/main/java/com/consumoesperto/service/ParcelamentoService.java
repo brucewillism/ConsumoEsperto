@@ -56,8 +56,24 @@ public class ParcelamentoService {
         int nParcelas,
         TransacaoDTO.StatusConferencia statusConferencia
     ) {
+        return criarParcelamentoSemJuros(
+            usuarioId, cartao, descricaoBase, valorTotal, nParcelas, statusConferencia, null, null);
+    }
+
+    @Transactional
+    public List<TransacaoDTO> criarParcelamentoSemJuros(
+        Long usuarioId,
+        CartaoCredito cartao,
+        String descricaoBase,
+        BigDecimal valorTotal,
+        int nParcelas,
+        TransacaoDTO.StatusConferencia statusConferencia,
+        LocalDateTime dataCompra,
+        Long categoriaId
+    ) {
         List<BigDecimal> valores = calcularValoresSemJuros(valorTotal, nParcelas);
-        return criarParcelasInterno(usuarioId, cartao, descricaoBase, valores, valorTotal, null, statusConferencia);
+        return criarParcelasInterno(
+            usuarioId, cartao, descricaoBase, valores, valorTotal, null, statusConferencia, dataCompra, categoriaId);
     }
 
     /**
@@ -87,7 +103,8 @@ public class ParcelamentoService {
             ? valorRealPreçoAVista.setScale(2, RoundingMode.HALF_UP)
             : totalFin;
         BigDecimal valorComJuros = totalFin.subtract(valorReal).max(BigDecimal.ZERO);
-        return criarParcelasInterno(usuarioId, cartao, descricaoBase, valores, valorReal, valorComJuros, statusConferencia);
+        return criarParcelasInterno(
+            usuarioId, cartao, descricaoBase, valores, valorReal, valorComJuros, statusConferencia, null, null);
     }
 
     private List<TransacaoDTO> criarParcelasInterno(
@@ -97,14 +114,17 @@ public class ParcelamentoService {
         List<BigDecimal> valoresParcela,
         BigDecimal valorRealMeta,
         BigDecimal valorComJurosTotal,
-        TransacaoDTO.StatusConferencia statusConferencia
+        TransacaoDTO.StatusConferencia statusConferencia,
+        LocalDateTime dataCompra,
+        Long categoriaId
     ) {
         String grupo = UUID.randomUUID().toString();
         int n = valoresParcela.size();
-        Fatura faturaRef = faturaService.resolverFaturaParaCompra(usuarioId, cartao, LocalDateTime.now());
+        LocalDateTime ref = dataCompra != null ? dataCompra : LocalDateTime.now();
+        Fatura faturaRef = faturaService.resolverFaturaParaCompra(usuarioId, cartao, ref);
         LocalDate vencPrimeira = faturaRef.getDataVencimento() != null
             ? faturaRef.getDataVencimento().toLocalDate()
-            : LocalDate.now();
+            : ref.toLocalDate();
         int dia = clampDia(cartao.getDiaVencimento());
 
         List<TransacaoDTO> criadas = new ArrayList<>();
@@ -115,8 +135,9 @@ public class ParcelamentoService {
             dto.setDescricao(montarDescricaoParcela(descricaoBase, i + 1, n));
             dto.setValor(valoresParcela.get(i));
             dto.setTipoTransacao(TransacaoDTO.TipoTransacao.DESPESA);
-            dto.setDataTransacao(LocalDateTime.now());
+            dto.setDataTransacao(i == 0 ? ref : vencParcela.atStartOfDay());
             dto.setFaturaId(f.getId());
+            dto.setCategoriaId(categoriaId);
             dto.setStatusConferencia(statusConferencia != null ? statusConferencia : TransacaoDTO.StatusConferencia.CONFIRMADA);
             dto.setGrupoParcelaId(grupo);
             dto.setParcelaAtual(i + 1);
