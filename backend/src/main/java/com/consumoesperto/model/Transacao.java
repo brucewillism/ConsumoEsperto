@@ -25,7 +25,12 @@ import org.hibernate.annotations.Where;
  * @version 1.0
  */
 @Entity
-@Table(name = "transacoes") // Nome da tabela no banco de dados
+@Table(
+    name = "transacoes",
+    indexes = {
+        @Index(name = "idx_transacoes_usuario_periodo_categoria", columnList = "usuario_id, data_transacao, categoria_id")
+    }
+)
 @NoArgsConstructor // Lombok: gera construtor sem argumentos
 @AllArgsConstructor // Lombok: gera construtor com todos os argumentos
 @Where(clause = "excluido = false")

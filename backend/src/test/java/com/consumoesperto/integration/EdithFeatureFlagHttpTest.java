@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -52,6 +53,40 @@ class EdithFeatureFlagHttpTest {
         mockMvc.perform(get("/api/edith/status").header("Authorization", token))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.enabled").value(false))
-            .andExpect(jsonPath("$.state").value("DISABLED"));
+            .andExpect(jsonPath("$.state").value("DISABLED"))
+            .andExpect(jsonPath("$.assistant").value("LOCAL"));
+    }
+
+    @Test
+    void edithDesligada_listarCartoesFunciona() throws Exception {
+        mockMvc.perform(get("/api/cartoes-credito").header("Authorization", token))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void edithDesligada_crudFinanceiroFunciona() throws Exception {
+        mockMvc.perform(get("/api/transacoes").header("Authorization", token))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void edithDesligada_botaoListarCartoesNaoDependeDeHub() throws Exception {
+        mockMvc.perform(post("/api/ia-chat")
+                .header("Authorization", token)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"mensagem\":\"Lista os meus cartões\",\"capability\":\"finance.cards.list\",\"screen\":\"dashboard\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.mode").value("LOCAL"))
+            .andExpect(jsonPath("$.assistant").value("LOCAL"));
+    }
+
+    @Test
+    void runtimeHealthSeparaCoreDeEdith() throws Exception {
+        mockMvc.perform(get("/api/runtime-health").header("Authorization", token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.core").value("AVAILABLE"))
+            .andExpect(jsonPath("$.database").value("AVAILABLE"))
+            .andExpect(jsonPath("$.edith").value("DISABLED"))
+            .andExpect(jsonPath("$.assistant").value("LOCAL"));
     }
 }

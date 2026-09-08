@@ -37,6 +37,8 @@ public class LegacyCognitiveGateway implements CognitiveGateway {
             .status("COMPLETED")
             .resultText(resposta)
             .clientRequestId(request.getClientRequestId())
+            .mode("LOCAL")
+            .traceId(request.getTraceId())
             .build();
     }
 }

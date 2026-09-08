@@ -66,6 +66,7 @@ export class EdithAssistantComponent implements OnInit {
   ultimoErro = false;
   historico: ChatMsg[] = [];
   conversationId: string | null = null;
+  assistant = '';
 
   constructor(private edith: EdithService) {}
 
@@ -74,6 +75,7 @@ export class EdithAssistantComponent implements OnInit {
       next: (s) => {
         this.visible = true;
         this.state = s.state;
+        this.assistant = s.assistant || '';
       },
       error: () => {
         this.visible = true;
@@ -83,6 +85,10 @@ export class EdithAssistantComponent implements OnInit {
   }
 
   get stateLabel(): string {
+    if (this.assistant === 'ONLINE') return 'Online';
+    if (this.assistant === 'DEGRADED') return 'Modo degradado';
+    if (this.assistant === 'EDITH_UNAVAILABLE') return 'E.D.I.T.H. indisponível';
+    if (this.assistant === 'LOCAL' || this.state === 'DISABLED') return 'Modo local';
     if (this.state === 'AVAILABLE') return 'Disponível';
     if (this.state === 'UNAVAILABLE') return 'Indisponível';
     return 'Desabilitado';
@@ -117,7 +123,10 @@ export class EdithAssistantComponent implements OnInit {
       return;
     }
 
-    this.edith.sendMessage(this.conversationId, texto, clientRequestId).subscribe({
+    this.edith.sendMessage(this.conversationId, texto, clientRequestId, 'consumo.chat', {
+      applicationId: 'consumo-esperto',
+      screen: 'dashboard',
+    }).subscribe({
       next: (resp) => {
         this.statusAtual = resp.status;
         this.unsubscribeSse?.();
@@ -144,10 +153,24 @@ export class EdithAssistantComponent implements OnInit {
 
   private onSse(ev: { status: string; data: Record<string, unknown> }): void {
     this.statusAtual = ev.status;
+    const delta = ev.data['delta'];
+    if (typeof delta === 'string' && delta) {
+      const last = this.historico[this.historico.length - 1];
+      if (last && last.autor === 'ia') {
+        last.texto += delta;
+      } else {
+        this.historico.push({ autor: 'ia', texto: delta });
+      }
+    }
     if (ev.status === 'COMPLETED') {
       const result = String(ev.data['result'] ?? '');
       if (result) {
-        this.historico.push({ autor: 'ia', texto: result });
+        const last = this.historico[this.historico.length - 1];
+        if (last && last.autor === 'ia') {
+          last.texto = result;
+        } else {
+          this.historico.push({ autor: 'ia', texto: result });
+        }
       }
       this.carregando = false;
       this.unsubscribeSse?.();

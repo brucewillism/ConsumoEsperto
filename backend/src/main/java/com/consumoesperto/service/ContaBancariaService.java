@@ -5,6 +5,7 @@ import com.consumoesperto.dto.ContaBancariaUpdateDTO;
 import com.consumoesperto.dto.MatchResult;
 import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.model.ContaBancaria;
+import com.consumoesperto.security.OwnershipChecks;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.UsuarioRepository;
@@ -207,8 +208,10 @@ public class ContaBancariaService {
     }
 
     private ContaBancaria buscarEntidadeInterno(Long id, Long usuarioId) {
-        return contaBancariaRepository.findByIdAndUsuarioId(id, usuarioId)
-            .orElseThrow(() -> new ResourceNotFoundException("Conta bancária não encontrada"));
+        return OwnershipChecks.requireOwned(
+            contaBancariaRepository.findByIdAndUsuarioId(id, usuarioId),
+            contaBancariaRepository.existsById(id),
+            "conta");
     }
 
     private void desmarcarOutrasPadrao(Long usuarioId, Long excetoId) {

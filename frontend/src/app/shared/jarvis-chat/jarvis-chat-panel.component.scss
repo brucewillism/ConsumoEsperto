@@ -60,6 +60,35 @@
   flex-shrink: 0;
 }
 
+.jarvis-header-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.jarvis-status {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #94a3b8;
+}
+
+.jarvis-status[data-state='ONLINE'] {
+  color: #4ade80;
+}
+
+.jarvis-status[data-state='LOCAL'] {
+  color: #38bdf8;
+}
+
+.jarvis-status[data-state='DEGRADED'] {
+  color: #fbbf24;
+}
+
+.jarvis-status[data-state='EDITH_UNAVAILABLE'] {
+  color: #f87171;
+}
+
 .ai-chat-panel-header {
   justify-content: space-between;
   color: #e5e7eb;
@@ -200,9 +229,22 @@
   white-space: pre-line;
 }
 
-.chat-msg.user {
-  justify-self: end;
-  background: rgba(56, 189, 248, 0.24);
+.cap-title {
+  margin: 0 0 0.4rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.cap-cards ul,
+.cap-month ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.cap-meta {
+  display: block;
+  color: #94a3b8;
+  font-size: 0.8rem;
 }
 
 .jarvis-typing {

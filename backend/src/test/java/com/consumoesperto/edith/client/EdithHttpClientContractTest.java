@@ -9,7 +9,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 
-import java.time.Duration;
 import java.util.Map;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
@@ -77,6 +76,41 @@ class EdithHttpClientContractTest {
 
     EdithApiModels.MessageSubmission sub = client.sendMessage("conv-1", req);
     assertEquals("task-1", sub.getTaskId());
+  }
+
+  @Test
+  void streamTaskEventsReenviaLastEventId() {
+    wireMock.stubFor(get(urlEqualTo("/api/v1/integrations/tasks/task-sse/events"))
+      .withHeader("Last-Event-ID", equalTo("evt-7"))
+      .willReturn(aResponse()
+        .withStatus(200)
+        .withHeader("Content-Type", "text/event-stream")
+        .withBody("data: {\"type\":\"COMPLETED\",\"data\":{\"status\":\"COMPLETED\"}}\n\n")));
+
+    client.streamTaskEvents("task-sse", "evt-7", event -> { });
+    wireMock.verify(getRequestedFor(urlEqualTo("/api/v1/integrations/tasks/task-sse/events"))
+      .withHeader("Last-Event-ID", equalTo("evt-7")));
+  }
+
+  @Test
+  void circuitOpenNaoChamaHub() {
+    com.consumoesperto.edith.EdithResilience resilience =
+      org.mockito.Mockito.mock(com.consumoesperto.edith.EdithResilience.class);
+    org.mockito.Mockito.when(resilience.isCircuitOpen()).thenReturn(true);
+    EdithHttpClient closed = new EdithHttpClient(clientProperties(), new RestTemplateBuilder(), objectMapper, resilience);
+    com.consumoesperto.edith.EdithException ex = assertThrows(
+      com.consumoesperto.edith.EdithException.class, () -> closed.getTask("task-x"));
+    assertEquals(com.consumoesperto.edith.EdithErrorCode.EDITH_UNAVAILABLE, ex.getCode());
+    wireMock.verify(0, getRequestedFor(urlMatching("/api/v1/integrations/tasks/.*")));
+  }
+
+  private EdithProperties clientProperties() {
+    EdithProperties props = new EdithProperties();
+    props.setEnabled(true);
+    props.setBaseUrl("http://localhost:" + wireMock.port());
+    props.setApiKey("test-api-key");
+    props.setRequestTimeoutMs(5_000L);
+    return props;
   }
 
   @Test

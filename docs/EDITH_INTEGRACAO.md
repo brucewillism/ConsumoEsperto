@@ -12,6 +12,8 @@ E.D.I.T.H. → POST /api/internal/edith/tools (HMAC) → Finance Services → Po
 Nunca: `Angular → E.D.I.T.H.` direto.  
 Nunca: `E.D.I.T.H. → JDBC → PostgreSQL`.
 
+Ver o contrato atualizado em `docs/CONSUMO_EDITH_INTEGRATION.md`. Auditoria pré-complemento: `docs/CONSUMO_EDITH_AUDIT.md`.
+
 ## Configuração
 
 | Variável | Padrão | Descrição |
@@ -20,8 +22,13 @@ Nunca: `E.D.I.T.H. → JDBC → PostgreSQL`.
 | `EDITH_BASE_URL` | — | Base da API (ex. `http://edith_api:8080`) |
 | `EDITH_API_KEY` | — | Chave backend-only |
 | `EDITH_CALLBACK_SECRET` | — | HMAC do Tool Bridge |
-
-Ver também `.env.example`.
+| `EDITH_APPLICATION_ID` | `consumo-esperto` | `application_id` no contexto |
+| `EDITH_CONNECT_TIMEOUT` | `5000` | Timeout de conexão (ms) |
+| `EDITH_READ_TIMEOUT` | `15000` | Timeout de leitura (ms) |
+| `EDITH_RETRY` | `true` | Retry de transporte |
+| `EDITH_MAX_RETRIES` | `2` | Tentativas extras |
+| `EDITH_CIRCUIT_BREAKER` | `true` | Circuito Resilience4j `edith` |
+| `LEGACY_AI_FALLBACK_ENABLED` / `EDITH_FALLBACK_ENABLED` | `true` | Fallback para IA legada |
 
 ## SDK
 
@@ -38,7 +45,8 @@ Implementado adapter HTTP: `EdithHttpClient`.
 ## Tool Bridge (HMAC)
 
 - `POST /api/internal/edith/tools`
-- Allowlist read-only: `finance.accounts.list`, `finance.transactions.search`, `finance.invoice.read`
+- Allowlist read-only: `finance.accounts.list`, `finance.transactions.search`, `finance.invoice.read`, `finance.cards.list`, `finance.month.summary`, `finance.cashflow.project`, `finance.subscriptions.list`, `finance.recurring.list`, `finance.category.summary`
+- Write (`finance.transaction.create`) negada (`TOOL_BRIDGE_DENIED`)
 
 ## Health
 

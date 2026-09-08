@@ -24,11 +24,34 @@ public class EdithProperties {
     /** Identificador da aplicação no hub E.D.I.T.H. */
     private String application = "CONSUMO_ESPERTO";
 
+    /** application_id enviado no contexto cognitivo (kebab-case do contrato). */
+    private String applicationId = "consumo-esperto";
+
     /** Projeto/tenant lógico dentro da aplicação. */
     private String project = "CONSUMO_ESPERTO";
 
     /** Timeout HTTP para requests à API E.D.I.T.H. (ms). */
     private long requestTimeoutMs = 30_000L;
+
+    /** Timeout de conexão (ms). 0 = usar {@link #requestTimeoutMs}. */
+    private long connectTimeoutMs = 5_000L;
+
+    /** Timeout de leitura (ms). 0 = usar {@link #requestTimeoutMs}. */
+    private long readTimeoutMs = 15_000L;
+
+    /** Retry transitório no cliente HTTP. */
+    private boolean retryEnabled = true;
+
+    private int maxRetries = 2;
+
+    /** Circuit breaker Resilience4j instância {@code edith}. */
+    private boolean circuitBreakerEnabled = true;
+
+    /**
+     * Se a hub falhar (ou o circuito abrir), usar {@link com.consumoesperto.edith.LegacyCognitiveGateway}.
+     * Alias de ambiente: {@code EDITH_FALLBACK_ENABLED} / {@code LEGACY_AI_FALLBACK_ENABLED}.
+     */
+    private boolean fallbackEnabled = true;
 
     /** Timeout máximo de acompanhamento de Task (ms). */
     private long taskTimeoutMs = 300_000L;

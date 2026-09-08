@@ -29,9 +29,14 @@ public class FinanceAccountsListTool implements EdithFinanceTool {
     public Map<String, Object> execute(String contextRef, Map<String, Object> input) {
         Long usuarioId = integrationService.resolveUsuarioByContextRef(contextRef)
             .orElseThrow(() -> new EdithException(EdithErrorCode.INVALID_CONTEXT_REF, "context_ref inválido"));
+        return executeForUser(usuarioId, input);
+    }
 
-        boolean includeInactive = Boolean.TRUE.equals(input.get("include_inactive"));
-        int limit = parseLimit(input.get("limit"), 20, 50);
+    @Override
+    public Map<String, Object> executeForUser(Long usuarioId, Map<String, Object> input) {
+        Map<String, Object> args = input != null ? input : Map.of();
+        boolean includeInactive = Boolean.TRUE.equals(args.get("include_inactive"));
+        int limit = ToolLimits.require(args.get("limit"), ToolLimits.LIST_DEFAULT, ToolLimits.LIST_MAX);
 
         List<ContaBancariaDTO> contas = contaBancariaService.listarPorUsuario(usuarioId, !includeInactive);
         List<Map<String, Object>> items = contas.stream()
@@ -54,15 +59,8 @@ public class FinanceAccountsListTool implements EdithFinanceTool {
         return out;
     }
 
+    /** @deprecated use {@link ToolLimits#require} */
     static int parseLimit(Object raw, int defaultVal, int max) {
-        if (raw == null) {
-            return defaultVal;
-        }
-        try {
-            int v = raw instanceof Number n ? n.intValue() : Integer.parseInt(String.valueOf(raw));
-            return Math.max(1, Math.min(v, max));
-        } catch (NumberFormatException e) {
-            return defaultVal;
-        }
+        return ToolLimits.require(raw, defaultVal, max);
     }
 }

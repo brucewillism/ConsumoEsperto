@@ -96,6 +96,34 @@ class EdithToolBridgeHttpTest {
   }
 
   @Test
+  void replayNonceHttpBloqueado() throws Exception {
+    String body = "{\"request_id\":\"" + requestId + "\",\"tool\":\"finance.accounts.list\",\"version\":\"1\","
+      + "\"arguments\":{\"context_ref\":\"" + contextRef + "\"}}";
+    byte[] raw = body.getBytes(StandardCharsets.UTF_8);
+    String ts = String.valueOf(Instant.now().getEpochSecond());
+    String nonce = "nonce-replay-" + System.nanoTime();
+    String sig = EdithHmacSigner.sign("test-callback-secret", ts, nonce, requestId, raw);
+
+    mockMvc.perform(post("/api/internal/edith/tools")
+        .contentType(MediaType.APPLICATION_JSON)
+        .header(EdithCallbackHeaders.TIMESTAMP, ts)
+        .header(EdithCallbackHeaders.NONCE, nonce)
+        .header(EdithCallbackHeaders.REQUEST_ID, requestId)
+        .header(EdithCallbackHeaders.SIGNATURE, sig)
+        .content(raw))
+      .andExpect(status().isOk());
+
+    mockMvc.perform(post("/api/internal/edith/tools")
+        .contentType(MediaType.APPLICATION_JSON)
+        .header(EdithCallbackHeaders.TIMESTAMP, ts)
+        .header(EdithCallbackHeaders.NONCE, nonce)
+        .header(EdithCallbackHeaders.REQUEST_ID, requestId)
+        .header(EdithCallbackHeaders.SIGNATURE, sig)
+        .content(raw))
+      .andExpect(status().isConflict());
+  }
+
+  @Test
   void invalidContextRefRejected() throws Exception {
     String body = "{\"request_id\":\"" + requestId + "\",\"tool\":\"finance.accounts.list\",\"version\":\"1\","
       + "\"arguments\":{\"context_ref\":\"ctx-inexistente\"}}";

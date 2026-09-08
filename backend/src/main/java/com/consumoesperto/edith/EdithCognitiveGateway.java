@@ -52,7 +52,8 @@ public class EdithCognitiveGateway implements CognitiveGateway {
             conversationId,
             request.getContent(),
             request.getSourceAction() != null ? request.getSourceAction() : "consumo.chat",
-            request.getClientRequestId()
+            request.getClientRequestId(),
+            request
         );
         if (request.isAwaitCompletion()) {
             String result = integrationService.awaitTaskResult(request.getUsuarioId(), response.getTaskId());
@@ -65,6 +66,8 @@ public class EdithCognitiveGateway implements CognitiveGateway {
                 .contextRef(response.getContextRef())
                 .status("COMPLETED")
                 .resultText(result)
+                .mode("EDITH")
+                .traceId(request.getTraceId())
                 .build();
         }
         return response;

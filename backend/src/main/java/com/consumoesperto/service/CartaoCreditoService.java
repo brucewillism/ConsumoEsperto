@@ -2,6 +2,7 @@ package com.consumoesperto.service;
 
 import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.dto.CartaoCreditoDTO;
+import com.consumoesperto.security.OwnershipChecks;
 import com.consumoesperto.dto.MatchResult;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Usuario;
@@ -195,8 +196,10 @@ public class CartaoCreditoService {
      */
     public CartaoCreditoDTO buscarPorId(Long id, Long usuarioId) {
         // Busca o cartão pelo ID e valida se pertence ao usuário
-        CartaoCredito cartaoCredito = cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
+        CartaoCredito cartaoCredito = OwnershipChecks.requireOwned(
+            cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId),
+            cartaoCreditoRepository.existsById(id),
+            "cartão");
         return converterParaDTO(cartaoCredito);
     }
 
@@ -452,8 +455,10 @@ public class CartaoCreditoService {
      */
     public CartaoCreditoDTO atualizarCartaoCredito(Long id, CartaoCreditoDTO cartaoCreditoDTO, Long usuarioId) {
         // Verifica se o cartão existe e pertence ao usuário antes de tentar atualizar
-        CartaoCredito cartaoExistente = cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
+        CartaoCredito cartaoExistente = OwnershipChecks.requireOwned(
+            cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId),
+            cartaoCreditoRepository.existsById(id),
+            "cartão");
 
         // Trata PUT como atualização parcial para não apagar campos omitidos pelo frontend.
         if (cartaoCreditoDTO.getNome() != null && !cartaoCreditoDTO.getNome().isBlank()) {
@@ -508,8 +513,10 @@ public class CartaoCreditoService {
      */
     public void deletarCartaoCredito(Long id, Long usuarioId) {
         // Verifica se o cartão existe e pertence ao usuário antes de tentar desativar
-        CartaoCredito cartaoCredito = cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cartão de crédito não encontrado"));
+        CartaoCredito cartaoCredito = OwnershipChecks.requireOwned(
+            cartaoCreditoRepository.findByIdAndUsuarioId(id, usuarioId),
+            cartaoCreditoRepository.existsById(id),
+            "cartão");
         
         // Soft delete: marca o cartão como inativo em vez de removê-lo fisicamente
         cartaoCredito.setAtivo(false);

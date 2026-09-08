@@ -33,7 +33,7 @@ public class MobileCaptureClassificationService {
       String merchantNormalized,
       BigDecimal amount
   ) {
-    if (!properties.isEdithClassificationEnabled()) {
+    if (!properties.isEdithClassificationEnabled() || !gatewaySelector.usesEdith()) {
       return Optional.empty();
     }
     try {

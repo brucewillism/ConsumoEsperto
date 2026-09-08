@@ -81,6 +81,48 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("dataInicio") LocalDateTime dataInicio,
         @Param("dataFim") LocalDateTime dataFim,
         Pageable pageable);
+
+    /**
+     * IDs do recorte com {@code LIMIT} no SQL (sem JOIN de entidade). Evita o planejador
+     * materializar o período inteiro antes do teto.
+     */
+    @Query(value = "SELECT t.id FROM transacoes t "
+        + "WHERE t.usuario_id = :usuarioId "
+        + "AND t.data_transacao BETWEEN :dataInicio AND :dataFim "
+        + "AND t.excluido = false "
+        + "ORDER BY t.data_transacao DESC, t.id DESC",
+        nativeQuery = true)
+    List<Long> searchIdsForCapabilityByPeriod(
+        @Param("usuarioId") Long usuarioId,
+        @Param("dataInicio") LocalDateTime dataInicio,
+        @Param("dataFim") LocalDateTime dataFim,
+        Pageable pageable);
+
+    @Query(value = "SELECT t.id FROM transacoes t "
+        + "LEFT JOIN faturas fat ON fat.id = t.fatura_id "
+        + "LEFT JOIN cartoes_credito cc ON cc.id = fat.cartao_credito_id "
+        + "WHERE t.usuario_id = :usuarioId "
+        + "AND t.data_transacao BETWEEN :dataInicio AND :dataFim "
+        + "AND t.excluido = false "
+        + "AND (:categoriaId IS NULL OR t.categoria_id = :categoriaId) "
+        + "AND (:contaId IS NULL OR t.conta_bancaria_id = :contaId) "
+        + "AND (:cartaoId IS NULL OR cc.id = :cartaoId) "
+        + "AND (:tipo IS NULL OR t.tipo_transacao = :tipo) "
+        + "ORDER BY t.data_transacao DESC, t.id DESC",
+        nativeQuery = true)
+    List<Long> searchIdsForCapabilityFiltered(
+        @Param("usuarioId") Long usuarioId,
+        @Param("dataInicio") LocalDateTime dataInicio,
+        @Param("dataFim") LocalDateTime dataFim,
+        @Param("categoriaId") Long categoriaId,
+        @Param("contaId") Long contaId,
+        @Param("cartaoId") Long cartaoId,
+        @Param("tipo") String tipo,
+        Pageable pageable);
+
+    @EntityGraph(attributePaths = {"categoria", "contaBancaria", "fatura", "fatura.cartaoCredito"})
+    @Query("SELECT t FROM Transacao t WHERE t.id IN :ids")
+    List<Transacao> findGraphByIdIn(@Param("ids") Collection<Long> ids);
     
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId AND t.tipoTransacao = :tipoTransacao AND t.dataTransacao BETWEEN :dataInicio AND :dataFim")
     BigDecimal sumByUsuarioIdAndTipoAndPeriodo(@Param("usuarioId") Long usuarioId, 

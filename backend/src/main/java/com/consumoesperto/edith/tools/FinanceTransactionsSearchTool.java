@@ -1,9 +1,11 @@
 package com.consumoesperto.edith.tools;
 
-import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.dto.FinanceTransactionSearchItemDto;
+import com.consumoesperto.eco.EcoException;
 import com.consumoesperto.edith.EdithErrorCode;
 import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.edith.EdithIntegrationService;
+import com.consumoesperto.model.Transacao;
 import com.consumoesperto.service.TransacaoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -11,7 +13,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,53 +36,59 @@ public class FinanceTransactionsSearchTool implements EdithFinanceTool {
     public Map<String, Object> execute(String contextRef, Map<String, Object> input) {
         Long usuarioId = integrationService.resolveUsuarioByContextRef(contextRef)
             .orElseThrow(() -> new EdithException(EdithErrorCode.INVALID_CONTEXT_REF, "context_ref inválido"));
+        return executeForUser(usuarioId, input);
+    }
 
-        LocalDate dateFrom = parseDate(input.get("date_from"), LocalDate.now().minusMonths(1));
-        LocalDate dateTo = parseDate(input.get("date_to"), LocalDate.now());
+    @Override
+    public Map<String, Object> executeForUser(Long usuarioId, Map<String, Object> input) {
+        Map<String, Object> args = input != null ? input : Map.of();
+        LocalDate dateFrom = parseDate(args.get("date_from"), LocalDate.now().minusMonths(1));
+        LocalDate dateTo = parseDate(args.get("date_to"), LocalDate.now());
         if (dateTo.isBefore(dateFrom)) {
-            throw new EdithException(EdithErrorCode.FINANCE_DATA_UNAVAILABLE, "Período inválido");
+            throw EcoException.invalidInput("Período inválido");
         }
         if (ChronoUnit.DAYS.between(dateFrom, dateTo) > MAX_PERIOD_DAYS) {
-            throw new EdithException(EdithErrorCode.FINANCE_DATA_UNAVAILABLE, "Período máximo excedido");
+            throw EcoException.invalidInput("Período máximo excedido");
         }
 
-        int limit = FinanceAccountsListTool.parseLimit(input.get("limit"), 50, 200);
+        int limit = ToolLimits.require(args.get("limit"), ToolLimits.SEARCH_DEFAULT, ToolLimits.SEARCH_MAX);
         LocalDateTime inicio = dateFrom.atStartOfDay();
         LocalDateTime fim = dateTo.plusDays(1).atStartOfDay().minusNanos(1);
+        Transacao.TipoTransacao tipo = parseTipo(args.get("type"));
 
-        List<TransacaoDTO> transacoes = transacaoService.buscarPorPeriodo(usuarioId, inicio, fim);
+        List<FinanceTransactionSearchItemDto> items = transacaoService.buscarParaCapability(
+            usuarioId,
+            inicio,
+            fim,
+            parseLong(args.get("category_id")),
+            parseLong(args.get("account_id")),
+            parseLong(args.get("card_id")),
+            tipo,
+            limit
+        );
 
-        Long categoryId = parseLong(input.get("category_id"));
-        Long accountId = parseLong(input.get("account_id"));
-        Long cardId = parseLong(input.get("card_id"));
-        String type = input.get("type") != null ? String.valueOf(input.get("type")) : null;
-
-        List<Map<String, Object>> items = transacoes.stream()
-            .filter(t -> categoryId == null || categoryId.equals(t.getCategoriaId()))
-            .filter(t -> accountId == null || accountId.equals(t.getContaBancariaId()))
-            .filter(t -> cardId == null || cardId.equals(t.getCartaoCreditoId()))
-            .filter(t -> type == null || (t.getTipoTransacao() != null && type.equalsIgnoreCase(t.getTipoTransacao().name())))
-            .limit(limit)
-            .map(t -> {
-                Map<String, Object> m = new HashMap<>();
-                m.put("id", t.getId());
-                m.put("descricao", t.getDescricao());
-                m.put("valor", t.getValor());
-                m.put("tipo", t.getTipoTransacao() != null ? t.getTipoTransacao().name() : null);
-                m.put("data", t.getDataTransacao());
-                m.put("categoria", t.getCategoriaNome());
-                m.put("conta_id", t.getContaBancariaId());
-                m.put("cartao_id", t.getCartaoCreditoId());
-                return m;
-            })
-            .collect(Collectors.toList());
-
-        Map<String, Object> out = new HashMap<>();
-        out.put("transacoes", items);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("transacoes", items.stream().map(this::toMap).collect(Collectors.toList()));
         out.put("total", items.size());
+        out.put("limit", limit);
+        out.put("limit_max", ToolLimits.SEARCH_MAX);
         out.put("date_from", dateFrom.toString());
         out.put("date_to", dateTo.toString());
         return out;
+    }
+
+    private Map<String, Object> toMap(FinanceTransactionSearchItemDto item) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", item.getId());
+        m.put("occurred_at", item.getOccurredAt());
+        m.put("amount", item.getAmount());
+        m.put("type", item.getType());
+        m.put("category_id", item.getCategoryId());
+        m.put("category", item.getCategory());
+        m.put("account_id", item.getAccountId());
+        m.put("card_id", item.getCardId());
+        m.put("description", item.getDescription());
+        return m;
     }
 
     private static LocalDate parseDate(Object raw, LocalDate fallback) {
@@ -90,7 +98,7 @@ public class FinanceTransactionsSearchTool implements EdithFinanceTool {
         try {
             return LocalDate.parse(String.valueOf(raw));
         } catch (Exception e) {
-            return fallback;
+            throw EcoException.invalidInput("data inválida");
         }
     }
 
@@ -101,7 +109,18 @@ public class FinanceTransactionsSearchTool implements EdithFinanceTool {
         try {
             return raw instanceof Number n ? n.longValue() : Long.parseLong(String.valueOf(raw));
         } catch (NumberFormatException e) {
+            throw EcoException.invalidInput("identificador numérico inválido");
+        }
+    }
+
+    private static Transacao.TipoTransacao parseTipo(Object raw) {
+        if (raw == null) {
             return null;
+        }
+        try {
+            return Transacao.TipoTransacao.valueOf(String.valueOf(raw).trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw EcoException.invalidInput("type inválido");
         }
     }
 }

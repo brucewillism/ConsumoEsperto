@@ -14,4 +14,7 @@ public class CognitiveResponse {
     String contextRef;
     String status;
     String resultText;
+    /** LOCAL | EDITH | LEGACY | DEGRADED */
+    String mode;
+    String traceId;
 }

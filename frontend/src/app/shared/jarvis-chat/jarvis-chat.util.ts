@@ -1,16 +1,34 @@
 import { Usuario } from '../../models/usuario.model';
 
+export const CONSUMO_APPLICATION_ID = 'consumo-esperto';
+
 export interface JarvisChatSugestao {
   rotulo: string;
   pergunta: string;
+  capability?: string;
 }
 
 export const JARVIS_CHAT_SUGESTOES: JarvisChatSugestao[] = [
-  { rotulo: 'Listar meus cartões', pergunta: 'Lista os meus cartões' },
-  { rotulo: 'Como vou fechar o mês?', pergunta: 'Como vou fechar o mês?' },
+  { rotulo: 'Listar meus cartões', pergunta: 'Lista os meus cartões', capability: 'finance.cards.list' },
+  { rotulo: 'Como vou fechar o mês?', pergunta: 'Como vou fechar o mês?', capability: 'finance.month.summary' },
   { rotulo: 'Onde invisto meu saldo?', pergunta: 'Onde invisto meu saldo?' },
   { rotulo: 'Ajuda (menu)', pergunta: 'ajuda' },
 ];
+
+export type JarvisAssistantState = 'ONLINE' | 'LOCAL' | 'DEGRADED' | 'EDITH_UNAVAILABLE';
+
+export function rotuloEstadoJarvis(state: JarvisAssistantState | string | null | undefined): string {
+  switch (state) {
+    case 'ONLINE':
+      return 'Online';
+    case 'DEGRADED':
+      return 'Modo degradado';
+    case 'EDITH_UNAVAILABLE':
+      return 'E.D.I.T.H. indisponível';
+    default:
+      return 'Modo local';
+  }
+}
 
 export function vocativoJarvis(usuario: Usuario | null | undefined): string {
   const resumo = usuario?.jarvisTratamentoResumo?.trim();

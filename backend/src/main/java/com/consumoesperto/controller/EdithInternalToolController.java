@@ -1,6 +1,7 @@
 package com.consumoesperto.controller;
 
 import com.consumoesperto.config.EdithProperties;
+import com.consumoesperto.eco.EcoEnvelopeHolder;
 import com.consumoesperto.edith.EdithCallbackSecurityService;
 import com.consumoesperto.edith.EdithErrorCode;
 import com.consumoesperto.edith.EdithException;
@@ -48,6 +49,7 @@ public class EdithInternalToolController {
         }
         enforceRateLimit(clientIp(request));
         securityService.validate(timestamp, nonce, requestId, rawBody, signature);
+        EcoEnvelopeHolder.markWorkStart();
         EdithToolRequestDto dto = parseBody(rawBody);
         if (dto.getRequestId() == null || dto.getRequestId().isBlank()) {
             dto.setRequestId(requestId);

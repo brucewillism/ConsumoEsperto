@@ -1,5 +1,7 @@
 package com.consumoesperto.controller;
 
+import com.consumoesperto.config.EdithProperties;
+import com.consumoesperto.edith.CognitiveRequest;
 import com.consumoesperto.edith.EdithIntegrationService;
 import com.consumoesperto.edith.EdithSseService;
 import com.consumoesperto.model.EdithConversationLink;
@@ -24,6 +26,7 @@ public class EdithController {
     private final EdithIntegrationService integrationService;
     private final EdithSseService sseService;
     private final AiRateLimitService aiRateLimitService;
+    private final EdithProperties properties;
 
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> status() {
@@ -35,10 +38,24 @@ public class EdithController {
         } else {
             state = "UNAVAILABLE";
         }
-        return ResponseEntity.ok(Map.of(
-            "enabled", integrationService.isEnabled(),
-            "state", state
-        ));
+        String assistant;
+        if (!integrationService.isEnabled()) {
+            assistant = "LOCAL";
+        } else if (integrationService.isOperational()) {
+            assistant = "ONLINE";
+        } else if (properties.isFallbackEnabled()) {
+            assistant = "DEGRADED";
+        } else {
+            assistant = "EDITH_UNAVAILABLE";
+        }
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("enabled", integrationService.isEnabled());
+        body.put("state", state);
+        body.put("assistant", assistant);
+        body.put("fallbackEnabled", properties.isFallbackEnabled());
+        body.put("circuit", integrationService.edithHttpClient().circuitState());
+        body.put("applicationId", properties.getApplicationId());
+        return ResponseEntity.ok(body);
     }
 
     @PostMapping("/conversations")
@@ -73,8 +90,19 @@ public class EdithController {
         String content = body.getOrDefault("content", body.getOrDefault("mensagem", ""));
         String sourceAction = body.getOrDefault("sourceAction", "consumo.chat");
         String clientRequestId = idempotencyKey != null ? idempotencyKey : body.get("clientRequestId");
+        CognitiveRequest ctx = CognitiveRequest.builder()
+            .usuarioId(user.getId())
+            .content(content)
+            .sourceAction(sourceAction)
+            .clientRequestId(clientRequestId)
+            .applicationId(body.getOrDefault("applicationId", properties.getApplicationId()))
+            .screen(body.get("screen"))
+            .entityType(body.get("entityType"))
+            .entityId(body.get("entityId"))
+            .traceId(body.get("traceId"))
+            .build();
 
-        var response = integrationService.sendMessage(user.getId(), conversationId, content, sourceAction, clientRequestId);
+        var response = integrationService.sendMessage(user.getId(), conversationId, content, sourceAction, clientRequestId, ctx);
         return ResponseEntity.accepted().body(Map.of(
             "conversationId", response.getConversationId(),
             "messageId", response.getMessageId() != null ? response.getMessageId() : "",
@@ -104,9 +132,10 @@ public class EdithController {
     @GetMapping(value = "/tasks/{taskId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter taskEvents(
         @AuthenticationPrincipal UserPrincipal user,
-        @PathVariable String taskId
+        @PathVariable String taskId,
+        @RequestHeader(value = "Last-Event-ID", required = false) String lastEventId
     ) {
         aiRateLimitService.checkOrThrow(user.getId(), "edith-sse");
-        return sseService.subscribe(user.getId(), taskId);
+        return sseService.subscribe(user.getId(), taskId, lastEventId);
     }
 }

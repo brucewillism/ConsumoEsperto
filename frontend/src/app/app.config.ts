@@ -16,6 +16,7 @@ import { routes } from './app.routes';
 import { AuthInterceptor } from './interceptors/auth.interceptor';
 import { ErrorInterceptor } from './interceptors/error.interceptor';
 import { LoadingInterceptor } from './interceptors/loading.interceptor';
+import { EcoEnvelopeInterceptor } from './interceptors/eco-envelope.interceptor';
 import {
   ChunkErrorHandler,
   isChunkLoadError,
@@ -56,7 +57,7 @@ export const appConfig: ApplicationConfig = {
     // Configura o cliente HTTP com interceptors personalizados
     // - AuthInterceptor: adiciona automaticamente token JWT nas requisições
     provideHttpClient(
-      withInterceptors([LoadingInterceptor, ErrorInterceptor, AuthInterceptor])
+      withInterceptors([LoadingInterceptor, EcoEnvelopeInterceptor, ErrorInterceptor, AuthInterceptor])
     ),
     
     // Habilita animações básicas do Angular

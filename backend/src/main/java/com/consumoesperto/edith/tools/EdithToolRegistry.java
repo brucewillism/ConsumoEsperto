@@ -17,20 +17,14 @@ public class EdithToolRegistry {
 
     private final Map<String, EdithFinanceTool> toolsByName;
 
-    public EdithToolRegistry(
-        FinanceAccountsListTool accountsListTool,
-        FinanceTransactionsSearchTool transactionsSearchTool,
-        FinanceInvoiceReadTool invoiceReadTool
-    ) {
+    public EdithToolRegistry(List<EdithFinanceTool> tools) {
         Map<String, EdithFinanceTool> map = new LinkedHashMap<>();
-        register(map, accountsListTool);
-        register(map, transactionsSearchTool);
-        register(map, invoiceReadTool);
+        if (tools != null) {
+            for (EdithFinanceTool tool : tools) {
+                map.put(tool.name(), tool);
+            }
+        }
         this.toolsByName = Collections.unmodifiableMap(map);
-    }
-
-    private static void register(Map<String, EdithFinanceTool> map, EdithFinanceTool tool) {
-        map.put(tool.name(), tool);
     }
 
     public List<String> allowedTools() {
@@ -38,10 +32,20 @@ public class EdithToolRegistry {
     }
 
     public Map<String, Object> execute(String toolName, String contextRef, Map<String, Object> input) {
+        EdithFinanceTool tool = requireTool(toolName);
+        return tool.execute(contextRef, input != null ? input : Map.of());
+    }
+
+    public Map<String, Object> executeForUser(String toolName, Long usuarioId, Map<String, Object> input) {
+        EdithFinanceTool tool = requireTool(toolName);
+        return tool.executeForUser(usuarioId, input != null ? input : Map.of());
+    }
+
+    private EdithFinanceTool requireTool(String toolName) {
         EdithFinanceTool tool = toolsByName.get(toolName);
         if (tool == null) {
             throw new EdithException(EdithErrorCode.TOOL_NOT_ALLOWED, "Tool não permitida: " + toolName);
         }
-        return tool.execute(contextRef, input != null ? input : Map.of());
+        return tool;
     }
 }

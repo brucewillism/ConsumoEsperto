@@ -9,5 +9,7 @@ public interface EdithFinanceTool {
 
     String name();
 
+    Map<String, Object> executeForUser(Long usuarioId, Map<String, Object> input);
+
     Map<String, Object> execute(String contextRef, Map<String, Object> input);
 }

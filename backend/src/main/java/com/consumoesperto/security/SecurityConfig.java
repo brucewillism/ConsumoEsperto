@@ -73,6 +73,7 @@ public class SecurityConfig {
                     "/v3/api-docs/**",
                     "/error"
                 ).permitAll()
+                .antMatchers(HttpMethod.GET, "/capabilities", "/api/capabilities").permitAll()
                 // Actuator: allowlist pública mínima; endpoints sensíveis exigem ROLE_ADMIN
                 .antMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                 .antMatchers("/actuator/**").hasRole("ADMIN")
@@ -117,7 +118,14 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(patterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setExposedHeaders(List.of(
+            "Authorization",
+            "X-Eco-Trace-Id",
+            "X-Eco-Span-Id",
+            "X-Eco-Parent-Span-Id",
+            "X-Eco-Deadline",
+            "X-Eco-Mode"
+        ));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

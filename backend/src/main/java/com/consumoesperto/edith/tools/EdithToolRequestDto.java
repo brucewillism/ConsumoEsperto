@@ -27,4 +27,6 @@ public class EdithToolRequestDto {
     private String projectId;
 
     private Map<String, Object> arguments;
+
+    private Map<String, Object> envelope;
 }

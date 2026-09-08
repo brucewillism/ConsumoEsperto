@@ -1,10 +1,10 @@
 package com.consumoesperto.edith.tools;
 
 import com.consumoesperto.dto.FaturaDTO;
+import com.consumoesperto.eco.EcoException;
 import com.consumoesperto.edith.EdithErrorCode;
 import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.edith.EdithIntegrationService;
-import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.service.FaturaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -30,18 +30,17 @@ public class FinanceInvoiceReadTool implements EdithFinanceTool {
     public Map<String, Object> execute(String contextRef, Map<String, Object> input) {
         Long usuarioId = integrationService.resolveUsuarioByContextRef(contextRef)
             .orElseThrow(() -> new EdithException(EdithErrorCode.INVALID_CONTEXT_REF, "context_ref inválido"));
+        return executeForUser(usuarioId, input);
+    }
 
-        Long invoiceId = parseInvoiceId(input.get("invoice_id"));
+    @Override
+    public Map<String, Object> executeForUser(Long usuarioId, Map<String, Object> input) {
+        Long invoiceId = parseInvoiceId(input != null ? input.get("invoice_id") : null);
         if (invoiceId == null) {
-            throw new EdithException(EdithErrorCode.FINANCE_DATA_UNAVAILABLE, "invoice_id obrigatório");
+            throw EcoException.invalidInput("invoice_id obrigatório");
         }
 
-        FaturaDTO fatura;
-        try {
-            fatura = faturaService.buscarPorId(invoiceId, usuarioId);
-        } catch (ResourceNotFoundException e) {
-            throw new EdithException(EdithErrorCode.FINANCE_RESOURCE_NOT_FOUND, "Fatura não encontrada");
-        }
+        FaturaDTO fatura = faturaService.buscarPorId(invoiceId, usuarioId);
 
         Map<String, Object> out = new HashMap<>();
         out.put("id", fatura.getId());
@@ -57,10 +56,18 @@ public class FinanceInvoiceReadTool implements EdithFinanceTool {
         out.put("valor_pago", fatura.getValorPago());
 
         List<Map<String, Object>> itens = fatura.getTransacoes() != null
-            ? fatura.getTransacoes().stream().limit(20).collect(Collectors.toList())
+            ? fatura.getTransacoes().stream().limit(20).map(FinanceInvoiceReadTool::slimItem).collect(Collectors.toList())
             : List.of();
         out.put("principais_itens", itens);
         return out;
+    }
+
+    private static Map<String, Object> slimItem(Map<String, Object> raw) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", raw.get("id"));
+        m.put("descricao", raw.get("descricao") != null ? raw.get("descricao") : raw.get("description"));
+        m.put("valor", raw.get("valor") != null ? raw.get("valor") : raw.get("value"));
+        return m;
     }
 
     private static Long parseInvoiceId(Object raw) {

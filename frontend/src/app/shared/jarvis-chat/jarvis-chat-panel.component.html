@@ -24,7 +24,10 @@
     aria-label="J.A.R.V.I.S."
   >
     <header class="ai-chat-panel-header">
-      <strong>J.A.R.V.I.S.</strong>
+      <div class="jarvis-header-identity">
+        <strong>J.A.R.V.I.S.</strong>
+        <span class="jarvis-status" [attr.data-state]="assistantState">{{ assistantLabel }}</span>
+      </div>
       <button type="button" class="btn-fechar-chat jarvis-chat-fechar" (click)="fecharChat()" aria-label="Fechar chat">
         <span aria-hidden="true">✕</span>
       </button>
@@ -64,7 +67,90 @@
 
     <div class="chat-body jarvis-chat-body" #chatBody>
       <div class="chat-msg" *ngFor="let msg of historico" [class.user]="msg.autor === 'user'">
-        {{ msg.texto }}
+        <ng-container *ngIf="msg.autor === 'user' || !msg.capability">{{ msg.texto }}</ng-container>
+        <div class="cap-cards" *ngIf="msg.capability === 'finance.cards.list'">
+          <p class="cap-title">Cartões</p>
+          <ul *ngIf="listOf(msg, 'cartoes').length; else semCartoes">
+            <li *ngFor="let c of listOf(msg, 'cartoes')">
+              <strong>{{ c['nome'] || 'Cartão' }}</strong>
+              <span *ngIf="c['banco']"> · {{ c['banco'] }}</span>
+              <span class="cap-meta" *ngIf="c['limite_disponivel'] != null">disponível {{ brl(c['limite_disponivel']) }}</span>
+              <span class="cap-meta" *ngIf="c['dia_vencimento']">vence dia {{ c['dia_vencimento'] }}</span>
+            </li>
+          </ul>
+          <ng-template #semCartoes><p>Nenhum cartão ativo cadastrado.</p></ng-template>
+        </div>
+        <div class="cap-month" *ngIf="msg.capability === 'finance.month.summary' || msg.capability === 'finance.cashflow.project'">
+          <p class="cap-title">Fechamento {{ msg.data?.['competencia'] || '' }}</p>
+          <ul>
+            <li *ngIf="msg.data?.['total_receitas'] != null">Receitas {{ brl(msg.data?.['total_receitas']) }}</li>
+            <li *ngIf="msg.data?.['total_despesas'] != null">Despesas {{ brl(msg.data?.['total_despesas']) }}</li>
+            <li *ngIf="msg.data?.['receitas_previstas'] != null">Receitas previstas {{ brl(msg.data?.['receitas_previstas']) }}</li>
+            <li *ngIf="msg.data?.['despesas_previstas'] != null">Despesas previstas {{ brl(msg.data?.['despesas_previstas']) }}</li>
+            <li *ngIf="msg.data?.['fluxo_mes'] != null">Fluxo {{ brl(msg.data?.['fluxo_mes']) }}</li>
+            <li *ngIf="msg.data?.['saldo_projetado_fim_mes'] != null">Saldo projetado {{ brl(msg.data?.['saldo_projetado_fim_mes']) }}</li>
+            <li *ngIf="msg.data?.['saldo_previsto'] != null">Saldo previsto {{ brl(msg.data?.['saldo_previsto']) }}</li>
+          </ul>
+        </div>
+        <div class="cap-cards" *ngIf="msg.capability === 'finance.accounts.list'">
+          <p class="cap-title">Contas</p>
+          <ul *ngIf="listOf(msg, 'contas').length; else semContas">
+            <li *ngFor="let c of listOf(msg, 'contas')">
+              <strong>{{ c['nome'] || 'Conta' }}</strong>
+              <span *ngIf="c['tipo']"> · {{ c['tipo'] }}</span>
+              <span class="cap-meta" *ngIf="c['saldo_disponivel'] != null">{{ brl(c['saldo_disponivel']) }}</span>
+            </li>
+          </ul>
+          <ng-template #semContas><p>Nenhuma conta cadastrada.</p></ng-template>
+        </div>
+        <div class="cap-cards" *ngIf="msg.capability === 'finance.transactions.search'">
+          <p class="cap-title">Lançamentos</p>
+          <ul *ngIf="listOf(msg, 'transacoes').length; else semTx">
+            <li *ngFor="let t of listOf(msg, 'transacoes')">
+              <strong>{{ t['description'] || 'Lançamento' }}</strong>
+              <span class="cap-meta">{{ brl(t['amount']) }} · {{ t['occurred_at'] }}</span>
+            </li>
+          </ul>
+          <ng-template #semTx><p>Nenhum lançamento no recorte.</p></ng-template>
+        </div>
+        <div class="cap-cards" *ngIf="msg.capability === 'finance.subscriptions.list'">
+          <p class="cap-title">Assinaturas</p>
+          <ul *ngIf="listOf(msg, 'assinaturas').length; else semAssin">
+            <li *ngFor="let a of listOf(msg, 'assinaturas')">
+              <strong>{{ a['nome'] || 'Assinatura' }}</strong>
+              <span class="cap-meta" *ngIf="a['valor'] != null">{{ brl(a['valor']) }}</span>
+            </li>
+          </ul>
+          <ng-template #semAssin><p>Nenhuma assinatura ativa.</p></ng-template>
+        </div>
+        <div class="cap-cards" *ngIf="msg.capability === 'finance.recurring.list'">
+          <p class="cap-title">Agendamentos</p>
+          <ul *ngIf="listOf(msg, 'agendamentos').length; else semAg">
+            <li *ngFor="let a of listOf(msg, 'agendamentos')">
+              <strong>{{ a['beneficiario'] || 'Agendamento' }}</strong>
+              <span class="cap-meta" *ngIf="a['valor'] != null">{{ brl(a['valor']) }}</span>
+            </li>
+          </ul>
+          <ng-template #semAg><p>Nenhum agendamento.</p></ng-template>
+        </div>
+        <div class="cap-cards" *ngIf="msg.capability === 'finance.category.summary'">
+          <p class="cap-title">Categorias {{ msg.data?.['competencia'] || '' }}</p>
+          <ul *ngIf="listOf(msg, 'categorias').length; else semCat">
+            <li *ngFor="let c of listOf(msg, 'categorias')">
+              <strong>{{ c['categoria'] }}</strong>
+              <span class="cap-meta">{{ brl(c['total']) }}</span>
+            </li>
+          </ul>
+          <ng-template #semCat><p>Sem despesas no período.</p></ng-template>
+        </div>
+        <div class="cap-cards" *ngIf="msg.capability === 'finance.invoice.read'">
+          <p class="cap-title">Fatura {{ msg.data?.['competencia'] || '' }}</p>
+          <ul>
+            <li *ngIf="msg.data?.['cartao']">Cartão {{ msg.data?.['cartao'] }}</li>
+            <li *ngIf="msg.data?.['valor_total'] != null">Total {{ brl(msg.data?.['valor_total']) }}</li>
+            <li *ngIf="msg.data?.['status']">Status {{ msg.data?.['status'] }}</li>
+          </ul>
+        </div>
       </div>
       <div class="chat-msg jarvis-typing" *ngIf="carregando">
         <span class="typing-dot" aria-hidden="true"></span>

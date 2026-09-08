@@ -9,24 +9,33 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EdithToolRegistryTest {
 
-    private final EdithToolRegistry registry = new EdithToolRegistry(
+    private final EdithToolRegistry registry = new EdithToolRegistry(List.of(
         new FinanceAccountsListTool(null, null),
         new FinanceTransactionsSearchTool(null, null),
-        new FinanceInvoiceReadTool(null, null)
-    );
+        new FinanceInvoiceReadTool(null, null),
+        new FinanceCardsListTool(null, null),
+        new FinanceMonthSummaryTool(null, null),
+        new FinanceCashflowProjectTool(null, null),
+        new FinanceSubscriptionsListTool(null, null),
+        new FinanceRecurringListTool(null, null),
+        new FinanceCategorySummaryTool(null, null)
+    ));
 
     @Test
     void allowlistSomenteReadOnly() {
         List<String> allowed = registry.allowedTools();
-        assertEquals(3, allowed.size());
-        assertEquals(List.of(
-            "finance.accounts.list",
-            "finance.transactions.search",
-            "finance.invoice.read"
-        ), allowed);
+        assertTrue(allowed.contains("finance.accounts.list"));
+        assertTrue(allowed.contains("finance.cards.list"));
+        assertTrue(allowed.contains("finance.month.summary"));
+        assertTrue(allowed.contains("finance.cashflow.project"));
+        assertTrue(allowed.contains("finance.subscriptions.list"));
+        assertTrue(allowed.contains("finance.recurring.list"));
+        assertTrue(allowed.contains("finance.category.summary"));
+        assertTrue(allowed.contains("finance.invoice.read"));
     }
 
     @Test

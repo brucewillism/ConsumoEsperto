@@ -1,5 +1,8 @@
 package com.consumoesperto.exception;
 
+import com.consumoesperto.eco.EcoDeadlineExceededException;
+import com.consumoesperto.eco.EcoEnvelopeHolder;
+import com.consumoesperto.eco.EcoException;
 import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.mobilecapture.security.MobileCaptureException;
 import com.consumoesperto.util.AiErroHumanizer;
@@ -321,6 +324,31 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             status.value(),
             path
         ));
+    }
+
+    @ExceptionHandler(EcoException.class)
+    public ResponseEntity<Map<String, Object>> handleEco(EcoException ex) {
+        String trace = EcoEnvelopeHolder.current().map(e -> e.getTraceId()).orElse("");
+        EcoEnvelopeHolder.outcome("FAILED");
+        Map<String, Object> error = new HashMap<>();
+        error.put("code", ex.getCode());
+        error.put("message", ex.getMessage() != null ? ex.getMessage() : ex.getCode());
+        error.put("retryable", ex.isRetryable());
+        error.put("trace_id", trace);
+        return ResponseEntity.status(ex.getHttpStatus()).body(Map.of("error", error));
+    }
+
+    @ExceptionHandler(EcoDeadlineExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleEcoDeadline(EcoDeadlineExceededException ex) {
+        String trace = EcoEnvelopeHolder.current().map(e -> e.getTraceId()).orElse("");
+        log.warn("eco_deadline_exceeded trace_id={}", trace);
+        EcoEnvelopeHolder.outcome("FAILED");
+        Map<String, Object> error = new HashMap<>();
+        error.put("code", "DEADLINE_EXCEEDED");
+        error.put("message", ex.getMessage() != null ? ex.getMessage() : "deadline excedido");
+        error.put("retryable", false);
+        error.put("trace_id", trace);
+        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT).body(Map.of("error", error));
     }
 
     @ExceptionHandler(EdithException.class)

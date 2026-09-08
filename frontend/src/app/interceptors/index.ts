@@ -10,3 +10,4 @@
  */
 
 export { AuthInterceptor } from './auth.interceptor';
+export { EcoEnvelopeInterceptor } from './eco-envelope.interceptor';

@@ -1,7 +1,10 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dto.FinanceTransactionSearchItemDto;
+import com.consumoesperto.eco.EcoException;
 import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.dto.TransacaoDTO;
+import com.consumoesperto.security.OwnershipChecks;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.ContaBancaria;
@@ -14,6 +17,7 @@ import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -230,9 +234,7 @@ public class TransacaoService {
             .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         
         // Verifica se a transação pertence ao usuário solicitante
-        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new ResourceNotFoundException("Transação não encontrada");
-        }
+        assertOwner(transacao, usuarioId);
         
         return converterParaDTO(transacao);
     }
@@ -276,9 +278,7 @@ public class TransacaoService {
             .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         
         // Verifica se a transação pertence ao usuário solicitante
-        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new ResourceNotFoundException("Transação não encontrada");
-        }
+        assertOwner(transacao, usuarioId);
 
         Long faturaIdAntes = transacao.getFatura() != null ? transacao.getFatura().getId() : null;
         Long categoriaIdAntes = transacao.getCategoria() != null ? transacao.getCategoria().getId() : null;
@@ -353,9 +353,7 @@ public class TransacaoService {
         Transacao transacao = transacaoRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
 
-        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new ResourceNotFoundException("Transação não encontrada");
-        }
+        assertOwner(transacao, usuarioId);
 
         SaldoMovimentacaoService.MovimentacaoSnapshot snap = saldoMovimentacaoService.capturarSnapshot(transacao);
         Transacao.StatusConferencia novoStatus = Transacao.StatusConferencia.valueOf(status.name());
@@ -386,9 +384,7 @@ public class TransacaoService {
     public TransacaoDTO confirmarProvisaoFiscal(Long transacaoId, Long usuarioId, Long contaBancariaId) {
         Transacao transacao = transacaoRepository.findById(transacaoId)
             .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
-        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new ResourceNotFoundException("Transação não encontrada");
-        }
+        assertOwner(transacao, usuarioId);
         if (transacao.getOrigemFiscal() == null) {
             throw new RuntimeException("Esta transação não é uma provisão fiscal.");
         }
@@ -419,9 +415,7 @@ public class TransacaoService {
             .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
         
         // Verifica se a transação pertence ao usuário solicitante
-        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new ResourceNotFoundException("Transação não encontrada");
-        }
+        assertOwner(transacao, usuarioId);
         if (transacao.getTipoTransacao() == Transacao.TipoTransacao.PAGAMENTO_FATURA) {
             throw new IllegalArgumentException(
                 "Pagamento de fatura não pode ser excluído pelo CRUD genérico. Estorne via exclusão da fatura ou fluxo de conciliação.");
@@ -449,9 +443,7 @@ public class TransacaoService {
     public void deletarTransacaoComModoParcelamento(Long id, Long usuarioId, String modo) {
         Transacao transacao = transacaoRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
-        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
-            throw new ResourceNotFoundException("Transação não encontrada");
-        }
+        assertOwner(transacao, usuarioId);
         String grupo = transacao.getGrupoParcelaId();
         String m = normalizarModoParcelamentoExclusao(modo);
         if (grupo == null || grupo.isBlank() || "UM".equals(m)) {
@@ -929,9 +921,7 @@ public class TransacaoService {
     public Transacao aplicarPatchDespesaRecorrente(Long usuarioId, Long transacaoId, String novaDescricao, BigDecimal novoValor) {
         Transacao t = transacaoRepository.findById(transacaoId)
             .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
-        if (t.getUsuario() == null || !t.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("Transação não pertence ao usuário");
-        }
+        assertOwner(t, usuarioId);
         if (!t.isRecorrente()) {
             throw new RuntimeException("Esta transação não é recorrente (despesa fixa)");
         }
@@ -1021,5 +1011,81 @@ public class TransacaoService {
             transacao.setMobileCaptureEventId(mobileCaptureEventId);
         }
         transacaoRepository.save(transacao);
+    }
+
+    /**
+     * Capability {@code finance.transactions.search}: filtros e teto no SQL.
+     * Filtros de conta/categoria/cartão de outro usuário → {@code SCOPE_DENIED}.
+     */
+    @Transactional(readOnly = true)
+    public List<FinanceTransactionSearchItemDto> buscarParaCapability(
+        Long usuarioId,
+        LocalDateTime inicio,
+        LocalDateTime fim,
+        Long categoryId,
+        Long accountId,
+        Long cardId,
+        Transacao.TipoTransacao tipo,
+        int limit
+    ) {
+        if (categoryId != null) {
+            OwnershipChecks.requireOwned(
+                categoriaRepository.findByIdAndUsuarioId(categoryId, usuarioId),
+                categoriaRepository.existsById(categoryId),
+                "categoria");
+        }
+        if (accountId != null) {
+            contaBancariaService.buscarPorId(accountId, usuarioId);
+        }
+        if (cardId != null) {
+            OwnershipChecks.requireOwned(
+                cartaoCreditoRepository.findByIdAndUsuarioId(cardId, usuarioId),
+                cartaoCreditoRepository.existsById(cardId),
+                "cartão");
+        }
+        PageRequest page = PageRequest.of(0, limit);
+        List<Long> ids = (categoryId == null && accountId == null && cardId == null && tipo == null)
+            ? transacaoRepository.searchIdsForCapabilityByPeriod(usuarioId, inicio, fim, page)
+            : transacaoRepository.searchIdsForCapabilityFiltered(
+                usuarioId, inicio, fim, categoryId, accountId, cardId,
+                tipo != null ? tipo.name() : null, page);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Transacao> byId = transacaoRepository.findGraphByIdIn(ids).stream()
+            .collect(Collectors.toMap(Transacao::getId, t -> t, (a, b) -> a));
+        return ids.stream()
+            .map(byId::get)
+            .filter(Objects::nonNull)
+            .map(this::toSearchItem)
+            .collect(Collectors.toList());
+    }
+
+    private FinanceTransactionSearchItemDto toSearchItem(Transacao t) {
+        Long cardId = null;
+        if (t.getFatura() != null && t.getFatura().getCartaoCredito() != null) {
+            cardId = t.getFatura().getCartaoCredito().getId();
+        }
+        String desc = t.getDescricao();
+        if (desc != null && desc.length() > 80) {
+            desc = desc.substring(0, 80);
+        }
+        return FinanceTransactionSearchItemDto.builder()
+            .id(t.getId())
+            .occurredAt(t.getDataTransacao())
+            .amount(t.getValor())
+            .type(t.getTipoTransacao() != null ? t.getTipoTransacao().name() : null)
+            .categoryId(t.getCategoria() != null ? t.getCategoria().getId() : null)
+            .category(t.getCategoria() != null ? t.getCategoria().getNome() : null)
+            .accountId(t.getContaBancaria() != null ? t.getContaBancaria().getId() : null)
+            .cardId(cardId)
+            .description(desc)
+            .build();
+    }
+
+    private static void assertOwner(Transacao transacao, Long usuarioId) {
+        if (transacao.getUsuario() == null || !transacao.getUsuario().getId().equals(usuarioId)) {
+            throw EcoException.scopeDenied("transação de outro usuário");
+        }
     }
 }

@@ -15,4 +15,10 @@ public class CognitiveRequest {
     String clientRequestId;
     Map<String, Object> metadata;
     boolean awaitCompletion;
+    String applicationId;
+    String screen;
+    String entityType;
+    String entityId;
+    String traceId;
+    String capability;
 }
