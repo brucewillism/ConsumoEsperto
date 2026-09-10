@@ -29,3 +29,50 @@ O erro **«502 Bad Gateway»** ao chamar `https://seu-domínio/api/...` quase se
 
 4. **`docker-compose` atual**
    O serviço `backend` inclui um **healthcheck** em `GET /api/auth/status`. O frontend só sobe quando o backend estiver «healthy». Isto ajuda contra 502 só por clicar antes do Spring estar pronto.
+
+---
+
+## 403 `HTTPS obrigatório` (Atalhos iOS / MacroDroid)
+
+O telemóvel chama `https://consumoesperto.brucew07.com.br/api/...`. O **Nginx/Apache termina o TLS** e fala HTTP com o Spring (`8087`). Sem `X-Forwarded-Proto: https`, o filtro de ingestão vê `request.isSecure()=false` e responde 403.
+
+O Spring Boot 2.7 está com `server.forward-headers-strategy=FRAMEWORK` (env `SERVER_FORWARD_HEADERS_STRATEGY` no Compose). Isso **só funciona se o proxy enviar os headers**.
+
+### Nginx — bloco a ajustar
+
+Não copie `$http_x_forwarded_proto` do cliente (o Atalhos **não** envia esse header). Use `$scheme` do vhost HTTPS:
+
+```nginx
+location /api/ {
+    proxy_pass         http://127.0.0.1:8087;
+    proxy_http_version 1.1;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+    proxy_set_header   X-Forwarded-Host  $host;
+    proxy_read_timeout 360s;
+}
+```
+
+Ficheiro de exemplo no repo: [`nginx-api-proxy.conf.example`](nginx-api-proxy.conf.example).
+
+Depois: `nginx -t && systemctl reload nginx`.
+
+Confirme o header a chegar ao Spring:
+
+```bash
+docker logs consumo_backend --tail 80 | grep https_obrigatorio
+```
+
+O WARN inclui `scheme`, `isSecure` e os `X-Forwarded-*` recebidos (sem tokens).
+
+### Dev / local (HTTP)
+
+Não desligue a exigência em produção. No perfil `dev` / `dev-evolution` já vai `false`. Fora disso:
+
+```
+MOBILE_CAPTURE_REQUIRE_HTTPS=false
+INGEST_NOTIFICACAO_REQUIRE_HTTPS=false
+```
+

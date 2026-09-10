@@ -12,8 +12,9 @@ import java.sql.Statement;
 import java.util.List;
 
 /**
- * Aplica patches idempotentes de schema para compatibilidade com releases recentes.
- * Evita falhas em runtime quando o banco local está com colunas antigas.
+ * Patches idempotentes para schema legado (colunas/tabelas históricas).
+ * Objectos com migration Flyway própria (V2 complemento, edith_tool_audit,
+ * whatsapp_conexao_*) não são criados aqui.
  */
 @Service
 @RequiredArgsConstructor
@@ -23,16 +24,6 @@ public class SchemaAutoPatchService {
     private final JdbcTemplate jdbcTemplate;
     private final DadosLegadosSanitizationService dadosLegadosSanitizationService;
     private final SchemaAutoPatchProperties schemaAutoPatchProperties;
-
-    /** Extensão {@code vector} (pgvector) instalada nesta base. */
-    private boolean isPgVectorExtensionInstalled() {
-        try {
-            return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-                "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector')", Boolean.class));
-        } catch (Exception e) {
-            return false;
-        }
-    }
 
     /**
      * Com {@code spring.datasource.hikari.auto-commit=false}, DDL via {@link JdbcTemplate#execute(String)}
@@ -95,12 +86,7 @@ public class SchemaAutoPatchService {
         ensureNotificacaoOrquestracaoTables();
         ensureJarvisCronosEventLogTable();
         ensureAuditLogTable();
-        ensurePgvectorExtensionAndMemoriaSemanticaJarvisTable();
-        ensureTransacaoSemanticaIndexTable();
-        ensureJarvisFeedbackTable();
-        ensureJarvisFeedbackDataExpiracaoColumn();
         ensureUsuarioSessoesContextoTable();
-        ensureEventoWebhookProcessadoTable();
         ensureMovimentacaoSaldoLogTable();
         ensureFaturaOrigemQuitacaoColumn();
         ensureTransacaoDescontoEmFolhaColumn();
@@ -1228,24 +1214,6 @@ public class SchemaAutoPatchService {
         }
     }
 
-    private void ensureEventoWebhookProcessadoTable() {
-        try {
-            executeDdlAutocommit(
-                "CREATE TABLE IF NOT EXISTS public.evento_webhook_processado ("
-                    + "id BIGSERIAL PRIMARY KEY,"
-                    + "chave_dedup VARCHAR(512) NOT NULL,"
-                    + "processado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
-                    + ")"
-            );
-            executeDdlAutocommit(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_evento_webhook_chave ON public.evento_webhook_processado(chave_dedup)"
-            );
-            log.info("Schema patch: evento_webhook_processado verificada.");
-        } catch (Exception e) {
-            log.warn("Falha ao CREATE evento_webhook_processado: {}", e.getMessage());
-        }
-    }
-
     /** Trilha append-only de mutações de saldo (auditoria financeira). */
     private void ensureMovimentacaoSaldoLogTable() {
         try {
@@ -1345,240 +1313,6 @@ public class SchemaAutoPatchService {
             log.info("Schema patch: grupos familiares verificados.");
         } catch (Exception e) {
             log.warn("Falha ao CREATE grupos familiares: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * pgvector + memória semântica J.A.R.V.I.S. (uma tabela por schema que contém {@code usuarios}).
-     */
-    private void ensurePgvectorExtensionAndMemoriaSemanticaJarvisTable() {
-        try {
-            executeDdlAutocommit("CREATE EXTENSION IF NOT EXISTS vector");
-        } catch (Exception e) {
-            log.warn(
-                "Schema patch: CREATE EXTENSION vector falhou (ex.: sem superuser). "
-                    + "Instale pgvector no Postgres ou conceda privilégio: {}",
-                e.getMessage());
-        }
-        try {
-            List<String> schemas = jdbcTemplate.queryForList(
-                "SELECT table_schema "
-                    + "FROM information_schema.tables "
-                    + "WHERE table_name = 'usuarios' "
-                    + "  AND table_type = 'BASE TABLE' "
-                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
-                String.class
-            );
-            if (schemas == null || schemas.isEmpty()) {
-                log.warn("Schema patch: 'usuarios' inexistente; memoria_semantica_jarvis não criada.");
-                return;
-            }
-            boolean vectorReady = isPgVectorExtensionInstalled();
-            String embeddingCol = vectorReady ? "embedding vector(1536)" : "embedding BYTEA";
-            if (!vectorReady) {
-                log.warn(
-                    "Schema patch: pgvector não disponível nesta imagem Postgres — criando memoria_semantica_jarvis com embedding BYTEA "
-                        + "(consultas só texto funcionam; busca por similaridade vetorial usa imagem pgvector/pgvector ou CREATE EXTENSION).");
-            }
-            for (String rawSchema : schemas) {
-                String schema = rawSchema.replace("\"", "");
-                String qualifiedUsuarios = schema + ".usuarios";
-                String qualified = schema + ".memoria_semantica_jarvis";
-                try {
-                    executeDdlAutocommit(
-                        "CREATE TABLE IF NOT EXISTS " + qualified + " ("
-                            + "id BIGSERIAL PRIMARY KEY,"
-                            + "usuario_id BIGINT NOT NULL REFERENCES " + qualifiedUsuarios + "(id) ON DELETE CASCADE,"
-                            + "contexto TEXT NOT NULL,"
-                            + embeddingCol + ","
-                            + "data_registro TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),"
-                            + "categoria_origem VARCHAR(32) NOT NULL "
-                            + "CHECK (categoria_origem IN ('FINANCAS','HABITO','AGENDA'))"
-                            + ")"
-                    );
-                    executeDdlAutocommit(
-                        "CREATE INDEX IF NOT EXISTS idx_mem_sem_jarvis_usuario_registro ON "
-                            + qualified + " (usuario_id, data_registro DESC)"
-                    );
-                    aplicarColunasMetadadosMemoria(qualified);
-                } catch (Exception e) {
-                    log.warn("Schema patch memoria_semantica_jarvis [{}] em {} falhou: {}", schema, qualified, e.getMessage());
-                }
-            }
-            log.info(
-                "Schema patch: memoria_semantica_jarvis processada para {} schema(s); pgvector={}.",
-                schemas.size(),
-                vectorReady);
-        } catch (Exception e) {
-            log.warn(
-                "Schema patch memória semântica (liste schemas / extensões): {}",
-                e.getMessage());
-        }
-    }
-
-    /**
-     * Metadados estruturados da memória J.A.R.V.I.S. (tipo, status, confiança, validade, evidência).
-     * Aditivo e retrocompatível: registros antigos ganham defaults e continuam funcionando.
-     */
-    private void aplicarColunasMetadadosMemoria(String qualified) {
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS tipo VARCHAR(24) NOT NULL DEFAULT 'FATO'");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'ATIVA'");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS origem VARCHAR(24) NOT NULL DEFAULT 'SISTEMA'");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS confianca NUMERIC(3,2) NOT NULL DEFAULT 0.50");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS validade DATE");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS valor NUMERIC(19,2)");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS categoria VARCHAR(120)");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS mes_alvo INTEGER");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS ano_alvo INTEGER");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS contador_reforco INTEGER NOT NULL DEFAULT 1");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS ultimo_reforco_em TIMESTAMP WITHOUT TIME ZONE");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS transacoes_evidencia TEXT");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS confirmada_usuario BOOLEAN");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS superada_por_id BIGINT");
-        executeDdlAutocommit("ALTER TABLE " + qualified
-            + " ADD COLUMN IF NOT EXISTS restaurada_em TIMESTAMP WITHOUT TIME ZONE");
-        // Backfill idempotente: hábitos antigos ganham tipo HABITO e origem INFERIDO
-        executeDdlAutocommit("UPDATE " + qualified
-            + " SET tipo = 'HABITO', origem = 'INFERIDO' WHERE categoria_origem = 'HABITO' AND tipo = 'FATO'");
-        executeDdlAutocommit("CREATE INDEX IF NOT EXISTS idx_mem_sem_jarvis_usuario_status ON "
-            + qualified + " (usuario_id, status, tipo)");
-    }
-
-    /**
-     * Índice pgvector por transação (RAG analítico — Protocolo Memória Semântica nas movimentações).
-     */
-    private void ensureTransacaoSemanticaIndexTable() {
-        try {
-            executeDdlAutocommit("CREATE EXTENSION IF NOT EXISTS vector");
-        } catch (Exception e) {
-            log.warn(
-                "Schema patch transacao_semantica_index: CREATE EXTENSION vector falhou: {}",
-                e.getMessage());
-        }
-        try {
-            List<String> schemas = jdbcTemplate.queryForList(
-                "SELECT table_schema "
-                    + "FROM information_schema.tables "
-                    + "WHERE table_name = 'transacoes' "
-                    + "  AND table_type = 'BASE TABLE' "
-                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
-                String.class
-            );
-            if (schemas == null || schemas.isEmpty()) {
-                log.warn("Schema patch: 'transacoes' inexistente; transacao_semantica_index não criada.");
-                return;
-            }
-            boolean vectorReadyTx = isPgVectorExtensionInstalled();
-            String embeddingColTx = vectorReadyTx ? "embedding vector(1536)" : "embedding BYTEA";
-            if (!vectorReadyTx) {
-                log.warn(
-                    "Schema patch: criando transacao_semantica_index com embedding BYTEA (pgvector ausente;"
-                        + " RAG por similaridade em transações fica indisponível até imagem/pgvector ou CREATE EXTENSION).");
-            }
-            for (String rawSchema : schemas) {
-                String schema = rawSchema.replace("\"", "");
-                String qTx = schema + ".transacoes";
-                String qUs = schema + ".usuarios";
-                String qIdx = schema + ".transacao_semantica_index";
-                try {
-                    executeDdlAutocommit(
-                        "CREATE TABLE IF NOT EXISTS " + qIdx + " ("
-                            + "id BIGSERIAL PRIMARY KEY,"
-                            + "transacao_id BIGINT NOT NULL REFERENCES " + qTx + "(id) ON DELETE CASCADE,"
-                            + "usuario_id BIGINT NOT NULL REFERENCES " + qUs + "(id) ON DELETE CASCADE,"
-                            + "texto_indexado TEXT NOT NULL,"
-                            + embeddingColTx + ","
-                            + "atualizado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),"
-                            + "CONSTRAINT uq_transacao_semantica_tx UNIQUE (transacao_id)"
-                            + ")"
-                    );
-                    executeDdlAutocommit(
-                        "CREATE INDEX IF NOT EXISTS idx_transacao_semantica_usuario ON " + qIdx + " (usuario_id)"
-                    );
-                } catch (Exception inner) {
-                    log.warn("Schema patch transacao_semantica_index [{}] falhou em {}: {}", schema, qIdx, inner.getMessage());
-                }
-            }
-            log.info(
-                "Schema patch: transacao_semantica_index verificada em {} schema(s); pgvector={}.",
-                schemas.size(),
-                vectorReadyTx);
-        } catch (Exception e) {
-            log.warn("Schema patch transacao_semantica_index: {}", e.getMessage());
-        }
-    }
-
-    private void ensureJarvisFeedbackTable() {
-        try {
-            List<String> schemas = jdbcTemplate.queryForList(
-                "SELECT table_schema "
-                    + "FROM information_schema.tables "
-                    + "WHERE table_name = 'usuarios' "
-                    + "  AND table_type = 'BASE TABLE' "
-                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
-                String.class
-            );
-            if (schemas == null || schemas.isEmpty()) {
-                return;
-            }
-            for (String rawSchema : schemas) {
-                String schema = rawSchema.replace("\"", "");
-                String u = schema + ".usuarios";
-                String t = schema + ".jarvis_feedback";
-                executeDdlAutocommit(
-                    "CREATE TABLE IF NOT EXISTS " + t + " ("
-                        + "id BIGSERIAL PRIMARY KEY,"
-                        + "usuario_id BIGINT NOT NULL REFERENCES " + u + "(id) ON DELETE CASCADE,"
-                        + "insight_id VARCHAR(120) NOT NULL,"
-                        + "tipo_alvo VARCHAR(32) NOT NULL,"
-                        + "positivo BOOLEAN NOT NULL,"
-                        + "categoria_chave VARCHAR(200),"
-                        + "data_registro TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()"
-                        + ")"
-                );
-                executeDdlAutocommit(
-                    "CREATE INDEX IF NOT EXISTS idx_jarvis_fb_usuario_registro ON " + t
-                        + " (usuario_id, data_registro DESC)"
-                );
-            }
-            log.info("Schema patch: jarvis_feedback verificada em {} schema(s).", schemas.size());
-        } catch (Exception e) {
-            log.warn("Schema patch jarvis_feedback: {}", e.getMessage());
-        }
-    }
-
-    private void ensureJarvisFeedbackDataExpiracaoColumn() {
-        try {
-            List<String> schemas = jdbcTemplate.queryForList(
-                "SELECT table_schema "
-                    + "FROM information_schema.tables "
-                    + "WHERE table_name = 'jarvis_feedback' "
-                    + "  AND table_type = 'BASE TABLE' "
-                    + "  AND table_schema NOT IN ('pg_catalog', 'information_schema')",
-                String.class
-            );
-            for (String rawSchema : schemas) {
-                String schema = rawSchema.replace("\"", "");
-                String t = schema + ".jarvis_feedback";
-                executeDdlAutocommit(
-                    "ALTER TABLE " + t + " ADD COLUMN IF NOT EXISTS data_expiracao TIMESTAMP WITHOUT TIME ZONE");
-            }
-        } catch (Exception e) {
-            log.warn("Schema patch jarvis_feedback.data_expiracao: {}", e.getMessage());
         }
     }
 

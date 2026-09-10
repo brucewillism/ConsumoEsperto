@@ -1,5 +1,7 @@
 # Captura automática — iPhone (Atalhos / Wallet)
 
+> **Caminho actual para notificações de banco:** [`CAPTURA_AUTOMATICA_CELULAR.md`](CAPTURA_AUTOMATICA_CELULAR.md) (`origem: IOS_ATALHOS`). Este documento cobre o pipeline legado Wallet / `X-CE-Device-Token`.
+
 Este guia descreve como enviar transações do Apple Pay / Wallet para o ConsumoEsperto via **Atalhos (Shortcuts)**.
 
 ## Pré-requisitos
@@ -30,7 +32,7 @@ No iPhone os dados chegam estruturados — **não dependa de texto de notificaç
 {
   "source": "IOS_WALLET",
   "client_event_id": "<UUID>",
-  "occurred_at": "2026-09-01T14:30:00",
+  "occurred_at": "2026-09-09T14:30:00-03:00",
   "amount": 89.90,
   "currency": "BRL",
   "merchant": "POSTO SHELL",
@@ -78,7 +80,8 @@ Os nomes exatos das variáveis no Atalhos mudam entre versões do iOS — mapeie
 
 ## Segurança
 
-- Somente **HTTPS** em produção.
+- Somente **HTTPS** em produção. O Atalhos já usa `https://`; se receber **403 HTTPS obrigatório**, o Nginx não está a enviar `X-Forwarded-Proto: https` para o Spring (TLS termina no proxy). Ajuste: [`docker/REVERSO_PROXY_502.md`](../docker/REVERSO_PROXY_502.md).
+- Em desenvolvimento local (HTTP, sem Nginx): `MOBILE_CAPTURE_REQUIRE_HTTPS=false`.
 - Token por dispositivo, revogável e rotacionável no perfil.
 - Não envie `userId` — o servidor resolve o usuário pelo token do dispositivo.
 

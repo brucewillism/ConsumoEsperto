@@ -1,14 +1,18 @@
 package com.consumoesperto.edith.tools;
 
 import com.consumoesperto.dto.ContaBancariaDTO;
+import com.consumoesperto.eco.CapabilityStageClock;
 import com.consumoesperto.edith.EdithErrorCode;
 import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.edith.EdithIntegrationService;
+import com.consumoesperto.edith.UntrustedText;
 import com.consumoesperto.service.ContaBancariaService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
+import javax.sql.DataSource;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -19,6 +23,9 @@ public class FinanceAccountsListTool implements EdithFinanceTool {
 
     private final EdithIntegrationService integrationService;
     private final ContaBancariaService contaBancariaService;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Override
     public String name() {
@@ -38,25 +45,31 @@ public class FinanceAccountsListTool implements EdithFinanceTool {
         boolean includeInactive = Boolean.TRUE.equals(args.get("include_inactive"));
         int limit = ToolLimits.require(args.get("limit"), ToolLimits.LIST_DEFAULT, ToolLimits.LIST_MAX);
 
-        List<ContaBancariaDTO> contas = contaBancariaService.listarPorUsuario(usuarioId, !includeInactive);
-        List<Map<String, Object>> items = contas.stream()
-            .limit(limit)
-            .map(c -> {
-                Map<String, Object> m = new HashMap<>();
-                m.put("id", c.getId());
-                m.put("nome", c.getNome());
-                m.put("tipo", c.getTipo() != null ? c.getTipo().name() : null);
-                m.put("ativa", c.isAtiva());
-                m.put("padrao", c.isPadrao());
-                m.put("saldo_disponivel", c.getSaldoDisponivel());
-                return m;
-            })
-            .collect(Collectors.toList());
+        CapabilityStageClock.acquirePool(dataSource);
+        List<ContaBancariaDTO> contas = CapabilityStageClock.timed(CapabilityStageClock.JPA_HYDRATE,
+            () -> contaBancariaService.listarPorUsuario(usuarioId, !includeInactive));
+        List<Map<String, Object>> items = CapabilityStageClock.timed(CapabilityStageClock.DTO_MAP, () ->
+            contas.stream()
+                .limit(limit)
+                .map(this::slim)
+                .collect(Collectors.toList()));
 
-        Map<String, Object> out = new HashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("contas", items);
         out.put("total", items.size());
+        out.put("limit", limit);
+        out.put("limit_max", ToolLimits.LIST_MAX);
         return out;
+    }
+
+    private Map<String, Object> slim(ContaBancariaDTO c) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", c.getId());
+        m.put("nome", UntrustedText.of(c.getNome(), 80));
+        m.put("tipo", c.getTipo() != null ? c.getTipo().name() : null);
+        m.put("ativa", c.isAtiva());
+        m.put("saldo_disponivel", c.getSaldoDisponivel());
+        return m;
     }
 
     /** @deprecated use {@link ToolLimits#require} */

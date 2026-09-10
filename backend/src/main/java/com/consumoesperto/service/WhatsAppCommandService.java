@@ -152,6 +152,7 @@ public class WhatsAppCommandService {
     private final com.consumoesperto.config.JarvisPerformanceProperties jarvisPerformanceProperties;
     private final com.consumoesperto.service.jarvis.CategoriaCorrecaoMemoriaService categoriaCorrecaoMemoriaService;
     private final AiStructuredOutputService aiStructuredOutputService;
+    private final com.consumoesperto.ingest.notificacao.IngestNotificacaoWhatsappHandler ingestNotificacaoWhatsappHandler;
 
     @org.springframework.beans.factory.annotation.Value("${consumoesperto.jarvis.whatsapp-voice-reply:false}")
     private boolean whatsappVoiceReply;
@@ -376,6 +377,10 @@ public class WhatsAppCommandService {
         Optional<String> chequeEsp = tryResolveChequeEspecialConfirmacao(userId, text);
         if (chequeEsp.isPresent()) {
             return chequeEsp;
+        }
+        Optional<String> capturaNotif = ingestNotificacaoWhatsappHandler.tryHandle(userId, text);
+        if (capturaNotif.isPresent()) {
+            return capturaNotif;
         }
         Optional<String> boletoTexto = tryDetectarBoletoOuPixTexto(userId, text);
         if (boletoTexto.isPresent()) {

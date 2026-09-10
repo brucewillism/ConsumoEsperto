@@ -32,6 +32,12 @@
         <span aria-hidden="true">✕</span>
       </button>
     </header>
+    <p
+      class="jarvis-degrade-note"
+      *ngIf="assistantState === 'DEGRADED' || assistantState === 'EDITH_UNAVAILABLE'"
+    >
+      Assistente em modo reduzido. Texto livre fica limitado; contas, lançamentos, faturas e importação seguem no app.
+    </p>
 
     <div class="chat-sugestoes" *ngIf="!carregando">
       <div class="chat-sugestoes-track" role="list">
@@ -72,8 +78,8 @@
           <p class="cap-title">Cartões</p>
           <ul *ngIf="listOf(msg, 'cartoes').length; else semCartoes">
             <li *ngFor="let c of listOf(msg, 'cartoes')">
-              <strong>{{ c['nome'] || 'Cartão' }}</strong>
-              <span *ngIf="c['banco']"> · {{ c['banco'] }}</span>
+              <strong>{{ untrustedValue(c['nome']) || 'Cartão' }}</strong>
+              <span *ngIf="untrustedValue(c['banco'])"> · {{ untrustedValue(c['banco']) }}</span>
               <span class="cap-meta" *ngIf="c['limite_disponivel'] != null">disponível {{ brl(c['limite_disponivel']) }}</span>
               <span class="cap-meta" *ngIf="c['dia_vencimento']">vence dia {{ c['dia_vencimento'] }}</span>
             </li>
@@ -96,7 +102,7 @@
           <p class="cap-title">Contas</p>
           <ul *ngIf="listOf(msg, 'contas').length; else semContas">
             <li *ngFor="let c of listOf(msg, 'contas')">
-              <strong>{{ c['nome'] || 'Conta' }}</strong>
+              <strong>{{ untrustedValue(c['nome']) || 'Conta' }}</strong>
               <span *ngIf="c['tipo']"> · {{ c['tipo'] }}</span>
               <span class="cap-meta" *ngIf="c['saldo_disponivel'] != null">{{ brl(c['saldo_disponivel']) }}</span>
             </li>
@@ -107,7 +113,7 @@
           <p class="cap-title">Lançamentos</p>
           <ul *ngIf="listOf(msg, 'transacoes').length; else semTx">
             <li *ngFor="let t of listOf(msg, 'transacoes')">
-              <strong>{{ t['description'] || 'Lançamento' }}</strong>
+              <strong>{{ untrustedValue(t['description']) || 'Lançamento' }}</strong>
               <span class="cap-meta">{{ brl(t['amount']) }} · {{ t['occurred_at'] }}</span>
             </li>
           </ul>
@@ -117,7 +123,7 @@
           <p class="cap-title">Assinaturas</p>
           <ul *ngIf="listOf(msg, 'assinaturas').length; else semAssin">
             <li *ngFor="let a of listOf(msg, 'assinaturas')">
-              <strong>{{ a['nome'] || 'Assinatura' }}</strong>
+              <strong>{{ untrustedValue(a['nome']) || 'Assinatura' }}</strong>
               <span class="cap-meta" *ngIf="a['valor'] != null">{{ brl(a['valor']) }}</span>
             </li>
           </ul>
@@ -127,7 +133,7 @@
           <p class="cap-title">Agendamentos</p>
           <ul *ngIf="listOf(msg, 'agendamentos').length; else semAg">
             <li *ngFor="let a of listOf(msg, 'agendamentos')">
-              <strong>{{ a['beneficiario'] || 'Agendamento' }}</strong>
+              <strong>{{ untrustedValue(a['beneficiario']) || 'Agendamento' }}</strong>
               <span class="cap-meta" *ngIf="a['valor'] != null">{{ brl(a['valor']) }}</span>
             </li>
           </ul>
@@ -137,18 +143,19 @@
           <p class="cap-title">Categorias {{ msg.data?.['competencia'] || '' }}</p>
           <ul *ngIf="listOf(msg, 'categorias').length; else semCat">
             <li *ngFor="let c of listOf(msg, 'categorias')">
-              <strong>{{ c['categoria'] }}</strong>
+              <strong>{{ untrustedValue(c['categoria']) }}</strong>
               <span class="cap-meta">{{ brl(c['total']) }}</span>
             </li>
           </ul>
           <ng-template #semCat><p>Sem despesas no período.</p></ng-template>
         </div>
         <div class="cap-cards" *ngIf="msg.capability === 'finance.invoice.read'">
-          <p class="cap-title">Fatura {{ msg.data?.['competencia'] || '' }}</p>
+          <p class="cap-title">Fatura {{ untrustedValue(msg.data?.['competencia']) }}</p>
           <ul>
-            <li *ngIf="msg.data?.['cartao']">Cartão {{ msg.data?.['cartao'] }}</li>
+            <li *ngIf="untrustedValue(msg.data?.['cartao'])">Cartão {{ untrustedValue(msg.data?.['cartao']) }}</li>
             <li *ngIf="msg.data?.['valor_total'] != null">Total {{ brl(msg.data?.['valor_total']) }}</li>
             <li *ngIf="msg.data?.['status']">Status {{ msg.data?.['status'] }}</li>
+            <li *ngIf="msg.data?.['item_count'] != null">Itens {{ msg.data?.['item_count'] }}</li>
           </ul>
         </div>
       </div>

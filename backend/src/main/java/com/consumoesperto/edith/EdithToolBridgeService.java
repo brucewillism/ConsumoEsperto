@@ -5,6 +5,7 @@ import com.consumoesperto.edith.tools.EdithToolRegistry;
 import com.consumoesperto.edith.tools.EdithToolRequestDto;
 import com.consumoesperto.eco.EcoEnvelopeFactory;
 import com.consumoesperto.eco.EcoEnvelopeHolder;
+import com.consumoesperto.eco.EcoException;
 import com.consumoesperto.eco.EcoExecutionPath;
 import com.consumoesperto.eco.EcoSensitivity;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import java.util.Map;
 public class EdithToolBridgeService {
 
     private final EdithToolRegistry toolRegistry;
+    private final EdithToolAuditService auditService;
 
     public EdithApiModels.ToolCallbackResponse handle(EdithToolRequestDto request) {
         if (request == null || request.getTool() == null || request.getTool().isBlank()) {
@@ -54,18 +56,28 @@ public class EdithToolBridgeService {
             EcoEnvelopeHolder.recordToolMs(latencyMs);
             EcoEnvelopeHolder.executionPath(EcoExecutionPath.INSTANT);
             EcoEnvelopeHolder.outcome("SUCCESS");
+            auditService.record(traceId, request.getRequestId(), contextRef, tool, arguments, result, latencyMs, "SUCCESS");
             log.info("edith_tool_executed tool={} request_id={} context_ref={} t_tool_ms={} trace_id={}",
                 tool, request.getRequestId(), maskRef(contextRef), latencyMs, traceId);
             return EdithApiModels.ToolCallbackResponse.ok(request.getRequestId(), result);
-        } catch (EdithException e) {
+        } catch (EcoException e) {
+            long latencyMs = (System.nanoTime() - start) / 1_000_000L;
             EcoEnvelopeHolder.outcome("FAILED");
+            auditService.record(traceId, request.getRequestId(), contextRef, tool, arguments, null, latencyMs, e.getCode());
+            throw e;
+        } catch (EdithException e) {
+            long latencyMs = (System.nanoTime() - start) / 1_000_000L;
+            EcoEnvelopeHolder.outcome("FAILED");
+            auditService.record(traceId, request.getRequestId(), contextRef, tool, arguments, null, latencyMs, e.getCode().name());
             log.warn("edith_tool_failed tool={} code={} trace_id={}", tool, e.getCode(), traceId);
             if (e.getCode() == EdithErrorCode.TOOL_NOT_ALLOWED) {
                 return EdithApiModels.ToolCallbackResponse.error(request.getRequestId(), "TOOL_BRIDGE_DENIED", e.getMessage());
             }
             throw e;
         } catch (Exception e) {
+            long latencyMs = (System.nanoTime() - start) / 1_000_000L;
             EcoEnvelopeHolder.outcome("FAILED");
+            auditService.record(traceId, request.getRequestId(), contextRef, tool, arguments, null, latencyMs, "FAILED");
             log.warn("edith_tool_failed tool={} error={} trace_id={}", tool, e.getClass().getSimpleName(), traceId);
             throw new EdithException(EdithErrorCode.TOOL_FAILED, "Falha ao executar tool");
         }

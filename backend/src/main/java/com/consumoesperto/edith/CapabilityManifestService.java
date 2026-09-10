@@ -105,10 +105,10 @@ public class CapabilityManifestService {
             );
             case "finance.invoice.read" -> cap(
                 id,
-                "Lê uma fatura do usuário autenticado (ownership obrigatório).",
+                "Lê totais de uma fatura do usuário autenticado (sem dump de lançamentos).",
                 List.of("ver fatura", "detalhe da fatura", "abrir fatura", "fatura do cartao", "mostrar fatura"),
                 Map.of("type", "object", "properties", Map.of("invoice_id", Map.of("type", "integer")), "required", List.of("invoice_id")),
-                Map.of("type", "object", "properties", Map.of("id", Map.of("type", "integer"), "valor_total", Map.of("type", "number"))),
+                Map.of("type", "object", "properties", Map.of("id", Map.of("type", "integer"), "valor_total", Map.of("type", "number"), "item_count", Map.of("type", "integer"))),
                 CapabilityLatencyManifest.INVOICE_READ
             );
             case "finance.cards.list" -> cap(
@@ -145,9 +145,12 @@ public class CapabilityManifestService {
             );
             case "finance.category.summary" -> cap(
                 id,
-                "Agrega despesas do mês por categoria (totais, não dump de linhas).",
+                "Agrega despesas do mês por categoria no SQL (GROUP BY). Totais, não dump de linhas.",
                 List.of("gastos por categoria", "resumo por categoria", "onde estou gastando", "categorias do mes", "despesas por tipo"),
-                Map.of("type", "object", "properties", Map.of("year_month", Map.of("type", "string"), "limit", Map.of("type", "integer")), "required", List.of()),
+                Map.of("type", "object", "properties", Map.of(
+                    "year_month", Map.of("type", "string"),
+                    "limit", Map.of("type", "integer", "maximum", ToolLimits.CATEGORY_MAX)
+                ), "required", List.of()),
                 Map.of("type", "object", "properties", Map.of("categorias", Map.of("type", "array"))),
                 CapabilityLatencyManifest.CATEGORY_SUMMARY
             );

@@ -26,7 +26,11 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+    // H2 partilhado (jdbc:h2:mem:testdb) é encerrado quando outro contexto Spring
+    // sai da cache — CREATE TABLE no jdbcTemplate rebentava com "database is null".
+    "spring.datasource.url=jdbc:h2:mem:compra_parcela_mig;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE"
+})
 @ActiveProfiles("test")
 @Transactional
 class CompraParceladaMigracaoIntegracaoTest {

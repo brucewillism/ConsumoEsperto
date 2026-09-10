@@ -50,7 +50,7 @@ flowchart LR
 | Camada | Tecnologia |
 |--------|------------|
 | Frontend | Angular (standalone), Material, Chart.js, Nginx em produção |
-| Backend | Spring Boot 3, Java 17, JPA, Flyway, JWT |
+| Backend | Spring Boot **2.7.18** (fora do suporte OSS — ver [`BACKLOG_SPRING_BOOT_3.md`](BACKLOG_SPRING_BOOT_3.md)), Java 17, JPA, Flyway, JWT |
 | WhatsApp | Evolution API (`evoapicloud/evolution-api`) |
 | IA | Ordem fixa: Groq → OpenAI → Claude → Gemini → DeepSeek → Ollama |
 | Dados | PostgreSQL (+ pgvector para memória semântica / RAG) |

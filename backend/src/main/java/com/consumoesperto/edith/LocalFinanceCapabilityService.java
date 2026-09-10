@@ -100,9 +100,9 @@ public class LocalFinanceCapabilityService {
         }
         StringBuilder sb = new StringBuilder("Cartões ativos:\n");
         for (Map<String, Object> c : cartoes) {
-            sb.append("• ").append(c.get("nome") != null ? c.get("nome") : "Cartão");
-            if (c.get("banco") != null && !String.valueOf(c.get("banco")).isBlank()) {
-                sb.append(" (").append(c.get("banco")).append(")");
+            sb.append("• ").append(displayText(c.get("nome"), "Cartão"));
+            if (c.get("banco") != null && !displayText(c.get("banco"), "").isBlank()) {
+                sb.append(" (").append(displayText(c.get("banco"), "")).append(")");
             }
             if (c.get("limite_disponivel") != null) {
                 sb.append(" — disponível ").append(brl(c.get("limite_disponivel")));
@@ -148,6 +148,21 @@ public class LocalFinanceCapabilityService {
             }
         }
         return null;
+    }
+
+    static String displayText(Object raw, String fallback) {
+        if (raw instanceof UntrustedText u) {
+            return u.getValue() != null && !u.getValue().isBlank() ? u.getValue() : fallback;
+        }
+        if (raw instanceof Map<?, ?> m && m.containsKey("value")) {
+            Object v = m.get("value");
+            return v != null && !String.valueOf(v).isBlank() ? String.valueOf(v) : fallback;
+        }
+        if (raw == null) {
+            return fallback;
+        }
+        String s = String.valueOf(raw);
+        return s.isBlank() ? fallback : s;
     }
 
     private static String brl(Object value) {

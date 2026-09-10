@@ -1,12 +1,18 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
+import { MatTabsModule } from '@angular/material/tabs';
 import { RouterLink } from '@angular/router';
+import { Subscription, interval } from 'rxjs';
 import {
   UsuarioService,
   VincularWhatsappResponse,
 } from '../../services/usuario.service';
+import {
+  WhatsappConexaoService,
+  WhatsappConexaoStatus,
+} from '../../services/whatsapp-conexao.service';
 import { ToastService } from '../../services/toast.service';
 import { Usuario } from '../../models/usuario.model';
 import {
@@ -22,11 +28,11 @@ import { EdithAdminStatus, EdithService } from '../../services/edith.service';
 @Component({
   selector: 'app-whatsapp-config',
   standalone: true,
-  imports: [CommonModule, FormsModule, CeInputMaskDirective, PageLoadingComponent, RouterLink],
+  imports: [CommonModule, FormsModule, CeInputMaskDirective, PageLoadingComponent, RouterLink, MatTabsModule],
   templateUrl: './whatsapp-config.component.html',
   styleUrl: './whatsapp-config.component.scss'
 })
-export class WhatsappConfigComponent implements OnInit {
+export class WhatsappConfigComponent implements OnInit, OnDestroy {
   numeroWhatsapp = '';
   numeroAtual = '';
   /** Sessão real na Evolution (GET connectionState), distinto do número gravado na BD. */
@@ -44,8 +50,19 @@ export class WhatsappConfigComponent implements OnInit {
   edithAdmin: EdithAdminStatus | null = null;
   edithToggleLoading = false;
 
+  conexaoStatus: WhatsappConexaoStatus | null = null;
+  reconectandoAgora = false;
+  pairingCode = '';
+  pairingSegundosRestantes = 0;
+  pairingGerando = false;
+  abaPareamento = 0;
+
+  private pairingTick?: Subscription;
+  private statusPoll?: Subscription;
+
   constructor(
     private usuarioService: UsuarioService,
+    private whatsappConexaoService: WhatsappConexaoService,
     private toastService: ToastService,
     private dialog: MatDialog,
     private paridadeService: WhatsappParidadeService,
@@ -55,6 +72,138 @@ export class WhatsappConfigComponent implements OnInit {
   ngOnInit(): void {
     this.carregarPerfil();
     this.carregarParidade();
+  }
+
+  ngOnDestroy(): void {
+    this.pairingTick?.unsubscribe();
+    this.statusPoll?.unsubscribe();
+  }
+
+  carregarConexaoStatus(): void {
+    this.whatsappConexaoService.getStatus().subscribe({
+      next: (st) => {
+        this.conexaoStatus = st;
+        if (st.instanceName) {
+          this.evolutionInstanceName = st.instanceName;
+        }
+        if (st.estado === 'open') {
+          this.evolutionWaConnected = true;
+          this.pararPairingCountdown();
+          this.statusPoll?.unsubscribe();
+          this.statusPoll = undefined;
+        }
+      },
+      error: () => {
+        this.conexaoStatus = null;
+      },
+    });
+  }
+
+  reconectarAgora(): void {
+    this.reconectandoAgora = true;
+    this.whatsappConexaoService.reconectarAgora().subscribe({
+      next: (res) => {
+        this.reconectandoAgora = false;
+        if (res.conexao) {
+          this.conexaoStatus = res.conexao;
+        }
+        this.atualizarStatusEvolution();
+        this.carregarConexaoStatus();
+        this.toastService.info('Tentativa de reconexão enviada à Evolution (sem apagar o pareamento).');
+      },
+      error: (error) => {
+        this.reconectandoAgora = false;
+        this.toastService.error(error?.error?.message || 'Falha ao pedir reconexão.');
+      },
+    });
+  }
+
+  gerarCodigoPareamento(): void {
+    const numero = this.numeroWhatsapp.trim();
+    if (!numero) {
+      this.toastService.warning('Indique o número de WhatsApp (DDI 55 se for Brasil).');
+      return;
+    }
+    this.pairingGerando = true;
+    this.whatsappConexaoService.gerarPairingCode(numero).subscribe({
+      next: (res) => {
+        this.pairingGerando = false;
+        if (res.alreadyConnected) {
+          this.evolutionWaConnected = true;
+          this.toastService.success('WhatsApp já está ligado nesta instância.');
+          this.carregarConexaoStatus();
+          return;
+        }
+        const code = (res.pairingCode || '').trim();
+        if (!code) {
+          this.toastService.warning(
+            res.evolutionWarning || 'A Evolution não devolveu código. Use a aba Escanear QR.'
+          );
+          return;
+        }
+        this.pairingCode = code;
+        this.iniciarPairingCountdown(res.validadeSegundos || 90);
+        this.iniciarPollStatus();
+        this.toastService.info('Digite o código no telemóvel. O código expira em cerca de 90 s.');
+      },
+      error: (error) => {
+        this.pairingGerando = false;
+        this.toastService.error(error?.error?.message || 'Não foi possível gerar o código.');
+      },
+    });
+  }
+
+  get pairingCodeFormatado(): string {
+    const raw = this.pairingCode.replace(/\s+/g, '');
+    if (raw.length === 8) {
+      return raw.slice(0, 4) + ' ' + raw.slice(4);
+    }
+    return this.pairingCode;
+  }
+
+  private iniciarPairingCountdown(segundos: number): void {
+    this.pararPairingCountdown();
+    this.pairingSegundosRestantes = Math.max(1, segundos);
+    this.pairingTick = interval(1000).subscribe(() => {
+      this.pairingSegundosRestantes -= 1;
+      if (this.pairingSegundosRestantes <= 0) {
+        this.pararPairingCountdown();
+        this.toastService.warning('O código expirou. Gere um novo se ainda não ligou.');
+      }
+    });
+  }
+
+  private pararPairingCountdown(): void {
+    this.pairingTick?.unsubscribe();
+    this.pairingTick = undefined;
+    this.pairingSegundosRestantes = 0;
+  }
+
+  private iniciarPollStatus(): void {
+    this.statusPoll?.unsubscribe();
+    this.statusPoll = interval(5000).subscribe(() => {
+      this.atualizarStatusEvolution();
+      this.carregarConexaoStatus();
+    });
+  }
+
+  estadoBadgeLabel(estado?: string): string {
+    switch (estado) {
+      case 'open':
+        return 'Ligada';
+      case 'connecting':
+        return 'A ligar…';
+      case 'close':
+        return 'Desligada';
+      case 'missing':
+        return 'Instância ausente';
+      case 'error':
+        return 'Erro de rede';
+      case 'suppressed':
+        return 'Desligada na app';
+      default:
+        return estado || 'Desconhecido';
+    }
   }
 
   carregarParidade(): void {
@@ -111,6 +260,7 @@ export class WhatsappConfigComponent implements OnInit {
         this.isAdmin = usuario.role === 'ADMIN';
         this.carregando = false;
         this.atualizarStatusEvolution();
+        this.carregarConexaoStatus();
         this.carregarEdithAdmin();
       },
       error: () => {
@@ -127,6 +277,11 @@ export class WhatsappConfigComponent implements OnInit {
         this.evolutionWaConnected = suppressed
           ? false
           : st.connected === true || st.evolutionWaConnected === true;
+        if (this.evolutionWaConnected) {
+          this.pararPairingCountdown();
+          this.statusPoll?.unsubscribe();
+          this.statusPoll = undefined;
+        }
         if (st.instanceName) {
           this.evolutionInstanceName = st.instanceName;
         }

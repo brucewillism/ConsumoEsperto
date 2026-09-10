@@ -15,5 +15,6 @@ public enum OrigemTransacao {
     PIX,
     NFC_E,
     AGENDAMENTO,
-    RECORRENCIA
+    RECORRENCIA,
+    NOTIFICACAO_BANCARIA
 }

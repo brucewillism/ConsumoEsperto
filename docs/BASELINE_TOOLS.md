@@ -154,5 +154,5 @@ Artefatos: `backend/target/scale-h2.txt`, `backend/target/pg-baseline.txt`.
 ## 6. O que esta medição não inclui
 
 Filtro HTTP, HMAC, JSON, rede Angular ↔ backend. WhatsApp não é borda.
-`finance.category.summary` ainda agrega o mês em memória (dívida em
-`docs/COMPAT_DEBT.md`).
+`finance.category.summary` passou a agregar no SQL (`GROUP BY`). Ver
+`docs/CAPABILITY_SURFACE.md` e o item 6 resolvido em `docs/COMPAT_DEBT.md`.

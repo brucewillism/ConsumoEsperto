@@ -50,6 +50,24 @@ class AndroidNotificationParsingTest {
   }
 
   @Test
+  void iosWallet_occurredAtComOffsetIso8601() {
+    MobileTransactionIngestionRequest req = new MobileTransactionIngestionRequest();
+    req.setSource("IOS_WALLET");
+    req.setAmount(new BigDecimal("45.90"));
+    req.setMerchant("PADARIA");
+    req.setOccurredAt("2026-09-09T11:13:00-03:00");
+    req.setCardHint("Nubank");
+
+    Optional<ParsedMobileTransaction> parsed = service.parse(req);
+    assertTrue(parsed.isPresent());
+    assertEquals(2026, parsed.get().getOccurredAt().getYear());
+    assertEquals(9, parsed.get().getOccurredAt().getMonthValue());
+    assertEquals(9, parsed.get().getOccurredAt().getDayOfMonth());
+    assertEquals(11, parsed.get().getOccurredAt().getHour());
+    assertEquals(13, parsed.get().getOccurredAt().getMinute());
+  }
+
+  @Test
   void notificacaoDesconhecida_semValor_naoInventa() {
     MobileTransactionIngestionRequest req = new MobileTransactionIngestionRequest();
     req.setSource("ANDROID_NOTIFICATION");

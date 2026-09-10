@@ -65,6 +65,15 @@ Página **`/whatsapp-config`**:
 
 O browser **nunca** recebe a API key mestra da Evolution; só o backend chama a Evolution.
 
+### Monitor, alerta por e-mail e código de 8 dígitos
+
+- `GET /api/whatsapp/conexao/status` — estado persistido + últimas transições.
+- `POST /api/whatsapp/conexao/reconectar` — reconnect/restart **sem** apagar a instância.
+- `POST /api/whatsapp/conexao/pairing-code` — `{ "numero": "5581999999999" }` → código (Evolution `GET /instance/connect?number=`).
+- Alerta SMTP: canal do `AlertaOperacionalService` (`ALERTAS_EMAIL_ENABLED`, `MAIL_*`, `ALERTA_EMAIL_DESTINO`). Gmail = senha de app.
+
+Diagnóstico da queda ~4 dias: [`WHATSAPP_CONEXAO_DIAGNOSTICO.md`](WHATSAPP_CONEXAO_DIAGNOSTICO.md).
+
 ---
 
 ## Privacidade e notificações no telemóvel
@@ -133,10 +142,11 @@ Serviços: `EvolutionMediaService`, `SpeechToTextService`, `TextToSpeechService`
 | `Connection reset by peer` | Verificar Redis `CACHE_REDIS_*`; logs do contentor `consumo_evolution` |
 | Sessão cai após restart | `EVOLUTION_SESSION_STICKY=true`; não reiniciar Evolution em loop |
 | Sem notificações no telemóvel | Desactivar `alwaysOnline`/`readMessages`; activar `EVOLUTION_PRIVACY_SET_UNAVAILABLE` |
+| Sessão cai após ~4 dias em silêncio | Ver [WHATSAPP_CONEXAO_DIAGNOSTICO.md](WHATSAPP_CONEXAO_DIAGNOSTICO.md). Monitor + e-mail: `ALERTAS_EMAIL_ENABLED`, `MAIL_*`, `ALERTA_EMAIL_DESTINO`. Pin `CONFIG_SESSION_PHONE_VERSION` vazio; **não** apagar a instância. |
 | Webhook não chega ao Spring | `WEBHOOK_GLOBAL_URL` → `http://backend:8087/api/public/evolution/webhook` (Docker) ou `http://127.0.0.1:18081/...` (local) |
 | Áudio não transcrito | Verificar chaves Groq/OpenAI; logs `[JARVIS-LOG] STT`; mídia via `EvolutionMediaService` |
 | Password Postgres com `@` no URI | Percent-encode na `DATABASE_CONNECTION_URI` |
 
-Mais contexto: [`CONFIGURACAO_AMBIENTE.md`](../CONFIGURACAO_AMBIENTE.md), [`docker/README.md`](../docker/README.md).
+Mais contexto: [`CONFIGURACAO_AMBIENTE.md`](../CONFIGURACAO_AMBIENTE.md), [`docker/README.md`](../docker/README.md), [`WHATSAPP_CONEXAO_DIAGNOSTICO.md`](WHATSAPP_CONEXAO_DIAGNOSTICO.md).
 
-**Última revisão:** junho/2026
+**Última revisão:** setembro/2026

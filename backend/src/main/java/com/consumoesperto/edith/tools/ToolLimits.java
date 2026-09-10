@@ -12,6 +12,8 @@ public final class ToolLimits {
     public static final int SEARCH_MAX = 100;
     public static final int LIST_DEFAULT = 20;
     public static final int LIST_MAX = 50;
+    public static final int CATEGORY_DEFAULT = 12;
+    public static final int CATEGORY_MAX = 30;
 
     private ToolLimits() {
     }

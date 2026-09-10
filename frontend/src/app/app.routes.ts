@@ -42,6 +42,14 @@ export const routes: Routes = [
   },
 
   {
+    path: 'captura-automatica',
+    loadComponent: () =>
+      import('./pages/captura-automatica/captura-automatica.component').then(
+        m => m.CapturaAutomaticaComponent
+      ),
+    canActivate: [AuthGuard]
+  },
+  {
     path: 'captura-automatica/revisao',
     loadComponent: () =>
       import('./pages/mobile-capture-review/mobile-capture-review.component').then(

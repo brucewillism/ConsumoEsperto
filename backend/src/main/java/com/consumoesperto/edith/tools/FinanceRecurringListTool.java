@@ -4,11 +4,12 @@ import com.consumoesperto.dto.AgendamentoPagamentoDTO;
 import com.consumoesperto.edith.EdithErrorCode;
 import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.edith.EdithIntegrationService;
+import com.consumoesperto.edith.UntrustedText;
 import com.consumoesperto.service.AgendamentoPagamentoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -39,16 +40,18 @@ public class FinanceRecurringListTool implements EdithFinanceTool {
             .limit(limit)
             .map(this::slim)
             .collect(Collectors.toList());
-        Map<String, Object> out = new HashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("agendamentos", items);
         out.put("total", items.size());
+        out.put("limit", limit);
+        out.put("limit_max", ToolLimits.LIST_MAX);
         return out;
     }
 
     private Map<String, Object> slim(AgendamentoPagamentoDTO a) {
-        Map<String, Object> m = new HashMap<>();
+        Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", a.getId());
-        m.put("beneficiario", a.getBeneficiario());
+        m.put("beneficiario", UntrustedText.of(a.getBeneficiario(), 80));
         m.put("valor", a.getValor());
         m.put("vencimento", a.getDataVencimento());
         m.put("status", a.getStatus());

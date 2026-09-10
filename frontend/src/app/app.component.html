@@ -140,6 +140,12 @@
           </a>
         </li>
         <li class="nav-item">
+          <a routerLink="/captura-automatica" routerLinkActive="active" class="nav-link" title="Captura automática" (click)="navigateSidebar('/captura-automatica', $event)">
+            <i class="fas fa-bell"></i>
+            <span class="nav-label">Captura automática</span>
+          </a>
+        </li>
+        <li class="nav-item">
           <a routerLink="/whatsapp-config" routerLinkActive="active" class="nav-link" title="WhatsApp" (click)="navigateSidebar('/whatsapp-config', $event)">
             <i class="fab fa-whatsapp"></i>
             <span class="nav-label">WhatsApp</span>
@@ -243,6 +249,10 @@
             <button type="button" class="dropdown-item" role="menuitem" (click)="navigateUserMenu('/perfil', $event)">
               <i class="fas fa-user"></i>
               Perfil
+            </button>
+            <button type="button" class="dropdown-item" role="menuitem" (click)="navigateUserMenu('/captura-automatica', $event)">
+              <i class="fas fa-bell"></i>
+              Captura automática
             </button>
             <button type="button" class="dropdown-item" role="menuitem" (click)="navigateUserMenu('/whatsapp-config', $event)">
               <i class="fas fa-cog"></i>

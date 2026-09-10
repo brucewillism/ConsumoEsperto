@@ -1,14 +1,11 @@
 package com.consumoesperto.integration;
 
 import com.consumoesperto.service.EvolutionWebhookDedupService;
+import com.consumoesperto.integration.support.SharedPostgresContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.DockerClientFactory;
 import org.junit.jupiter.api.condition.EnabledIf;
 
 import javax.sql.DataSource;
@@ -24,24 +21,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Integração Postgres: dedup webhook (INSERT ON CONFLICT) e expurgo. */
-@Testcontainers(disabledWithoutDocker = true)
 @EnabledIf("com.consumoesperto.integration.WebhookDedupPostgresIntegrationTest#dockerDisponivel")
 class WebhookDedupPostgresIntegrationTest {
 
     static boolean dockerDisponivel() {
-        try {
-            DockerClientFactory.instance().client();
-            return true;
-        } catch (Throwable t) {
-            return false;
-        }
+        return SharedPostgresContainer.dockerAvailable();
     }
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-        .withDatabaseName("consumo_test")
-        .withUsername("consumo")
-        .withPassword("test");
 
     private EvolutionWebhookDedupService dedupService;
     private JdbcTemplate jdbcTemplate;
@@ -49,9 +34,9 @@ class WebhookDedupPostgresIntegrationTest {
     @BeforeEach
     void setUp() {
         DataSource ds = new DriverManagerDataSource(
-            postgres.getJdbcUrl(),
-            postgres.getUsername(),
-            postgres.getPassword()
+            SharedPostgresContainer.jdbcUrl("webhook_dedup"),
+            SharedPostgresContainer.username(),
+            SharedPostgresContainer.password()
         );
         jdbcTemplate = new JdbcTemplate(ds);
         jdbcTemplate.execute(

@@ -1,78 +1,68 @@
-# Plano de migração SchemaAutoPatchService → Flyway (NÃO EXECUTAR EM PRODUÇÃO SEM BACKUP)
+# Plano de migração SchemaAutoPatchService → Flyway
 
-## Situação atual
+## Situação actual (2026-09-09)
 
-- `spring.flyway.enabled=true` em `application.properties`, mas **não há** arquivos em `classpath:db/migration/`.
-- O schema real evolui via `SchemaAutoPatchService` (`@PostConstruct`, DDL idempotente).
-- Flyway faz baseline vazio; patches runtime preenchem lacunas — difícil reproduzir ambiente e rollback.
+Flyway **está ligado** em produção/dev:
 
-## Objetivo
-
-Versionamento explícito **sem big-bang** e **sem recriar** banco existente.
-
-## Fases propostas
-
-### Fase 0 — Pré-requisitos (humano)
-
-1. Backup completo: `pg_dump -Fc consumo_db > backup_pre_flyway.dump`
-2. Validar restore em banco descartável (`scripts/restore-postgres-backup.sh`)
-3. Congelar deploys durante janela de validação
-
-### Fase 1 — Baseline (somente leitura do schema existente)
-
-```bash
-pg_dump --schema-only --no-owner --no-privileges \
-  -h localhost -p 5439 -U consumo consumo_db \
-  > backend/src/main/resources/db/migration/V1__baseline.sql
 ```
-
-- Revisar manualmente o SQL (remover `CREATE EXTENSION` duplicados se necessário).
-- Commitar `V1__baseline.sql` como **snapshot** do schema em produção na data do baseline.
-
-Configuração:
-
-```properties
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
 spring.flyway.baseline-on-migrate=true
-spring.flyway.baseline-version=1
-spring.flyway.baseline-description=Schema existente antes da migração formal
+spring.flyway.baseline-version=0
+spring.flyway.validate-on-migrate=false
 ```
 
-Em banco **já populado**, Flyway registra baseline e **não executa** V1 (nada é recriado).
+Há `V1__baseline_inicial.sql` (dump Hibernate da época, **não** um `pg_dump` de produção) e incrementais `V2`…`V10` mais versões datadas.
 
-### Fase 2 — Coexistência
+Isto **não** é a Fase 1 do plano original (baseline com `pg_dump` de produção + `baseline-version=1` + não executar V1). O `baseline-on-migrate` actual é `0`: em base **já populada sem** `flyway_schema_history`, o Flyway marca 0 e depois tenta aplicar V1… — V1 **não** é `IF NOT EXISTS` em todas as tabelas. Risco operacional separado; não reabrir big-bang aqui.
 
-- Manter `SchemaAutoPatchService` ativo como fallback idempotente.
-- Novos objetos **somente** via `V2__...sql`, `V3__...sql`.
-- Remover patch correspondente do `SchemaAutoPatchService` apenas após Flyway estável em staging.
+Perfis:
 
-### Fase 3 — Novas migrations
+| Perfil | Flyway | Autopatch | Hibernate DDL |
+|--------|--------|-----------|---------------|
+| default / produção | on | on (legado) | `none` |
+| `integracao` | on | **off** | `validate` |
+| testes H2 | off | off | `create` |
 
-Exemplo:
+## Inventário — um dono por objecto
 
-```
-V2__evento_webhook_processado.sql
-V3__metas_valor_acumulado.sql
-```
+### Só Flyway (autopatch **não** cria)
 
-### Fase 4 — Desligar patches redundantes
+| Migration | Objectos |
+|-----------|----------|
+| `V2__schema_autopatch_complementar.sql` | `evento_webhook_processado`, `memoria_semantica_jarvis`, `transacao_semantica_index`, `jarvis_feedback` (+ `data_expiracao`), `compra_parcelada_migracao_controle`, `CREATE EXTENSION vector` (best-effort) |
+| `V3` / catch-up | `ux_faturas_cartao_competencia_nao_quitada` |
+| `V4` / catch-up | `usuarios.role` |
+| `V5` | `grupo_familiar_membros.papel` |
+| `V6` / catch-up | `agendamento_execucoes` + unicidade |
+| `V7` / catch-up | `edith_conversation_link`, `edith_task_link`, `edith_callback_nonce` |
+| `V8`–`V9` / catch-up | captura móvel, colunas de ingestão em `transacoes` |
+| `V10` | `idx_transacoes_usuario_periodo_categoria` |
+| `V202609081200000__edith_tool_audit.sql` | `edith_tool_audit` (**sem** `IF NOT EXISTS` — primeira aplicação; se a tabela já existir *sem* histórico Flyway desta versão, a migrate falha de propósito) |
+| `V202609091200000__whatsapp_conexao_status.sql` | `whatsapp_conexao_status`, `whatsapp_conexao_transicao` (`IF NOT EXISTS`) |
 
-Quando staging/produção confirmarem Flyway:
+Os `ensure*` correspondentes a V2 (webhook dedup, pgvector/memória, feedback) foram **removidos** do `SchemaAutoPatchService`.
 
-1. Listar patches duplicados no `SchemaAutoPatchService`
-2. Remover um a um com deploy monitorado
-3. Manter patches de emergência (extensão pgvector, etc.) até última fase
+### Autopatch só (legado, ainda sem migration dedicada além do que já está no V1)
 
-## Critérios de aceite
+Patches `CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` para objectos que o V1 já descreve (contas, agendamentos, metas, família, notificações, `movimentacao_saldo_log`, `usuario_sessoes_contexto`, colunas de utilizador, etc.). Em base **já migrada por Flyway** são no-op.
 
-| Cenário | Resultado esperado |
-|---------|-------------------|
-| Banco novo (CI/local) | Flyway aplica V1+ e app sobe |
-| Banco existente VPS | `flyway_schema_history` baseline; **zero** DROP/CREATE destrutivo |
-| Rollback de código | Reverter JAR; schema permanece (migrations forward-only) |
+Também: `jarvis_cronos_evento_log` (não está no V1).
 
-## Riscos
+### Comportamento esperado em produção (não executar daqui)
 
-- Corrida boot: Flyway + `SchemaAutoPatchService` no mesmo `@PostConstruct` — serializar (Flyway primeiro via `FlywayMigrationStrategy` ou `@DependsOn`).
-- Drift: baseline desatualizado — regenerar baseline apenas em ambiente novo, nunca sobrescrever produção.
+1. **VPS com `flyway_schema_history` alinhado** — Flyway só aplica versões em falta. Autopatch legado é `IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`. Tabelas WhatsApp / audit / V2 não são recriadas pelo autopatch.
+2. **VPS antiga sem histórico Flyway** — `baseline-on-migrate=true` + `baseline-version=0` faz o Flyway **tentar V1** (`CREATE TABLE` sem `IF NOT EXISTS`) → **falha** se as tabelas já existirem. Não é este PR a corrigir; precisa de baseline real (`pg_dump` + `baseline-version=1`) ou histórico já preenchido. Ver backlog abaixo.
+3. **Banco novo (CI / local limpo)** — Flyway aplica V1…Vn; app sobe; autopatch no-op no que o V1 já criou.
 
-**Este plano não foi executado automaticamente. Requer validação humana e backup antes de qualquer passo em ambiente com dados.**
+H2 de teste: Flyway off; entidades JPA (`ddl-auto=create`) cobrem `whatsapp_conexao_*`.
+
+## Convergência (backlog)
+
+1. Backup + restore em descartável antes de endurecer VPS.
+2. Baseline real de produção **ou** `flyway_schema_history` já correcto — não assumir que V1 é o schema da VPS.
+3. Ir desligando `ensure*` do autopatch **depois** de cada objecto ter migration estável (V1 overlap é o grosso que resta).
+4. `validate-on-migrate=true` só com histórico limpo nas VPS.
+5. `edith_tool_audit` poderia ganhar `IF NOT EXISTS` só se alguma VPS criou a tabela fora do Flyway — hoje o versionamento rígido é o correcto.
+
+**Não** deixar o Flyway inerte. **Não** voltar a duplicar DDL no autopatch para objectos que já têm migration própria.

@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.eco.CapabilityStageClock;
 import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.dto.FaturaDTO;
 import com.consumoesperto.security.OwnershipChecks;
@@ -88,6 +89,9 @@ public class FaturaService {
     @Value("${consumoesperto.fatura.dias-entre-fechamento-e-vencimento:10}")
     private int diasEntreFechamentoEVencimento;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private javax.sql.DataSource dataSource;
+
     /**
      * Cria uma nova fatura de cartão de crédito no sistema
      * 
@@ -133,13 +137,15 @@ public class FaturaService {
      * @throws RuntimeException se a fatura não for encontrada ou não pertencer ao usuário
      */
     public FaturaDTO buscarPorId(Long id, Long usuarioId) {
-        // Busca a fatura pelo ID e valida se pertence ao usuário através do cartão
-        Fatura fatura = OwnershipChecks.requireOwned(
-            faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId),
-            faturaRepository.existsById(id),
-            "fatura");
-        faturaConciliacaoService.reconciliarStatusPagamento(fatura);
-        return converterParaDTO(fatura);
+        CapabilityStageClock.acquirePool(dataSource);
+        Fatura fatura = CapabilityStageClock.timed(CapabilityStageClock.JPA_HYDRATE, () ->
+            OwnershipChecks.requireOwned(
+                faturaRepository.findByIdAndCartaoCreditoUsuarioId(id, usuarioId),
+                faturaRepository.existsById(id),
+                "fatura"));
+        CapabilityStageClock.timed(CapabilityStageClock.RECONCILE, () ->
+            faturaConciliacaoService.reconciliarStatusPagamento(fatura));
+        return CapabilityStageClock.timed(CapabilityStageClock.DTO_MAP, () -> converterParaDTO(fatura));
     }
 
     /**
@@ -907,7 +913,8 @@ public class FaturaService {
         dto.setCartaoCreditoId(fatura.getCartaoCredito().getId());
         dto.setDataCriacao(fatura.getDataCriacao());
         dto.setDataAtualizacao(fatura.getDataAtualizacao());
-        dto.setTransacoes(transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(fatura.getId()).stream()
+        dto.setTransacoes(CapabilityStageClock.timed(CapabilityStageClock.JPA_ITEMS, () ->
+            transacaoRepository.findByFaturaIdOrderByDataTransacaoAscIdAsc(fatura.getId())).stream()
             .map(t -> {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("id", t.getId());

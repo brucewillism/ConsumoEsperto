@@ -6,7 +6,7 @@
 | ------- | ---------------- | ---------------- | -------------- | ------- |
 | JDK 17 | `tools/java/ms-17.0.15` | idem | `setup-java@v4` temurin 17 | instalado no host |
 | Maven | `tools/maven` | idem | cache Maven | idem |
-| Backend build/test | `.\scripts\mvn-backend.ps1 clean verify` | Compose + idem | `backend-ci.yml` | deploy manual |
+| Backend build/test | `.\scripts\mvn-backend.ps1 clean test` (ver [`TESTES_BACKEND.md`](TESTES_BACKEND.md) se usar Podman) | Compose + idem | `backend-ci.yml` | deploy manual |
 | Frontend | `cd frontend && npm ci && npm run build` | idem | `frontend-ci.yml` | idem |
 | Testes frontend | `cd frontend && npm test` | idem | idem | idem |
 | PostgreSQL | serviço Windows local | container Compose | service container CI | VPS |

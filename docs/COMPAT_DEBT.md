@@ -3,7 +3,9 @@
 Toda ponte anterior ao contrato fica visível: marcada na métrica e com data-alvo
 de remoção. Sem isso a ponte vira permanente.
 
-Datas ancoradas em 2026-09-07 (rodada 2).
+Datas ancoradas em 2026-09-07 (rodada 2). Hoje: 2026-09-08.
+**Nenhuma data-alvo passou.** Nenhuma dívida desta lista virou permanente
+por prazo.
 
 ---
 
@@ -22,6 +24,13 @@ borda, span novo, deadline absoluto, sensitivity). ConsumoEsperto deixa de
 sintetizar quando o header chega. Remoção da síntese é fail-closed: request
 sem envelope no Tool Bridge vira `INVALID_INPUT` / recusa de contrato, não
 gera `tr_` novo.
+
+**Estado em 2026-09-08.** Este repo **aceita** `X-Eco-*` quando chega
+(`EcoEnvelopeDeadlineHttpTest` manda `X-Eco-Trace-Id`). O cliente HTTP daqui
+para a E.D.I.T.H. **envia** `X-Eco-*` no hop de conversa. O Tool Bridge
+legado, nas suítes que imitam a E.D.I.T.H. de hoje, ainda autentica com
+`X-Edith-*` e **sem** `X-Eco-Trace-Id` — o filtro sintetiza. A E.D.I.T.H.
+ainda não mandou o envelope canônico neste hop. Dívida intacta.
 
 **Métrica.** `envelope_synthesized=true` em `eco_span`.
 
@@ -114,15 +123,12 @@ marca `auth_scheme=session`.
 
 ---
 
-## 6. `finance.category.summary` ainda agrega em memória
+## 6. `finance.category.summary` — RESOLVIDO (rodada 3)
 
-**O que é.** A capability carrega o período via `buscarPorPeriodo` e soma no
-heap. Não era o recorte da rodada 2 (`transactions.search`).
+Era agregado em memória (`buscarPorPeriodo` + heap). Agora
+`GROUP BY` no SQL (`TransacaoRepository.sumDespesasPorCategoriaCapability`),
+teto 12/30, DTO de totais. Saído da lista viva.
 
-**Por que existe.** Superfície menor que o search (um mês), mas o mesmo cheiro
-de volume.
-
-**O que precisa acontecer para sair.** `GROUP BY` no SQL, teto de categorias,
-DTO de totais. Remedir p95 em Postgres antes de atualizar o manifesto.
-
-**Data-alvo de remoção:** 2026-10-21.
+Não remedimos p95 Postgres desta tool nesta rodada (não era o recorte do
+breakdown dos 19,8 ms). O número do manifesto (`CATEGORY_SUMMARY = 40`)
+continua conservador até uma amostra Postgres dedicada.

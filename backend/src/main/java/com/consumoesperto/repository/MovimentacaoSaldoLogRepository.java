@@ -16,4 +16,6 @@ public interface MovimentacaoSaldoLogRepository extends JpaRepository<Movimentac
     List<MovimentacaoSaldoLog> findUltimasPorConta(@Param("contaId") Long contaId, Pageable pageable);
 
     Optional<MovimentacaoSaldoLog> findTopByContaIdOrderByIdDesc(Long contaId);
+
+    Optional<MovimentacaoSaldoLog> findFirstByTransacaoIdOrderByIdDesc(Long transacaoId);
 }

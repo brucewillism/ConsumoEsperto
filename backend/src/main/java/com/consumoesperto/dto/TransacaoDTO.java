@@ -64,6 +64,11 @@ public class TransacaoDTO {
     private Integer totalParcelas;
     private BigDecimal valorReal;
     private BigDecimal valorComJuros;
+    /**
+     * Quando {@code false}, não chama o categorizador (evita LLM na ingestão de notificação).
+     * {@code null} = comportamento legado (sugerir).
+     */
+    private Boolean sugerirCategoriaAutomatica;
 
     public enum TipoTransacao {
         RECEITA, DESPESA, INVESTIMENTO, PAGAMENTO_FATURA

@@ -84,7 +84,7 @@ public class CognitiveGatewaySelector {
             .status("FAILED")
             .mode("DEGRADED")
             .traceId(traceId)
-            .resultText("O assistente cognitivo está desligado neste ambiente.")
+            .resultText("O assistente cognitivo está temporariamente indisponível. Suas finanças continuam acessíveis no app.")
             .build();
     }
 

@@ -1,5 +1,6 @@
 package com.consumoesperto.integration;
 
+import com.consumoesperto.integration.support.SharedPostgresContainer;
 import com.consumoesperto.model.ContaBancaria;
 import com.consumoesperto.model.MovimentacaoSaldoLog;
 import com.consumoesperto.model.Usuario;
@@ -19,10 +20,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import javax.persistence.EntityManager;
 import java.math.BigDecimal;
@@ -42,31 +39,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Testcontainers(disabledWithoutDocker = true)
 @EnabledIf("com.consumoesperto.integration.SaldoConcorrenciaPostgresIntegrationTest#dockerDisponivel")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class SaldoConcorrenciaPostgresIntegrationTest {
 
     static boolean dockerDisponivel() {
-        try {
-            DockerClientFactory.instance().client();
-            return true;
-        } catch (Throwable t) {
-            return false;
-        }
+        return SharedPostgresContainer.dockerAvailable();
     }
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-        .withDatabaseName("consumo_test")
-        .withUsername("consumo")
-        .withPassword("test");
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.url", () -> SharedPostgresContainer.jdbcUrl("saldo_conc"));
+        registry.add("spring.datasource.username", SharedPostgresContainer::username);
+        registry.add("spring.datasource.password", SharedPostgresContainer::password);
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.flyway.enabled", () -> "false");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");

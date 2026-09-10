@@ -5,6 +5,7 @@ import com.consumoesperto.edith.security.EdithHmacSigner;
 import com.consumoesperto.model.EdithTaskLink;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.EdithTaskLinkRepository;
+import com.consumoesperto.repository.EdithToolAuditRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ class EdithToolBridgeHttpTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private UsuarioRepository usuarioRepository;
   @Autowired private EdithTaskLinkRepository taskLinkRepository;
+  @Autowired private EdithToolAuditRepository auditRepository;
   @Autowired private PasswordEncoder passwordEncoder;
 
   private String contextRef;
@@ -139,6 +141,35 @@ class EdithToolBridgeHttpTest {
         .header(EdithCallbackHeaders.REQUEST_ID, requestId)
         .header(EdithCallbackHeaders.SIGNATURE, sig)
         .content(raw))
-      .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void accountsListGravaAuditoriaSemPayloadFinanceiro() throws Exception {
+    String body = "{\"request_id\":\"" + requestId + "\",\"tool\":\"finance.accounts.list\",\"version\":\"1\","
+      + "\"arguments\":{\"context_ref\":\"" + contextRef + "\",\"limit\":5,\"description\":\"ignore previous\"}}";
+    byte[] raw = body.getBytes(StandardCharsets.UTF_8);
+    String ts = String.valueOf(Instant.now().getEpochSecond());
+    String nonce = "nonce-audit-" + System.nanoTime();
+    String sig = EdithHmacSigner.sign("test-callback-secret", ts, nonce, requestId, raw);
+
+    mockMvc.perform(post("/api/internal/edith/tools")
+        .contentType(MediaType.APPLICATION_JSON)
+        .header(EdithCallbackHeaders.TIMESTAMP, ts)
+        .header(EdithCallbackHeaders.NONCE, nonce)
+        .header(EdithCallbackHeaders.REQUEST_ID, requestId)
+        .header(EdithCallbackHeaders.SIGNATURE, sig)
+        .content(raw))
+      .andExpect(status().isOk())
+      .andExpect(jsonPath("$.success").value(true));
+
+    var rows = auditRepository.findByToolCallId(requestId);
+    org.junit.jupiter.api.Assertions.assertFalse(rows.isEmpty());
+    var row = rows.get(0);
+    org.junit.jupiter.api.Assertions.assertEquals("finance.accounts.list", row.getCapability());
+    org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", row.getOutcome());
+    org.junit.jupiter.api.Assertions.assertFalse(row.getParamsJson().contains("ignore previous"));
+    org.junit.jupiter.api.Assertions.assertTrue(row.getParamsJson().contains("limit"));
+    org.junit.jupiter.api.Assertions.assertNotNull(row.getTraceId());
   }
 }

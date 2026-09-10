@@ -32,6 +32,7 @@ public class SecurityConfig {
     private final PasswordEncoder passwordEncoder;
     private final AdminApiKeyFilter adminApiKeyFilter;
     private final com.consumoesperto.mobilecapture.security.MobileDeviceTokenFilter mobileDeviceTokenFilter;
+    private final com.consumoesperto.ingest.notificacao.security.IngestTokenFilter ingestTokenFilter;
 
     /**
      * Padrões permitidos (origins), separados por vírgula. Em produção use o domínio HTTPS do frontend
@@ -84,6 +85,10 @@ public class SecurityConfig {
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .anyRequest().authenticated();
 
+        http.addFilterBefore(
+            ingestTokenFilter,
+            UsernamePasswordAuthenticationFilter.class
+        );
         http.addFilterBefore(
             mobileDeviceTokenFilter,
             UsernamePasswordAuthenticationFilter.class

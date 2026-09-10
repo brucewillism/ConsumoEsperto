@@ -16,9 +16,13 @@ Mapa de todos os ficheiros de referência do repositório.
 | [`POLITICA_STATUS_FATURA_PREVISTA.md`](POLITICA_STATUS_FATURA_PREVISTA.md) | Faturas PREVISTA e sync de totais |
 | [`PLANO_CONVERSAO_COMPRA_PARCELADA.md`](PLANO_CONVERSAO_COMPRA_PARCELADA.md) | Convergência CompraParcelada → fluxo principal |
 | [`BACKLOG_FISCAL_ESTIMATIVA.md`](BACKLOG_FISCAL_ESTIMATIVA.md) | Fiscal simplificado — evolução futura |
+| [`BACKLOG_SPRING_BOOT_3.md`](BACKLOG_SPRING_BOOT_3.md) | Parent real 2.7.18 (EOL OSS); actualização para Boot 3 |
+| [`PLANO_MIGRACAO_FLYWAY.md`](PLANO_MIGRACAO_FLYWAY.md) | Flyway já activo; autopatch só para legado; tabelas novas só via SQL |
+| [`WHATSAPP_CONEXAO_DIAGNOSTICO.md`](WHATSAPP_CONEXAO_DIAGNOSTICO.md) | Queda de sessão Evolution ~4 dias (fase 0) |
 | [`MODULO_FAMILIA.md`](MODULO_FAMILIA.md) | Grupo familiar, convites, orçamentos partilhados, racha-contas |
 | [`FRONTEND_OVERLAY_MODAIS.md`](FRONTEND_OVERLAY_MODAIS.md) | Modais Angular Material: overlay CDK, scroll, z-index |
 | [`WHATSAPP_EVOLUTION.md`](WHATSAPP_EVOLUTION.md) | Evolution API: QR, webhook, privacidade, sessão |
+| [`CAPTURA_AUTOMATICA_CELULAR.md`](CAPTURA_AUTOMATICA_CELULAR.md) | Notificação Nubank/Itaú → lançamento automático (MacroDroid / Atalhos) |
 | [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) | Advisor, empréstimo consignado, Sentinela, fiscal, áudio, cron jobs |
 | [`INTEGRIDADE_SALDO.md`](INTEGRIDADE_SALDO.md) | Lock de saldo, audit trail, reconciliação, reparo financeiro, alertas, débito automático de fixas |
 | [`WEBHOOK_AUTH_EVOLUTION.md`](WEBHOOK_AUTH_EVOLUTION.md) | Autenticação do webhook Evolution: secret, rollback, testes |
@@ -27,6 +31,8 @@ Mapa de todos os ficheiros de referência do repositório.
 
 | Ficheiro | Descrição |
 |----------|-----------|
+| [`AMBIENTES.md`](AMBIENTES.md) | Matriz local / Docker / CI |
+| [`TESTES_BACKEND.md`](TESTES_BACKEND.md) | `mvn test` completo, Podman (RAM), contentor Postgres partilhado |
 | [`CONFIGURACAO_AMBIENTE.md`](../CONFIGURACAO_AMBIENTE.md) | Desenvolvimento local Windows |
 | [`docker/README.md`](../docker/README.md) | Docker Compose produção (portas, Flyway, Ollama) |
 | [`docker/REVERSO_PROXY_502.md`](../docker/REVERSO_PROXY_502.md) | Erro 502 atrás de proxy reverso |
@@ -58,6 +64,7 @@ Mapa de todos os ficheiros de referência do repositório.
 | Empréstimo consignado | `backend/.../EmprestimoService.java` |
 | Sentinela / patrimônio | `backend/.../PrevisaoFluxoCaixaService.java`, `SaldoService.java` |
 | Movimentação de saldo (ponto único, lock + audit) | `backend/.../SaldoMovimentacaoService.java` |
+| Ingestão notificação bancária | `backend/.../ingest/notificacao/` (`POST /api/ingest/notificacao`) |
 | Reparo financeiro (dry-run/aplicar) | `backend/.../ReparoFinanceiroController.java`, `SaldoReparoService.java` |
 | Alertas operacionais | `backend/.../AlertaOperacionalService.java` |
 | Débito automático de despesas fixas | `backend/.../DespesaFixaDebitoAutomaticoService.java` |
@@ -76,6 +83,6 @@ Ao alterar funcionalidades visíveis ao utilizador:
 2. Atualizar [`FUNCIONALIDADES.md`](FUNCIONALIDADES.md), [`JARVIS_PROTOCOLOS.md`](JARVIS_PROTOCOLOS.md) e secções relevantes em `VISAO_GERAL.md`.
 3. Se mudarem **cálculos visíveis** → [`CALCULOS_FINANCEIROS.md`](CALCULOS_FINANCEIROS.md) e [`AVISO_MUDANCAS_CALCULOS.md`](AVISO_MUDANCAS_CALCULOS.md).
 4. Se mudarem portas ou serviços Docker → `docker/README.md` e `stack-ports.ps1`.
-5. Schema BD → `SchemaAutoPatchService.java` (não há Flyway SQL neste repo).
+5. Schema BD → objectos **novos** em `backend/src/main/resources/db/migration/` (Flyway). `SchemaAutoPatchService` só para legado; não duplicar a mesma tabela nos dois. Ver [`PLANO_MIGRACAO_FLYWAY.md`](PLANO_MIGRACAO_FLYWAY.md).
 
-**Última revisão:** julho/2026
+**Última revisão:** setembro/2026

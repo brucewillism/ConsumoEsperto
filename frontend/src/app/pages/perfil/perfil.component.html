@@ -122,14 +122,11 @@
       <div class="alert-body">
         <strong>Captura automática de gastos</strong>
         <p class="hint">
-          Android: notificação do banco → MacroDroid → ConsumoEsperto.
-          iPhone: Apple Pay / Wallet → Atalhos → ConsumoEsperto.
-          Cada aparelho recebe um token exclusivo (não é o seu login).
+          Token dedicado + MacroDroid (Android) ou Atalhos (iPhone). A compra é lançada sozinha;
+          o J.A.R.V.I.S. avisa no WhatsApp para corrigir ou apagar.
         </p>
         <p class="hint">
-          Documentação:
-          <code>docs/MOBILE_CAPTURE_ANDROID_MACRODROID.md</code> e
-          <code>docs/MOBILE_CAPTURE_IOS_SHORTCUTS.md</code>.
+          Documentação: <code>docs/CAPTURA_AUTOMATICA_CELULAR.md</code>
         </p>
         <div class="mobile-loading" *ngIf="mobileCarregando"><i class="fas fa-spinner fa-spin"></i></div>
         <ul class="mobile-devices" *ngIf="!mobileCarregando && mobileDevices.length">
@@ -154,6 +151,7 @@
       <div class="mobile-toolbar">
         <button type="button" class="btn outline" (click)="abrirModalMobile('ANDROID_MACRODROID')">Adicionar Android</button>
         <button type="button" class="btn outline" (click)="abrirModalMobile('IOS_SHORTCUTS')">Adicionar iPhone</button>
+        <a routerLink="/captura-automatica" class="btn outline">Configurar captura</a>
         <a routerLink="/captura-automatica/revisao" class="btn outline">Revisão pendente</a>
       </div>
     </div>

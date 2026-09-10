@@ -4,11 +4,12 @@ import com.consumoesperto.dto.CartaoCreditoDTO;
 import com.consumoesperto.edith.EdithErrorCode;
 import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.edith.EdithIntegrationService;
+import com.consumoesperto.edith.UntrustedText;
 import com.consumoesperto.service.CartaoCreditoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -39,17 +40,19 @@ public class FinanceCardsListTool implements EdithFinanceTool {
             .limit(limit)
             .map(this::slim)
             .collect(Collectors.toList());
-        Map<String, Object> out = new HashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("cartoes", items);
         out.put("total", items.size());
+        out.put("limit", limit);
+        out.put("limit_max", ToolLimits.LIST_MAX);
         return out;
     }
 
     private Map<String, Object> slim(CartaoCreditoDTO c) {
-        Map<String, Object> m = new HashMap<>();
+        Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
-        m.put("nome", c.getNome());
-        m.put("banco", c.getBanco());
+        m.put("nome", UntrustedText.of(c.getNome(), 80));
+        m.put("banco", c.getBanco() != null && !c.getBanco().isBlank() ? UntrustedText.of(c.getBanco(), 80) : null);
         m.put("limite_disponivel", c.getLimiteDisponivel());
         m.put("dia_vencimento", c.getDiaVencimento());
         m.put("ativo", c.getAtivo());

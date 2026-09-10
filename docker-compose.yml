@@ -37,6 +37,8 @@ services:
     image: redis:alpine
     container_name: consumo_redis
     restart: always
+    # AOF + noeviction: sessão Evolution no Redis não deve ser evictada nem perder-se num restart limpo.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     volumes:
       - redis_data:/data
 
@@ -115,6 +117,14 @@ services:
       ALERTAS_WEBHOOK_ENABLED: ${ALERTAS_WEBHOOK_ENABLED:-false}
       ALERTAS_WEBHOOK_URL: ${ALERTAS_WEBHOOK_URL:-}
       ALERTAS_COOLDOWN_MINUTES: ${ALERTAS_COOLDOWN_MINUTES:-15}
+      ALERTAS_EMAIL_ENABLED: ${ALERTAS_EMAIL_ENABLED:-false}
+      ALERTA_EMAIL_DESTINO: ${ALERTA_EMAIL_DESTINO:-}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      WHATSAPP_MONITOR_ENABLED: ${WHATSAPP_MONITOR_ENABLED:-true}
       # Memória semântica J.A.R.V.I.S. — captura automática, dedupe, RAG híbrido e ciclo de vida
       MEMORIA_CAPTURA_AUTOMATICA_ENABLED: ${MEMORIA_CAPTURA_AUTOMATICA_ENABLED:-true}
       MEMORIA_DEDUPE_SIMILARIDADE: ${MEMORIA_DEDUPE_SIMILARIDADE:-0.90}
@@ -147,10 +157,15 @@ services:
       LEGACY_AI_FALLBACK_ENABLED: ${LEGACY_AI_FALLBACK_ENABLED:-true}
       EDITH_FALLBACK_ENABLED: ${EDITH_FALLBACK_ENABLED:-true}
       EDITH_TASK_TIMEOUT_MS: ${EDITH_TASK_TIMEOUT_MS:-300000}
-      # Captura automatica de gastos (MacroDroid / Atalhos iOS)
+      # Captura automatica de gastos (MacroDroid / Atalhos iOS) — pipeline legado X-CE-Device-Token
       MOBILE_CAPTURE_ENABLED: ${MOBILE_CAPTURE_ENABLED:-false}
       MOBILE_CAPTURE_INGESTION_URL: ${MOBILE_CAPTURE_INGESTION_URL:-https://consumoesperto.brucew07.com.br}
       MOBILE_CAPTURE_EDITH_CLASSIFICATION_ENABLED: ${MOBILE_CAPTURE_EDITH_CLASSIFICATION_ENABLED:-true}
+      MOBILE_CAPTURE_REQUIRE_HTTPS: ${MOBILE_CAPTURE_REQUIRE_HTTPS:-true}
+      # Notificacoes bancarias — POST /api/ingest/notificacao + X-Ingest-Token
+      INGEST_NOTIFICACAO_ENABLED: ${INGEST_NOTIFICACAO_ENABLED:-false}
+      INGEST_NOTIFICACAO_URL: ${INGEST_NOTIFICACAO_URL:-https://consumoesperto.brucew07.com.br}
+      INGEST_NOTIFICACAO_REQUIRE_HTTPS: ${INGEST_NOTIFICACAO_REQUIRE_HTTPS:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -179,7 +194,7 @@ services:
         condition: service_healthy
 
   evolution_api:
-    # Imagem em linha com https://github.com/EvolutionAPI/evolution-api (evoapicloud). Variáveis Redis: CACHE_REDIS_* (REDIS_* sozinho costuma falhar silenciosamente / reset na socket).
+    # Pin recomendado (humano, com backup de volumes): evoapicloud/evolution-api:v2.3.7 — NÃO actualizar latest sozinho.
     image: evoapicloud/evolution-api:latest
     container_name: consumo_evolution
     restart: always
@@ -193,10 +208,12 @@ services:
      - QRCODE_LIMIT=${EVOLUTION_QRCODE_LIMIT:-90}
      # Preto padrão — #198754 (verde) confundia utilizadores e alguns leitores preferem alto contraste
      - QRCODE_COLOR=#000000
-     # Vazio = auto; se o scan falhar, defina no .env a versão do fundo do menu WhatsApp Web (ex. 2.3000.1033893291)
-     - CONFIG_SESSION_PHONE_VERSION=${CONFIG_SESSION_PHONE_VERSION:-2.3000.1033893291}
+     # Vazio = a Evolution escolhe a versão WhatsApp Web. Pin antigo (2.3000.*) correlaciona com queda ~4 dias.
+     - CONFIG_SESSION_PHONE_VERSION=${CONFIG_SESSION_PHONE_VERSION:-}
      - CONFIG_SESSION_PHONE_CLIENT=${CONFIG_SESSION_PHONE_CLIENT:-Chrome}
      - CONFIG_SESSION_PHONE_NAME=${CONFIG_SESSION_PHONE_NAME:-Chrome}
+     # Nunca apagar instância por inactividade (perde pareamento).
+     - DEL_INSTANCE=${EVOLUTION_DEL_INSTANCE:-false}
      - NODE_OPTIONS=--dns-result-order=ipv4first
      - DATABASE_PROVIDER=postgresql
      # Atenção: caracteres especiais na password Postgres (@ : / #) devem estar URL-encoded no URI ou o contentor pode cair durante arranque.

@@ -123,7 +123,8 @@ public class FinancialImportDeduplicationService {
     public Match toMatch(Transacao t) {
         OrigemTransacao origem = t.getOrigemTransacao();
         boolean mobile = origem == OrigemTransacao.IOS_WALLET
-            || origem == OrigemTransacao.ANDROID_NOTIFICATION;
+            || origem == OrigemTransacao.ANDROID_NOTIFICATION
+            || origem == OrigemTransacao.NOTIFICACAO_BANCARIA;
         boolean alreadyImported = origem == OrigemTransacao.CSV_BANK_STATEMENT
             || origem == OrigemTransacao.CSV_CARD_STATEMENT
             || origem == OrigemTransacao.FATURA_PDF;
@@ -142,7 +143,7 @@ public class FinancialImportDeduplicationService {
         return MoedaUtil.nz(a).abs().compareTo(MoedaUtil.nz(b).abs()) == 0;
     }
 
-    static boolean descricaoCompativel(String a, String b) {
+    public static boolean descricaoCompativel(String a, String b) {
         if (a == null || b == null || a.isBlank() || b.isBlank()) {
             return false;
         }

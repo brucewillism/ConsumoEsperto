@@ -2,6 +2,7 @@ package com.consumoesperto.controller;
 
 import com.consumoesperto.dto.EvolutionIncomingMessageDTO;
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.config.WhatsappConexaoMonitorProperties;
 import com.consumoesperto.service.AiProvidersConfigService;
 import com.consumoesperto.service.AiRateLimitService;
 import com.consumoesperto.service.EvolutionInstanceSettingsService;
@@ -13,6 +14,7 @@ import com.consumoesperto.service.EvolutionWebhookDedupService;
 import com.consumoesperto.service.EvolutionBotEchoFilterService;
 import com.consumoesperto.service.EvolutionSessionMetricsService;
 import com.consumoesperto.service.EvolutionSessionWatchdogService;
+import com.consumoesperto.service.WhatsappConexaoMonitorService;
 import com.consumoesperto.service.WhatsappAccountProvisioner;
 import com.consumoesperto.service.WhatsAppBotAllowlist;
 import com.consumoesperto.service.WhatsAppCommandService;
@@ -51,6 +53,8 @@ public class EvolutionWebhookController {
     private final UsuarioAiConfigRepository usuarioAiConfigRepository;
     private final EvolutionSessionWatchdogService evolutionSessionWatchdogService;
     private final EvolutionSessionMetricsService evolutionSessionMetricsService;
+    private final WhatsappConexaoMonitorService whatsappConexaoMonitorService;
+    private final WhatsappConexaoMonitorProperties whatsappConexaoMonitorProperties;
     private final AiRateLimitService aiRateLimitService;
 
     /**
@@ -419,9 +423,13 @@ public class EvolutionWebhookController {
             String inst = instance.trim();
             if (EvolutionSessionWatchdogService.isConnectionLostState(state)) {
                 evolutionSessionMetricsService.recordDisconnect(inst, state);
-                evolutionSessionWatchdogService.onConnectionLost(inst, state);
             } else if ("open".equalsIgnoreCase(state)) {
                 evolutionSessionMetricsService.recordConnected(inst);
+            }
+            if (whatsappConexaoMonitorProperties.isEnabled()) {
+                whatsappConexaoMonitorService.aoEventoConexao(inst, state);
+            } else if (EvolutionSessionWatchdogService.isConnectionLostState(state)) {
+                evolutionSessionWatchdogService.onConnectionLost(inst, state);
             }
         }
         if ("open".equalsIgnoreCase(state) && instance != null && !instance.isBlank()) {

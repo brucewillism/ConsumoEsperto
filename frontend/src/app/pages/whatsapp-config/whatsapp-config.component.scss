@@ -273,3 +273,59 @@ h2 {
 .edith-admin-card {
   border-color: #475569;
 }
+
+.conexao-badge {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.conexao-badge[data-estado='open'] strong {
+  color: #86efac;
+}
+
+.conexao-badge[data-estado='close'],
+.conexao-badge[data-estado='error'],
+.conexao-badge[data-estado='missing'] strong {
+  color: #fca5a5;
+}
+
+.conexao-hist {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: #d1d5db;
+  max-height: 9rem;
+  overflow: auto;
+}
+
+.pareamento-tabs {
+  margin: 8px 0 4px;
+}
+
+.tab-body {
+  padding: 12px 4px 8px;
+}
+
+.pairing-code-box {
+  margin-top: 16px;
+  text-align: center;
+  background: #0b1220;
+  border: 1px dashed #38bdf8;
+  border-radius: 10px;
+  padding: 16px 12px;
+}
+
+.pairing-code {
+  font-size: 2rem;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.pairing-ttl {
+  margin: 8px 0 0;
+  color: #fcd34d;
+  font-size: 0.9rem;
+}

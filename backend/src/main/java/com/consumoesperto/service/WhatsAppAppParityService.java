@@ -223,6 +223,17 @@ public class WhatsAppAppParityService {
             List.of("Foto, nome, preferências J.A.R.V.I.S.", "Chaves de IA por utilizador"),
             "Vincular WhatsApp em WhatsApp no menu."
         ),
+        item("captura-notificacao", "Captura por notificação", "/captura-automatica", "Captura automática", "BOTH",
+            List.of(
+                "apagar",
+                "não foi isso",
+                "categoria Alimentação",
+                "conta Nubank",
+                "cartão Itaú"
+            ),
+            List.of("Token de ingestão", "Mapear banco ↔ conta/cartão", "Log das notificações", "Horário silencioso"),
+            "A compra é lançada sozinha; o J.A.R.V.I.S. avisa no WhatsApp para corrigir ou apagar."
+        ),
         item("whatsapp-vinculo", "Vincular WhatsApp", "/whatsapp-config", "WhatsApp", "APP_ONLY",
             List.of("usar o mesmo número no chat «Eu» / consigo mesmo"),
             List.of("Vincular número", "QR Code Evolution", "Desvincular"),

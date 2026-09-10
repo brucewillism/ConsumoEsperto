@@ -1,0 +1,16 @@
+{"id":"nu-compra-aprovada","app":"nubank","titulo":"Nubank","texto":"Compra aprovada: R$ 45,90 em PADARIA DO ZE","esperado":{"destino":"LANCAR","valor":"45.90","estabelecimento":"PADARIA DO ZE","tipo":"COMPRA_CREDITO","canal":"CREDITO","tipoTransacao":"DESPESA"}}
+{"id":"nu-compra-de","app":"nubank","titulo":"Compra aprovada","texto":"Compra de R$ 89,90 em POSTO SHELL","esperado":{"destino":"LANCAR","valor":"89.90","estabelecimento":"POSTO SHELL","tipo":"COMPRA_CREDITO","canal":"CREDITO","tipoTransacao":"DESPESA"}}
+{"id":"nu-pix-enviado","app":"nubank","titulo":"Nubank","texto":"Pix de R$ 20,00 para MARIA SILVA","esperado":{"destino":"LANCAR","valor":"20.00","estabelecimento":"MARIA SILVA","tipo":"PIX_ENVIADO","canal":"PIX","tipoTransacao":"DESPESA"}}
+{"id":"nu-pix-recebido","app":"nubank","titulo":"Nubank","texto":"Você recebeu um Pix de R$ 100,00 de PEDRO ALVES","esperado":{"destino":"LANCAR","valor":"100.00","estabelecimento":"PEDRO ALVES","tipo":"PIX_RECEBIDO","canal":"PIX","tipoTransacao":"RECEITA"}}
+{"id":"nu-saque","app":"nubank","titulo":"Nubank","texto":"Saque de R$ 200,00 no Banco 24 Horas","esperado":{"destino":"LANCAR","valor":"200.00","estabelecimento":"BANCO 24 HORAS","tipo":"SAQUE","canal":"DEBITO","tipoTransacao":"DESPESA"}}
+{"id":"nu-estorno","app":"nubank","titulo":"Nubank","texto":"Estorno de compra: R$ 45,90 em PADARIA DO ZE","esperado":{"destino":"ESTORNO","valor":"45.90","estabelecimento":"PADARIA DO ZE","canal":"CREDITO"}}
+{"id":"nu-fatura-fechou","app":"nubank","titulo":"Nubank","texto":"Sua fatura fechou em R$ 1.200,00","esperado":{"destino":"IGNORAR"}}
+{"id":"nu-login","app":"nubank","titulo":"Nubank","texto":"Novo login detectado no seu app","esperado":{"destino":"IGNORAR"}}
+{"id":"nu-promo","app":"nubank","titulo":"Nubank","texto":"Aproveite 10% de cashback neste fim de semana","esperado":{"destino":"IGNORAR"}}
+{"id":"nu-saldo","app":"nubank","titulo":"Nubank","texto":"Saldo disponível: R$ 350,00","esperado":{"destino":"IGNORAR"}}
+{"id":"itau-compra","app":"itau","titulo":"Itaú","texto":"Compra aprovada no cartão: R$ 32,00 em LOJA DO JOAO","esperado":{"destino":"LANCAR","valor":"32.00","estabelecimento":"LOJA DO JOAO","tipo":"COMPRA_CREDITO","canal":"CREDITO","tipoTransacao":"DESPESA"}}
+{"id":"itau-pix","app":"itau","titulo":"Itaú","texto":"Você fez um Pix de R$ 50,00 para JOAO SILVA","esperado":{"destino":"LANCAR","valor":"50.00","estabelecimento":"JOAO SILVA","tipo":"PIX_ENVIADO","canal":"PIX","tipoTransacao":"DESPESA"}}
+{"id":"itau-debito","app":"itau","titulo":"Itaú","texto":"Débito de R$ 15,00 em POSTO Ipiranga","esperado":{"destino":"LANCAR","valor":"15.00","estabelecimento":"POSTO IPIRANGA","tipo":"COMPRA_DEBITO","canal":"DEBITO","tipoTransacao":"DESPESA"}}
+{"id":"itau-estorno","app":"itau","titulo":"Itaú","texto":"Estorno de R$ 32,00 em LOJA DO JOAO","esperado":{"destino":"ESTORNO","valor":"32.00","estabelecimento":"LOJA DO JOAO"}}
+{"id":"itau-fatura","app":"itau","titulo":"Itaú","texto":"Sua fatura fechou. Vencimento da fatura em 10/10","esperado":{"destino":"IGNORAR"}}
+{"id":"desconhecida-sem-valor","app":"nubank","titulo":"Nubank","texto":"Bem-vindo ao app","esperado":{"destino":"NAO_RECONHECIDA"}}

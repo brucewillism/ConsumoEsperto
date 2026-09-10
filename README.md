@@ -64,7 +64,7 @@ Alternativa: `.\scripts\subir-stack.ps1` abre três janelas CMD (requer wrappers
 | Camada | Tecnologia |
 |--------|------------|
 | Frontend | Angular 19, Material, Chart.js |
-| Backend | Spring Boot 3, Java 17, Flyway, JWT |
+| Backend | Spring Boot **2.7.18** (fora do suporte OSS — ver `docs/BACKLOG_SPRING_BOOT_3.md`), Java 17, Flyway, JWT |
 | WhatsApp | Evolution API (`evoapicloud/evolution-api`) |
 | IA | Groq → OpenAI → Claude → Gemini → DeepSeek → Ollama |
 | Dados | PostgreSQL (+ pgvector) · Redis (Evolution) |

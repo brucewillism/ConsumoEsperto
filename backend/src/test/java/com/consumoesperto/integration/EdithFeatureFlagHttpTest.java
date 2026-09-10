@@ -89,4 +89,31 @@ class EdithFeatureFlagHttpTest {
             .andExpect(jsonPath("$.edith").value("DISABLED"))
             .andExpect(jsonPath("$.assistant").value("LOCAL"));
     }
+
+    @Test
+    void edithDesligada_textoLivreRespondeViaLegacyGateway() throws Exception {
+        mockMvc.perform(post("/api/ia-chat")
+                .header("Authorization", token)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"mensagem\":\"oi\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.mode").value("LOCAL"))
+            .andExpect(jsonPath("$.assistant").value("LOCAL"))
+            .andExpect(jsonPath("$.resposta").isNotEmpty());
+    }
+
+    @Test
+    void nucleoFinanceiroNaoDependeDaEdith() throws Exception {
+        mockMvc.perform(get("/api/faturas").header("Authorization", token))
+            .andExpect(status().isOk());
+        mockMvc.perform(get("/api/contas-bancarias").header("Authorization", token))
+            .andExpect(status().isOk());
+        mockMvc.perform(get("/api/transacoes/resumo-mes-atual").header("Authorization", token))
+            .andExpect(status().isOk());
+        mockMvc.perform(get("/api/relatorios/mensal").param("ano", "2026").param("mes", "9")
+                .header("Authorization", token))
+            .andExpect(status().isOk());
+        mockMvc.perform(get("/api/importacoes/faturas/pendentes").header("Authorization", token))
+            .andExpect(status().isOk());
+    }
 }

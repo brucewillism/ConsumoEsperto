@@ -5,14 +5,13 @@ import com.consumoesperto.eco.EcoException;
 import com.consumoesperto.edith.EdithErrorCode;
 import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.edith.EdithIntegrationService;
+import com.consumoesperto.edith.UntrustedText;
 import com.consumoesperto.service.FaturaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -41,11 +40,12 @@ public class FinanceInvoiceReadTool implements EdithFinanceTool {
         }
 
         FaturaDTO fatura = faturaService.buscarPorId(invoiceId, usuarioId);
+        int itemCount = fatura.getTransacoes() != null ? fatura.getTransacoes().size() : 0;
 
-        Map<String, Object> out = new HashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", fatura.getId());
-        out.put("cartao", fatura.getNomeCartao());
-        out.put("competencia", fatura.getNumeroFatura());
+        out.put("cartao", UntrustedText.of(fatura.getNomeCartao(), 80));
+        out.put("competencia", UntrustedText.of(fatura.getNumeroFatura(), 40));
         out.put("status", fatura.getStatusFatura() != null ? fatura.getStatusFatura().name() : fatura.getStatus());
         out.put("valor_total", fatura.getValorTotal() != null ? fatura.getValorTotal() : fatura.getValorFatura());
         out.put("valor_minimo", fatura.getValorMinimo());
@@ -54,20 +54,8 @@ public class FinanceInvoiceReadTool implements EdithFinanceTool {
         out.put("paga", fatura.getPaga());
         out.put("data_pagamento", fatura.getDataPagamento());
         out.put("valor_pago", fatura.getValorPago());
-
-        List<Map<String, Object>> itens = fatura.getTransacoes() != null
-            ? fatura.getTransacoes().stream().limit(20).map(FinanceInvoiceReadTool::slimItem).collect(Collectors.toList())
-            : List.of();
-        out.put("principais_itens", itens);
+        out.put("item_count", itemCount);
         return out;
-    }
-
-    private static Map<String, Object> slimItem(Map<String, Object> raw) {
-        Map<String, Object> m = new HashMap<>();
-        m.put("id", raw.get("id"));
-        m.put("descricao", raw.get("descricao") != null ? raw.get("descricao") : raw.get("description"));
-        m.put("valor", raw.get("valor") != null ? raw.get("valor") : raw.get("value"));
-        return m;
     }
 
     private static Long parseInvoiceId(Object raw) {

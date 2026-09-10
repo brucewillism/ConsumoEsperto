@@ -1,0 +1,154 @@
+<div class="review-page">
+  <div class="card">
+    <a routerLink="/perfil" class="link-back"><i class="fas fa-arrow-left"></i> Voltar ao perfil</a>
+    <h1>Captura automática</h1>
+    <p class="hint">
+      O celular envia a notificação do banco; o ConsumoEsperto lança a transação e o J.A.R.V.I.S. avisa no WhatsApp
+      para corrigir ou apagar. Guia:
+      <code>docs/CAPTURA_AUTOMATICA_CELULAR.md</code>.
+    </p>
+    <p>
+      <a routerLink="/captura-automatica/revisao" class="link-inline">Revisão pendente (pipeline antigo)</a>
+    </p>
+
+    <div class="loading" *ngIf="carregando"><i class="fas fa-spinner fa-spin"></i> A carregar…</div>
+
+    <ng-container *ngIf="!carregando && config">
+      <section class="block">
+        <h2>Token de ingestão</h2>
+        <p class="hint">
+          Endpoint: <code>{{ config.ingestionUrl }}</code>
+          <button type="button" class="linkish" (click)="copiar(config.ingestionUrl)">copiar</button>
+        </p>
+        <p class="meta" *ngIf="config.token.existe">
+          Prefixo {{ config.token.prefixo }} ·
+          {{ config.token.ativo ? 'activo' : 'revogado' }}
+          <span *ngIf="config.token.ultimoUsoEm"> · último uso {{ config.token.ultimoUsoEm | date : 'short' }}</span>
+        </p>
+        <p class="hint warning" *ngIf="tokenNovo">
+          Copie agora — o valor completo não volta a aparecer.
+        </p>
+        <div class="cred-block" *ngIf="tokenNovo">
+          <code>{{ tokenNovo.token }}</code>
+          <button type="button" class="btn primary" (click)="copiar(tokenNovo.token)">Copiar token</button>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn primary" (click)="gerarToken()">
+            {{ config.token.existe && config.token.ativo ? 'Regenerar token' : 'Gerar token' }}
+          </button>
+          <button
+            type="button"
+            class="btn outline"
+            *ngIf="config.token.existe && config.token.ativo"
+            (click)="revogarToken()"
+          >
+            Revogar
+          </button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Preferências</h2>
+        <label class="fld check">
+          <input type="checkbox" [(ngModel)]="config.preferencias.ativo" name="ativo" />
+          <span>Captura activa (lançar automaticamente)</span>
+        </label>
+        <label class="fld">
+          <span>Aviso no WhatsApp</span>
+          <select [(ngModel)]="config.preferencias.agrupamento" name="agrupamento">
+            <option value="IMEDIATO">Cada lançamento</option>
+            <option value="RESUMO">Resumo a cada N minutos</option>
+          </select>
+        </label>
+        <label class="fld" *ngIf="config.preferencias.agrupamento === 'RESUMO'">
+          <span>Minutos do resumo</span>
+          <input type="number" min="1" max="180" [(ngModel)]="config.preferencias.resumoMinutos" name="resumoMinutos" />
+        </label>
+        <label class="fld">
+          <span>Horário silencioso (início)</span>
+          <input type="time" [(ngModel)]="config.preferencias.silenciosoInicio" name="silencioIni" />
+        </label>
+        <label class="fld">
+          <span>Horário silencioso (fim)</span>
+          <input type="time" [(ngModel)]="config.preferencias.silenciosoFim" name="silencioFim" />
+        </label>
+        <label class="fld">
+          <span>Conta padrão (quando o app do banco não está mapeado)</span>
+          <select [(ngModel)]="config.preferencias.contaPadraoId" name="contaPadrao">
+            <option [ngValue]="null">Conta padrão do perfil</option>
+            <option *ngFor="let c of contas" [ngValue]="c.id">{{ c.nome }}</option>
+          </select>
+        </label>
+        <div class="actions">
+          <button type="button" class="btn primary" (click)="salvarPrefs()">Guardar preferências</button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Banco ↔ conta/cartão</h2>
+        <p class="hint">Ex.: Nubank crédito → cartão Nubank; Nubank PIX → conta Nubank.</p>
+        <ul class="fontes" *ngIf="config.fontes.length">
+          <li *ngFor="let f of config.fontes">
+            <span
+              ><strong>{{ f.app }}</strong> {{ f.canal }} → conta {{ nomeConta(f.contaBancariaId) }} · cartão
+              {{ nomeCartao(f.cartaoCreditoId) }}</span
+            >
+            <button type="button" class="linkish danger" (click)="removerFonte(f)">Remover</button>
+          </li>
+        </ul>
+        <div class="grid-fonte">
+          <label class="fld">
+            <span>App</span>
+            <select [(ngModel)]="novaFonte.app" name="appFonte">
+              <option value="nubank">Nubank</option>
+              <option value="itau">Itaú</option>
+            </select>
+          </label>
+          <label class="fld">
+            <span>Canal</span>
+            <select [(ngModel)]="novaFonte.canal" name="canalFonte">
+              <option value="CREDITO">Crédito</option>
+              <option value="DEBITO">Débito</option>
+              <option value="PIX">PIX</option>
+            </select>
+          </label>
+          <label class="fld">
+            <span>Conta</span>
+            <select [(ngModel)]="novaFonte.contaBancariaId" name="contaFonte">
+              <option [ngValue]="null">—</option>
+              <option *ngFor="let c of contas" [ngValue]="c.id">{{ c.nome }}</option>
+            </select>
+          </label>
+          <label class="fld">
+            <span>Cartão</span>
+            <select [(ngModel)]="novaFonte.cartaoCreditoId" name="cartaoFonte">
+              <option [ngValue]="null">—</option>
+              <option *ngFor="let c of cartoes" [ngValue]="c.id">{{ c.nome }}</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn outline" (click)="adicionarFonte()">Guardar mapeamento</button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Últimas notificações</h2>
+        <p class="empty" *ngIf="!logs.length">Ainda não chegou nenhuma notificação.</p>
+        <article class="event-card" *ngFor="let n of logs">
+          <header>
+            <strong>{{ n.app }}</strong>
+            <span class="badge">{{ labelStatus(n.status) }}</span>
+          </header>
+          <p>{{ n.titulo }}</p>
+          <p>{{ n.texto }}</p>
+          <p class="meta">
+            {{ n.criadoEm | date : 'short' }}
+            <span *ngIf="n.transacaoId"> · transação #{{ n.transacaoId }}</span>
+            <span *ngIf="n.erro"> · {{ n.erro }}</span>
+          </p>
+        </article>
+      </section>
+    </ng-container>
+  </div>
+</div>

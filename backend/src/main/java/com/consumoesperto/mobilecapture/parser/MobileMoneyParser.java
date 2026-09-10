@@ -6,7 +6,8 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-final class MobileMoneyParser {
+/** Parser de valores pt-BR partilhado pela captura móvel e pela ingestão de notificações. */
+public final class MobileMoneyParser {
 
   private static final Pattern MONEY = Pattern.compile(
       "(?i)(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})");
@@ -14,7 +15,7 @@ final class MobileMoneyParser {
   private MobileMoneyParser() {
   }
 
-  static Optional<BigDecimal> firstAmount(String... texts) {
+  public static Optional<BigDecimal> firstAmount(String... texts) {
     if (texts == null) {
       return Optional.empty();
     }
@@ -27,7 +28,7 @@ final class MobileMoneyParser {
     return Optional.empty();
   }
 
-  static Optional<BigDecimal> parseAmount(String text) {
+  public static Optional<BigDecimal> parseAmount(String text) {
     if (text == null || text.isBlank()) {
       return Optional.empty();
     }
@@ -47,7 +48,7 @@ final class MobileMoneyParser {
     return Optional.empty();
   }
 
-  static String normalizeMerchant(String merchant) {
+  public static String normalizeMerchant(String merchant) {
     if (merchant == null) {
       return null;
     }

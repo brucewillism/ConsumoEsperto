@@ -60,6 +60,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             path.startsWith("/api/oauth2/") ||
             path.startsWith("/api/public/") ||
             path.startsWith("/api/ingestion/mobile/") ||
+            path.startsWith("/api/ingest/notificacao") ||
             path.startsWith("/swagger-ui/") ||
             path.startsWith("/v3/api-docs/") ||
             path.equals("/login") || 

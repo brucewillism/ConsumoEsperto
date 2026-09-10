@@ -17,7 +17,7 @@ Legenda de status: `[x] VALIDADO` · `[~] IMPLEMENTADO NÃO VALIDADO` · `[-] PA
 | Família | Qualquer membro renomeava/convidava | Papéis `OWNER`/`MEMBER` persistidos; convite com expiração, cancelamento, remoção | `FamiliaAutorizacaoHttpTest` (matriz completa) | `[x] VALIDADO` |
 | WhatsApp config | `/api/whatsapp/**` amplo; webhook sem limite | Webhook só com segredo (`EvolutionWebhookApiKeyFilter`); payload max; endpoints não-webhook autenticados | `WhatsAppSegurancaHttpTest` | `[x] VALIDADO` |
 
-\* Testes Postgres com Testcontainers **ignorados localmente** sem Docker (`Skipped: 1` cada); validados em CI com PostgreSQL.
+\* Testes Postgres vanilla partilham um contentor Testcontainers (`SharedPostgresContainer`); `MemoriaSemanticaPostgresIntegrationTest` usa imagem pgvector. Sem Docker/Podman são *skipped*. Ver [`TESTES_BACKEND.md`](TESTES_BACKEND.md).
 
 ---
 

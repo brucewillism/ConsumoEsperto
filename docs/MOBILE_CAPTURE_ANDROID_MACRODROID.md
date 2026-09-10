@@ -1,5 +1,7 @@
 # Captura automática — Android (MacroDroid)
 
+> **Caminho actual (recomendado):** [`CAPTURA_AUTOMATICA_CELULAR.md`](CAPTURA_AUTOMATICA_CELULAR.md) — `POST /api/ingest/notificacao` com header `X-Ingest-Token`. Este documento descreve o pipeline legado `POST /api/ingestion/mobile/transactions`.
+
 Este guia descreve como enviar notificações bancárias do Android para o ConsumoEsperto **sem captura de tela** e **sem OCR**.
 
 ## Pré-requisitos

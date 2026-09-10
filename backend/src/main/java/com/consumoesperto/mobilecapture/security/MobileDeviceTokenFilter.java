@@ -3,6 +3,7 @@ package com.consumoesperto.mobilecapture.security;
 import com.consumoesperto.config.MobileCaptureProperties;
 import com.consumoesperto.model.MobileCaptureDevice;
 import com.consumoesperto.repository.MobileCaptureDeviceRepository;
+import com.consumoesperto.security.ForwardedHttps;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,7 @@ public class MobileDeviceTokenFilter extends OncePerRequestFilter {
 
   private final MobileCaptureProperties properties;
   private final MobileCaptureDeviceRepository deviceRepository;
+  private final ForwardedHttps forwardedHttps;
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -41,8 +43,8 @@ public class MobileDeviceTokenFilter extends OncePerRequestFilter {
       response.sendError(HttpServletResponse.SC_NOT_FOUND);
       return;
     }
-    if (properties.isRequireHttps() && !isSecure(request)) {
-      response.sendError(HttpServletResponse.SC_FORBIDDEN, "HTTPS obrigatório");
+    if (properties.isRequireHttps() && !ForwardedHttps.isHttps(request)) {
+      forwardedHttps.rejectRequired(request, response);
       return;
     }
     String rawToken = request.getHeader(DEVICE_TOKEN_HEADER);
@@ -58,13 +60,5 @@ public class MobileDeviceTokenFilter extends OncePerRequestFilter {
     }
     SecurityContextHolder.getContext().setAuthentication(new MobileDeviceAuthentication(device.get()));
     filterChain.doFilter(request, response);
-  }
-
-  private static boolean isSecure(HttpServletRequest request) {
-    if (request.isSecure()) {
-      return true;
-    }
-    String forwarded = request.getHeader("X-Forwarded-Proto");
-    return forwarded != null && forwarded.equalsIgnoreCase("https");
   }
 }

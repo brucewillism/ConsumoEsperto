@@ -32,6 +32,8 @@ public class UsuarioSessaoContextoService {
     public static final String CHAVE_CHEQUE_ESPECIAL_CONFIRMACAO = "CHEQUE_ESPECIAL_CONFIRMACAO";
     /** Hábito inferido pela memória J.A.R.V.I.S. aguardando confirmação sim/não do usuário. */
     public static final String CHAVE_HABITO_CONFIRMACAO = "HABITO_MEMORIA_CONFIRMACAO";
+    /** Lançamento automático por notificação bancária — corrigir categoria/conta ou apagar. */
+    public static final String CHAVE_CAPTURA_NOTIFICACAO = "CAPTURA_NOTIFICACAO";
 
     private final UsuarioSessaoContextoRepository repository;
     private final ObjectMapper objectMapper;

@@ -154,6 +154,7 @@ export class AppComponent implements OnInit {
     if (path.startsWith('/investimentos')) return 'Investimentos';
     if (path.startsWith('/score')) return 'Score';
     if (path.startsWith('/importacoes-pendentes')) return 'Importações Pendentes';
+    if (path.startsWith('/captura-automatica')) return 'Captura automática';
     if (path.startsWith('/whatsapp-config')) return 'WhatsApp';
     if (path.startsWith('/perfil')) return 'Perfil';
     if (path.startsWith('/dashboard')) return 'Dashboard';

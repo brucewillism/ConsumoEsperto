@@ -239,6 +239,14 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
     return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
+  untrustedValue(raw: unknown): string {
+    if (raw && typeof raw === 'object' && 'value' in (raw as Record<string, unknown>)) {
+      const v = (raw as { value?: unknown }).value;
+      return v == null ? '' : String(v);
+    }
+    return raw == null ? '' : String(raw);
+  }
+
   private onChatResponse(res: IaChatResponse): void {
     if (res.assistant) {
       this.assistantState = res.assistant as JarvisAssistantState;
@@ -288,8 +296,9 @@ export class JarvisChatPanelComponent implements OnInit, OnChanges, OnDestroy {
       this.consultaConcluida.emit();
       this.rolarParaFim();
     } else if (ev.status === 'FAILED') {
-      this.historico[idx].texto = mensagemErroJarvis();
-      this.assistantState = 'DEGRADED';
+      this.historico[idx].texto =
+        'O assistente cognitivo está temporariamente indisponível. Suas finanças continuam acessíveis no app.';
+      this.assistantState = 'EDITH_UNAVAILABLE';
       this.carregando = false;
       this.unsubscribeSse?.();
       this.unsubscribeSse = null;

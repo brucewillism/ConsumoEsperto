@@ -4,6 +4,7 @@ import com.consumoesperto.eco.EcoDeadlineExceededException;
 import com.consumoesperto.eco.EcoEnvelopeHolder;
 import com.consumoesperto.eco.EcoException;
 import com.consumoesperto.edith.EdithException;
+import com.consumoesperto.ingest.notificacao.security.IngestNotificacaoException;
 import com.consumoesperto.mobilecapture.security.MobileCaptureException;
 import com.consumoesperto.util.AiErroHumanizer;
 import lombok.extern.slf4j.Slf4j;
@@ -305,6 +306,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             msg,
             JarvisErrorCopy.CONFLICT_INSTRUCAO,
             HttpStatus.CONFLICT.value(),
+            path
+        ));
+    }
+
+    @ExceptionHandler(IngestNotificacaoException.class)
+    public ResponseEntity<ApiError> handleIngestNotificacao(IngestNotificacaoException ex, WebRequest request) {
+        String path = pathFrom(request);
+        String msg = ex.getMessage() != null ? ex.getMessage() : "Ingestão de notificação indisponível";
+        HttpStatus status = msg.toLowerCase().contains("limite")
+            ? HttpStatus.TOO_MANY_REQUESTS
+            : HttpStatus.BAD_REQUEST;
+        log.warn("ingest_notificacao_error path={} msg={}", path, msg);
+        return ResponseEntity.status(status).body(new ApiError(
+            "INGEST_NOTIFICACAO_ERROR",
+            msg,
+            "Verifique o token de ingestão e o payload enviado.",
+            status.value(),
             path
         ));
     }

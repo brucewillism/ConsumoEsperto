@@ -143,6 +143,14 @@ class WhatsAppSegurancaHttpTest {
             .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/usuarios/whatsapp/evolution-connection-status"))
             .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/whatsapp/conexao/status"))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/whatsapp/conexao/reconectar"))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/whatsapp/conexao/pairing-code")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"numero\":\"81999999999\"}"))
+            .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -22,23 +22,83 @@
         <span *ngIf="numeroAtual && evolutionWaConnected === false" class="status-warn">
           Sessão WhatsApp (Evolution): <strong>desligada</strong>
           <span *ngIf="evolutionInstanceName" class="muted"> — {{ evolutionInstanceName }}</span>
-          — use <strong>Atualizar vínculo</strong> para escanear um QR novo.
+          — reconecte abaixo (automático tenta sozinho; se falhar, QR ou código).
         </span>
         <span *ngIf="evolutionWaConnected === null && numeroAtual" class="status-muted">
           A verificar ligação com a Evolution…
         </span>
+        <span *ngIf="conexaoStatus?.estado" class="conexao-badge" [attr.data-estado]="conexaoStatus?.estado">
+          Monitor: <strong>{{ estadoBadgeLabel(conexaoStatus?.estado) }}</strong>
+          <span class="muted" *ngIf="conexaoStatus?.minutosNoEstado != null">
+            — neste estado há {{ conexaoStatus?.minutosNoEstado }} min
+          </span>
+        </span>
+        <span class="muted" *ngIf="conexaoStatus?.detalhe">{{ conexaoStatus?.detalhe }}</span>
       </div>
+      <button
+        class="btn outline"
+        type="button"
+        (click)="reconectarAgora()"
+        [disabled]="carregando || reconectandoAgora || evolutionWaConnected === true"
+      >
+        {{ reconectandoAgora ? 'A reconectar…' : 'Reconectar agora' }}
+      </button>
+      <ul class="conexao-hist" *ngIf="conexaoStatus?.transicoes?.length">
+        <li *ngFor="let t of conexaoStatus?.transicoes">
+          <span class="muted">{{ t.verificadoEm | date:'dd/MM HH:mm' }}</span>
+          {{ t.estadoAnterior || '—' }} → {{ t.estadoNovo }}
+          <span class="muted" *ngIf="t.origem">({{ t.origem }})</span>
+        </li>
+      </ul>
     </div>
 
-    <label for="whatsappNumero">Número WhatsApp (formato internacional)</label>
-    <input
-      id="whatsappNumero"
-      type="text"
-      ceMask="phone"
-      [(ngModel)]="numeroWhatsapp"
-      placeholder="+55 (11) 99999-9999"
-      [disabled]="carregando"
-    />
+    <mat-tab-group [(selectedIndex)]="abaPareamento" class="pareamento-tabs">
+      <mat-tab label="Escanear QR">
+        <div class="tab-body">
+          <label for="whatsappNumero">Número WhatsApp (formato internacional)</label>
+          <input
+            id="whatsappNumero"
+            type="text"
+            ceMask="phone"
+            [(ngModel)]="numeroWhatsapp"
+            placeholder="+55 (11) 99999-9999"
+            [disabled]="carregando"
+          />
+          <p class="hint">Após vincular, o QR abre num modal. Leia-o no telemóvel em até ~90 s.</p>
+        </div>
+      </mat-tab>
+      <mat-tab label="Conectar com número">
+        <div class="tab-body">
+          <label for="whatsappNumeroPairing">Número WhatsApp (DDI + DDD)</label>
+          <input
+            id="whatsappNumeroPairing"
+            type="text"
+            ceMask="phone"
+            [(ngModel)]="numeroWhatsapp"
+            placeholder="+55 (81) 99999-9999"
+            [disabled]="carregando || pairingGerando"
+          />
+          <p class="hint">
+            No telemóvel: WhatsApp → <strong>Aparelhos ligados</strong> →
+            <strong>Ligar com número de telefone</strong> → digitar o código de 8 dígitos.
+          </p>
+          <button
+            class="btn primary"
+            type="button"
+            (click)="gerarCodigoPareamento()"
+            [disabled]="carregando || pairingGerando"
+          >
+            {{ pairingGerando ? 'A gerar código…' : 'Gerar código' }}
+          </button>
+          <div class="pairing-code-box" *ngIf="pairingCode">
+            <span class="pairing-code">{{ pairingCodeFormatado }}</span>
+            <p class="pairing-ttl" *ngIf="pairingSegundosRestantes > 0">
+              Expira em {{ pairingSegundosRestantes }} s
+            </p>
+          </div>
+        </div>
+      </mat-tab>
+    </mat-tab-group>
 
     <div class="actions">
       <button class="btn primary" (click)="vincular()" [disabled]="carregando">

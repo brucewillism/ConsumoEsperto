@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.config.WhatsappConexaoMonitorProperties;
 import com.consumoesperto.model.UsuarioAiConfig;
 import com.consumoesperto.repository.UsuarioAiConfigRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,8 @@ public class EvolutionSessionWatchdogService {
     private final EvolutionInstanceSettingsService evolutionInstanceSettingsService;
     private final EvolutionInstanceLifecycleService evolutionInstanceLifecycleService;
     private final EvolutionSessionMetricsService evolutionSessionMetricsService;
+    private final WhatsappConexaoMonitorService whatsappConexaoMonitorService;
+    private final WhatsappConexaoMonitorProperties whatsappConexaoMonitorProperties;
 
     private final ConcurrentHashMap<String, Long> lastWebhookActivityMs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> lastRecoverAttemptMs = new ConcurrentHashMap<>();
@@ -51,7 +54,11 @@ public class EvolutionSessionWatchdogService {
             return;
         }
         log.warn("Evolution CONNECTION_UPDATE perda de sessão: instance={} state={}", evolutionInstanceName, state);
-        attemptRecoverInstance(evolutionInstanceName.trim(), "connection-update:" + state);
+        if (whatsappConexaoMonitorProperties.isEnabled()) {
+            whatsappConexaoMonitorService.aoEventoConexao(evolutionInstanceName.trim(), state);
+        } else {
+            attemptRecoverInstance(evolutionInstanceName.trim(), "connection-update:" + state);
+        }
     }
 
     /**
@@ -61,43 +68,25 @@ public class EvolutionSessionWatchdogService {
         if (!watchdogEnabled || evolutionInstanceName == null || evolutionInstanceName.isBlank()) {
             return;
         }
-        attemptRecoverInstance(evolutionInstanceName.trim(), "send-failure");
+        if (whatsappConexaoMonitorProperties.isEnabled()) {
+            whatsappConexaoMonitorService.solicitarReconexaoPorInstancia(
+                evolutionInstanceName.trim(), "send-failure");
+        } else {
+            attemptRecoverInstance(evolutionInstanceName.trim(), "send-failure");
+        }
     }
 
-    @Scheduled(fixedDelayString = "${consumoesperto.evolution.watchdog.interval-ms:300000}")
+    /**
+     * Poll de sessões fantasma. A sondagem periódica e o backoff passam a
+     * {@link WhatsappConexaoMonitorService} (cron 5 min). Este método fica para
+     * chamadas manuais/diagnóstico.
+     */
     @Transactional(readOnly = true)
     public void scanStaleSessions() {
         if (!watchdogEnabled) {
             return;
         }
-        for (UsuarioAiConfig cfg : usuarioAiConfigRepository.findAll()) {
-            if (cfg == null || cfg.getUsuario() == null || cfg.getUsuario().getId() == null) {
-                continue;
-            }
-            Long userId = cfg.getUsuario().getId();
-            if (evolutionWaSessionRegistry.isUserDisconnected(userId)) {
-                continue;
-            }
-            String instance = cfg.getEvolutionInstanceName();
-            if (instance == null || instance.isBlank()) {
-                continue;
-            }
-            String name = instance.trim();
-            evolutionPairingService.invalidatePairingCredCache(userId);
-            EvolutionPairingService.ResolvedEvolutionCred cred = evolutionPairingService.resolveCredentials(userId);
-            if (cred == null || cred.instanceName == null || cred.instanceName.isBlank()) {
-                continue;
-            }
-            boolean ghost = evolutionPairingService.isGhostOpenStaleInstance(cred);
-            if (ghost) {
-                attemptRecoverInstance(name, "ghost-open-stale");
-                continue;
-            }
-            boolean open = evolutionPairingService.isRealWaSessionOpen(cred);
-            if (open) {
-                evolutionInstanceLifecycleService.ensureInstanceWebhook(name);
-            }
-        }
+        whatsappConexaoMonitorService.verificarTodasInstanciasVinculadas();
     }
 
     /**
@@ -128,11 +117,11 @@ public class EvolutionSessionWatchdogService {
                 continue;
             }
             if (evolutionPairingService.isGhostOpenStaleInstance(cred)) {
-                attemptRecoverInstance(name, "keepalive-ghost");
+                recoverOrDelegate(name, "keepalive-ghost");
                 continue;
             }
             if (!evolutionPairingService.isRealWaSessionOpen(cred)) {
-                attemptRecoverInstance(name, "keepalive-not-open");
+                recoverOrDelegate(name, "keepalive-not-open");
                 continue;
             }
             try {
@@ -142,6 +131,14 @@ public class EvolutionSessionWatchdogService {
             } catch (Exception e) {
                 log.debug("Evolution keepalive [{}]: {}", name, e.getMessage());
             }
+        }
+    }
+
+    private void recoverOrDelegate(String instanceName, String reason) {
+        if (whatsappConexaoMonitorProperties.isEnabled()) {
+            whatsappConexaoMonitorService.solicitarReconexaoPorInstancia(instanceName, reason);
+        } else {
+            attemptRecoverInstance(instanceName, reason);
         }
     }
 

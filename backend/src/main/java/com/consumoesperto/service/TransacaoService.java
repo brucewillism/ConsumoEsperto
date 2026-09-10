@@ -1,7 +1,10 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dto.FinanceCategoryTotalDto;
 import com.consumoesperto.dto.FinanceTransactionSearchItemDto;
+import com.consumoesperto.eco.CapabilityStageClock;
 import com.consumoesperto.eco.EcoException;
+import com.consumoesperto.edith.UntrustedText;
 import com.consumoesperto.exception.ResourceNotFoundException;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.security.OwnershipChecks;
@@ -89,6 +92,9 @@ public class TransacaoService {
     @org.springframework.context.annotation.Lazy
     private com.consumoesperto.service.jarvis.CategoriaCorrecaoMemoriaService categoriaCorrecaoMemoriaService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private javax.sql.DataSource dataSource;
+
     /**
      * Cria uma nova transação financeira no sistema
      * 
@@ -172,7 +178,10 @@ public class TransacaoService {
         Long categoriaId = transacaoDTO.getCategoriaId();
         boolean parcelaEmprestimo = transacaoDTO.getEmprestimoId() != null && !transacaoDTO.getEmprestimoId().isBlank();
         boolean despesaFatura = transacaoDTO.getFaturaId() != null;
+        boolean sugerirCategoria = transacaoDTO.getSugerirCategoriaAutomatica() == null
+            || Boolean.TRUE.equals(transacaoDTO.getSugerirCategoriaAutomatica());
         if (categoriaId == null
+            && sugerirCategoria
             && transacao.getTipoTransacao() == Transacao.TipoTransacao.DESPESA
             && !parcelaEmprestimo
             && !despesaFatura) {
@@ -1028,36 +1037,60 @@ public class TransacaoService {
         Transacao.TipoTransacao tipo,
         int limit
     ) {
-        if (categoryId != null) {
-            OwnershipChecks.requireOwned(
-                categoriaRepository.findByIdAndUsuarioId(categoryId, usuarioId),
-                categoriaRepository.existsById(categoryId),
-                "categoria");
-        }
-        if (accountId != null) {
-            contaBancariaService.buscarPorId(accountId, usuarioId);
-        }
-        if (cardId != null) {
-            OwnershipChecks.requireOwned(
-                cartaoCreditoRepository.findByIdAndUsuarioId(cardId, usuarioId),
-                cartaoCreditoRepository.existsById(cardId),
-                "cartão");
-        }
+        CapabilityStageClock.acquirePool(dataSource);
+        CapabilityStageClock.timed(CapabilityStageClock.OWNERSHIP, () -> {
+            if (categoryId != null) {
+                OwnershipChecks.requireOwned(
+                    categoriaRepository.findByIdAndUsuarioId(categoryId, usuarioId),
+                    categoriaRepository.existsById(categoryId),
+                    "categoria");
+            }
+            if (accountId != null) {
+                contaBancariaService.buscarPorId(accountId, usuarioId);
+            }
+            if (cardId != null) {
+                OwnershipChecks.requireOwned(
+                    cartaoCreditoRepository.findByIdAndUsuarioId(cardId, usuarioId),
+                    cartaoCreditoRepository.existsById(cardId),
+                    "cartão");
+            }
+        });
         PageRequest page = PageRequest.of(0, limit);
-        List<Long> ids = (categoryId == null && accountId == null && cardId == null && tipo == null)
-            ? transacaoRepository.searchIdsForCapabilityByPeriod(usuarioId, inicio, fim, page)
-            : transacaoRepository.searchIdsForCapabilityFiltered(
-                usuarioId, inicio, fim, categoryId, accountId, cardId,
-                tipo != null ? tipo.name() : null, page);
+        List<Long> ids = CapabilityStageClock.timed(CapabilityStageClock.SQL_IDS, () ->
+            (categoryId == null && accountId == null && cardId == null && tipo == null)
+                ? transacaoRepository.searchIdsForCapabilityByPeriod(usuarioId, inicio, fim, page)
+                : transacaoRepository.searchIdsForCapabilityFiltered(
+                    usuarioId, inicio, fim, categoryId, accountId, cardId,
+                    tipo != null ? tipo.name() : null, page));
         if (ids.isEmpty()) {
             return List.of();
         }
-        Map<Long, Transacao> byId = transacaoRepository.findGraphByIdIn(ids).stream()
-            .collect(Collectors.toMap(Transacao::getId, t -> t, (a, b) -> a));
-        return ids.stream()
-            .map(byId::get)
-            .filter(Objects::nonNull)
-            .map(this::toSearchItem)
+        Map<Long, Transacao> byId = CapabilityStageClock.timed(CapabilityStageClock.JPA_HYDRATE, () ->
+            transacaoRepository.findGraphByIdIn(ids).stream()
+                .collect(Collectors.toMap(Transacao::getId, t -> t, (a, b) -> a)));
+        return CapabilityStageClock.timed(CapabilityStageClock.DTO_MAP, () ->
+            ids.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .map(this::toSearchItem)
+                .collect(Collectors.toList()));
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinanceCategoryTotalDto> agregarDespesasPorCategoriaParaCapability(
+        Long usuarioId,
+        LocalDateTime inicio,
+        LocalDateTime fim,
+        int limit
+    ) {
+        List<Object[]> rows = transacaoRepository.sumDespesasPorCategoriaCapability(usuarioId, inicio, fim);
+        return rows.stream()
+            .limit(limit)
+            .map(row -> FinanceCategoryTotalDto.builder()
+                .categoryId(row[0] instanceof Number n ? n.longValue() : null)
+                .categoria(UntrustedText.of(row[1] != null ? String.valueOf(row[1]) : "Sem categoria", 80))
+                .total(row[2] instanceof BigDecimal bd ? bd : BigDecimal.ZERO)
+                .build())
             .collect(Collectors.toList());
     }
 
@@ -1066,20 +1099,16 @@ public class TransacaoService {
         if (t.getFatura() != null && t.getFatura().getCartaoCredito() != null) {
             cardId = t.getFatura().getCartaoCredito().getId();
         }
-        String desc = t.getDescricao();
-        if (desc != null && desc.length() > 80) {
-            desc = desc.substring(0, 80);
-        }
         return FinanceTransactionSearchItemDto.builder()
             .id(t.getId())
             .occurredAt(t.getDataTransacao())
             .amount(t.getValor())
             .type(t.getTipoTransacao() != null ? t.getTipoTransacao().name() : null)
             .categoryId(t.getCategoria() != null ? t.getCategoria().getId() : null)
-            .category(t.getCategoria() != null ? t.getCategoria().getNome() : null)
+            .category(t.getCategoria() != null ? UntrustedText.of(t.getCategoria().getNome(), 80) : null)
             .accountId(t.getContaBancaria() != null ? t.getContaBancaria().getId() : null)
             .cardId(cardId)
-            .description(desc)
+            .description(UntrustedText.of(t.getDescricao(), 80))
             .build();
     }
 

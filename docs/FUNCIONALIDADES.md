@@ -50,6 +50,7 @@ App web + WhatsApp (J.A.R.V.I.S.) partilham a mesma base PostgreSQL: regista rec
 | Parcelamento | Transações | `grupoParcelaId`, exclusão UM/FUTURAS/TUDO |
 | Recorrência | Job | Gera ocorrências idempotentes |
 | WhatsApp | Texto natural | «gastei 45 no mercado» → NLP → transação CONFIRMADA |
+| Captura por notificação | `/captura-automatica` | Push Nubank/Itaú → `POST /api/ingest/notificacao` → CONFIRMADA + aviso WhatsApp corrigível. Guia: [`CAPTURA_AUTOMATICA_CELULAR.md`](CAPTURA_AUTOMATICA_CELULAR.md) |
 
 ---
 
@@ -207,6 +208,7 @@ Testes: `MemoriaSemanticaPostgresIntegrationTest` (Docker).
 | Dia 5 | Sentinela | Relatório disponibilidade real (WhatsApp) |
 | Semanal | Modo Viagem | Google Calendar → sugestão de teto |
 | Diário | Webhook dedup | Expurga entregas antigas |
+| 04:20 | Expurgo notificações bancárias | Retenção ~90 dias (`INGEST_NOTIFICACAO_RETENTION_DAYS`) |
 
 ---
 

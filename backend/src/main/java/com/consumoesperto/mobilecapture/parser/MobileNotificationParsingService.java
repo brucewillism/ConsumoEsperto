@@ -1,10 +1,13 @@
 package com.consumoesperto.mobilecapture.parser;
 
 import com.consumoesperto.mobilecapture.dto.MobileTransactionIngestionRequest;
+import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
@@ -68,12 +71,23 @@ public class MobileNotificationParsingService {
 
   private static LocalDateTime parseOccurredAt(String raw) {
     if (raw == null || raw.isBlank()) {
-      return LocalDateTime.now();
+      return AppTimeZone.agora();
+    }
+    String v = raw.trim();
+    try {
+      return LocalDateTime.parse(v);
+    } catch (DateTimeParseException ignored) {
+      // Atalhos / ISO-8601 costumam vir com offset
     }
     try {
-      return LocalDateTime.parse(raw);
-    } catch (DateTimeParseException e) {
-      return LocalDateTime.now();
+      return OffsetDateTime.parse(v).atZoneSameInstant(AppTimeZone.BR).toLocalDateTime();
+    } catch (DateTimeParseException ignored) {
+      // Instant (Z)
+    }
+    try {
+      return Instant.parse(v).atZone(AppTimeZone.BR).toLocalDateTime();
+    } catch (DateTimeParseException ignored) {
+      return AppTimeZone.agora();
     }
   }
 

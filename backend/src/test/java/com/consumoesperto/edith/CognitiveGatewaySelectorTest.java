@@ -44,6 +44,7 @@ class CognitiveGatewaySelectorTest {
         CognitiveGatewaySelector selector = new CognitiveGatewaySelector(properties, legacy, edith, integration);
         CognitiveResponse r = selector.dispatch(CognitiveRequest.builder().usuarioId(1L).content("oi").build());
         assertEquals("DEGRADED", r.getMode());
+        assertEquals("O assistente cognitivo está temporariamente indisponível. Suas finanças continuam acessíveis no app.", r.getResultText());
         verify(legacy, never()).send(any());
     }
 

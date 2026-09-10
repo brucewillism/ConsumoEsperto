@@ -1,16 +1,11 @@
 package com.consumoesperto.integration;
 
-import org.flywaydb.core.Flyway;
+import com.consumoesperto.integration.support.SharedPostgresContainer;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,36 +22,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * {@code ux_faturas_cartao_competencia_nao_quitada} impede a criação concorrente de duas
  * faturas não quitadas para o mesmo cartão + competência.
  */
-@Testcontainers
 @EnabledIf("com.consumoesperto.integration.FaturaCompetenciaUnicidadePostgresIntegrationTest#dockerDisponivel")
 class FaturaCompetenciaUnicidadePostgresIntegrationTest {
 
     static boolean dockerDisponivel() {
-        try {
-            DockerClientFactory.instance().client();
-            return true;
-        } catch (Throwable t) {
-            return false;
-        }
+        return SharedPostgresContainer.dockerAvailable();
     }
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-        .withDatabaseName("consumo_test")
-        .withUsername("consumo")
-        .withPassword("test");
 
     private static JdbcTemplate jdbc;
 
     @BeforeAll
     static void migrate() {
-        Flyway.configure()
-            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-            .locations("classpath:db/migration")
-            .load()
-            .migrate();
-        jdbc = new JdbcTemplate(new DriverManagerDataSource(
-            postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword()));
+        jdbc = SharedPostgresContainer.flywayJdbc("fatura_competencia");
     }
 
     private Long cartaoId;

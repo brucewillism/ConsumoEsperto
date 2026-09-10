@@ -12,7 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.persistence.EntityManager;
 import java.math.BigDecimal;
@@ -32,9 +33,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Curva de {@code finance.transactions.search} com pushdown de limit (H2).
  * Volumes: 2.500 → 50.000 → 200.000 no mesmo dataset.
  */
-@SpringBootTest
+@SpringBootTest(properties = {
+    // Memória própria: 200k inserts não partilham o H2 da suíte.
+    // Sem @Transactional: medir o SELECT com dados committed (tx aberta de 200k
+    // linhas fazia o p95 explodir e falhar de forma intermitente).
+    "spring.datasource.url=jdbc:h2:mem:tool_search_scale;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE"
+})
 @ActiveProfiles("test")
-@Transactional
 class ToolSearchScaleTest {
 
     @Autowired private UsuarioRepository usuarioRepository;
@@ -44,10 +49,11 @@ class ToolSearchScaleTest {
     @Autowired private FinanceTransactionsSearchTool searchTool;
     @Autowired private EntityManager entityManager;
     @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private PlatformTransactionManager transactionManager;
 
     @Test
     void curvaSearchComPushdown() throws Exception {
-        Fixture fx = seedUser();
+        Fixture fx = java.util.Objects.requireNonNull(seedUser(), "seed");
         Map<String, Object> input = new HashMap<>();
         input.put("date_from", LocalDate.now().minusDays(200).toString());
         input.put("date_to", LocalDate.now().toString());
@@ -61,7 +67,6 @@ class ToolSearchScaleTest {
         for (int volume : volumes) {
             insertTx(fx.userId, fx.catId, fx.contaId, volume - already);
             already = volume;
-            entityManager.flush();
             entityManager.clear();
             long[] samples = sample(() -> searchTool.executeForUser(fx.userId, input), 8, 24);
             long p50 = p(samples, 50);
@@ -167,26 +172,28 @@ class ToolSearchScaleTest {
     }
 
     private Fixture seedUser() {
-        String sfx = String.valueOf(System.nanoTime());
-        Usuario u = new Usuario();
-        u.setUsername("scale_" + sfx);
-        u.setEmail("scale_" + sfx + "@t.local");
-        u.setPassword(passwordEncoder.encode("secret"));
-        u.setNome("Scale");
-        u = usuarioRepository.save(u);
-        Categoria cat = new Categoria();
-        cat.setNome("Alim");
-        cat.setUsuario(u);
-        cat = categoriaRepository.save(cat);
-        ContaBancaria c = new ContaBancaria();
-        c.setNome("Conta");
-        c.setUsuario(u);
-        c.setTipo(ContaBancaria.TipoConta.CORRENTE);
-        c.setSaldoAtual(new BigDecimal("1000"));
-        c.setAtiva(true);
-        c = contaBancariaRepository.save(c);
-        entityManager.flush();
-        return new Fixture(u.getId(), cat.getId(), c.getId());
+        return new TransactionTemplate(transactionManager).execute(status -> {
+            String sfx = String.valueOf(System.nanoTime());
+            Usuario u = new Usuario();
+            u.setUsername("scale_" + sfx);
+            u.setEmail("scale_" + sfx + "@t.local");
+            u.setPassword(passwordEncoder.encode("secret"));
+            u.setNome("Scale");
+            u = usuarioRepository.save(u);
+            Categoria cat = new Categoria();
+            cat.setNome("Alim");
+            cat.setUsuario(u);
+            cat = categoriaRepository.save(cat);
+            ContaBancaria c = new ContaBancaria();
+            c.setNome("Conta");
+            c.setUsuario(u);
+            c.setTipo(ContaBancaria.TipoConta.CORRENTE);
+            c.setSaldoAtual(new BigDecimal("1000"));
+            c.setAtiva(true);
+            c = contaBancariaRepository.save(c);
+            entityManager.flush();
+            return new Fixture(u.getId(), cat.getId(), c.getId());
+        });
     }
 
     private record Fixture(long userId, long catId, long contaId) {
