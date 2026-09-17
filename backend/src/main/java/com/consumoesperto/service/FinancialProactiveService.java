@@ -53,6 +53,7 @@ public class FinancialProactiveService {
     private final AmortizacaoSazonalService amortizacaoSazonalService;
     private final AssinaturaRecorrenteService assinaturaRecorrenteService;
     private final com.consumoesperto.service.jarvis.CategoriaCorrecaoMemoriaService categoriaCorrecaoMemoriaService;
+    private final com.consumoesperto.config.FinancialAutonomyProperties financialAutonomyProperties;
 
     @Transactional(readOnly = true)
     public Optional<Categoria> sugerirCategoria(Long usuarioId, String descricao) {
@@ -68,6 +69,9 @@ public class FinancialProactiveService {
         Optional<Categoria> heuristica = sugerirCategoriaHeuristica(categorias, descricao);
         if (heuristica.isPresent()) {
             return heuristica;
+        }
+        if (financialAutonomyProperties.isEnabled()) {
+            return Optional.empty();
         }
         try {
             String nomes = categorias.stream().map(Categoria::getNome).collect(Collectors.joining(", "));

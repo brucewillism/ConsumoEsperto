@@ -87,7 +87,19 @@ Os nomes exatos das variáveis no Atalhos mudam entre versões do iOS — mapeie
 
 ## Deduplicação
 
-Reenvios com o mesmo `client_event_id` retornam `DUPLICATE` e não criam nova despesa.
+Prioridade de identidade:
+
+1. `client_event_id` (UUID do Atalho — preferido)
+2. `external_event_id` / id do provider, se existir
+3. fingerprint **exacto** (utilizador + origem + dispositivo + merchant normalizado + valor + timestamp com segundos + cartão/conta)
+
+O mesmo `client_event_id` duas vezes → `DUPLICATE`, uma transação.
+
+Duas compras reais parecidas (ex. POSTO X R$89,90 às 10:00 e 10:04) → **duas transações**. Semelhança não é dedup; o motor pode gerar alerta `POSSIBLE_DUPLICATE_CHARGE`.
+
+### Limitação — Atalho sem UUID
+
+Se o Atalho não enviar `client_event_id`, o servidor gera `derived:<sha256>` a partir dos campos exactos do evento (não de uma janela fuzzy). Reenvio do **mesmo** JSON no mesmo segundo é dedup; compras a 4 minutos de distância não são fundidas. Prefira gerar UUID no cliente.
 
 ## Revisão
 

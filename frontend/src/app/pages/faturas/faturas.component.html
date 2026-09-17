@@ -241,6 +241,18 @@
                 <span class="label">Valor total</span>
                 <span class="value" [class.valor-previsto-destaque]="fatura.status === 'PREVISTA'">{{ formatarMoeda(fatura.amount) }}</span>
               </div>
+              <div class="detalhe-item">
+                <span class="label">Confirmado</span>
+                <span class="value">{{ formatarMoeda(fatura.valorConfirmado ?? fatura.amount) }}</span>
+              </div>
+              <div class="detalhe-item">
+                <span class="label">Pendente</span>
+                <span class="value">{{ formatarMoeda(fatura.valorPendente ?? 0) }}</span>
+              </div>
+              <div class="detalhe-item">
+                <span class="label">Projetado</span>
+                <span class="value">{{ formatarMoeda(fatura.valorProjetado ?? ((fatura.valorConfirmado ?? fatura.amount) + (fatura.valorPendente ?? 0))) }}</span>
+              </div>
               
               <div class="detalhe-item">
                 <span class="label">Vencimento:</span>

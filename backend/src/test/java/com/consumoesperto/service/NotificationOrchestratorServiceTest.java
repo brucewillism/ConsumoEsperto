@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -134,6 +135,50 @@ class NotificationOrchestratorServiceTest {
 
         assertFalse(ok);
         verify(digestBufferRepository, never()).save(any());
+    }
+
+    @Test
+    void whatsappOfflineEnfileiraBrief() {
+        when(preferenciasService.obterCanalEntrega(1L)).thenReturn(NotificacaoCanalEntrega.WHATSAPP);
+        when(enviadaRepository.existsByUsuarioIdAndHashEvento(any(), any())).thenReturn(false);
+        when(digestBufferRepository.existsByUsuarioIdAndHashEvento(any(), any())).thenReturn(false);
+        when(whatsAppDeliveryService.enviar(1L, "brief mensal")).thenReturn(false);
+
+        boolean ok = service.solicitar(NotificacaoSolicitacao.builder()
+            .usuarioId(1L)
+            .evento(NotificacaoEventoTipo.RESUMO_SEMANAL)
+            .mensagem("brief mensal")
+            .hashEvento("MONTHLY_WEEKLY_BRIEF:1:2026-W38")
+            .entregaImediata(true)
+            .tituloWeb("Visão mensal")
+            .build());
+
+        assertFalse(ok);
+        ArgumentCaptor<NotificacaoDigestBuffer> cap = ArgumentCaptor.forClass(NotificacaoDigestBuffer.class);
+        verify(digestBufferRepository).save(cap.capture());
+        assertEquals("DELIVERY_PENDING", cap.getValue().getTipo());
+        assertEquals(NotificacaoEventoTipo.RESUMO_SEMANAL.name(), cap.getValue().getLinhaDigest());
+        verify(enviadaRepository, never()).save(any());
+    }
+
+    @Test
+    void entregaImediataNaoEsperaDigest() {
+        when(preferenciasService.obterCanalEntrega(1L)).thenReturn(NotificacaoCanalEntrega.WHATSAPP);
+        when(enviadaRepository.existsByUsuarioIdAndHashEvento(any(), any())).thenReturn(false);
+        when(digestBufferRepository.existsByUsuarioIdAndHashEvento(any(), any())).thenReturn(false);
+        when(whatsAppDeliveryService.enviar(1L, "brief geral")).thenReturn(true);
+
+        boolean ok = service.solicitar(NotificacaoSolicitacao.builder()
+            .usuarioId(1L)
+            .evento(NotificacaoEventoTipo.FORECAST_MENSAL)
+            .mensagem("brief geral")
+            .hashEvento("GENERAL_MONTHLY_BRIEF:1:2026-09")
+            .entregaImediata(true)
+            .build());
+
+        assertTrue(ok);
+        verify(digestBufferRepository, never()).save(any());
+        verify(enviadaRepository).save(any(NotificacaoEnviada.class));
     }
 
     private static NotificacaoDigestBuffer item(String linha) {

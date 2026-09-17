@@ -2,7 +2,6 @@ package com.consumoesperto.dto;
 
 import com.consumoesperto.model.JarvisTipoNotificacaoProativa;
 import com.consumoesperto.model.NotificacaoEventoTipo;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -21,6 +20,15 @@ public class NotificacaoSolicitacao {
     private final String digestLinha;
     /** Título para notificação in-app / Web Push futuro. */
     private final String tituloWeb;
+    private final Long financialEventId;
+    private final Long resourceId;
+    private final String decisionId;
+    /**
+     * Briefs e mensagens que não devem esperar o digest informativo.
+     * Idempotência continua no {@code hashEvento}.
+     */
+    @Builder.Default
+    private final boolean entregaImediata = false;
 
     public static NotificacaoSolicitacao legacy(
         Long usuarioId,

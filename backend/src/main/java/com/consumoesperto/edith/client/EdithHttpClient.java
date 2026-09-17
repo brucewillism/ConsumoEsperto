@@ -6,10 +6,12 @@ import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.edith.EdithResilience;
 import com.consumoesperto.eco.EcoEnvelopeHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.*;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
@@ -58,10 +60,25 @@ public class EdithHttpClient {
         this.resilience = resilience;
         Duration connect = Duration.ofMillis(connectTimeoutMs());
         Duration read = Duration.ofMillis(readTimeoutMs());
-        this.restTemplate = builder
+        ObjectMapper snake = objectMapper.copy();
+        snake.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+        MappingJackson2HttpMessageConverter jackson = new MappingJackson2HttpMessageConverter(snake);
+        RestTemplate template = builder
             .setConnectTimeout(connect)
             .setReadTimeout(read)
             .build();
+        var converters = template.getMessageConverters();
+        boolean replaced = false;
+        for (int i = 0; i < converters.size(); i++) {
+            if (converters.get(i) instanceof MappingJackson2HttpMessageConverter) {
+                converters.set(i, jackson);
+                replaced = true;
+            }
+        }
+        if (!replaced) {
+            converters.add(jackson);
+        }
+        this.restTemplate = template;
         this.javaHttpClient = HttpClient.newBuilder()
             .connectTimeout(connect)
             .build();
@@ -177,7 +194,8 @@ public class EdithHttpClient {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("circuit_open");
         }
         try {
-            HttpHeaders headers = authHeaders(null);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON, MediaType.ALL));
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             Supplier<ResponseEntity<String>> call = () ->
                 restTemplate.exchange(baseUrl() + EdithApiModels.Paths.HEALTH, HttpMethod.GET, entity, String.class);

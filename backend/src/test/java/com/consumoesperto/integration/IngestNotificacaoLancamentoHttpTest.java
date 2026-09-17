@@ -186,8 +186,7 @@ class IngestNotificacaoLancamentoHttpTest {
         merchantCategoryRuleService.saveUserRule(usuarioId, "MARIA SILVA", categoriaId);
         postNotif("Pix de R$ 18,00 para MARIA SILVA", "evt-cat-1");
         Transacao tx = transacaoRepository.findByUsuarioIdOrderByDataTransacaoDesc(usuarioId).get(0);
-        assertNotNull(tx.getCategoria());
-        assertEquals(categoriaId, tx.getCategoria().getId());
+        assertNull(tx.getCategoria(), "ingestão não aplica categoria; a policy decide depois");
 
         Map<String, Object> ctx = new HashMap<>();
         ctx.put("transacaoId", tx.getId());

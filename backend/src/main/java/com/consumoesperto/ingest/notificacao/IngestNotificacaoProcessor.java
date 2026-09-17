@@ -42,10 +42,10 @@ public class IngestNotificacaoProcessor {
     private final ContaBancariaRepository contaBancariaRepository;
     private final TransacaoRepository transacaoRepository;
     private final TransacaoService transacaoService;
-    private final IngestNotificacaoCategorizador categorizador;
     private final MerchantNormalizationService merchantNormalizationService;
     private final FinancialImportDeduplicationService financialImportDeduplicationService;
     private final IngestNotificacaoAvisoService avisoService;
+    private final com.consumoesperto.autonomy.FinancialReconciliationService reconciliationService;
 
     @Async("cerebroExecutor")
     public void processarAsync(Long id) {
@@ -144,6 +144,14 @@ public class IngestNotificacaoProcessor {
                 fingerprint,
                 java.math.BigDecimal.ONE,
                 null
+            );
+            reconciliationService.attachOrCreateEvidence(
+                row.getUsuarioId(),
+                criada.getId(),
+                OrigemTransacao.NOTIFICACAO_BANCARIA,
+                row.getIdExterno(),
+                fingerprint,
+                java.math.BigDecimal.ONE
             );
             finalizar(row, NotificacaoBancariaRecebida.STATUS_LANCADA, null, criada.getId(), null);
             avisoService.agendarOuEnviar(row.getUsuarioId(), row.getId(), criada.getId(), parsed, alvo, pref);
@@ -269,6 +277,14 @@ public class IngestNotificacaoProcessor {
             existente.setOrigemTransacao(OrigemTransacao.NOTIFICACAO_BANCARIA);
         }
         transacaoRepository.save(existente);
+        reconciliationService.attachOrCreateEvidence(
+            row.getUsuarioId(),
+            existente.getId(),
+            OrigemTransacao.NOTIFICACAO_BANCARIA,
+            row.getIdExterno(),
+            null,
+            java.math.BigDecimal.ONE
+        );
         return existente;
     }
 
@@ -282,7 +298,6 @@ public class IngestNotificacaoProcessor {
         dto.setDataTransacao(row.getRecebidoEm());
         dto.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
         dto.setSugerirCategoriaAutomatica(false);
-        categorizador.sugerir(row.getUsuarioId(), parsed.estabelecimento()).ifPresent(dto::setCategoriaId);
         if (alvo.cartaoId() != null) {
             dto.setCartaoCreditoId(alvo.cartaoId());
         } else if (alvo.contaId() != null) {

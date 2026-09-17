@@ -9,7 +9,6 @@ import com.consumoesperto.dto.ImportedFinancialRow;
 import com.consumoesperto.dto.PagamentoFaturaRequest;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.exception.ResourceNotFoundException;
-import com.consumoesperto.mobilecapture.service.MerchantCategoryRuleService;
 import com.consumoesperto.mobilecapture.service.MerchantNormalizationService;
 import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.ContaBancaria;
@@ -91,8 +90,9 @@ public class FinancialCsvImportService {
     private final SaldoService saldoService;
     private final FinancialImportDeduplicationService deduplicationService;
     private final MerchantNormalizationService merchantNormalizationService;
-    private final MerchantCategoryRuleService categoryRuleService;
     private final ObjectMapper objectMapper;
+    private final com.consumoesperto.autonomy.FinancialReconciliationService reconciliationService;
+    private final com.consumoesperto.autonomy.FinancialEventPublisher financialEventPublisher;
 
     @Transactional
     public ImportacaoFaturaDTO processar(
@@ -277,7 +277,7 @@ public class FinancialCsvImportService {
             }
             if (ImportacaoItemStatus.MATCHED_EXISTING.name().equals(st)) {
                 if (item.getMatchedTransacaoId() != null) {
-                    enriquecerExistente(item);
+                    enriquecerExistente(usuarioId, item);
                     matched++;
                 }
                 continue;
@@ -369,10 +369,9 @@ public class FinancialCsvImportService {
         dto.setValor(item.getValor() == null ? BigDecimal.ZERO : item.getValor().abs());
         dto.setDataTransacao(item.getData() != null ? item.getData().atStartOfDay() : LocalDateTime.now());
         dto.setStatusConferencia(TransacaoDTO.StatusConferencia.CONFIRMADA);
+        dto.setSugerirCategoriaAutomatica(false);
         if (item.getCategoriaId() != null) {
             dto.setCategoriaId(categoriaDoUsuario(usuarioId, item.getCategoriaId()));
-        } else {
-            sugerirCategoria(usuarioId, item).ifPresent(dto::setCategoriaId);
         }
         if (item.getParcelaAtual() != null && item.getTotalParcelas() != null && item.getTotalParcelas() > 1) {
             dto.setParcelaAtual(item.getParcelaAtual());
@@ -399,7 +398,7 @@ public class FinancialCsvImportService {
         }
 
         TransacaoDTO created = transacaoService.criarTransacao(dto, usuarioId, false, false, false);
-        attachMeta(created.getId(), origem(imp), item);
+        attachMeta(usuarioId, created.getId(), origem(imp), item);
         if (created.getFaturaId() != null) {
             BigDecimal contrib = created.getValor() == null ? BigDecimal.ZERO : created.getValor();
             registrarImpactoFatura(created.getFaturaId(), contrib, totaisAntes, adicionadasPorFatura);
@@ -427,7 +426,7 @@ public class FinancialCsvImportService {
         req.setValor(item.getValor() == null ? null : item.getValor().abs());
         req.setDataPagamento(item.getData() != null ? item.getData().atStartOfDay() : LocalDateTime.now());
         TransacaoDTO pag = faturaConciliacaoService.pagarFatura(usuarioId, req);
-        attachMeta(pag.getId(), OrigemTransacao.CSV_BANK_STATEMENT, item);
+        attachMeta(usuarioId, pag.getId(), OrigemTransacao.CSV_BANK_STATEMENT, item);
         adicionadasPorFatura.merge(fatura.getId(), 0, Integer::sum);
         return fatura.getId();
     }
@@ -455,7 +454,7 @@ public class FinancialCsvImportService {
             dto.setCartaoCreditoId(null);
         }
         TransacaoDTO created = transacaoService.criarTransacao(dto, usuarioId, false, false, false);
-        attachMeta(created.getId(), OrigemTransacao.CSV_CARD_STATEMENT, item);
+        attachMeta(usuarioId, created.getId(), OrigemTransacao.CSV_CARD_STATEMENT, item);
         if (created.getFaturaId() != null) {
             BigDecimal contrib = created.getValor() == null ? BigDecimal.ZERO : created.getValor();
             registrarImpactoFatura(created.getFaturaId(), contrib, totaisAntes, adicionadasPorFatura);
@@ -465,7 +464,7 @@ public class FinancialCsvImportService {
         return f.getId();
     }
 
-    private void enriquecerExistente(ImportacaoFaturaItemDTO item) {
+    private void enriquecerExistente(Long usuarioId, ImportacaoFaturaItemDTO item) {
         transacaoService.atualizarMetadadosIngestao(
             item.getMatchedTransacaoId(),
             null,
@@ -482,9 +481,23 @@ public class FinancialCsvImportService {
             t.setOrigemTransacao(OrigemTransacao.CSV_CARD_STATEMENT);
             transacaoRepository.save(t);
         }
+        reconciliationService.attachOrCreateEvidence(
+            usuarioId,
+            item.getMatchedTransacaoId(),
+            OrigemTransacao.CSV_CARD_STATEMENT,
+            item.getExternalId(),
+            item.getFingerprint(),
+            java.math.BigDecimal.ONE
+        );
+        financialEventPublisher.publish(
+            usuarioId,
+            com.consumoesperto.autonomy.FinancialEventType.TRANSACTION_RECONCILED,
+            item.getMatchedTransacaoId(),
+            "csv"
+        );
     }
 
-    private void attachMeta(Long transacaoId, OrigemTransacao origem, ImportacaoFaturaItemDTO item) {
+    private void attachMeta(Long usuarioId, Long transacaoId, OrigemTransacao origem, ImportacaoFaturaItemDTO item) {
         if (transacaoId == null) {
             return;
         }
@@ -500,6 +513,16 @@ public class FinancialCsvImportService {
             null,
             null
         );
+        if (usuarioId != null) {
+            reconciliationService.attachOrCreateEvidence(
+                usuarioId,
+                transacaoId,
+                origem,
+                item.getExternalId(),
+                item.getFingerprint(),
+                java.math.BigDecimal.ONE
+            );
+        }
     }
 
     private void enriquecerPreview(
@@ -706,11 +729,6 @@ public class FinancialCsvImportService {
         categoriaRepository.findByIdAndUsuarioId(categoriaId, usuarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada"));
         return categoriaId;
-    }
-
-    private Optional<Long> sugerirCategoria(Long usuarioId, ImportacaoFaturaItemDTO item) {
-        String merchant = item.getMerchant() != null ? item.getMerchant() : item.getDescricao();
-        return categoryRuleService.match(usuarioId, merchant).map(MerchantCategoryRuleService.CategoryMatch::categoriaId);
     }
 
     private Optional<CartaoCredito> sugerirCartaoUnico(Long usuarioId, CsvParseResult parsed) {

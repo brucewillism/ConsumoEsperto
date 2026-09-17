@@ -32,7 +32,11 @@ public class EdithAdminService {
         out.put("enabled", properties.isEnabled());
         out.put("state", resolveState());
         out.put("envDefaultEnabled", envDefaultEnabled);
-        out.put("configured", integrationService.isOperational() || isPartiallyConfigured());
+        out.put("configured", isPartiallyConfigured());
+        out.put("operational", integrationService.isOperational());
+        out.put("live", properties.isEnabled() && integrationService.isLive());
+        out.put("frontendPortMisconfigured", EdithBaseUrl.looksLikeFrontend(properties.getBaseUrl()));
+        out.put("suggestedApiUrl", EdithBaseUrl.suggestedApiUrl(properties.getBaseUrl()));
         out.put("baseUrlConfigured", properties.getBaseUrl() != null && !properties.getBaseUrl().isBlank());
         out.put("apiKeyConfigured", properties.getApiKey() != null && !properties.getApiKey().isBlank());
         return out;
@@ -54,7 +58,10 @@ public class EdithAdminService {
         if (!properties.isEnabled()) {
             return "DISABLED";
         }
-        return integrationService.isOperational() ? "AVAILABLE" : "UNAVAILABLE";
+        if (EdithBaseUrl.looksLikeFrontend(properties.getBaseUrl())) {
+            return "UNAVAILABLE";
+        }
+        return integrationService.isLive() ? "AVAILABLE" : "UNAVAILABLE";
     }
 
     private boolean isPartiallyConfigured() {

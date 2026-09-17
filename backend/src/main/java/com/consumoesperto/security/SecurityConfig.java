@@ -77,6 +77,7 @@ public class SecurityConfig {
                 .antMatchers(HttpMethod.GET, "/capabilities", "/api/capabilities").permitAll()
                 // Actuator: allowlist pública mínima; endpoints sensíveis exigem ROLE_ADMIN
                 .antMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
+                .antMatchers(HttpMethod.GET, "/api/runtime-health").permitAll()
                 .antMatchers("/actuator/**").hasRole("ADMIN")
                 // Toggle E.D.I.T.H. em runtime — qualquer utilizador autenticado (teste em produção)
                 .antMatchers("/api/admin/edith", "/api/admin/edith/**").authenticated()

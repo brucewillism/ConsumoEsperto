@@ -78,6 +78,12 @@ public class Transacao {
     @JsonBackReference("categoria-transacoes")
     private Categoria categoria;
 
+    /** Sugestão (MANUAL / policy SUGGEST) — não é categoria aplicada. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "categoria_sugerida_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "usuario"})
+    private Categoria categoriaSugerida;
+
     /**
      * Usuário proprietário da transação
      * Relacionamento muitos-para-um: várias transações podem pertencer a um usuário
@@ -209,6 +215,9 @@ public class Transacao {
 
     public Categoria getCategoria() { return categoria; }
     public void setCategoria(Categoria categoria) { this.categoria = categoria; }
+
+    public Categoria getCategoriaSugerida() { return categoriaSugerida; }
+    public void setCategoriaSugerida(Categoria categoriaSugerida) { this.categoriaSugerida = categoriaSugerida; }
 
     public Usuario getUsuario() { return usuario; }
     public void setUsuario(Usuario usuario) { this.usuario = usuario; }

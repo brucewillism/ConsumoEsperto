@@ -56,7 +56,9 @@ public class EdithCognitiveGateway implements CognitiveGateway {
             request
         );
         if (request.isAwaitCompletion()) {
-            String result = integrationService.awaitTaskResult(request.getUsuarioId(), response.getTaskId());
+            long timeout = request.getTimeoutMs() > 0 ? request.getTimeoutMs() : properties.getTaskTimeoutMs();
+            String result = integrationService.awaitTaskResult(
+                request.getUsuarioId(), response.getTaskId(), timeout);
             return CognitiveResponse.builder()
                 .conversationId(response.getConversationId())
                 .messageId(response.getMessageId())

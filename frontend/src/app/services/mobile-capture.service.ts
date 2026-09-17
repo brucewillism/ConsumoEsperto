@@ -79,4 +79,36 @@ export class MobileCaptureService {
   discardEvent(id: number): Observable<{ status: string }> {
     return this.http.post<{ status: string }>(`${this.base}/review/events/${id}/discard`, {});
   }
+
+  listSourceMappings(): Observable<MobileSourceMapping[]> {
+    return this.http.get<MobileSourceMapping[]>(`${this.base}/source-mappings`);
+  }
+
+  createSourceMapping(body: CreateMobileSourceMapping): Observable<MobileSourceMapping> {
+    return this.http.post<MobileSourceMapping>(`${this.base}/source-mappings`, body);
+  }
+
+  deleteSourceMapping(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/source-mappings/${id}`);
+  }
+}
+
+export interface MobileSourceMapping {
+  id: number;
+  deviceId?: number;
+  packageName?: string;
+  providerKey?: string;
+  cardLast4?: string;
+  contaId?: number;
+  cartaoId?: number;
+  enabled: boolean;
+}
+
+export interface CreateMobileSourceMapping {
+  deviceId?: number | null;
+  packageName?: string | null;
+  providerKey?: string | null;
+  cardLast4?: string | null;
+  contaId?: number | null;
+  cartaoId?: number | null;
 }

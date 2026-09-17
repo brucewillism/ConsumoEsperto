@@ -23,6 +23,8 @@ server {
         proxy_read_timeout 360s;
     }
 
+    # SPA: F5 em /login, /dashboard, /transacoes, etc. TEM de ir ao Angular (:8181),
+    # nunca ao Spring (:8087). Caso contrário o browser mostra JSON 401.
     location / {
         proxy_pass         http://127.0.0.1:8181;
         proxy_set_header   Host              $host;

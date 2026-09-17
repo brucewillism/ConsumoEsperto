@@ -50,6 +50,7 @@ public class CognitiveGatewaySelector {
             .clientRequestId(request.getClientRequestId())
             .metadata(request.getMetadata())
             .awaitCompletion(request.isAwaitCompletion())
+            .timeoutMs(request.getTimeoutMs())
             .applicationId(request.getApplicationId())
             .screen(request.getScreen())
             .entityType(request.getEntityType())

@@ -51,6 +51,13 @@ import { ChartConfiguration, ChartOptions } from 'chart.js';
 import { LoadingIndicatorComponent } from '../../components/loading-indicator/loading-indicator.component';
 import { LoadingService } from '../../services/loading.service';
 import { DashboardSessionCacheService } from '../../services/dashboard-session-cache.service';
+import { AutonomyResumo, AutonomyService } from '../../services/autonomy.service';
+import { DashboardViewApiService } from '../../services/dashboard-view-api.service';
+import {
+  DashboardViewCardItem,
+  DashboardViewMode,
+  DashboardViewPayload,
+} from '../../models/dashboard-view.model';
 import { WhatsappParityHintComponent } from '../../shared/whatsapp-parity-hint/whatsapp-parity-hint.component';
 import { ChartMetodologiaComponent } from '../../shared/chart-metodologia/chart-metodologia.component';
 import { FinancaAlteracaoService } from '../../services/financa-alteracao.service';
@@ -279,6 +286,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /** Atualização em segundo plano (polling / eventos) sem overlay completo */
   isSilentRefreshing = false;
   ultimaAtualizacao: Date | null = null;
+  autonomyResumo: AutonomyResumo | null = null;
 
   readonly mensagemCarregamentoDashboard =
     'Sincronizando o ecossistema operacional do J.A.R.V.I.S.…';
@@ -328,6 +336,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   tickerMercadoSegmentos: TickerMercadoSegmento[] = [];
   /** Radar HUD — mesma flag que o gráfico Sentinela (emitida em um único tick pelo {@link DashboardService}). */
   radarPulsoHud = false;
+  viewMode: DashboardViewMode = 'MONTHLY';
+  viewDto: DashboardViewPayload | null = null;
+  viewLoading = false;
   readonly opcoesTratamentoWizard: { value: PreferenciaTratamentoJarvis; label: string }[] = [
     { value: 'SENHOR', label: 'Senhor' },
     { value: 'SENHORA', label: 'Senhora' },
@@ -354,7 +365,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
     private loadingService: LoadingService,
-    private dashboardSessionCache: DashboardSessionCacheService
+    private dashboardSessionCache: DashboardSessionCacheService,
+    private autonomyService: AutonomyService,
+    private dashboardViewApi: DashboardViewApiService
   ) {
     this.financaAlteracao.alteracoes$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -387,6 +400,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
     this.carregarInsightsFeed();
     this.carregarInsightsMemoria();
+    this.viewMode = this.dashboardViewApi.visaoInicial();
+    this.dashboardViewApi.aplicarPreferenciaServidor()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((mode) => {
+        if (mode !== this.viewMode) {
+          this.viewMode = mode;
+          this.carregarVisao();
+        }
+      });
 
     this.dashboardService.estadoDashboardCompleto$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -421,6 +443,125 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .subscribe(() => this.loadDashboardData({ silent: true, completo: false }));
 
     this.syncDashboardPageOverlay();
+  }
+
+  get visaoMensal(): boolean {
+    return this.viewMode === 'MONTHLY';
+  }
+
+  get visaoGeral(): boolean {
+    return this.viewMode === 'GENERAL';
+  }
+
+  get viewCardItens(): DashboardViewCardItem[] {
+    return this.viewDto?.cards?.itens ?? [];
+  }
+
+  get viewInsights() {
+    return this.viewDto?.insights ?? [];
+  }
+
+  get viewAlertas() {
+    return this.viewDto?.alertas ?? [];
+  }
+
+  get viewEmprestimos(): Record<string, unknown> | null {
+    const c = this.viewDto?.compromissos?.['emprestimos'];
+    return c && typeof c === 'object' ? (c as Record<string, unknown>) : null;
+  }
+
+  get viewFaturas(): Record<string, unknown> | null {
+    const c = this.viewDto?.compromissos?.['cartaoFatura'];
+    return c && typeof c === 'object' ? (c as Record<string, unknown>) : null;
+  }
+
+  get viewRecorrentes(): Record<string, unknown> | null {
+    const c = this.viewDto?.compromissos?.['fixasAssinaturasAgendamentos'];
+    return c && typeof c === 'object' ? (c as Record<string, unknown>) : null;
+  }
+
+  asList(value: unknown): Record<string, unknown>[] {
+    return Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
+  }
+
+  toNum(value: unknown): number {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  numMetrica(chave: string): number {
+    const v = this.viewDto?.metricas?.[chave];
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  alternarVisao(mode: DashboardViewMode): void {
+    if (this.viewMode === mode && this.viewDto?.viewMode === mode) {
+      return;
+    }
+    this.viewMode = mode;
+    this.dashboardViewApi.persistir(mode).subscribe({ error: () => undefined });
+    this.carregarVisao();
+  }
+
+  carregarVisao(): void {
+    this.viewLoading = true;
+    this.dashboardViewApi.obter(this.viewMode).subscribe({
+      next: (dto) => {
+        this.viewDto = dto;
+        this.viewMode = dto.viewMode === 'GENERAL' ? 'GENERAL' : 'MONTHLY';
+        this.aplicarCardsDaVisao(dto);
+        this.viewLoading = false;
+      },
+      error: () => {
+        this.viewLoading = false;
+      },
+    });
+  }
+
+  private aplicarCardsDaVisao(dto: DashboardViewPayload): void {
+    const itens = dto.cards?.itens ?? [];
+    if (!itens.length) {
+      return;
+    }
+    this.dashboardCards = itens.map((c) => ({
+      title: c.titulo,
+      value: c.id === 'score' ? String(c.valor ?? '') : this.formatCurrency(Number(c.valor) || 0),
+      change: c.subtitulo || '',
+      changeType:
+        c.sentido === 'positivo' ? 'positive' : c.sentido === 'negativo' ? 'negative' : 'neutral',
+      icon: this.iconeCardVisao(c.id),
+      color: c.sentido === 'positivo' ? '#1c3238' : c.sentido === 'negativo' ? '#f64e60' : '#3699ff',
+    }));
+  }
+
+  private iconeCardVisao(id?: string): string {
+    switch (id) {
+      case 'receitasMes':
+        return 'fas fa-arrow-down';
+      case 'despesasMes':
+        return 'fas fa-arrow-up';
+      case 'faturaMes':
+      case 'cartaoFatura':
+        return 'fas fa-credit-card';
+      case 'parcelaMes':
+      case 'passivos':
+      case 'dividaTotal':
+        return 'fas fa-file-invoice-dollar';
+      case 'safeToSpendMes':
+      case 'folgaPatrimonial':
+      case 'reservas':
+        return 'fas fa-wallet';
+      case 'score':
+        return 'fas fa-medal';
+      case 'patrimonioLiquido':
+      case 'ativos':
+      case 'totalEmContas':
+      case 'totalInvestido':
+        return 'fas fa-landmark';
+      default:
+        return 'fas fa-chart-line';
+    }
   }
 
   carregarInsightsFeed(): void {
@@ -906,6 +1047,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Atualiza os cards com dados reais calculados
    */
   private atualizarCardsComDadosReais() {
+    if (this.viewDto?.cards?.itens?.length) {
+      this.aplicarCardsDaVisao(this.viewDto);
+      return;
+    }
     const limiteDisponivel = this.creditCardLimit - this.creditCardUsed;
     
     console.log('📊 Atualizando cards do dashboard:', {
@@ -1401,6 +1546,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   private loadDashboardDataAfterSync(completo: boolean) {
     this.isLoadingData = true;
+    this.carregarAutonomia();
+    this.carregarVisao();
     console.log('📊 Carregando dados após sincronização...');
 
     const now = new Date();
@@ -1985,6 +2132,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   get linhaPreviewJarvisWizard(): string {
     return this.previewJarvisTratamento(this.jarvisWizardPreviewPref);
+  }
+
+  private carregarAutonomia(): void {
+    this.autonomyService.resumo().subscribe({
+      next: (r) => (this.autonomyResumo = r?.enabled ? r : null),
+      error: () => (this.autonomyResumo = null),
+    });
   }
 
   confirmarTratamentoJarvis(pref: PreferenciaTratamentoJarvis): void {

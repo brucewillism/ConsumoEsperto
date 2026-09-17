@@ -13,6 +13,7 @@ Mapa de todos os ficheiros de referência do repositório.
 | [`AVISO_MUDANCAS_CALCULOS.md`](AVISO_MUDANCAS_CALCULOS.md) | Texto para o utilizador antes de deploy com mudanças numéricas |
 | [`POLITICA_STATUS_TRANSACAO.md`](POLITICA_STATUS_TRANSACAO.md) | CONFIRMADA vs PREVISTO (T1) |
 | [`POLITICA_PROVISAO.md`](POLITICA_PROVISAO.md) | Dedup percentual e precedência de provisões |
+| [`POLITICA_VISOES_DASHBOARD.md`](POLITICA_VISOES_DASHBOARD.md) | Visão Mensal × Geral; taxonomia disjunta de obrigações |
 | [`POLITICA_STATUS_FATURA_PREVISTA.md`](POLITICA_STATUS_FATURA_PREVISTA.md) | Faturas PREVISTA e sync de totais |
 | [`PLANO_CONVERSAO_COMPRA_PARCELADA.md`](PLANO_CONVERSAO_COMPRA_PARCELADA.md) | Convergência CompraParcelada → fluxo principal |
 | [`BACKLOG_FISCAL_ESTIMATIVA.md`](BACKLOG_FISCAL_ESTIMATIVA.md) | Fiscal simplificado — evolução futura |

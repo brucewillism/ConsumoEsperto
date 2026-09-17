@@ -49,6 +49,31 @@
     </div>
   </div>
 
+  <div class="view-mode-switch hud-animate" role="tablist" aria-label="Visão do dashboard" [style.--stagger]="0">
+    <button
+      type="button"
+      role="tab"
+      class="view-mode-btn"
+      [class.active]="visaoMensal"
+      [attr.aria-selected]="visaoMensal"
+      (click)="alternarVisao('MONTHLY')"
+      [disabled]="viewLoading">
+      Visão Mensal
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="view-mode-btn"
+      [class.active]="visaoGeral"
+      [attr.aria-selected]="visaoGeral"
+      (click)="alternarVisao('GENERAL')"
+      [disabled]="viewLoading">
+      Visão Geral
+    </button>
+    <span class="view-mode-hint" *ngIf="visaoMensal">O que pesa ou ajuda neste mês?</span>
+    <span class="view-mode-hint" *ngIf="visaoGeral">Como está a saúde financeira total?</span>
+  </div>
+
   <!-- Oráculo externo — letreiro de mercado + nota da Sentinela -->
   <section
     class="hud-market-strip hud-animate jarvis-hud-ticker"
@@ -211,26 +236,58 @@
     <section class="hud-command-strip dashboard-cards-grid" *ngIf="!errorMessage">
       <article class="hud-card hud-glass hud-animate" [style.--stagger]="1">
         <header class="hud-card-head">
-          <span class="hud-chip">Patrimônio</span>
-          <span class="hud-card-title">Patrimônio líquido</span>
+          <span class="hud-chip">{{ visaoMensal ? 'Mês' : 'Patrimônio' }}</span>
+          <span class="hud-card-title">{{ visaoMensal ? 'Projeção do mês' : 'Patrimônio líquido' }}</span>
         </header>
-        <p
-          class="hud-sentinela-value"
-          *ngIf="previsaoFuturoChart != null; else semSentinela"
-          matTooltip="Saldo em contas menos parcelas de empréstimo que debitam a conta (consignado em folha já sai do salário e não entra aqui)."
-          matTooltipPosition="below">
-          {{ formatCurrency(previsaoFuturoChart.saldoAtual) }}
-        </p>
-        <ng-template #semSentinela>
-          <p class="hud-sentinela-value hud-muted">—</p>
+        <ng-container *ngIf="visaoGeral; else hudMensal">
+          <p class="hud-sentinela-value" [class.hud-negativo]="numMetrica('patrimonioLiquido') < 0">
+            {{ formatCurrency(numMetrica('patrimonioLiquido')) }}
+          </p>
+          <p class="hud-subline">
+            Ativos {{ formatCurrency(numMetrica('ativos')) }}
+            − Passivos {{ formatCurrency(numMetrica('passivos')) }}
+          </p>
+        </ng-container>
+        <ng-template #hudMensal>
+          <p class="hud-sentinela-value">
+            {{ formatCurrency(numMetrica('projecaoMes') || (previsaoFuturoChart?.saldoAtual ?? balance)) }}
+          </p>
+          <p class="hud-subline">Saldo projetado até o fim do mês (previstos rotulados na projeção).</p>
         </ng-template>
         <p class="hud-cautela" *ngIf="protocoloCautelaAtivo">
           <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
           Patrimônio ou projeção do mês em risco — protocolo de cautela ativo.
         </p>
-        <p class="hud-subline" *ngIf="!protocoloCautelaAtivo">
-          Contas menos parcelas de empréstimo que debitam a conta (consignado em folha não entra).
+      </article>
+
+      <article class="hud-card hud-glass hud-animate" *ngIf="autonomyResumo" [style.--stagger]="1">
+        <header class="hud-card-head">
+          <span class="hud-chip">Autonomia</span>
+          <span class="hud-card-title">J.A.R.V.I.S. — Autonomia</span>
+        </header>
+        <p class="hud-sentinela-value">
+          {{ autonomyResumo.revisoesPendentes || 0 }}
+          <span class="hud-subline">{{ (autonomyResumo.revisoesPendentes || 0) === 1 ? 'item precisa de você' : 'itens precisam de você' }}</span>
         </p>
+        <p class="hud-subline">
+          Auto hoje: {{ autonomyResumo.transacoesAutoHoje || 0 }}
+          · Conciliados: {{ autonomyResumo.itensConciliadosHoje || 0 }}
+          · Anomalias: {{ autonomyResumo.anomaliasAbertas || 0 }}
+        </p>
+        <p class="hud-subline" *ngIf="visaoMensal && autonomyResumo.safeToSpend?.safeToSpend != null">
+          Safe-to-spend do mês:
+          {{ formatCurrency(autonomyResumo.safeToSpend!.safeToSpend!) }}
+        </p>
+        <p class="hud-subline" *ngIf="autonomyResumo.forecast?.d30?.saldoProjetado != null">
+          Previsão 30 dias: {{ formatCurrency(autonomyResumo.forecast!.d30!.saldoProjetado!) }}
+        </p>
+        <p class="hud-subline" *ngIf="autonomyResumo.faturas?.length">
+          Fatura viva (projetado):
+          <span *ngFor="let f of autonomyResumo.faturas; let last = last">
+            {{ f.cartaoNome }} {{ formatCurrency(f.valorProjetado || 0) }}{{ last ? '' : ' · ' }}
+          </span>
+        </p>
+        <a routerLink="/revisao" class="hud-subline">Abrir revisão</a>
       </article>
 
       <article class="hud-card hud-glass hud-animate" [style.--stagger]="2">
@@ -563,10 +620,97 @@
       </div>
     </div>
 
+    <section class="view-panels hud-animate" *ngIf="!errorMessage && viewDto" [style.--stagger]="3">
+      <div class="view-panel hud-glass" *ngIf="viewAlertas.length">
+        <h3>{{ visaoMensal ? 'Alertas do mês' : 'Alertas gerais' }}</h3>
+        <ul>
+          <li *ngFor="let a of viewAlertas">
+            <strong>{{ a.titulo }}</strong>
+            <span>{{ a.detalhe }}</span>
+          </li>
+        </ul>
+      </div>
+      <div class="view-panel hud-glass" *ngIf="viewInsights.length">
+        <h3>{{ visaoMensal ? 'Insights do mês' : 'Insights gerais' }}</h3>
+        <ul>
+          <li *ngFor="let a of viewInsights">
+            <strong>{{ a.titulo }}</strong>
+            <span>{{ a.detalhe }}</span>
+          </li>
+        </ul>
+      </div>
+      <div class="view-panel hud-glass" *ngIf="visaoMensal && viewFaturas">
+        <h3>Fatura do mês</h3>
+        <p class="view-panel-total">{{ formatCurrency(toNum(viewFaturas['total'])) }}</p>
+        <ul>
+          <li *ngFor="let f of asList(viewFaturas['itens'])">
+            {{ f['cartaoNome'] }} — confirmado {{ formatCurrency(toNum(f['valorConfirmado'])) }}
+            · projetado {{ formatCurrency(toNum(f['valorProjetado'])) }}
+            <small *ngIf="f['diasAteFechamento'] != null"> · {{ f['diasAteFechamento'] }} dias até o fechamento</small>
+          </li>
+        </ul>
+      </div>
+      <div class="view-panel hud-glass" *ngIf="visaoMensal && viewEmprestimos">
+        <h3>Parcela do mês</h3>
+        <p class="view-panel-total">{{ formatCurrency(toNum(viewEmprestimos['total'])) }}</p>
+        <ul>
+          <li *ngFor="let p of asList(viewEmprestimos['itens'])">
+            {{ p['descricao'] }} — {{ formatCurrency(toNum(p['valor'])) }}
+            <small *ngIf="p['descontoEmFolha']"> · desconto em folha (não debita a conta)</small>
+          </li>
+        </ul>
+      </div>
+      <div class="view-panel hud-glass" *ngIf="visaoMensal && viewRecorrentes">
+        <h3>Fixas, assinaturas e agendamentos</h3>
+        <p class="view-panel-total">{{ formatCurrency(toNum(viewRecorrentes['total'])) }}</p>
+        <p class="view-panel-sub" *ngIf="asList(viewRecorrentes['fixas']).length">Fixas</p>
+        <ul>
+          <li *ngFor="let f of asList(viewRecorrentes['fixas'])">
+            {{ f['descricao'] }} — {{ formatCurrency(toNum(f['valor'])) }}
+            <small *ngIf="f['diaVencimento']"> · dia {{ f['diaVencimento'] }}</small>
+          </li>
+        </ul>
+        <p class="view-panel-sub" *ngIf="asList(viewRecorrentes['assinaturas']).length">Assinaturas</p>
+        <ul>
+          <li *ngFor="let a of asList(viewRecorrentes['assinaturas'])">
+            {{ a['nome'] }} — {{ formatCurrency(toNum(a['valor'])) }}
+          </li>
+        </ul>
+        <p class="view-panel-sub" *ngIf="asList(viewRecorrentes['agendamentos']).length">Agendamentos (fora de cartão)</p>
+        <ul>
+          <li *ngFor="let a of asList(viewRecorrentes['agendamentos'])">
+            {{ a['beneficiario'] }} — {{ formatCurrency(toNum(a['valor'])) }}
+          </li>
+        </ul>
+      </div>
+      <div class="view-panel hud-glass" *ngIf="visaoGeral && viewEmprestimos">
+        <h3>Saldo devedor por contrato</h3>
+        <ul>
+          <li *ngFor="let e of asList(viewEmprestimos['itens'])">
+            {{ e['descricao'] }} ({{ e['tipo'] }})
+            — saldo devedor {{ formatCurrency(toNum(e['saldoDevedor'])) }}
+            · total contratado {{ formatCurrency(toNum(e['totalContratado'])) }}
+            · {{ e['parcelasRestantes'] }} parcelas restantes
+            · parcela {{ formatCurrency(toNum(e['valorParcela'])) }}
+            <small *ngIf="e['descontoEmFolha']"> · desconto em folha</small>
+          </li>
+        </ul>
+      </div>
+      <div class="view-panel hud-glass" *ngIf="visaoGeral && viewFaturas">
+        <h3>Exposição de cartão</h3>
+        <p class="view-panel-total">{{ formatCurrency(toNum(viewFaturas['total'])) }}</p>
+        <ul>
+          <li *ngFor="let f of asList(viewFaturas['itens'])">
+            {{ f['cartaoNome'] }} — projetado {{ formatCurrency(toNum(f['valorProjetado'])) }}
+          </li>
+        </ul>
+      </div>
+    </section>
+
     <!-- Gráficos e Estatísticas -->
     <div class="dashboard-charts" *ngIf="!errorMessage">
       <!-- Gráfico de Patrimônio — Safra Cascata -->
-      <div class="chart-card chart-card--safra">
+      <div class="chart-card chart-card--safra" *ngIf="visaoGeral">
         <div class="chart-header">
           <div>
             <h3>Patrimônio — Safra Cascata</h3>

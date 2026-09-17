@@ -1,5 +1,6 @@
 package com.consumoesperto.service;
 
+import com.consumoesperto.dashboard.DashboardBriefService;
 import com.consumoesperto.dto.OrcamentoDTO;
 import com.consumoesperto.dto.NotificacaoSolicitacao;
 import com.consumoesperto.model.NotificacaoEventoTipo;
@@ -50,6 +51,7 @@ public class ProactiveFinancialJobs {
     private final FinancialProactiveService financialProactiveService;
     private final ConciliacaoAuditoriaService conciliacaoAuditoriaService;
     private final UsuarioSessaoContextoService sessaoContextoService;
+    private final DashboardBriefService dashboardBriefService;
     private final CerebroSemanticoService cerebroSemanticoService;
 
     @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
@@ -141,62 +143,21 @@ public class ProactiveFinancialJobs {
         }
     }
 
-    @Scheduled(cron = "0 0 18 ? * SUN", zone = "America/Sao_Paulo")
+    @Scheduled(cron = "${consumoesperto.dashboard.brief.weekly-cron:0 0 8 * * MON}", zone = "America/Sao_Paulo")
     @Transactional(readOnly = true)
     public void enviarResumoSemanal() {
-        LocalDate hoje = AppTimeZone.hoje();
-        LocalDate inicioSemana = hoje.with(DayOfWeek.MONDAY);
-        LocalDateTime iniAtual = inicioSemana.atStartOfDay();
-        LocalDateTime fimAtual = hoje.atTime(23, 59, 59);
-        LocalDateTime iniAnterior = inicioSemana.minusWeeks(1).atStartOfDay();
-        LocalDateTime fimAnterior = inicioSemana.minusDays(1).atTime(23, 59, 59);
+        dashboardBriefService.enviarBriefsSemanais();
+    }
 
-        for (Usuario usuario : usuarioRepository.findAll()) {
-            if (usuario.getWhatsappNumero() == null || usuario.getWhatsappNumero().isBlank()) {
-                continue;
-            }
-            BigDecimal atual = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuario.getId(), Transacao.TipoTransacao.DESPESA, iniAtual, fimAtual));
-            BigDecimal anterior = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
-                usuario.getId(), Transacao.TipoTransacao.DESPESA, iniAnterior, fimAnterior));
-            List<Transacao> semana = transacaoRepository.findByUsuarioIdAndTipoAndPeriodo(
-                usuario.getId(), Transacao.TipoTransacao.DESPESA, iniAtual, fimAtual);
-            Transacao maior = semana.stream().max(Comparator.comparing(Transacao::getValor)).orElse(null);
-            List<OrcamentoDTO> orcamentos = orcamentoService.listar(
-                usuario.getId(), YearMonth.now().getMonthValue(), YearMonth.now().getYear());
-            List<String> limites = orcamentos.stream()
-                .filter(o -> o.getPercentualUso() != null && o.getPercentualUso().compareTo(BigDecimal.valueOf(70)) >= 0)
-                .map(o -> o.getCategoriaNome() + " (" + o.getPercentualUso() + "%)")
-                .collect(Collectors.toList());
-            String resumoBase = "Semana atual: " + atual + "\nSemana anterior: " + anterior
-                + "\nMaior gasto: " + (maior != null ? maior.getDescricao() + " " + maior.getValor() : "sem despesas")
-                + "\nOrçamentos no limite: " + limites;
-            String dica = forecastFinanceiroService.gerarDicaSemanal(usuario.getId(), resumoBase);
-            String vocativo = jarvisProtocolService.resolveVocative(usuario.getId(), usuarioRepository);
-            String linhaMaior = maior != null ? maior.getDescricao() + " — " + BRL.format(maior.getValor()) : "sem despesas confirmadas";
-            String linhaOrc = limites.isEmpty() ? "nenhum em patamar crítico" : String.join(", ", limites);
-            String msg = jarvisProtocolService.proativoResumoSemanal(
-                vocativo,
-                BRL.format(atual),
-                BRL.format(anterior),
-                linhaMaior,
-                linhaOrc,
-                dica,
-                feedbackFamiliar(usuario.getId()));
-            msg += blocoConfirmacaoHabitoInferido(usuario.getId());
-            notificationOrchestratorService.solicitar(NotificacaoSolicitacao.builder()
-                .usuarioId(usuario.getId())
-                .evento(NotificacaoEventoTipo.RESUMO_SEMANAL)
-                .mensagem(msg)
-                .hashEvento("RESUMO_SEM:" + usuario.getId() + ":" + inicioSemana)
-                .tituloWeb("Resumo semanal")
-                .build());
-        }
+    @Scheduled(cron = "${consumoesperto.dashboard.brief.general-cron:0 0 8 28 * *}", zone = "America/Sao_Paulo")
+    @Transactional(readOnly = true)
+    public void enviarBriefGeralDia28() {
+        dashboardBriefService.enviarBriefsGerais();
     }
 
     /**
-     * Confirmação de padrões inferidos (6.2) dentro do resumo semanal já existente — sem mensagens avulsas.
-     * «Sim» eleva a confiança; «não» refuta. A pendência expira em 3 dias.
+     * Confirmação de padrões inferidos (6.2) — disponível para outros jobs; o brief semanal
+     * da visão mensal não inclui este bloco para não misturar semântica.
      */
     private String blocoConfirmacaoHabitoInferido(Long usuarioId) {
         try {

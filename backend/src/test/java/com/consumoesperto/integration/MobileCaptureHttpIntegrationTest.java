@@ -4,8 +4,11 @@ import com.consumoesperto.mobilecapture.dto.CreateMobileCaptureDeviceRequest;
 import com.consumoesperto.mobilecapture.dto.MobileDeviceRegistrationResponse;
 import com.consumoesperto.mobilecapture.security.DeviceTokenHasher;
 import com.consumoesperto.mobilecapture.security.MobileDeviceTokenFilter;
+import com.consumoesperto.mobilecapture.service.MerchantCategoryRuleService;
+import com.consumoesperto.model.Categoria;
 import com.consumoesperto.model.MobilePlatform;
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.MobileCaptureDeviceRepository;
 import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
@@ -43,6 +46,8 @@ class MobileCaptureHttpIntegrationTest {
   @Autowired private JwtTokenProvider jwtTokenProvider;
   @Autowired private MobileCaptureDeviceRepository deviceRepository;
   @Autowired private TransacaoRepository transacaoRepository;
+  @Autowired private CategoriaRepository categoriaRepository;
+  @Autowired private MerchantCategoryRuleService merchantCategoryRuleService;
 
   private String tokenA;
   private String tokenB;
@@ -153,6 +158,59 @@ class MobileCaptureHttpIntegrationTest {
     assertTrue(body.get("message").asText().contains("TEST"));
     assertEquals(0, transacaoRepository.findAll().stream()
         .filter(t -> usuarioIdA.equals(t.getUsuario().getId())).count());
+  }
+
+  @Test
+  void ingestaoNaoAplicaCategoriaMesmoComRegraLocal() throws Exception {
+    Usuario usuario = usuarioRepository.findById(usuarioIdA).orElseThrow();
+    Categoria transporte = new Categoria();
+    transporte.setNome("Transporte");
+    transporte.setUsuario(usuario);
+    transporte.setDataCriacao(java.time.LocalDateTime.now());
+    transporte = categoriaRepository.save(transporte);
+    merchantCategoryRuleService.saveUserRule(usuarioIdA, "POSTO SHELL", transporte.getId());
+
+    MvcResult res = ingest("""
+        {
+          "source": "IOS_WALLET",
+          "amount": 15.00,
+          "currency": "BRL",
+          "merchant": "POSTO SHELL",
+          "client_event_id": "manual-bypass-1"
+        }
+        """, "manual-bypass-1");
+    JsonNode body = objectMapper.readTree(res.getResponse().getContentAsString());
+    assertEquals("REGISTERED", body.get("status").asText());
+    long txId = body.get("transacaoId").asLong();
+    var tx = transacaoRepository.findById(txId).orElseThrow();
+    assertNull(tx.getCategoria());
+  }
+
+  @Test
+  void duasComprasSemelhantesQuatroMinutosNaoSaoDedup() throws Exception {
+    ingest("""
+        {
+          "source": "IOS_WALLET",
+          "amount": 89.90,
+          "merchant": "POSTO X",
+          "occurred_at": "2026-09-13T10:00:00",
+          "client_event_id": "posto-x-1000"
+        }
+        """, "posto-x-1000");
+    ingest("""
+        {
+          "source": "IOS_WALLET",
+          "amount": 89.90,
+          "merchant": "POSTO X",
+          "occurred_at": "2026-09-13T10:04:00",
+          "client_event_id": "posto-x-1004"
+        }
+        """, "posto-x-1004");
+    long count = transacaoRepository.findAll().stream()
+        .filter(t -> usuarioIdA.equals(t.getUsuario().getId())
+            && t.getDescricao() != null && t.getDescricao().toUpperCase().contains("POSTO X"))
+        .count();
+    assertEquals(2, count);
   }
 
   @Test

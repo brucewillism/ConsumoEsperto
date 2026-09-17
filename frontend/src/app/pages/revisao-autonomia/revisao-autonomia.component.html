@@ -1,0 +1,26 @@
+<div class="review-page">
+  <div class="card">
+    <a routerLink="/dashboard" class="link-back"><i class="fas fa-arrow-left"></i> Voltar ao painel</a>
+    <h1>Revisão inteligente</h1>
+    <p class="hint" *ngIf="!carregando">
+      {{ itens.length === 0 ? 'Nada precisa de si agora.' : (itens.length + ' itens precisam de você') }}
+    </p>
+
+    <div class="loading" *ngIf="carregando"><i class="fas fa-spinner fa-spin"></i> A carregar…</div>
+
+    <article class="event-card" *ngFor="let item of itens">
+      <header>
+        <strong>{{ item.title }}</strong>
+        <span class="badge">{{ item.kind }}</span>
+      </header>
+      <p *ngIf="item.detail">{{ item.detail }}</p>
+      <p class="meta" *ngIf="item.confidence != null">Confiança: {{ item.confidence | percent : '1.0-0' }}</p>
+      <p class="meta" *ngIf="item.transacaoId">Transação #{{ item.transacaoId }}</p>
+      <div class="actions">
+        <button type="button" class="btn primary" (click)="resolver(item)" [disabled]="processandoId === item.id">
+          Marcar como visto
+        </button>
+      </div>
+    </article>
+  </div>
+</div>

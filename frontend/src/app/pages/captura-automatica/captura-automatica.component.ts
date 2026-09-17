@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -13,6 +13,10 @@ import { ContaBancariaService } from '../../services/conta-bancaria.service';
 import { CartaoCreditoService } from '../../services/cartao-credito.service';
 import { ContaBancaria } from '../../models/conta-bancaria.model';
 import { CartaoCredito } from '../../models/cartao-credito.model';
+import {
+  MobileCaptureService,
+  MobileSourceMapping,
+} from '../../services/mobile-capture.service';
 import { ToastService } from '../../services/toast.service';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 
@@ -24,25 +28,29 @@ import { resolveHttpError } from '../../shared/utils/form.utils';
   styleUrl: './captura-automatica.component.scss',
 })
 export class CapturaAutomaticaComponent implements OnInit {
+  private readonly ingest = inject(IngestNotificacaoService);
+  private readonly contaService = inject(ContaBancariaService);
+  private readonly cartaoService = inject(CartaoCreditoService);
+  private readonly mobileCapture = inject(MobileCaptureService);
+  private readonly toast = inject(ToastService);
+
   carregando = true;
   config: IngestConfig | null = null;
   tokenNovo: IngestTokenGerado | null = null;
   contas: ContaBancaria[] = [];
   cartoes: CartaoCredito[] = [];
   logs: IngestNotificacaoLog[] = [];
+  walletMappings: MobileSourceMapping[] = [];
+  novoWallet: { providerKey: string; cartaoCreditoId: number | null } = {
+    providerKey: '',
+    cartaoCreditoId: null,
+  };
   novaFonte: { app: string; canal: string; contaBancariaId: number | null; cartaoCreditoId: number | null } = {
     app: 'nubank',
     canal: 'CREDITO',
     contaBancariaId: null,
     cartaoCreditoId: null,
   };
-
-  constructor(
-    private ingest: IngestNotificacaoService,
-    private contaService: ContaBancariaService,
-    private cartaoService: CartaoCreditoService,
-    private toast: ToastService
-  ) {}
 
   ngOnInit(): void {
     this.contaService.listarContasAtivas().subscribe({ next: (c) => (this.contas = c) });
@@ -65,6 +73,14 @@ export class CapturaAutomaticaComponent implements OnInit {
     this.ingest.listarNotificacoes().subscribe({
       next: (rows) => (this.logs = rows),
       error: () => (this.logs = []),
+    });
+    this.carregarWalletMappings();
+  }
+
+  carregarWalletMappings(): void {
+    this.mobileCapture.listSourceMappings().subscribe({
+      next: (rows) => (this.walletMappings = rows || []),
+      error: () => (this.walletMappings = []),
     });
   }
 
@@ -138,6 +154,39 @@ export class CapturaAutomaticaComponent implements OnInit {
         this.recarregar();
       },
       error: (err) => this.toast.error(resolveHttpError(err, 'Falha ao remover mapeamento.')),
+    });
+  }
+
+  guardarWalletMapping(): void {
+    const hint = (this.novoWallet.providerKey || '').trim();
+    if (!hint || this.novoWallet.cartaoCreditoId == null) {
+      this.toast.error('Informe o nome no Wallet e o cartão ConsumoEsperto.');
+      return;
+    }
+    const digits = hint.replace(/\D/g, '');
+    this.mobileCapture
+      .createSourceMapping({
+        providerKey: hint,
+        cardLast4: digits.length >= 4 ? digits.slice(-4) : null,
+        cartaoId: this.novoWallet.cartaoCreditoId,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success('Associação Wallet guardada.');
+          this.novoWallet = { providerKey: '', cartaoCreditoId: null };
+          this.carregarWalletMappings();
+        },
+        error: (err) => this.toast.error(resolveHttpError(err, 'Falha ao guardar associação Wallet.')),
+      });
+  }
+
+  removerWalletMapping(m: MobileSourceMapping): void {
+    this.mobileCapture.deleteSourceMapping(m.id).subscribe({
+      next: () => {
+        this.toast.success('Associação removida.');
+        this.carregarWalletMappings();
+      },
+      error: (err) => this.toast.error(resolveHttpError(err, 'Falha ao remover associação.')),
     });
   }
 

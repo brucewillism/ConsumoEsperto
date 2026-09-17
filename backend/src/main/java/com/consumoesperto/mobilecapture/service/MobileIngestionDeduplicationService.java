@@ -12,9 +12,14 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.Optional;
 
+/**
+ * Dedup = mesmo evento. Fingerprint exacto (não trunca hora).
+ * Semelhança 10:00 vs 10:04 NÃO é dedup — isso é possível duplicata no engine.
+ */
 @Service
 @RequiredArgsConstructor
 public class MobileIngestionDeduplicationService {
@@ -56,20 +61,46 @@ public class MobileIngestionDeduplicationService {
       String merchantNormalized,
       LocalDateTime occurredAt
   ) {
-    String window = occurredAt == null
+    return buildFingerprint(usuarioId, origem, null, contaId, cartaoId, amount, merchantNormalized, occurredAt);
+  }
+
+  public String buildFingerprint(
+      Long usuarioId,
+      OrigemTransacao origem,
+      Long deviceId,
+      Long contaId,
+      Long cartaoId,
+      BigDecimal amount,
+      String merchantNormalized,
+      LocalDateTime occurredAt
+  ) {
+    String ts = occurredAt == null
         ? "na"
-        : occurredAt.withMinute(0).withSecond(0).withNano(0).toString();
-    String payload = usuarioId + "|" + origem + "|" + contaId + "|" + cartaoId + "|"
-        + amount.stripTrailingZeros().toPlainString() + "|" + merchantNormalized + "|" + window;
+        : occurredAt.truncatedTo(ChronoUnit.SECONDS).toString();
+    String amt = amount == null ? "0" : amount.stripTrailingZeros().toPlainString();
+    String payload = usuarioId + "|" + origem + "|" + deviceId + "|" + contaId + "|" + cartaoId + "|"
+        + amt + "|" + merchantNormalized + "|" + ts;
+    return sha256(payload);
+  }
+
+  /** Identificador derivado do evento exacto — não é chave fuzzy. */
+  public String derivedClientEventId(String fingerprint) {
+    if (fingerprint == null || fingerprint.isBlank()) {
+      return null;
+    }
+    return "derived:" + fingerprint;
+  }
+
+  public String fingerprintPrefix(String fingerprint) {
+    return DeviceTokenHasher.fingerprintPrefix(fingerprint);
+  }
+
+  private static String sha256(String payload) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       return HexFormat.of().formatHex(digest.digest(payload.getBytes(StandardCharsets.UTF_8)));
     } catch (Exception e) {
       throw new IllegalStateException("SHA-256 indisponível", e);
     }
-  }
-
-  public String fingerprintPrefix(String fingerprint) {
-    return DeviceTokenHasher.fingerprintPrefix(fingerprint);
   }
 }

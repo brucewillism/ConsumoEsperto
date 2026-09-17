@@ -35,6 +35,15 @@ public class FaturaDTO {
 
     private BigDecimal valorTotal;
 
+    /** Soma CONFIRMADA — mesma semântica de valorTotal persistido. */
+    private BigDecimal valorConfirmado;
+
+    /** Soma PENDENTE elegível (compra ainda não conferida). */
+    private BigDecimal valorPendente;
+
+    /** confirmado + pendente elegível. Fatura viva usa este campo. */
+    private BigDecimal valorProjetado;
+
     private BigDecimal valorMinimo;
 
     // Campo adicional para compatibilidade com código existente

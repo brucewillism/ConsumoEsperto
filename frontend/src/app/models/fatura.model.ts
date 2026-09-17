@@ -14,6 +14,9 @@ export interface Fatura {
   /** Valor total da fatura (soma de todas as transações do período) */
   valorFatura: number;
   valorTotal?: number;
+  valorConfirmado?: number;
+  valorPendente?: number;
+  valorProjetado?: number;
   
   /** Valor já pago da fatura (pode ser parcial ou total) */
   valorPago: number;
@@ -123,6 +126,9 @@ export interface FaturaDTO {
   /** Valor total da fatura (soma de todas as transações do período) */
   valorFatura: number;
   valorTotal?: number;
+  valorConfirmado?: number;
+  valorPendente?: number;
+  valorProjetado?: number;
   
   /** Valor já pago da fatura (pode ser parcial ou total) */
   valorPago: number;

@@ -1,6 +1,8 @@
 package com.consumoesperto.edith;
 
 import com.consumoesperto.config.EdithProperties;
+import com.consumoesperto.config.FinancialAutonomyProperties;
+import com.consumoesperto.config.MobileCaptureProperties;
 import com.consumoesperto.service.EvolutionSessionMonitorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,15 +23,34 @@ public class ConsumoRuntimeHealthService {
     private final EdithProperties edithProperties;
     private final EdithIntegrationService edithIntegrationService;
     private final EvolutionSessionMonitorService evolutionSessionMonitorService;
+    private final MobileCaptureProperties mobileCaptureProperties;
+    private final FinancialAutonomyProperties autonomyProperties;
 
     public Map<String, Object> snapshot() {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("core", "AVAILABLE");
+        out.put("coreFinanceiro", probeDatabase());
         out.put("database", probeDatabase());
         out.put("edith", probeEdith());
+        out.put("edithFrontendPortMisconfigured", EdithBaseUrl.looksLikeFrontend(edithProperties.getBaseUrl()));
+        out.put("edithSuggestedApiUrl", EdithBaseUrl.suggestedApiUrl(edithProperties.getBaseUrl()));
+        out.put("jarvis", probeWhatsapp());
         out.put("whatsapp", probeWhatsapp());
         out.put("assistant", probeAssistant());
+        out.put("tokenSuppressor", probeTokenSuppressor());
+        out.put("mobileCapture", mobileCaptureProperties.isEnabled() ? "ENABLED" : "DISABLED");
+        out.put("autonomy", autonomyProperties.isEnabled() ? "ENABLED" : "DISABLED");
         return out;
+    }
+
+    private String probeTokenSuppressor() {
+        if (!edithProperties.isEnabled()) {
+            return "N/A";
+        }
+        if (edithIntegrationService.isOperational()) {
+            return "VIA_EDITH";
+        }
+        return "UNAVAILABLE_NON_BLOCKING";
     }
 
     private String probeDatabase() {
@@ -44,7 +65,10 @@ public class ConsumoRuntimeHealthService {
         if (!edithProperties.isEnabled()) {
             return "DISABLED";
         }
-        if (edithIntegrationService.isOperational()) {
+        if (EdithBaseUrl.looksLikeFrontend(edithProperties.getBaseUrl())) {
+            return "UNAVAILABLE";
+        }
+        if (edithIntegrationService.isLive()) {
             return "AVAILABLE";
         }
         return "UNAVAILABLE";

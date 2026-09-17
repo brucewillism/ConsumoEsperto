@@ -188,6 +188,10 @@ public class Usuario {
     @Column(name = "google_calendar_linked_at")
     private LocalDateTime googleCalendarLinkedAt;
 
+    /** Última visão do dashboard escolhida na UI ({@code MONTHLY} | {@code GENERAL}). */
+    @Column(name = "ultima_visao_dashboard", length = 16)
+    private String ultimaVisaoDashboard;
+
     /**
      * Lista de transações financeiras do usuário
      * Relacionamento um-para-muitos: um usuário pode ter várias transações
@@ -320,6 +324,14 @@ public class Usuario {
     public LocalDateTime getGoogleCalendarLinkedAt() { return googleCalendarLinkedAt; }
     public void setGoogleCalendarLinkedAt(LocalDateTime googleCalendarLinkedAt) {
         this.googleCalendarLinkedAt = googleCalendarLinkedAt;
+    }
+
+    public String getUltimaVisaoDashboard() {
+        return ultimaVisaoDashboard;
+    }
+
+    public void setUltimaVisaoDashboard(String ultimaVisaoDashboard) {
+        this.ultimaVisaoDashboard = ultimaVisaoDashboard;
     }
 
     public Set<Transacao> getTransacoes() { return transacoes; }

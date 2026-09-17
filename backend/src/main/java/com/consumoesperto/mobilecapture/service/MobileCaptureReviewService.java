@@ -78,8 +78,9 @@ public class MobileCaptureReviewService {
 
     OrigemTransacao origem = TransactionIngestionService.mapOrigemForReview(event.getSource());
     LocalDateTime occurredAt = event.getReceivedAt() != null ? event.getReceivedAt() : LocalDateTime.now();
+    Long deviceId = event.getDevice() != null ? event.getDevice().getId() : null;
     String fingerprint = deduplicationService.buildFingerprint(
-        usuarioId, origem, contaId, cartaoId, event.getAmount(), merchantNorm, occurredAt);
+        usuarioId, origem, deviceId, contaId, cartaoId, event.getAmount(), merchantNorm, occurredAt);
     event.setFingerprint(fingerprint);
     event.setMerchantNormalized(merchantNorm);
 

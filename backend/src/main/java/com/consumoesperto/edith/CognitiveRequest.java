@@ -15,6 +15,8 @@ public class CognitiveRequest {
     String clientRequestId;
     Map<String, Object> metadata;
     boolean awaitCompletion;
+    /** 0 = usar timeout padrão da hub. Autonomia financeira deve passar um teto curto. */
+    long timeoutMs;
     String applicationId;
     String screen;
     String entityType;

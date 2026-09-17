@@ -1,0 +1,25 @@
+# Exemplo Apache — HTTPS do host
+# /api  → Spring Boot :8087
+# /     → Angular (container Nginx) :8181
+#
+# NUNCA faça ProxyPass / http://127.0.0.1:8087/
+# F5 ou URL directa em /login, /dashboard, /transacoes cairia no Spring
+# e o browser mostraria JSON 401 em vez da SPA.
+
+<VirtualHost *:443>
+    ServerName consumoesperto.brucew07.com.br
+
+    SSLEngine on
+    # SSLCertificateFile      /etc/letsencrypt/live/consumoesperto.brucew07.com.br/fullchain.pem
+    # SSLCertificateKeyFile   /etc/letsencrypt/live/consumoesperto.brucew07.com.br/privkey.pem
+
+    ProxyPreserveHost On
+    RequestHeader set X-Forwarded-Proto "https"
+    ProxyTimeout 360
+
+    ProxyPass        /api/ http://127.0.0.1:8087/api/
+    ProxyPassReverse /api/ http://127.0.0.1:8087/api/
+
+    ProxyPass        / http://127.0.0.1:8181/
+    ProxyPassReverse / http://127.0.0.1:8181/
+</VirtualHost>

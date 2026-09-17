@@ -37,6 +37,8 @@ public class NotificationOrchestratorService {
     private static final Duration COOLDOWN_IMPORTANTE = Duration.ofHours(6);
     private static final Duration COOLDOWN_INFORMATIVA = Duration.ofHours(24);
     private static final String DIGEST_TITULO = "Resumo ConsumoEsperto";
+    private static final String ACTION_REQUIRED_PENDING = "ACTION_REQUIRED_PENDING";
+    private static final String DELIVERY_PENDING = "DELIVERY_PENDING";
 
     private final NotificacaoEnviadaRepository enviadaRepository;
     private final NotificacaoDigestBufferRepository digestBufferRepository;
@@ -76,6 +78,10 @@ public class NotificationOrchestratorService {
         if (digestBufferRepository.existsByUsuarioIdAndHashEvento(req.getUsuarioId(), hash)) {
             log.debug("[Orquestrador] Já no buffer userId={} hash={}", req.getUsuarioId(), hash);
             return false;
+        }
+
+        if (req.isEntregaImediata()) {
+            return entregar(req.getUsuarioId(), evento, categoria, hash, mensagem, req.getTituloWeb());
         }
 
         if (categoria == NotificacaoCategoria.INFORMATIVA) {
@@ -160,6 +166,57 @@ public class NotificationOrchestratorService {
         return true;
     }
 
+    private void enfileirarPendente(
+        Long usuarioId,
+        String hash,
+        String mensagem,
+        String tituloWeb,
+        NotificacaoEventoTipo evento
+    ) {
+        if (digestBufferRepository.existsByUsuarioIdAndHashEvento(usuarioId, hash)) {
+            return;
+        }
+        NotificacaoDigestBuffer buf = new NotificacaoDigestBuffer();
+        buf.setUsuarioId(usuarioId);
+        buf.setDataRef(AppTimeZone.hoje());
+        buf.setTipo(evento == NotificacaoEventoTipo.ACTION_REQUIRED ? ACTION_REQUIRED_PENDING : DELIVERY_PENDING);
+        buf.setHashEvento(hash);
+        buf.setLinhaDigest(evento.name());
+        buf.setMensagemCompleta(mensagem);
+        buf.setTituloWeb(tituloWeb);
+        buf.setCriadoEm(AppTimeZone.agora());
+        digestBufferRepository.save(buf);
+    }
+
+    @Transactional
+    public void retryPendingActionRequired() {
+        List<NotificacaoDigestBuffer> pending = new ArrayList<>();
+        pending.addAll(digestBufferRepository.findByTipo(ACTION_REQUIRED_PENDING));
+        pending.addAll(digestBufferRepository.findByTipo(DELIVERY_PENDING));
+        for (NotificacaoDigestBuffer item : pending) {
+            digestBufferRepository.delete(item);
+            NotificacaoEventoTipo evento = NotificacaoEventoTipo.ACTION_REQUIRED;
+            if (item.getLinhaDigest() != null) {
+                try {
+                    evento = NotificacaoEventoTipo.valueOf(item.getLinhaDigest().trim());
+                } catch (IllegalArgumentException ignored) {
+                    evento = ACTION_REQUIRED_PENDING.equals(item.getTipo())
+                        ? NotificacaoEventoTipo.ACTION_REQUIRED
+                        : NotificacaoEventoTipo.GENERICO;
+                }
+            }
+            solicitar(NotificacaoSolicitacao.builder()
+                .usuarioId(item.getUsuarioId())
+                .evento(evento)
+                .mensagem(item.getMensagemCompleta())
+                .hashEvento(item.getHashEvento())
+                .digestLinha(item.getLinhaDigest())
+                .tituloWeb(item.getTituloWeb())
+                .entregaImediata(true)
+                .build());
+        }
+    }
+
     private boolean entregar(
         Long usuarioId,
         NotificacaoEventoTipo evento,
@@ -179,8 +236,13 @@ public class NotificationOrchestratorService {
             webOk = webNotificationDeliveryService.enviar(
                 usuarioId, tituloWeb, mensagem, categoria.name());
         }
+        if (!whatsappOk && !webOk && evento == NotificacaoEventoTipo.ACTION_REQUIRED) {
+            webOk = webNotificationDeliveryService.enviar(
+                usuarioId, tituloWeb, mensagem, categoria.name());
+        }
 
         if (!whatsappOk && !webOk) {
+            enfileirarPendente(usuarioId, hash, mensagem, tituloWeb, evento);
             return false;
         }
 
@@ -250,13 +312,28 @@ public class NotificationOrchestratorService {
         if (req.getHashEvento() != null && !req.getHashEvento().isBlank()) {
             return req.getHashEvento();
         }
-        String base = req.getUsuarioId() + "|" + req.getEvento().name() + "|" + AppTimeZone.hoje();
-        if (req.getDigestLinha() != null && !req.getDigestLinha().isBlank()) {
-            base += "|" + req.getDigestLinha();
-        } else if (req.getMensagem() != null) {
-            base += "|" + req.getMensagem().hashCode();
-        }
+        String base = req.getUsuarioId() + "|" + req.getEvento().name()
+            + "|" + n(req.getFinancialEventId())
+            + "|" + n(req.getResourceId())
+            + "|" + firstNonBlank(req.getDecisionId(), req.getDigestLinha(),
+                req.getMensagem() != null ? String.valueOf(req.getMensagem().hashCode()) : "na");
         return sha256(base);
+    }
+
+    private static String n(Long v) {
+        return v == null ? "na" : String.valueOf(v);
+    }
+
+    private static String firstNonBlank(String... vals) {
+        if (vals == null) {
+            return "na";
+        }
+        for (String v : vals) {
+            if (v != null && !v.isBlank()) {
+                return v;
+            }
+        }
+        return "na";
     }
 
     private static String sha256(String input) {

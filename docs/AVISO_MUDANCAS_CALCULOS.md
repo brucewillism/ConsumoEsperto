@@ -27,3 +27,11 @@ Nenhuma transação foi apagada — só a forma de somar mudou. Se algo parecer 
 - Empréstimo: `descontoEmFolha` default true (consignado). **Patrimônio líquido** desconta **todas** as parcelas `PREVISTO`; a flag só define se a parcela debita conta no fluxo.
 
 ---
+
+## Visões do dashboard (set/2026)
+
+O painel passou a ter **Visão Mensal** (padrão) e **Visão Geral**. Na Mensal, empréstimo/consignado mostra só a **parcela do mês** (consignado em folha aparece, mas não sai da conta). Na Geral, o patrimônio negativo deixa de ser um número solto: **ativos − passivos = patrimônio líquido**, e a **dívida total** soma saldo devedor de empréstimos + faturas em aberto, **sem contar duas vezes** as compras parceladas no cartão (elas já estão na fatura).
+
+J.A.R.V.I.S. envia um resumo da visão mensal à segunda-feira e um da visão geral no dia 28, no WhatsApp.
+
+---

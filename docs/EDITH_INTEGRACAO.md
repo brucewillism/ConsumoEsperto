@@ -19,7 +19,7 @@ Ver o contrato atualizado em `docs/CONSUMO_EDITH_INTEGRATION.md`. Auditoria pré
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
 | `EDITH_ENABLED` | `false` | Feature flag |
-| `EDITH_BASE_URL` | — | Base da API (ex. `http://edith_api:8080`) |
+| `EDITH_BASE_URL` | — | Base da **API** (ex. `http://127.0.0.1:8000` ou `http://edith_api:8080`). **Não** use a porta do Control Center/Vite (`5173`, `4173`, `4200`). Health: `GET /api/v1/integrations/health`. |
 | `EDITH_API_KEY` | — | Chave backend-only |
 | `EDITH_CALLBACK_SECRET` | — | HMAC do Tool Bridge |
 | `EDITH_APPLICATION_ID` | `consumo-esperto` | `application_id` no contexto |
@@ -50,7 +50,10 @@ Implementado adapter HTTP: `EdithHttpClient`.
 
 ## Health
 
-Actuator component `edith`: `DISABLED` | `AVAILABLE` | `UNAVAILABLE` (não derruba health core).
+Actuator component `edith` e `GET /api/runtime-health` → `edith`:
+`DISABLED` | `AVAILABLE` | `UNAVAILABLE`.
+
+`AVAILABLE` exige probe vivo `GET /api/v1/integrations/health` 2xx. Configurado sem probe **não** conta como disponível. Porta de frontend em `EDITH_BASE_URL` é recusada.
 
 ## Migração IA legada
 
@@ -61,3 +64,9 @@ Actuator component `edith`: `DISABLED` | `AVAILABLE` | `UNAVAILABLE` (não derru
 | `WhatsAppCommandService` cognitivo | Parcial (`EdithJarvisRoutingService`) | Não |
 | OCR / faturas / contracheques | Não (fase 2) | Não |
 | `AiRouterService` / providers | Não (fallback só com flag off) | Não |
+
+## Autonomia financeira (limites desta versão)
+
+- **Anomalia:** não é z-score. Compara gasto 30d × média 30–90d e variação de recorrência/assinatura. Sem modelo único → **PARCIAL**.
+- **Forecast:** 30d = `ForecastFinanceiroService`; 60/90 = `SaldoService` safra. Não unificados → **PARCIAL**.
+- **JARVIS WhatsApp (Evolution):** entrega real permanece **IMPLEMENTADO NÃO VALIDADO** se Evolution estiver indisponível.

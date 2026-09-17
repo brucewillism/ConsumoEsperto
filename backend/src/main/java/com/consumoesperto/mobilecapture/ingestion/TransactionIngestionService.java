@@ -5,7 +5,6 @@ import com.consumoesperto.mobilecapture.dto.MobileTransactionIngestionRequest;
 import com.consumoesperto.mobilecapture.parser.MobileNotificationParsingService;
 import com.consumoesperto.mobilecapture.parser.ParsedMobileTransaction;
 import com.consumoesperto.mobilecapture.service.*;
-import com.consumoesperto.config.MobileCaptureProperties;
 import com.consumoesperto.dto.TransacaoDTO;
 import com.consumoesperto.model.*;
 import com.consumoesperto.repository.MobileCaptureEventRepository;
@@ -27,16 +26,14 @@ import java.util.Optional;
 @Slf4j
 public class TransactionIngestionService {
 
-  private final MobileCaptureProperties properties;
   private final MobileNotificationParsingService parsingService;
   private final MerchantNormalizationService merchantNormalizationService;
   private final MobileAccountResolverService accountResolver;
   private final MobileIngestionDeduplicationService deduplicationService;
-  private final MerchantCategoryRuleService categoryRuleService;
-  private final MobileCaptureClassificationService classificationService;
   private final TransacaoService transacaoService;
   private final MobileCaptureEventRepository eventRepository;
   private final com.consumoesperto.repository.MobileCaptureDeviceRepository deviceRepository;
+  private final com.consumoesperto.autonomy.FinancialReconciliationService reconciliationService;
 
   @Transactional
   public MobileIngestionResultDto ingest(
@@ -130,16 +127,27 @@ public class TransactionIngestionService {
     }
 
     OrigemTransacao origem = mapOrigem(request.getSource());
-    Optional<MobileAccountResolverService.ResolvedAccount> account = accountResolver.resolve(
+    MobileAccountResolverService.ResolveOutcome resolved = accountResolver.resolveDetailed(
         usuarioId, device.getId(), request.getPackageName(), p.getCardHint());
+    if (resolved.needsReview()) {
+      event.setStatus(IngestionEventStatus.NEEDS_REVIEW);
+      event.setProcessedAt(LocalDateTime.now());
+      event.setErrorMessage(resolved.reason() != null ? resolved.reason() : "card_hint ambíguo");
+      eventRepository.save(event);
+      return result(event, "Cartão Wallet sem associação única — revisão necessária");
+    }
 
-    Long contaId = account.map(MobileAccountResolverService.ResolvedAccount::contaId).orElse(null);
-    Long cartaoId = account.map(MobileAccountResolverService.ResolvedAccount::cartaoId).orElse(null);
+    Long contaId = resolved.account().map(MobileAccountResolverService.ResolvedAccount::contaId).orElse(null);
+    Long cartaoId = resolved.account().map(MobileAccountResolverService.ResolvedAccount::cartaoId).orElse(null);
 
     LocalDateTime occurredAt = p.getOccurredAt() != null ? p.getOccurredAt() : LocalDateTime.now();
     String fingerprint = deduplicationService.buildFingerprint(
-        usuarioId, origem, contaId, cartaoId, p.getAmount(), merchantNorm, occurredAt);
+        usuarioId, origem, device.getId(), contaId, cartaoId, p.getAmount(), merchantNorm, occurredAt);
     event.setFingerprint(fingerprint);
+    if (clientEventId == null || clientEventId.isBlank()) {
+      clientEventId = deduplicationService.derivedClientEventId(fingerprint);
+      event.setClientEventId(clientEventId);
+    }
 
     if (deduplicationService.existsRegisteredTransaction(usuarioId, fingerprint)) {
       return markDuplicate(event, event.getId());
@@ -148,8 +156,10 @@ public class TransactionIngestionService {
     if (dupFp.isPresent() && !dupFp.get().equals(event.getId())) {
       return markDuplicate(event, dupFp.get());
     }
-
-    CategoryResolution category = resolveCategory(usuarioId, merchantNorm, p.getAmount());
+    Optional<Long> dupDerived = deduplicationService.findDuplicateEventId(device, clientEventId);
+    if (dupDerived.isPresent() && !dupDerived.get().equals(event.getId())) {
+      return markDuplicate(event, dupDerived.get());
+    }
 
     TransacaoDTO dto = new TransacaoDTO();
     dto.setDescricao(merchantNorm.length() > 200 ? merchantNorm.substring(0, 200) : merchantNorm);
@@ -160,20 +170,18 @@ public class TransactionIngestionService {
     if (cartaoId != null) {
       dto.setCartaoCreditoId(cartaoId);
     }
-    if (category.categoriaId != null && category.autoApply) {
-      dto.setCategoriaId(category.categoriaId);
-    }
-    dto.setStatusConferencia(category.autoApply
-        ? TransacaoDTO.StatusConferencia.CONFIRMADA
-        : TransacaoDTO.StatusConferencia.PENDENTE);
+    dto.setStatusConferencia(TransacaoDTO.StatusConferencia.PENDENTE);
+    dto.setSugerirCategoriaAutomatica(false);
 
     TransacaoDTO created = transacaoService.criarTransacao(dto, usuarioId, false, true, true);
     attachIngestionMetadata(created.getId(), origem, clientEventId, request.getPackageName(),
-        p.getMerchantRaw(), merchantNorm, fingerprint, category.confidence, event.getId());
+        p.getMerchantRaw(), merchantNorm, fingerprint, BigDecimal.ZERO, event.getId());
+    reconciliationService.attachOrCreateEvidence(
+        usuarioId, created.getId(), origem, clientEventId, String.valueOf(event.getId()), BigDecimal.ONE);
 
     event.setStatus(IngestionEventStatus.REGISTERED);
     event.setTransacaoId(created.getId());
-    event.setConfidence(category.confidence);
+    event.setConfidence(BigDecimal.ZERO);
     event.setProcessedAt(LocalDateTime.now());
     eventRepository.save(event);
 
@@ -208,26 +216,6 @@ public class TransactionIngestionService {
     }
     transacaoService.atualizarMetadadosIngestao(
         transacaoId, origem, externalEventId, provider, merchantRaw, merchantNorm, fingerprint, confidence, eventId);
-  }
-
-  private CategoryResolution resolveCategory(Long usuarioId, String merchantNorm, BigDecimal amount) {
-    Optional<MerchantCategoryRuleService.CategoryMatch> rule = categoryRuleService.match(usuarioId, merchantNorm);
-    if (rule.isPresent()) {
-      BigDecimal conf = rule.get().confidence();
-      return new CategoryResolution(rule.get().categoriaId(), conf, shouldAutoApply(conf), conf);
-    }
-    Optional<MerchantCategoryRuleService.CategoryMatch> edith =
-        classificationService.classify(usuarioId, merchantNorm, amount);
-    if (edith.isPresent()) {
-      BigDecimal conf = edith.get().confidence();
-      return new CategoryResolution(edith.get().categoriaId(), conf, shouldAutoApply(conf), conf);
-    }
-    return new CategoryResolution(null, BigDecimal.ZERO, false, BigDecimal.ZERO);
-  }
-
-  private boolean shouldAutoApply(BigDecimal confidence) {
-    return confidence != null
-        && confidence.compareTo(BigDecimal.valueOf(properties.getAutoCategoryThreshold())) >= 0;
   }
 
   private MobileIngestionResultDto markDuplicate(MobileCaptureEvent event, Long originalEventId) {
@@ -315,6 +303,4 @@ public class TransactionIngestionService {
         .merchantNormalized(event.getMerchantNormalized())
         .build();
   }
-
-  private record CategoryResolution(Long categoriaId, BigDecimal confidence, boolean autoApply, BigDecimal displayConfidence) {}
 }

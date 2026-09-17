@@ -18,6 +18,7 @@ import {
   MobileDeviceRegistration,
   MobilePlatform,
 } from '../../services/mobile-capture.service';
+import { AutonomyPreferencias, AutonomyService } from '../../services/autonomy.service';
 import { resolveHttpError } from '../../shared/utils/form.utils';
 
 @Component({
@@ -59,6 +60,10 @@ export class PerfilComponent implements OnInit {
   notifPrefs: JarvisNotificacaoPreferencias = {};
   notifPrefsCarregando = false;
   notifPrefsSalvando = false;
+
+  autonomyPrefs: AutonomyPreferencias | null = null;
+  autonomyCarregando = false;
+  autonomySalvando = false;
 
   readonly notifOpcoes: {
     key: keyof JarvisNotificacaoPreferencias;
@@ -129,7 +134,8 @@ export class PerfilComponent implements OnInit {
     private googleCalendarLink: GoogleCalendarLinkService,
     private despesasFixaService: DespesasFixaService,
     private contaBancariaService: ContaBancariaService,
-    private mobileCaptureService: MobileCaptureService
+    private mobileCaptureService: MobileCaptureService,
+    private autonomyService: AutonomyService
   ) {}
 
   ngOnInit(): void {
@@ -146,6 +152,7 @@ export class PerfilComponent implements OnInit {
         this.carregando = false;
         this.carregarFixas();
         this.carregarNotifPrefs();
+        this.carregarAutonomyPrefs();
         this.carregarMobileDevices();
       },
       error: () => {
@@ -179,6 +186,37 @@ export class PerfilComponent implements OnInit {
       error: () => {
         this.notifPrefsSalvando = false;
         this.toastService.error('Não foi possível guardar as preferências.');
+      },
+    });
+  }
+
+  carregarAutonomyPrefs(): void {
+    this.autonomyCarregando = true;
+    this.autonomyService.preferencias().subscribe({
+      next: (p) => {
+        this.autonomyPrefs = p;
+        this.autonomyCarregando = false;
+      },
+      error: () => {
+        this.autonomyCarregando = false;
+      },
+    });
+  }
+
+  salvarAutonomyPrefs(): void {
+    if (!this.autonomyPrefs) {
+      return;
+    }
+    this.autonomySalvando = true;
+    this.autonomyService.salvarPreferencias(this.autonomyPrefs).subscribe({
+      next: (p) => {
+        this.autonomyPrefs = p;
+        this.autonomySalvando = false;
+        this.toastService.success('Autonomia financeira guardada.');
+      },
+      error: () => {
+        this.autonomySalvando = false;
+        this.toastService.error('Não foi possível guardar a autonomia.');
       },
     });
   }

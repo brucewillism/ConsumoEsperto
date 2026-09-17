@@ -177,6 +177,15 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/importacoes-pendentes/importacoes-pendentes.component').then(m => m.ImportacoesPendentesComponent),
     canActivate: [AuthGuard]
   },
+
+  {
+    path: 'revisao',
+    loadComponent: () =>
+      import('./pages/revisao-autonomia/revisao-autonomia.component').then(
+        m => m.RevisaoAutonomiaComponent
+      ),
+    canActivate: [AuthGuard]
+  },
   
   // Rota wildcard: captura todas as rotas inexistentes
   // Redireciona para o dashboard (útil para SPA)

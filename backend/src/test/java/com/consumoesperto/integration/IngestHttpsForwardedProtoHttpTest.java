@@ -3,8 +3,10 @@ package com.consumoesperto.integration;
 import com.consumoesperto.mobilecapture.dto.CreateMobileCaptureDeviceRequest;
 import com.consumoesperto.mobilecapture.dto.MobileDeviceRegistrationResponse;
 import com.consumoesperto.mobilecapture.security.MobileDeviceTokenFilter;
+import com.consumoesperto.model.CartaoCredito;
 import com.consumoesperto.model.MobilePlatform;
 import com.consumoesperto.model.Usuario;
+import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.security.ForwardedHttps;
 import com.consumoesperto.security.JwtTokenProvider;
@@ -52,6 +54,7 @@ class IngestHttpsForwardedProtoHttpTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private UsuarioRepository usuarioRepository;
+    @Autowired private CartaoCreditoRepository cartaoCreditoRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private JwtTokenProvider jwtTokenProvider;
@@ -67,6 +70,17 @@ class IngestHttpsForwardedProtoHttpTest {
         u.setPassword(passwordEncoder.encode("SenhaTeste123!"));
         u.setNome("Https");
         u = usuarioRepository.save(u);
+
+        CartaoCredito cartao = new CartaoCredito();
+        cartao.setNome("Nubank");
+        cartao.setBanco("Nubank");
+        cartao.setNumeroCartao("4111111111111111");
+        cartao.setDiaVencimento(10);
+        cartao.setUsuario(u);
+        cartao.setLimiteCredito(new java.math.BigDecimal("5000"));
+        cartao.setLimiteDisponivel(new java.math.BigDecimal("5000"));
+        cartao.setAtivo(true);
+        cartaoCreditoRepository.save(cartao);
 
         CreateMobileCaptureDeviceRequest req = new CreateMobileCaptureDeviceRequest();
         req.setName("iPhone");

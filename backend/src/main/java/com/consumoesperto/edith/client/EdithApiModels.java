@@ -1,5 +1,6 @@
 package com.consumoesperto.edith.client;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -45,6 +46,8 @@ public final class EdithApiModels {
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ConversationResponse {
+        @JsonProperty("conversation_id")
+        @JsonAlias({"conversationId", "id"})
         private String conversationId;
         private String status;
         private String title;
@@ -58,19 +61,35 @@ public final class EdithApiModels {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class MessageSendRequest {
         private String message;
+        @JsonProperty("source_action")
+        @JsonAlias("sourceAction")
         private String sourceAction;
+        @JsonProperty("source_label")
+        @JsonAlias("sourceLabel")
         private String sourceLabel;
         private Map<String, Object> context;
+        @JsonProperty("client_request_id")
+        @JsonAlias("clientRequestId")
         private String clientRequestId;
+        @JsonProperty("agent_id")
+        @JsonAlias("agentId")
         private String agentId;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class MessageSubmission {
+        @JsonProperty("conversation_id")
+        @JsonAlias("conversationId")
         private String conversationId;
+        @JsonProperty("message_id")
+        @JsonAlias("messageId")
         private String messageId;
+        @JsonProperty("task_id")
+        @JsonAlias("taskId")
         private String taskId;
+        @JsonProperty("request_id")
+        @JsonAlias("requestId")
         private String requestId;
         private String status;
         private Boolean idempotent;
@@ -79,6 +98,8 @@ public final class EdithApiModels {
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class TaskResponse {
+        @JsonProperty("task_id")
+        @JsonAlias("taskId")
         private String taskId;
         private String status;
         private String objective;
@@ -86,11 +107,23 @@ public final class EdithApiModels {
         private String agent;
         private String provider;
         private String model;
+        @JsonProperty("conversation_id")
+        @JsonAlias("conversationId")
         private String conversationId;
+        @JsonProperty("message_id")
+        @JsonAlias("messageId")
         private String messageId;
+        @JsonProperty("request_id")
+        @JsonAlias("requestId")
         private String requestId;
+        @JsonProperty("client_request_id")
+        @JsonAlias("clientRequestId")
         private String clientRequestId;
+        @JsonProperty("source_action")
+        @JsonAlias("sourceAction")
         private String sourceAction;
+        @JsonProperty("source_label")
+        @JsonAlias("sourceLabel")
         private String sourceLabel;
         private String error;
         private Boolean idempotent;
@@ -100,6 +133,8 @@ public final class EdithApiModels {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class TaskEvent {
         private String type;
+        @JsonProperty("task_id")
+        @JsonAlias("taskId")
         private String taskId;
         private Map<String, Object> data;
 
@@ -114,9 +149,13 @@ public final class EdithApiModels {
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ConversationMessage {
+        @JsonProperty("message_id")
+        @JsonAlias("messageId")
         private String messageId;
         private String role;
         private String content;
+        @JsonProperty("created_at")
+        @JsonAlias("createdAt")
         private String createdAt;
     }
 

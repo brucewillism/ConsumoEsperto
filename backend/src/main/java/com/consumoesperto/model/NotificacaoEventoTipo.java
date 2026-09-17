@@ -24,6 +24,8 @@ public enum NotificacaoEventoTipo {
     CONFERENCIA_NOTAS(NotificacaoCategoria.INFORMATIVA, JarvisTipoNotificacaoProativa.CONFERENCIA_NOTAS),
     MODO_VIAGEM(NotificacaoCategoria.INFORMATIVA, JarvisTipoNotificacaoProativa.MODO_VIAGEM_CRONOS),
 
+    ACTION_REQUIRED(NotificacaoCategoria.CRITICA, null),
+
     GENERICO(NotificacaoCategoria.INFORMATIVA, null);
 
     private final NotificacaoCategoria categoria;

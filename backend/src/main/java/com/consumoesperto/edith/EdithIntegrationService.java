@@ -38,7 +38,22 @@ public class EdithIntegrationService {
     }
 
     public boolean isOperational() {
-        return isEnabled() && httpClient.isConfigured() && !httpClient.isCircuitOpen();
+        if (!isEnabled() || !httpClient.isConfigured() || httpClient.isCircuitOpen()) {
+            return false;
+        }
+        return !EdithBaseUrl.looksLikeFrontend(properties.getBaseUrl());
+    }
+
+    /** Health vivo: GET /api/v1/integrations/health 2xx. */
+    public boolean isLive() {
+        if (!isOperational()) {
+            return false;
+        }
+        try {
+            return httpClient.healthProbe().getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public void assertEnabled() {
@@ -230,7 +245,11 @@ public class EdithIntegrationService {
     }
 
     public String awaitTaskResult(Long usuarioId, String taskId) {
-        long deadline = System.currentTimeMillis() + properties.getTaskTimeoutMs();
+        return awaitTaskResult(usuarioId, taskId, properties.getTaskTimeoutMs());
+    }
+
+    public String awaitTaskResult(Long usuarioId, String taskId, long timeoutMs) {
+        long deadline = System.currentTimeMillis() + Math.max(1_000L, timeoutMs);
         while (System.currentTimeMillis() < deadline) {
             EdithApiModels.TaskResponse task = fetchTask(usuarioId, taskId);
             if (task != null) {
@@ -238,7 +257,11 @@ public class EdithIntegrationService {
                 if ("COMPLETED".equals(status)) {
                     return task.getResult() != null ? task.getResult() : "";
                 }
-                if ("FAILED".equals(status)) {
+                if ("FAILED".equals(status)
+                    || status.startsWith("FAILED")
+                    || "BUDGET_EXCEEDED".equals(status)
+                    || "CANCELLED".equals(status)
+                    || "CANCELED".equals(status)) {
                     throw new EdithException(EdithErrorCode.TASK_FAILED, "Task falhou na E.D.I.T.H.");
                 }
             }

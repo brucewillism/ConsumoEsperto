@@ -27,6 +27,41 @@ public class ComposicaoProjecaoMesService {
     private final ForecastProjecaoConfig forecastProjecaoConfig;
 
     /**
+     * Componentes disjuntos da obrigação do mês (R1) — mesmos números da composição, sem Anti-Susto.
+     * {@code parcelasEmprestimoCaixa} exclui desconto em folha (sai de conta);
+     * {@code parcelasEmprestimoTodas} inclui consignado em folha (exibição da parcela do mês).
+     */
+    public record PartesObrigacoesMes(
+        BigDecimal fixas,
+        BigDecimal faturas,
+        BigDecimal parcelasEmprestimoCaixa,
+        BigDecimal parcelasEmprestimoFolha,
+        BigDecimal parcelasEmprestimoTodas
+    ) {
+        public BigDecimal comprometidoDisjuntoCaixa() {
+            return nz(fixas).add(nz(faturas)).add(nz(parcelasEmprestimoCaixa));
+        }
+
+        public BigDecimal comprometidoDisjuntoExibicao() {
+            return nz(fixas).add(nz(faturas)).add(nz(parcelasEmprestimoTodas));
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public PartesObrigacoesMes partesObrigacoesMes(Long usuarioId, YearMonth ym, LocalDate referencia) {
+        LocalDateTime inicio = ym.atDay(1).atStartOfDay();
+        LocalDateTime fimMes = ym.atEndOfMonth().atTime(23, 59, 59);
+        BigDecimal fixas = nz(despesaFixaService.somarValorRestanteNoMes(usuarioId, referencia));
+        BigDecimal faturas = nz(faturaRepository.sumValorFaturasPendentesNoMes(usuarioId, inicio, fimMes));
+        BigDecimal parcelasCaixa = nz(transacaoRepository.sumParcelasEmprestimoPrevistasNoMes(
+            usuarioId, inicio, fimMes));
+        BigDecimal parcelasTodas = nz(transacaoRepository.sumParcelasEmprestimoPrevistasNoMesTodas(
+            usuarioId, inicio, fimMes));
+        BigDecimal parcelasFolha = parcelasTodas.subtract(parcelasCaixa).max(BigDecimal.ZERO);
+        return new PartesObrigacoesMes(fixas, faturas, parcelasCaixa, parcelasFolha, parcelasTodas);
+    }
+
+    /**
      * Despesas previstas restantes no mês: fixas + faturas + parcelas de empréstimo + gasto variável (Anti-Susto).
      */
     @Transactional(readOnly = true)

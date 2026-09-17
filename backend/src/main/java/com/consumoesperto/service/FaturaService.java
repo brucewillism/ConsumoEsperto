@@ -904,6 +904,11 @@ public class FaturaService {
         dto.setNomeCartao(fatura.getCartaoCredito().getNome());
         dto.setBanco(fatura.getCartaoCredito().getBanco());
         dto.setValorTotal(fatura.getValorTotal() != null ? fatura.getValorTotal() : fatura.getValorFatura());
+        BigDecimal confirmado = nz(transacaoRepository.sumDespesaConfirmadaPorFaturaId(fatura.getId()));
+        BigDecimal pendente = nz(transacaoRepository.sumDespesaPendentePorFaturaId(fatura.getId()));
+        dto.setValorConfirmado(confirmado);
+        dto.setValorPendente(pendente);
+        dto.setValorProjetado(confirmado.add(pendente));
         dto.setValorMinimo(fatura.getValorMinimo() != null ? fatura.getValorMinimo() : fatura.getValorFatura());
         dto.setStatus(fatura.getStatusFatura() != null ? fatura.getStatusFatura().name() : null);
         dto.setPaga(fatura.isPaga() || Fatura.StatusFatura.PAGA.equals(fatura.getStatusFatura()));
@@ -1128,6 +1133,10 @@ public class FaturaService {
             return 10;
         }
         return Math.max(1, Math.min(31, dia));
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
     }
 
     /**

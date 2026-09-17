@@ -22,13 +22,27 @@ O erro **«502 Bad Gateway»** ao chamar `https://seu-domínio/api/...` quase se
 
    ProxyPass        /api/ http://127.0.0.1:8087/api/
    ProxyPassReverse /api/ http://127.0.0.1:8087/api/
-   ```
+
+   # SPA: o resto vai para o Angular (:8181), NÃO para o Spring.
+   ProxyPass        / http://127.0.0.1:8181/
+   ProxyPassReverse / http://127.0.0.1:8181/
+```
+
+   Exemplo completo: [`apache-spa-vhost.conf.example`](apache-spa-vhost.conf.example).
 
 3. **Tempo máximo no proxy**
    Se o JVM demora a subir ou pedidos ficam pendurados no boot, aumente timeouts no proxy (Apache: `ProxyTimeout`, Nginx: `proxy_read_timeout`).
 
 4. **`docker-compose` atual**
    O serviço `backend` inclui um **healthcheck** em `GET /api/auth/status`. O frontend só sobe quando o backend estiver «healthy». Isto ajuda contra 502 só por clicar antes do Spring estar pronto.
+
+### F5 em `/login` (ou `/dashboard`, `/transacoes`, …) mostra JSON 401
+
+O Angular usa rotas sem `#`. `GET /` pode servir o `index.html`, mas `GET /login` — se o Apache mandar para `:8087` — chega ao Spring, que responde JSON `Unauthorized`.
+
+1. Confirme o vhost: só `/api/` para `:8087`; `/` para `:8181` (o Nginx do frontend já tem `try_files ... /index.html`).
+2. Recarregue o Apache: `apache2ctl configtest && systemctl reload apache2`.
+3. O backend também passa a redirecionar navegação HTML anónima para `/?ce_resume=...` (defesa se o proxy ainda estiver errado). Isso só vale depois de publicar o JAR novo.
 
 ---
 

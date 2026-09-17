@@ -133,6 +133,39 @@
       </section>
 
       <section class="block">
+        <h2>Cartão Wallet → Cartão ConsumoEsperto</h2>
+        <p class="hint">
+          Quando o iPhone envia <code>card_hint</code> (ex.: Cartao Teste), associe ao cartão deste app.
+          Sem associação única o lançamento vai para revisão — o sistema não escolhe um cartão à sorte.
+        </p>
+        <ul class="fontes" *ngIf="walletMappings.length">
+          <li *ngFor="let m of walletMappings">
+            <span
+              ><strong>{{ m.providerKey || m.cardLast4 || 'Wallet' }}</strong>
+              → cartão {{ nomeCartao(m.cartaoId) }}</span
+            >
+            <button type="button" class="linkish danger" (click)="removerWalletMapping(m)">Remover</button>
+          </li>
+        </ul>
+        <div class="grid-fonte">
+          <label class="fld">
+            <span>Nome no Wallet / card_hint</span>
+            <input type="text" [(ngModel)]="novoWallet.providerKey" name="walletHint" placeholder="Cartao Teste" />
+          </label>
+          <label class="fld">
+            <span>Cartão ConsumoEsperto</span>
+            <select [(ngModel)]="novoWallet.cartaoCreditoId" name="walletCartao">
+              <option [ngValue]="null">—</option>
+              <option *ngFor="let c of cartoes" [ngValue]="c.id">{{ c.nome }}</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn outline" (click)="guardarWalletMapping()">Guardar associação</button>
+        </div>
+      </section>
+
+      <section class="block">
         <h2>Últimas notificações</h2>
         <p class="empty" *ngIf="!logs.length">Ainda não chegou nenhuma notificação.</p>
         <article class="event-card" *ngFor="let n of logs">

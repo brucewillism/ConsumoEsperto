@@ -347,6 +347,11 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     BigDecimal sumDespesaConfirmadaPorFaturaId(@Param("faturaId") Long faturaId);
 
     @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.fatura.id = :faturaId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PENDENTE")
+    BigDecimal sumDespesaPendentePorFaturaId(@Param("faturaId") Long faturaId);
+
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.fatura.id = :faturaId "
         + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.PAGAMENTO_FATURA "
         + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA")
     BigDecimal sumPagamentoFaturaConfirmadoPorFaturaId(@Param("faturaId") Long faturaId);
@@ -574,6 +579,41 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("inicio") LocalDateTime inicio,
         @Param("fim") LocalDateTime fim
     );
+
+    /** Parcelas de empréstimo PREVISTO no mês — inclui consignado em folha (exibição da Visão Mensal). */
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim")
+    BigDecimal sumParcelasEmprestimoPrevistasNoMesTodas(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    /** Parcelas de empréstimo (PREVISTO ou já CONFIRMADA) com vencimento no mês — inclui desconto em folha. */
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.dataTransacao BETWEEN :inicio AND :fim "
+        + "ORDER BY t.dataTransacao ASC, t.id ASC")
+    List<Transacao> findParcelasEmprestimoNoMes(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    /** Todas as parcelas PREVISTO de empréstimo (inclui desconto em folha) — Visão Geral. */
+    @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.excluido = false "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.PREVISTO "
+        + "AND t.emprestimoId IS NOT NULL "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "ORDER BY t.emprestimoId ASC, t.parcelaAtual ASC")
+    List<Transacao> findParcelasEmprestimoPrevistasAtivasTodas(@Param("usuarioId") Long usuarioId);
 
     @Query("SELECT t FROM Transacao t WHERE t.usuario.id = :usuarioId "
         + "AND t.excluido = false "

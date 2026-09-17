@@ -53,7 +53,7 @@ class EdithHttpClientContractTest {
       .willReturn(aResponse()
         .withStatus(200)
         .withHeader("Content-Type", "application/json")
-        .withBody("{\"conversationId\":\"conv-1\",\"status\":\"OPEN\"}")));
+        .withBody("{\"conversation_id\":\"conv-1\",\"status\":\"ACTIVE\"}")));
 
     EdithApiModels.ConversationResponse resp = client.createConversation("ConsumoEsperto");
     assertEquals("conv-1", resp.getConversationId());
@@ -66,7 +66,7 @@ class EdithHttpClientContractTest {
       .willReturn(aResponse()
         .withStatus(202)
         .withHeader("Content-Type", "application/json")
-        .withBody("{\"conversationId\":\"conv-1\",\"messageId\":\"msg-1\",\"taskId\":\"task-1\",\"status\":\"QUEUED\"}")));
+        .withBody("{\"conversation_id\":\"conv-1\",\"message_id\":\"msg-1\",\"task_id\":\"task-1\",\"request_id\":\"req-1\",\"status\":\"CREATED\"}")));
 
     EdithApiModels.MessageSendRequest req = new EdithApiModels.MessageSendRequest();
     req.setMessage("Olá");
@@ -119,7 +119,7 @@ class EdithHttpClientContractTest {
       .willReturn(aResponse()
         .withStatus(200)
         .withHeader("Content-Type", "application/json")
-        .withBody("{\"taskId\":\"task-9\",\"status\":\"COMPLETED\",\"result\":\"ok\"}")));
+        .withBody("{\"task_id\":\"task-9\",\"status\":\"COMPLETED\",\"result\":\"ok\"}")));
 
     wireMock.stubFor(get(urlEqualTo("/api/v1/integrations/health"))
       .willReturn(aResponse().withStatus(200).withBody("{\"status\":\"UP\"}")));

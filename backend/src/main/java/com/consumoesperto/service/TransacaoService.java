@@ -93,6 +93,10 @@ public class TransacaoService {
     private com.consumoesperto.service.jarvis.CategoriaCorrecaoMemoriaService categoriaCorrecaoMemoriaService;
 
     @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.consumoesperto.autonomy.FinancialEventPublisher financialEventPublisher;
+
+    @org.springframework.beans.factory.annotation.Autowired
     private javax.sql.DataSource dataSource;
 
     /**
@@ -222,6 +226,12 @@ public class TransacaoService {
                 "Investimento registrado: " + transacaoSalva.getDescricao());
         }
         invalidarContextoJarvis(usuarioId);
+        publicarEventoAutonomia(
+            usuarioId,
+            com.consumoesperto.autonomy.FinancialEventType.TRANSACTION_INGESTED,
+            transacaoSalva.getId(),
+            "created"
+        );
         return converterParaDTO(transacaoSalva);
     }
 
@@ -344,6 +354,12 @@ public class TransacaoService {
             && transacaoAtualizada.getDescricao() != null && !transacaoAtualizada.getDescricao().isBlank()) {
             categoriaCorrecaoMemoriaService.registrarCorrecaoCategoria(
                 usuarioId, transacaoAtualizada.getDescricao(), categoriaIdDepois);
+            publicarEventoAutonomia(
+                usuarioId,
+                com.consumoesperto.autonomy.FinancialEventType.CATEGORY_CORRECTED,
+                transacaoAtualizada.getId(),
+                "category"
+            );
         }
         invalidarContextoJarvis(usuarioId);
         return converterParaDTO(transacaoAtualizada);
@@ -768,6 +784,9 @@ public class TransacaoService {
             dto.setCategoriaId(transacao.getCategoria().getId());
             dto.setCategoriaNome(transacao.getCategoria().getNome());
         }
+        if (transacao.getCategoriaSugerida() != null) {
+            dto.setCategoriaSugeridaId(transacao.getCategoriaSugerida().getId());
+        }
         if (transacao.getFatura() != null) {
             dto.setFaturaId(transacao.getFatura().getId());
             if (transacao.getFatura().getCartaoCredito() != null) {
@@ -1020,6 +1039,76 @@ public class TransacaoService {
             transacao.setMobileCaptureEventId(mobileCaptureEventId);
         }
         transacaoRepository.save(transacao);
+    }
+
+    @Transactional(readOnly = true)
+    public com.consumoesperto.dto.TransacaoIngestSnapshot snapshotIngestao(Long transacaoId, Long usuarioId) {
+        Transacao transacao = transacaoRepository.findById(transacaoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
+        assertOwner(transacao, usuarioId);
+        Long cartaoId = null;
+        if (transacao.getFatura() != null && transacao.getFatura().getCartaoCredito() != null) {
+            cartaoId = transacao.getFatura().getCartaoCredito().getId();
+        }
+        Long contaId = transacao.getContaBancaria() != null ? transacao.getContaBancaria().getId() : null;
+        Long categoriaId = transacao.getCategoria() != null ? transacao.getCategoria().getId() : null;
+        return new com.consumoesperto.dto.TransacaoIngestSnapshot(
+            transacao.getId(),
+            transacao.getOrigemTransacao(),
+            transacao.getMerchantNormalized(),
+            transacao.getMerchantRaw(),
+            transacao.getDescricao(),
+            categoriaId,
+            transacao.getValor(),
+            transacao.getDataTransacao(),
+            cartaoId,
+            contaId,
+            transacao.getExternalEventId(),
+            transacao.getIngestionFingerprint()
+        );
+    }
+
+    @Transactional
+    public void aplicarCategoriaAutonoma(Long transacaoId, Long usuarioId, Long categoriaId) {
+        Transacao transacao = transacaoRepository.findById(transacaoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
+        assertOwner(transacao, usuarioId);
+        if (categoriaId == null) {
+            return;
+        }
+        transacao.setCategoria(buscarCategoriaDoUsuario(categoriaId, usuarioId));
+        transacao.setCategoriaSugerida(null);
+        transacaoRepository.save(transacao);
+        invalidarContextoJarvis(usuarioId);
+    }
+
+    @Transactional
+    public void aplicarCategoriaSugerida(Long transacaoId, Long usuarioId, Long categoriaId) {
+        Transacao transacao = transacaoRepository.findById(transacaoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada"));
+        assertOwner(transacao, usuarioId);
+        if (categoriaId == null) {
+            return;
+        }
+        transacao.setCategoriaSugerida(buscarCategoriaDoUsuario(categoriaId, usuarioId));
+        transacaoRepository.save(transacao);
+        invalidarContextoJarvis(usuarioId);
+    }
+
+    private void publicarEventoAutonomia(
+        Long usuarioId,
+        com.consumoesperto.autonomy.FinancialEventType type,
+        Long aggregateId,
+        String payloadMin
+    ) {
+        if (financialEventPublisher == null) {
+            return;
+        }
+        try {
+            financialEventPublisher.publish(usuarioId, type, aggregateId, payloadMin);
+        } catch (Exception e) {
+            log.debug("autonomy_event_publish_skipped: {}", e.getMessage());
+        }
     }
 
     /**

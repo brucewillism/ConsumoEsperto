@@ -37,6 +37,12 @@ public class MerchantCategoryRuleService {
         .flatMap(this::toMatch);
   }
 
+  /** Sugestão apenas — a policy decide APPLY/SUGGEST/REVIEW. */
+  public Optional<CategorySuggestion> suggest(Long usuarioId, String merchantRaw) {
+    return match(usuarioId, merchantRaw)
+        .map(m -> new CategorySuggestion(m.categoriaId(), m.confidence(), "MERCHANT_RULE"));
+  }
+
   @Transactional
   public void saveUserRule(Long usuarioId, String merchantRaw, Long categoriaId) {
     Categoria categoria = categoriaRepository.findByIdAndUsuarioId(categoriaId, usuarioId)
@@ -65,4 +71,6 @@ public class MerchantCategoryRuleService {
   }
 
   public record CategoryMatch(Long categoriaId, BigDecimal confidence, String origin) {}
+
+  public record CategorySuggestion(Long categoryId, BigDecimal confidence, String source) {}
 }

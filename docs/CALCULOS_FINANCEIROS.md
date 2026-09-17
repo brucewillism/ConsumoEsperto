@@ -1,7 +1,9 @@
 # Cálculos financeiros — referência
 
 Como o ConsumoEsperto soma saldos, patrimônio, projeções e provisões.  
-**Última revisão:** julho/2026 · Mudanças visíveis ao utilizador: [`AVISO_MUDANCAS_CALCULOS.md`](AVISO_MUDANCAS_CALCULOS.md)
+**Última revisão:** setembro/2026 · Mudanças visíveis ao utilizador: [`AVISO_MUDANCAS_CALCULOS.md`](AVISO_MUDANCAS_CALCULOS.md)
+
+Visões Mensal × Geral (taxonomia de obrigações, parcela do mês vs saldo devedor): [`POLITICA_VISOES_DASHBOARD.md`](POLITICA_VISOES_DASHBOARD.md).
 
 ---
 

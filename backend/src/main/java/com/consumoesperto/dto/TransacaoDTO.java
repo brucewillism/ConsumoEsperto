@@ -35,6 +35,7 @@ public class TransacaoDTO {
     private TipoTransacao tipoTransacao;
 
     private Long categoriaId;
+    private Long categoriaSugeridaId;
     private String categoriaNome;
     /** Despesa no cartão: id da fatura em aberto (opcional). */
     private Long faturaId;

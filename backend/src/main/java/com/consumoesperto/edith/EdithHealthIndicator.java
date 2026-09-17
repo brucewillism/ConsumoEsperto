@@ -24,6 +24,13 @@ public class EdithHealthIndicator implements HealthIndicator {
         if (!properties.isEnabled()) {
             return Health.up().withDetail("state", "DISABLED").build();
         }
+        if (EdithBaseUrl.looksLikeFrontend(properties.getBaseUrl())) {
+            return Health.up()
+                .withDetail("state", "UNAVAILABLE")
+                .withDetail("reason", "frontend_port")
+                .withDetail("suggestedApiUrl", EdithBaseUrl.suggestedApiUrl(properties.getBaseUrl()))
+                .build();
+        }
         if (!httpClient.isConfigured()) {
             return Health.up().withDetail("state", "UNAVAILABLE").withDetail("reason", "missing_config").build();
         }

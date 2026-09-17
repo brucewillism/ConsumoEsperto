@@ -14,6 +14,8 @@ public interface NotificacaoDigestBufferRepository extends JpaRepository<Notific
 
     List<NotificacaoDigestBuffer> findByUsuarioIdAndDataRefOrderByCriadoEmAsc(Long usuarioId, LocalDate dataRef);
 
+    List<NotificacaoDigestBuffer> findByTipo(String tipo);
+
     @Query("SELECT DISTINCT b.usuarioId FROM NotificacaoDigestBuffer b WHERE b.dataRef = :dataRef")
     List<Long> findDistinctUsuarioIdsByDataRef(@Param("dataRef") LocalDate dataRef);
 

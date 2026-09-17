@@ -6,6 +6,9 @@ export interface CreditCardInvoice {
   numeroFatura?: string;
   bankName: string;
   amount: number;
+  valorConfirmado?: number;
+  valorPendente?: number;
+  valorProjetado?: number;
   dueDate: Date;
   closingDate: Date;
   status: 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'PREVISTA';
