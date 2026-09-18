@@ -477,6 +477,27 @@ export class ImportacoesPendentesComponent implements OnInit {
     return !item.novo;
   }
 
+  itensMarcaveis(imp: ImportacaoFatura): ImportacaoFatura['itens'] {
+    return (imp.itens || []).filter((item) => !this.checkboxDisabled(imp, item));
+  }
+
+  quantidadeMarcados(imp: ImportacaoFatura): number {
+    return this.itensMarcaveis(imp).filter((item) => !!item.selecionado).length;
+  }
+
+  todosMarcados(imp: ImportacaoFatura): boolean {
+    const marcaveis = this.itensMarcaveis(imp);
+    return marcaveis.length > 0 && marcaveis.every((item) => !!item.selecionado);
+  }
+
+  alternarMarcarTodos(imp: ImportacaoFatura): void {
+    const marcar = !this.todosMarcados(imp);
+    for (const item of this.itensMarcaveis(imp)) {
+      item.selecionado = marcar;
+    }
+    this.onItemChanged(imp);
+  }
+
   loadingMessage(): string {
     return 'Lendo o arquivo enviado';
   }

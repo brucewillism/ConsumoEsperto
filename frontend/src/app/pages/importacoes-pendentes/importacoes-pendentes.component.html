@@ -205,6 +205,18 @@
         </mat-panel-description>
       </mat-expansion-panel-header>
 
+      <div class="selecao-toolbar" *ngIf="itensMarcaveis(imp).length">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="alternarMarcarTodos(imp)"
+          [disabled]="confirmandoId === imp.id">
+          <mat-icon>{{ todosMarcados(imp) ? 'deselect' : 'done_all' }}</mat-icon>
+          {{ todosMarcados(imp) ? 'Desmarcar todos' : 'Marcar todos' }}
+        </button>
+        <span class="selecao-count">{{ quantidadeMarcados(imp) }} de {{ itensMarcaveis(imp).length }}</span>
+      </div>
+
       <div class="items" *ngIf="!isCsv(imp)">
         <label class="item-row" *ngFor="let item of imp.itens">
           <mat-checkbox [(ngModel)]="item.selecionado" [disabled]="!item.novo"></mat-checkbox>

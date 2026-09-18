@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ImportacoesPendentesComponent } from './importacoes-pendentes.component';
-import { ImportacaoFaturaService } from '../../services/importacao-fatura.service';
+import { ImportacaoFatura, ImportacaoFaturaService } from '../../services/importacao-fatura.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ContaBancariaService } from '../../services/conta-bancaria.service';
@@ -91,5 +91,34 @@ describe('ImportacoesPendentesComponent', () => {
     expect(component.erroCarregar).toBeTrue();
     expect(component.carregando).toBeFalse();
     expect(component.importacoes.length).toBe(0);
+  });
+
+  it('marcar todos seleciona só linhas marcáveis e desmarca na segunda vez', () => {
+    const imp: ImportacaoFatura = {
+      id: 9,
+      bancoCartao: 'Nubank',
+      valorTotal: 0,
+      pagamentoMinimo: 0,
+      status: 'PENDENTE',
+      novosDetectados: 2,
+      auditorias: [],
+      dataCriacao: '',
+      tipoArquivo: 'BANK_STATEMENT_CSV',
+      itens: [
+        { data: '2026-07-07', descricao: 'Atacadao', valor: 10, novo: true, selecionado: false, statusPreview: 'NEEDS_REVIEW' },
+        { data: '2026-07-06', descricao: 'Claro', valor: 20, novo: true, selecionado: false, statusPreview: 'NOVO' },
+        { data: '2026-07-05', descricao: 'Dup', valor: 30, novo: false, selecionado: false, statusPreview: 'DUPLICATE' },
+      ],
+    };
+    importacao.atualizarItens.and.returnValue(of(imp));
+    component.alternarMarcarTodos(imp);
+    expect(imp.itens[0].selecionado).toBeTrue();
+    expect(imp.itens[1].selecionado).toBeTrue();
+    expect(imp.itens[2].selecionado).toBeFalse();
+    expect(component.todosMarcados(imp)).toBeTrue();
+    component.alternarMarcarTodos(imp);
+    expect(imp.itens[0].selecionado).toBeFalse();
+    expect(imp.itens[1].selecionado).toBeFalse();
+    expect(imp.itens[2].selecionado).toBeFalse();
   });
 });
