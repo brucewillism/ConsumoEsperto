@@ -7,8 +7,10 @@ import com.consumoesperto.edith.EdithException;
 import com.consumoesperto.ingest.notificacao.security.IngestNotificacaoException;
 import com.consumoesperto.mobilecapture.security.MobileCaptureException;
 import com.consumoesperto.util.AiErroHumanizer;
+import com.consumoesperto.util.BancoErroHumanizer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -108,6 +110,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             "Esta operação conflita com dados já existentes no sistema.",
             JarvisErrorCopy.CONFLICT_INSTRUCAO,
             HttpStatus.CONFLICT.value(),
+            path
+        ));
+    }
+
+    @ExceptionHandler(InvalidDataAccessResourceUsageException.class)
+    public ResponseEntity<ApiError> handleSqlGrammar(InvalidDataAccessResourceUsageException ex, WebRequest request) {
+        log.warn("SQL/schema incompatível path={}: {}", pathFrom(request), ex.getMostSpecificCause() != null
+            ? ex.getMostSpecificCause().getMessage()
+            : ex.getMessage());
+        String path = pathFrom(request);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError(
+            "SCHEMA_MISMATCH",
+            JarvisErrorCopy.SCHEMA_MISMATCH_MESSAGE,
+            JarvisErrorCopy.SCHEMA_MISMATCH_INSTRUCAO,
+            HttpStatus.BAD_REQUEST.value(),
             path
         ));
     }
@@ -264,6 +281,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 JarvisErrorCopy.DUPLICATE_RECORD_MESSAGE,
                 JarvisErrorCopy.DUPLICATE_RECORD_INSTRUCAO,
                 HttpStatus.CONFLICT.value(),
+                path
+            ));
+        }
+
+        String schema = BancoErroHumanizer.humanizar(ex);
+        if (schema == null) {
+            schema = BancoErroHumanizer.humanizar(raw);
+        }
+        if (schema != null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError(
+                "SCHEMA_MISMATCH",
+                schema,
+                JarvisErrorCopy.SCHEMA_MISMATCH_INSTRUCAO,
+                HttpStatus.BAD_REQUEST.value(),
                 path
             ));
         }

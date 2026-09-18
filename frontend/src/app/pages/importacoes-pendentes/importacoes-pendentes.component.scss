@@ -429,6 +429,14 @@ em.old {
   padding: 28px;
 }
 
+.empty-error p {
+  margin: 0 0 12px;
+}
+
+.empty-error button {
+  color: #e5e7eb;
+}
+
 @media (max-width: 760px) {
   .hero,
   .import-head {

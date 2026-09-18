@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ImportacoesPendentesComponent } from './importacoes-pendentes.component';
 import { ImportacaoFaturaService } from '../../services/importacao-fatura.service';
@@ -76,5 +76,20 @@ describe('ImportacoesPendentesComponent', () => {
       dataCriacao: '',
       tipoArquivo: 'BANK_STATEMENT_CSV',
     })).toBe('Extrato bancário CSV');
+  });
+
+  it('abrir a aba com lista vazia não mostra toast', () => {
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(component.erroCarregar).toBeFalse();
+    expect(component.importacoes.length).toBe(0);
+  });
+
+  it('falha ao listar mostra estado no ecrã sem toast', () => {
+    importacao.pendentes.and.returnValue(throwError(() => ({ status: 500 })));
+    component.carregar();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(component.erroCarregar).toBeTrue();
+    expect(component.carregando).toBeFalse();
+    expect(component.importacoes.length).toBe(0);
   });
 });

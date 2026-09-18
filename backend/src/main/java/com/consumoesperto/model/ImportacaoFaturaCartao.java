@@ -72,7 +72,7 @@ public class ImportacaoFaturaCartao {
     private String arquivoNome;
 
     @Column(name = "precisa_escolha_recurso", nullable = false)
-    private boolean precisaEscolhaRecurso;
+    private Boolean precisaEscolhaRecurso = Boolean.FALSE;
 
     @PrePersist
     protected void onCreate() {
@@ -82,6 +82,9 @@ public class ImportacaoFaturaCartao {
         }
         if (tipoArquivo == null) {
             tipoArquivo = FinancialImportFileType.INVOICE_PDF;
+        }
+        if (precisaEscolhaRecurso == null) {
+            precisaEscolhaRecurso = Boolean.FALSE;
         }
     }
 
@@ -139,7 +142,7 @@ public class ImportacaoFaturaCartao {
     public String getArquivoNome() { return arquivoNome; }
     public void setArquivoNome(String arquivoNome) { this.arquivoNome = arquivoNome; }
 
-    public boolean isPrecisaEscolhaRecurso() { return precisaEscolhaRecurso; }
+    public boolean isPrecisaEscolhaRecurso() { return Boolean.TRUE.equals(precisaEscolhaRecurso); }
     public void setPrecisaEscolhaRecurso(boolean precisaEscolhaRecurso) { this.precisaEscolhaRecurso = precisaEscolhaRecurso; }
 
     public enum Status {

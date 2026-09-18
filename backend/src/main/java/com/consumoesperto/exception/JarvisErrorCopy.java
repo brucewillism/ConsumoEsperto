@@ -30,6 +30,11 @@ public final class JarvisErrorCopy {
     public static final String VALIDATION_INSTRUCAO =
         "Corrija o campo indicado e envie de novo.";
 
+    public static final String SCHEMA_MISMATCH_MESSAGE =
+        "Não consegui processar esta fatura porque o banco de dados está desatualizado em relação a esta versão do app. Depois do próximo deploy, tente importar de novo.";
+    public static final String SCHEMA_MISMATCH_INSTRUCAO =
+        "No servidor, suba o backend para o Flyway aplicar as migrações e importe o PDF outra vez.";
+
     public static final String GENERIC_BAD_REQUEST_INSTRUCAO =
         "Verifique os dados e tente de novo. Se usar o WhatsApp, reformule com valor e descrição claros.";
 

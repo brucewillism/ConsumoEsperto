@@ -30,4 +30,14 @@ class DashboardViewFlywayIntegrationTest {
             Integer.class);
         assertEquals(1, n);
     }
+
+    @Test
+    void importacoesFaturaTemColunasCsvDaV9() {
+        Integer n = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM information_schema.columns "
+                + "WHERE table_name = 'importacoes_fatura_cartao' AND column_name IN "
+                + "('tipo_arquivo', 'conta_bancaria_id', 'arquivo_nome', 'precisa_escolha_recurso')",
+            Integer.class);
+        assertEquals(4, n);
+    }
 }

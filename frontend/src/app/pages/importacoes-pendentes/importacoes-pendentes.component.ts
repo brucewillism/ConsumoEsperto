@@ -52,6 +52,7 @@ import { LoadingIndicatorComponent } from '../../components/loading-indicator/lo
 export class ImportacoesPendentesComponent implements OnInit {
   importacoes: ImportacaoFatura[] = [];
   carregando = true;
+  erroCarregar = false;
   confirmandoId: number | null = null;
   dragOver = false;
   enviandoPdf = false;
@@ -84,13 +85,15 @@ export class ImportacoesPendentesComponent implements OnInit {
 
   carregar(): void {
     this.carregando = true;
+    this.erroCarregar = false;
     this.importacaoService.pendentes().subscribe({
       next: (res) => {
-        this.importacoes = res;
+        this.importacoes = res || [];
         this.carregando = false;
       },
       error: () => {
-        this.toast.error('Erro ao carregar importações pendentes.');
+        this.importacoes = [];
+        this.erroCarregar = true;
         this.carregando = false;
       }
     });

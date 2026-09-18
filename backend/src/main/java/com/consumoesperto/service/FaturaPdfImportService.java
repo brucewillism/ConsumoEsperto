@@ -18,6 +18,7 @@ import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import com.consumoesperto.exception.AiUnavailableException;
 import com.consumoesperto.util.AiErroHumanizer;
+import com.consumoesperto.util.BancoErroHumanizer;
 import com.consumoesperto.util.BancoBrasilCatalog;
 import com.consumoesperto.util.MoedaUtil;
 import com.consumoesperto.service.fatura.layout.BancoFaturaLayout;
@@ -142,10 +143,13 @@ public class FaturaPdfImportService {
             if (human != null) {
                 throw new AiUnavailableException(human);
             }
-            String detalhe = e.getMessage() != null && !e.getMessage().isBlank()
-                ? e.getMessage()
-                : e.getClass().getSimpleName();
-            throw new IllegalArgumentException("Não consegui processar esta fatura: " + detalhe, e);
+            String sql = BancoErroHumanizer.humanizar(e);
+            if (sql != null) {
+                throw new IllegalArgumentException(sql, e);
+            }
+            throw new IllegalArgumentException(
+                "Não consegui processar esta fatura. Confirme que o arquivo é PDF de fatura de cartão e tente de novo.",
+                e);
         }
     }
 
@@ -352,11 +356,17 @@ public class FaturaPdfImportService {
 
     @Transactional(readOnly = true)
     public List<ImportacaoFaturaDTO> listarPendentes(Long usuarioId) {
-        return importacaoRepository
-            .findByUsuarioIdAndStatusOrderByDataCriacaoDesc(Long.valueOf(usuarioId), ImportacaoFaturaCartao.Status.PENDENTE)
-            .stream()
-            .map(this::toDto)
-            .collect(Collectors.toList());
+        List<ImportacaoFaturaDTO> out = new ArrayList<>();
+        for (ImportacaoFaturaCartao imp : importacaoRepository.findByUsuarioIdAndStatusOrderByDataCriacaoDesc(
+            Long.valueOf(usuarioId), ImportacaoFaturaCartao.Status.PENDENTE)) {
+            try {
+                out.add(toDto(imp));
+            } catch (RuntimeException e) {
+                log.warn("Importação pendente id={} omitida na listagem: {}",
+                    imp.getId(), e.toString());
+            }
+        }
+        return out;
     }
 
     /** Remove uma importação pendente (e sugestões de protocolo vinculadas). */
@@ -609,8 +619,9 @@ public class FaturaPdfImportService {
     public ImportacaoFaturaDTO toDto(ImportacaoFaturaCartao imp) {
         ImportacaoFaturaDTO dto = new ImportacaoFaturaDTO();
         dto.setId(imp.getId());
-        dto.setCartaoCreditoId(imp.getCartaoCredito() != null ? imp.getCartaoCredito().getId() : null);
-        dto.setCartaoCreditoNome(imp.getCartaoCredito() != null ? imp.getCartaoCredito().getNome() : null);
+        CartaoCredito cartao = assocOuNulo(imp::getCartaoCredito);
+        dto.setCartaoCreditoId(cartao != null ? cartao.getId() : null);
+        dto.setCartaoCreditoNome(cartao != null ? cartao.getNome() : null);
         dto.setBancoCartao(imp.getBancoCartao());
         dto.setDataVencimento(imp.getDataVencimento());
         dto.setDataFechamento(imp.getDataFechamento());
@@ -2150,6 +2161,14 @@ public class FaturaPdfImportService {
             || n.contains("pagamento da fatura de")
             || n.contains("pagamentos e creditos devolvidos")
             || n.contains("pagamento recebido");
+    }
+
+    private static <T> T assocOuNulo(java.util.function.Supplier<T> loader) {
+        try {
+            return loader.get();
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private List<ImportacaoFaturaItemDTO> readItens(String json) {

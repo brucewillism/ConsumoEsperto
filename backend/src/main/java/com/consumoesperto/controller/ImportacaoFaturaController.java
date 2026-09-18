@@ -14,6 +14,7 @@ import com.consumoesperto.service.importacao.FinancialCsvImportService;
 import com.consumoesperto.service.importacao.FinancialImportDetection;
 import com.consumoesperto.service.importacao.FinancialImportFileTypeDetector;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +27,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/importacoes/faturas")
 @RequiredArgsConstructor
+@Slf4j
 @CrossOrigin(originPatterns = {"http://localhost:14200", "https://*.ngrok-free.app", "https://*.ngrok.io"})
 public class ImportacaoFaturaController {
 
@@ -37,7 +39,12 @@ public class ImportacaoFaturaController {
 
     @GetMapping("/pendentes")
     public ResponseEntity<List<ImportacaoFaturaDTO>> pendentes(@AuthenticationPrincipal UserPrincipal user) {
-        return ResponseEntity.ok(faturaPdfImportService.listarPendentes(user.getId()));
+        try {
+            return ResponseEntity.ok(faturaPdfImportService.listarPendentes(user.getId()));
+        } catch (RuntimeException e) {
+            log.warn("Listagem de importações pendentes falhou userId={}: {}", user.getId(), e.toString());
+            return ResponseEntity.ok(List.of());
+        }
     }
 
     @DeleteMapping("/pendentes")

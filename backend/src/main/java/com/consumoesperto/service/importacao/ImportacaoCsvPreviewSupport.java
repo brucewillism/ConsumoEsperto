@@ -21,9 +21,13 @@ public final class ImportacaoCsvPreviewSupport {
         }
         dto.setArquivoNome(imp.getArquivoNome());
         dto.setPrecisaEscolhaRecurso(imp.isPrecisaEscolhaRecurso());
-        if (imp.getContaBancaria() != null) {
-            dto.setContaBancariaId(imp.getContaBancaria().getId());
-            dto.setContaBancariaNome(imp.getContaBancaria().getNome());
+        try {
+            if (imp.getContaBancaria() != null) {
+                dto.setContaBancariaId(imp.getContaBancaria().getId());
+                dto.setContaBancariaNome(imp.getContaBancaria().getNome());
+            }
+        } catch (RuntimeException ignored) {
+            // FK órfã (conta apagada) — a listagem não pode cair por um registo.
         }
         if (itens == null || itens.isEmpty()) {
             return;
