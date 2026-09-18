@@ -192,7 +192,7 @@ public class FinancialProactiveService {
         sb.append("*Relatório mensal Sentinela — J.A.R.V.I.S.*\n");
         sb.append(vocativo).append(", panorama de *").append(mes.getMonthValue()).append("/")
             .append(mes.getYear()).append("*:\n\n");
-        sb.append("Patrimônio em contas: *").append(BRL.format(sentinela.patrimonioLiquido())).append("*.\n");
+        sb.append("Saldo em contas: *").append(BRL.format(sentinela.patrimonioLiquido())).append("*.\n");
         sb.append("Margem Sentinela: *").append(BRL.format(sentinela.saldoMarginal())).append("*");
         if (sentinela.colchaoVirtual().compareTo(BigDecimal.ZERO) > 0) {
             sb.append(" (colchão sazonal: ").append(BRL.format(sentinela.colchaoVirtual())).append(")");
@@ -227,7 +227,7 @@ public class FinancialProactiveService {
     ) {
         if (sentinelaRuim && forecastRuim) {
             return "*Alerta financeiro proativo*\n"
-                + "Patrimônio em contas: *" + BRL.format(sentinela.patrimonioLiquido()) + "*.\n"
+                + "Saldo em contas: *" + BRL.format(sentinela.patrimonioLiquido()) + "*.\n"
                 + "Margem Sentinela: *" + BRL.format(sentinela.saldoMarginal()) + "*"
                 + (sentinela.colchaoVirtual().compareTo(BigDecimal.ZERO) > 0
                     ? " (colchão sazonal: " + BRL.format(sentinela.colchaoVirtual()) + ")" : "")
@@ -249,7 +249,7 @@ public class FinancialProactiveService {
 
     private String mensagemFallbackSoSentinela(SentinelaProtocolService.SentinelaMargemDTO sentinela) {
         return "*Alerta Sentinela*\n"
-            + "Patrimônio em contas: *" + BRL.format(sentinela.patrimonioLiquido()) + "*.\n"
+            + "Saldo em contas: *" + BRL.format(sentinela.patrimonioLiquido()) + "*.\n"
             + "Margem projetada: *" + BRL.format(sentinela.saldoMarginal()) + "*"
             + (sentinela.colchaoVirtual().compareTo(BigDecimal.ZERO) > 0
                 ? " | Ajustada c/ colchão sazonal: *" + BRL.format(sentinela.saldoMarginalAjustado()) + "*"

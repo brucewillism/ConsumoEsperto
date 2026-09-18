@@ -68,7 +68,7 @@ public class ForecastFinanceiroService {
         dto.setGastoAtual(p.gastoAtual());
         dto.setMediaDiaria(mediaDiaria);
         dto.setGastoProjetado(p.gastoProjetado());
-        dto.setPatrimonioLiquido(p.patrimonioLiquido());
+        dto.setPatrimonioLiquido(p.saldoEmConta());
         dto.setReceitasPrevistas(p.receitasPrevistas());
         dto.setReceitasFiscaisPrevistas(p.receitasFiscaisPrevistas());
         dto.setDespesasPrevistas(p.despesasPrevistas());
@@ -94,7 +94,7 @@ public class ForecastFinanceiroService {
             : "";
         String corpo = "*📊 Previsão de fechamento do mês*\n"
             + "Dia " + f.getDiaAtual() + " de " + f.getDiasNoMes() + "\n"
-            + "Patrimônio em contas: *" + BRL.format(f.getPatrimonioLiquido()) + "*\n"
+            + "Saldo em contas: *" + BRL.format(f.getPatrimonioLiquido()) + "*\n"
             + "Gasto até agora: *" + BRL.format(f.getGastoAtual()) + "*\n"
             + "Média diária: *" + BRL.format(f.getMediaDiaria()) + "*\n"
             + "Projeção de gasto: *" + BRL.format(f.getGastoProjetado()) + "*\n"
@@ -161,7 +161,7 @@ public class ForecastFinanceiroService {
                     "Você é um analista financeiro. Retorne apenas JSON: {\"probabilidadeVermelho\":0-100,\"nivelRisco\":\"BAIXO|MEDIO|ALTO|CRITICO\",\"mensagem\":\"texto curto\"}.",
                     "Dia atual do mês: " + dto.getDiaAtual()
                         + "\nDias no mês: " + dto.getDiasNoMes()
-                        + "\nPatrimônio líquido: " + dto.getPatrimonioLiquido()
+                        + "\nSaldo em contas: " + dto.getPatrimonioLiquido()
                         + "\nRenda líquida: " + dto.getRendaLiquida()
                         + "\nReceitas previstas (salário): " + dto.getReceitasPrevistas()
                         + "\nReceitas fiscais previstas (13º/IR): " + dto.getReceitasFiscaisPrevistas()

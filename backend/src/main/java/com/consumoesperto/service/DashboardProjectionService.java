@@ -74,14 +74,14 @@ public class DashboardProjectionService {
         BigDecimal impactoSimuladoDiario = simulacaoImpactoService.impactoMensalAtivo(usuarioId)
             .divide(BigDecimal.valueOf(ym.lengthOfMonth()), 2, RoundingMode.HALF_UP);
 
-        BigDecimal patrimonioHoje = saldoService.patrimonioLiquido(usuarioId);
+        BigDecimal saldoHoje = saldoService.saldoEmConta(usuarioId);
         int idxHoje = Math.min(hoje.getDayOfMonth(), real.size()) - 1;
         BigDecimal acumuladoMesAteHoje = idxHoje >= 0 && real.get(idxHoje) != null
             ? real.get(idxHoje) : BigDecimal.ZERO;
-        BigDecimal offsetPatrimonio = patrimonioHoje.subtract(acumuladoMesAteHoje);
+        BigDecimal offsetCaixa = saldoHoje.subtract(acumuladoMesAteHoje);
         for (int i = 0; i < hoje.getDayOfMonth() && i < real.size(); i++) {
             if (real.get(i) != null) {
-                BigDecimal ancorado = real.get(i).add(offsetPatrimonio).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal ancorado = real.get(i).add(offsetCaixa).setScale(2, RoundingMode.HALF_UP);
                 real.set(i, ancorado);
                 projetado.set(i, ancorado);
                 simulado.set(i, ancorado);
@@ -109,6 +109,15 @@ public class DashboardProjectionService {
         dto.setSimulacoesAtivas(simulacaoImpactoService.listarAtivas(usuarioId));
         dto.setTimelineImpacto(timeline(usuarioId));
         dto.setSafraPatrimonio(saldoService.calcularProjecaoSafraDto(usuarioId, 2));
+        if (dto.getSafraPatrimonio() != null
+            && dto.getSafraPatrimonio().getMeses() != null
+            && !dto.getSafraPatrimonio().getMeses().isEmpty()
+            && !projetado.isEmpty()) {
+            BigDecimal oficial = dto.getSafraPatrimonio().getMeses().get(0).getSaldoProjetadoFimMes();
+            if (oficial != null) {
+                projetado.set(projetado.size() - 1, oficial.setScale(2, RoundingMode.HALF_UP));
+            }
+        }
         return dto;
     }
 

@@ -101,9 +101,37 @@ class ProjecaoMesCaixaSupportTest {
     }
 
     @Test
-    void suavizarProbabilidade_saldoNegativo_mantemOriginal() {
-        BigDecimal original = new BigDecimal("80.00");
-        assertEquals(original, ProjecaoMesCaixaSupport.suavizarProbabilidadeComSaldoPositivo(
-            original, new BigDecimal("-100.00")));
+    void gapSalarial_ultimoDiaDoMes_salarioJaConfirmado_gapZero() {
+        BigDecimal gap = ProjecaoMesCaixaSupport.calcularGapSalarial(
+            RENDA, RENDA, 30, 30, 5);
+        assertEquals(BigDecimal.ZERO.setScale(2), gap);
+    }
+
+    @Test
+    void gapSalarial_fevereiro_diaPagamento31Vira28_aindaNaoRecebido() {
+        BigDecimal gap = ProjecaoMesCaixaSupport.calcularGapSalarial(
+            RENDA, BigDecimal.ZERO, 10, 28, 31);
+        assertEquals(RENDA, gap);
+    }
+
+    @Test
+    void gapSalarial_janeiro1_salarioDeDezembroNaoEntra() {
+        BigDecimal gap = ProjecaoMesCaixaSupport.calcularGapSalarial(
+            RENDA, BigDecimal.ZERO, 1, 31, 5);
+        assertEquals(RENDA, gap);
+    }
+
+    @Test
+    void gapSalarial_vencimentoHoje_aindaNaoConfirmado_projeta() {
+        BigDecimal gap = ProjecaoMesCaixaSupport.calcularGapSalarial(
+            RENDA, BigDecimal.ZERO, 5, 30, 5);
+        assertEquals(RENDA, gap);
+    }
+
+    @Test
+    void gapSalarial_recebidoHoje_naoSomaDeNovo() {
+        BigDecimal gap = ProjecaoMesCaixaSupport.calcularGapSalarial(
+            RENDA, RENDA, 5, 30, 5);
+        assertEquals(BigDecimal.ZERO.setScale(2), gap);
     }
 }

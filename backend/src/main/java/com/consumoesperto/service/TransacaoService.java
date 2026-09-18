@@ -18,6 +18,7 @@ import com.consumoesperto.repository.CartaoCreditoRepository;
 import com.consumoesperto.repository.CategoriaRepository;
 import com.consumoesperto.repository.FaturaRepository;
 import com.consumoesperto.repository.TransacaoRepository;
+import com.consumoesperto.util.AppTimeZone;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -693,9 +694,9 @@ public class TransacaoService {
         totalDespesas = totalDespesas != null ? totalDespesas : BigDecimal.ZERO;
         totalInvestimentos = totalInvestimentos != null ? totalInvestimentos : BigDecimal.ZERO;
         BigDecimal fluxoMes = totalReceitas.subtract(totalDespesas).subtract(totalInvestimentos);
-        // Card "Saldo Atual" do dashboard: soma nominal das contas bancárias ativas (não fluxo do mês).
-        BigDecimal saldoAtual = yearMonth.equals(YearMonth.now())
-            ? saldoService.patrimonioLiquido(usuarioId)
+        // Card "Saldo Atual": soma nominal das contas bancárias ativas (não património líquido).
+        BigDecimal saldoAtual = yearMonth.equals(AppTimeZone.mesAtual())
+            ? saldoService.saldoEmConta(usuarioId)
             : fluxoMes;
         long totalLinhas = transacaoRepository.countTransacoesUsuarioNoPeriodo(usuarioId, inicio, fim);
         Map<String, Object> resumo = new HashMap<>();
@@ -706,9 +707,10 @@ public class TransacaoService {
         resumo.put("totalInvestimentos", totalInvestimentos);
         resumo.put("fluxoMes", fluxoMes);
         resumo.put("saldo", saldoAtual);
-        if (incluirProjecao && yearMonth.equals(YearMonth.now())) {
+        if (incluirProjecao && yearMonth.equals(AppTimeZone.mesAtual())) {
             SaldoService.ProjecaoMesCaixa projecao = saldoService.calcularProjecaoMes(usuarioId);
-            resumo.put("patrimonioLiquido", projecao.patrimonioLiquido());
+            resumo.put("patrimonioLiquido", saldoService.patrimonioLiquido(usuarioId));
+            resumo.put("saldoEmConta", projecao.saldoEmConta());
             resumo.put("receitasPrevistas", projecao.receitasPrevistas());
             resumo.put("receitasFiscaisPrevistas", projecao.receitasFiscaisPrevistas());
             resumo.put("saldoProjetadoFimMes", projecao.saldoProjetadoFimMes());

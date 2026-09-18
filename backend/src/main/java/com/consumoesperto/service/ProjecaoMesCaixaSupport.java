@@ -56,7 +56,10 @@ final class ProjecaoMesCaixaSupport {
     }
 
     /**
-     * Despesas previstas no fim do mês: fixas + empréstimo + margem sobre gasto variável.
+     * Estimativa de despesas variáveis ainda não realizadas (Anti-Susto):
+     * média diária de gasto variável × dias restantes × (1 + margem%),
+     * somada às obrigações conhecidas (fixas restantes + faturas restantes + parcelas de empréstimo à conta).
+     * A média diária não deve incluir fatura, parcela de cartão, empréstimo nem débito de despesa fixa.
      */
     static BigDecimal calcularDespesasPrevistasAntiSusto(
         BigDecimal mediaDiaria,

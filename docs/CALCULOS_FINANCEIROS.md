@@ -19,7 +19,7 @@ Patrimônio líquido = saldo em contas − passivo de empréstimo (todas as parc
 - **Passivo:** soma de despesas `PREVISTO` com `emprestimo_id` preenchido — **inclui** consignado com `descontoEmFolha = true`. A flag controla apenas o débito em conta no fluxo de caixa, não a existência da dívida.
 - **Não inclui:** faturas de cartão pendentes, despesas fixas do mês, provisões fiscais.
 
-**Serviço:** `SaldoService.patrimonioLiquido()` · exposto no dashboard via `PrevisaoFluxoCaixaService.buildPrevisaoFuturoChart().saldoAtual` (alias `saldoContaCorrente`).
+**Serviço:** `SaldoService.patrimonioLiquido()` · no dashboard Geral via `DashboardViewService`. O alias `saldoContaCorrente()` é **saldo em conta** (liquidez), não património.
 
 ---
 
@@ -28,38 +28,50 @@ Patrimônio líquido = saldo em contas − passivo de empréstimo (todas as parc
 **Fórmula distinta do patrimônio (sem dupla contagem de empréstimo):**
 
 ```
-Disponível = saldoContaCorrente − fixas restantes no mês − faturas de cartão pendentes
+Disponível = saldo em conta − fixas restantes no mês − restante de faturas pendentes − parcelas de empréstimo que debitam conta neste mês
 ```
 
-- **Base:** `SaldoService.saldoContaCorrente()` — hoje equivale a **patrimônio líquido** (liquidez em contas já líquida do passivo total de empréstimos).
-- **Obrigações do mês:** despesas fixas cadastradas/detectadas + faturas de cartão pendentes.
-- **Empréstimos:** parcelas **não** entram nas «fixas» desta fórmula; o passivo já foi descontado na base. Parcelas que debitam conta (`descontoEmFolha = false`) entram na **projeção mensal** (`ComposicaoProjecaoMesService`), não aqui.
+- **Base:** `SaldoService.saldoContaCorrente()` / `saldoEmConta()` — soma das contas ativas (não desconta o passivo total de empréstimos).
+- **Obrigações de caixa:** despesas fixas ainda não lançadas + restante de faturas (pagamento parcial reduz) + parcelas `emprestimoId` com `descontoEmFolha=false` no mês.
+- **Não usa** património líquido nem saldo devedor integral. Consignado em folha não sai de caixa.
 
-**Serviço:** `PrevisaoFluxoCaixaService.calcularDisponibilidadeReal()`.
+**Serviço:** `PrevisaoFluxoCaixaService.calcularDisponibilidadeReal()` → `SafeToSpendService`.
 
 ---
 
 ## 3. Projeção do mês / safra (M, M+1, M+2)
 
-**Ponto de partida:** patrimônio líquido (ou saldo cascata do mês anterior).
+**Ponto de partida:** liquidez atual (saldo em conta hoje), ou saldo de caixa cascata do mês anterior. **Não** usa património líquido.
 
-**Despesas previstas do mês** (`ComposicaoProjecaoMesService`):
+```
+Projeção de caixa no fechamento do mês =
+  liquidez atual
++ entradas ainda não realizadas até o fim do mês
+− saídas ainda não realizadas até o fim do mês
+− variável Anti-Susto aplicável
+```
 
-- Despesas fixas restantes (vencimento no mês)
-- Faturas de cartão com vencimento no mês
-- Parcelas de empréstimo `PREVISTO` no mês **que debitam conta** (exclui desconto em folha)
-- Gasto variável (burn rate × dias restantes, com margem anti-susto após dia 15)
+O saldo atual já incorpora eventos **CONFIRMADA**. Não somar de novo salário já recebido nem despesa já paga.
 
-**Receitas:** salário configurado (`RendaConfigService`) + receitas fiscais previstas (13º/IR).
+**Saídas restantes do mês** (`ComposicaoProjecaoMesService`) — cada obrigação económica entra **uma vez**:
 
-**Serviço:** `SaldoService.calcularProjecaoMes` / `calcularProjecaoSafra`.
+- Despesas fixas ainda não lançadas neste mês (exclui DESPESA CONFIRMADA com a mesma descrição / prefixo `Despesa fixa:`)
+- Restante de faturas com vencimento no mês (`valorFatura − valorPago`; PAGA/CANCELADA fora). Parcelas de compra no cartão (`grupoParcelaId`) **já estão na fatura** — não somam à parte.
+- Parcelas de empréstimo `PREVISTO` no mês com `emprestimoId` **que debitam conta** (`descontoEmFolha=false`). Consignado em folha = 0 no caixa.
+- Variável Anti-Susto: estimativa de gasto variável ainda não realizado (`sumDespesaVariavelConfirmadaPeriodo` × dias restantes, com margem antes do dia limiar). Não reapresenta fatura, fixa, empréstimo nem parcela de cartão.
+
+**Entradas restantes:** gap salarial (`renda − receitas salariais CONFIRMADA`) + receitas fiscais ainda PREVISTO.
+
+Assinaturas e agendamentos **não** entram no número da projeção (o cadastro de despesa fixa é a obrigação). Se o agendamento nasceu da própria fixa, não há dupla contagem.
+
+**Serviço:** `SaldoService.calcularProjecaoMes` / `calcularProjecaoSafra` — mesma fórmula para dashboard Mensal, Sentinela, briefs, alertas e J.A.R.V.I.S. O protocolo de cautela dispara se **esta** projeção de caixa for negativa, não se o património líquido for negativo.
 
 ---
 
 ## 4. Gráfico «Trajetória de caixa» (Sentinela)
 
-- **Linha sólida:** patrimônio líquido hoje.
-- **Linha tracejada:** projeção dia a dia até fim do mês (burn + rateio de faturas + saltos de fixas + provisões de memória).
+- Linha sólida: saldo em conta hoje (liquidez).
+- Linha tracejada: visualização dia a dia (burn). O **saldo de fechamento** e o protocolo de cautela vêm de `SaldoService.calcularProjecaoMes`.
 - Losangos âmbar: vencimento de despesa fixa cadastrada.
 
 ---
@@ -85,7 +97,9 @@ Registo: WhatsApp (`EmprestimoService`) · cancelamento estorna crédito acumula
 | PREVISTA | Ciclo futuro intencional — ver [`POLITICA_STATUS_FATURA_PREVISTA.md`](POLITICA_STATUS_FATURA_PREVISTA.md) |
 | PAGA | Quitada; `PAGAMENTO_FATURA` ou `origemQuitacao = EXTERNA` (sem débito em conta) |
 
-- Pagamento via app: `FaturaConciliacaoService` cria `PAGAMENTO_FATURA` + debita conta.
+- ABERTA / PARCIAL / VENCIDA / PREVISTA: restam `valorFatura − valorPago` nas projeções de caixa (PAGA e CANCELADA não entram).
+- PAGA: quitada; se o débito (`PAGAMENTO_FATURA`) já ocorreu, o saldo já caiu — não reprojeta a fatura.
+- Pagamento parcial: projeta só o restante (nunca fatura + pago).
 - CRUD genérico de transações **bloqueia** `PAGAMENTO_FATURA` — use fluxo de fatura.
 - Importação PDF: dedup por descrição normalizada + data ±1 dia + valor.
 

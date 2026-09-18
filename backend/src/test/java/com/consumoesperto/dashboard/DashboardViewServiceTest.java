@@ -146,6 +146,8 @@ class DashboardViewServiceTest {
         assertEquals(new BigDecimal("500.00"), rows.get(0).get("valor"));
         assertFalse(rows.get(0).containsKey("saldoDevedor"));
         assertFalse(rows.get(0).containsKey("totalContratado"));
+        assertEquals(0, new BigDecimal("6500.00").compareTo((BigDecimal) dto.getMetricas().get("projecaoMes")),
+            "projeção mensal vem de calcularProjecaoMes, não do património líquido");
     }
 
     @Test
@@ -325,6 +327,14 @@ class DashboardViewServiceTest {
         assertTrue(geral.getInsights().stream().anyMatch(i -> "EVOLUCAO_PATRIMONIAL".equals(i.get("codigo"))));
         assertTrue(geral.getInsights().stream().noneMatch(i -> "SAFE_TO_SPEND_BAIXO".equals(i.get("codigo"))
             || "PROJECAO_FIM_MES".equals(i.get("codigo"))));
+    }
+
+    @Test
+    void monthly_projecaoMesUsaSaldoProjetadoDeCaixa() {
+        DashboardViewDTO dto = service.montar(1L, DashboardViewMode.MONTHLY);
+        assertEquals(0, new BigDecimal("6500.00").compareTo((BigDecimal) dto.getMetricas().get("projecaoMes")));
+        assertTrue(itensTemTitulo(dto, "Projeção do mês"));
+        assertFalse(itensTemTitulo(dto, "Patrimônio líquido"));
     }
 
     private static boolean itensTemTitulo(DashboardViewDTO dto, String titulo) {

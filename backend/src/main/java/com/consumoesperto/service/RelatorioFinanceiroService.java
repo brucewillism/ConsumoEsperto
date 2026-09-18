@@ -197,7 +197,7 @@ public class RelatorioFinanceiroService {
 
         // Saldo disponível: patrimônio em contas + projeção de fechamento
         SaldoService.ProjecaoMesCaixa projecao = saldoService.calcularProjecaoMes(usuarioId);
-        BigDecimal patrimonio = projecao.patrimonioLiquido();
+        BigDecimal caixa = projecao.saldoEmConta();
         BigDecimal saldoProjetado = projecao.saldoProjetadoFimMes();
 
         // Monta o sistema de alertas com todas as informações críticas
@@ -206,11 +206,10 @@ public class RelatorioFinanceiroService {
         alertas.put("faturasVencendo30Dias", faturasVencendo30Dias.size());
         alertas.put("totalFaturasVencendo7Dias", calcularTotalFaturas(faturasVencendo7Dias));
         alertas.put("totalFaturasVencendo30Dias", calcularTotalFaturas(faturasVencendo30Dias));
-        alertas.put("patrimonioLiquido", patrimonio);
-        alertas.put("saldoMes", patrimonio);
+        alertas.put("patrimonioLiquido", saldoService.patrimonioLiquido(usuarioId));
+        alertas.put("saldoMes", caixa);
         alertas.put("saldoProjetadoFimMes", saldoProjetado);
-        alertas.put("saldoBaixo", patrimonio.compareTo(BigDecimal.valueOf(1000)) < 0
-            || saldoProjetado.compareTo(BigDecimal.ZERO) < 0);
+        alertas.put("saldoBaixo", saldoProjetado.compareTo(BigDecimal.ZERO) < 0);
         alertas.put("temFaturasVencendo", !faturasVencendo7Dias.isEmpty());
 
         return alertas;

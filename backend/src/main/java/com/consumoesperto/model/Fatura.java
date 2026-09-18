@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import javax.persistence.*;
 import javax.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import com.fasterxml.jackson.annotation.JsonBackReference;
@@ -235,6 +236,16 @@ public class Fatura {
 
     public OrigemQuitacao getOrigemQuitacao() { return origemQuitacao; }
     public void setOrigemQuitacao(OrigemQuitacao origemQuitacao) { this.origemQuitacao = origemQuitacao; }
+
+    /**
+     * Saída de caixa ainda devida nesta fatura. Pagamento parcial reduz o restante;
+     * nunca soma valor da fatura + valor já pago.
+     */
+    public BigDecimal valorRestanteCaixa() {
+        BigDecimal devido = valorFatura != null ? valorFatura : (valorTotal != null ? valorTotal : BigDecimal.ZERO);
+        BigDecimal pago = valorPago != null ? valorPago : BigDecimal.ZERO;
+        return devido.subtract(pago).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    }
 
     /**
      * Método executado automaticamente antes de persistir a entidade

@@ -295,6 +295,35 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
         @Param("fim") LocalDateTime fim
     );
 
+    /**
+     * Gasto variável em conta: DESPESA CONFIRMADA que não é fatura, parcela de cartão,
+     * empréstimo nem débito automático de despesa fixa. Base da variável Anti-Susto.
+     */
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.fatura IS NULL "
+        + "AND t.emprestimoId IS NULL "
+        + "AND (t.grupoParcelaId IS NULL OR t.grupoParcelaId = '') "
+        + "AND (t.descricao IS NULL OR LOWER(t.descricao) NOT LIKE 'despesa fixa:%') "
+        + "AND t.dataTransacao >= :inicio AND t.dataTransacao < :fim")
+    BigDecimal sumDespesaVariavelConfirmadaPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
+    /** Descrições de despesas CONFIRMADA no período — para não reprojetar fixa já lançada. */
+    @Query("SELECT t.descricao FROM Transacao t WHERE t.usuario.id = :usuarioId "
+        + "AND t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.DESPESA "
+        + "AND t.statusConferencia = com.consumoesperto.model.Transacao$StatusConferencia.CONFIRMADA "
+        + "AND t.dataTransacao >= :inicio AND t.dataTransacao <= :fim")
+    java.util.List<String> findDescricoesDespesaConfirmadaNoPeriodo(
+        @Param("usuarioId") Long usuarioId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fim") LocalDateTime fim
+    );
+
     /** Receitas + despesas/investimentos/pagamento fatura confirmados em conta — delta líquido no período. */
     @Query("SELECT COALESCE(SUM(CASE WHEN t.tipoTransacao = com.consumoesperto.model.Transacao$TipoTransacao.RECEITA "
         + "THEN t.valor ELSE -t.valor END), 0) FROM Transacao t WHERE t.usuario.id = :usuarioId "

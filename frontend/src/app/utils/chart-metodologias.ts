@@ -32,8 +32,8 @@ export const CHART_METODOLOGIAS: Record<ChartMetodologiaId, ChartMetodologia> = 
   PREVISAO_FUTURO: {
     titulo: 'Trajetória de caixa',
     itens: [
-      'Linha sólida (Patrimônio líquido): saldo em contas menos parcelas de empréstimo ainda previstas, ancorado no dia corrente.',
-      'Linha tracejada (Projeção): estende o ritmo médio de gastos até o último dia do mês, somando receitas previstas e descontando faturas pendentes, despesas fixas e provisões.',
+      'Linha sólida: saldo em conta hoje (liquidez). Não usa património líquido nem saldo devedor de empréstimo.',
+      'Linha tracejada: visualização dia a dia (burn). O saldo de fechamento e o protocolo de cautela vêm de SaldoService.calcularProjecaoMes (eventos futuros/restantes do mês).',
       'Losangos âmbar: dias de vencimento de despesas fixas cadastradas (Sentinela).',
       'Triângulos: provisões futuras registradas pela memória semântica do J.A.R.V.I.S.',
       'Área vermelha/âmbar: trecho em que a projeção indica saldo negativo (risco de descoberto).',
@@ -44,8 +44,8 @@ export const CHART_METODOLOGIAS: Record<ChartMetodologiaId, ChartMetodologia> = 
     titulo: 'Patrimônio — Safra Cascata',
     itens: [
       'Chips M / M+1 / M+2: saldo projetado ao fim de cada mês (maio, junho, julho…).',
-      'M (mês corrente): patrimônio líquido hoje + receitas previstas + receitas fiscais (13º/IR com status PREVISTO) − despesas restantes (burn rate = gasto confirmado ÷ dia atual × dias que faltam).',
-      'M+1 e M+2: o saldo final do mês anterior alimenta o patrimônio inicial do seguinte (efeito cascata); burn rate fixo do mês corrente; salário e parcelas fiscais específicas de cada mês.',
+      'M (mês corrente): liquidez atual + entradas ainda não realizadas − saídas ainda não realizadas − variável Anti-Susto. Não parte do património líquido.',
+      'M+1 e M+2: o saldo de caixa final do mês anterior alimenta o saldo inicial do seguinte (efeito cascata); variável Anti-Susto do mês corrente; salário e parcelas fiscais específicas de cada mês.',
       'Verde (Real): evolução diária do patrimônio no mês atual.',
       'Azul tracejado: projeção diária até o dia 31; no último dia usa o saldo final da safra M.',
       'Roxo (Safra): curva interpolada entre saldos finais de M+1 e M+2 (marcos visuais, não lançamentos diários reais).',

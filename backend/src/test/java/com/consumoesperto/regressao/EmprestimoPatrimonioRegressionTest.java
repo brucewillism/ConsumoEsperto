@@ -113,4 +113,16 @@ class EmprestimoPatrimonioRegressionTest {
         assertEquals(0, patrimonio.compareTo(new BigDecimal("-2000.00")),
             "consignado em folha: crédito na conta menos passivo total — não fica +10k");
     }
+
+    @Test
+    void saldoEmConta_naoDescontaPassivoDeEmprestimo() {
+        when(contaBancariaService.possuiContasAtivas(5L)).thenReturn(true);
+        when(contaBancariaService.somarSaldosAtivos(5L)).thenReturn(new BigDecimal("10000.00"));
+        when(transacaoRepository.sumPassivoEmprestimoAtivo(5L)).thenReturn(new BigDecimal("12000.00"));
+
+        assertEquals(0, new BigDecimal("10000.00").compareTo(saldoService.saldoEmConta(5L)));
+        assertEquals(0, new BigDecimal("10000.00").compareTo(saldoService.saldoContaCorrente(5L)));
+        assertEquals(0, new BigDecimal("-2000.00").compareTo(saldoService.patrimonioLiquido(5L)),
+            "Visão Geral permanece: ativos − passivo total");
+    }
 }

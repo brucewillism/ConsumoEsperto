@@ -249,14 +249,14 @@
           </p>
         </ng-container>
         <ng-template #hudMensal>
-          <p class="hud-sentinela-value">
+          <p class="hud-sentinela-value" [class.hud-negativo]="numMetrica('projecaoMes') < 0">
             {{ formatCurrency(numMetrica('projecaoMes') || (previsaoFuturoChart?.saldoAtual ?? balance)) }}
           </p>
-          <p class="hud-subline">Saldo projetado até o fim do mês (previstos rotulados na projeção).</p>
+          <p class="hud-subline">Liquidez atual + entradas ainda não realizadas − saídas ainda não realizadas do mês.</p>
         </ng-template>
         <p class="hud-cautela" *ngIf="protocoloCautelaAtivo">
           <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
-          Patrimônio ou projeção do mês em risco — protocolo de cautela ativo.
+          Projeção de caixa do mês em risco — protocolo de cautela ativo.
         </p>
       </article>
 

@@ -69,7 +69,7 @@ public class MotorFinanceiroColetaService {
 
         BigDecimal gastoMedio = media(despesas6);
         BigDecimal mesesReserva = gastoMedio.compareTo(BigDecimal.ZERO) > 0
-            ? nz(proj.patrimonioLiquido()).divide(gastoMedio, 2, RoundingMode.HALF_UP)
+            ? nz(proj.saldoEmConta()).divide(gastoMedio, 2, RoundingMode.HALF_UP)
             : BigDecimal.ZERO;
 
         List<MetaFinanceira> metas = metaFinanceiraRepository
@@ -94,7 +94,7 @@ public class MotorFinanceiroColetaService {
 
         return new MotorFinanceiroSnapshot(
             usuarioId,
-            nz(proj.patrimonioLiquido()),
+            nz(saldoService.patrimonioLiquido(usuarioId)),
             nz(saldoService.saldoLiquidezImediata(usuarioId)),
             renda,
             nz(proj.saldoProjetadoFimMes()),

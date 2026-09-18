@@ -53,7 +53,10 @@ public class PrevisaoFluxoCaixaService {
         BigDecimal fixas = somarContasFixasRestantesNoMes(usuarioId, AppTimeZone.hoje())
             .add(despesaFixaService.somarValorRestanteNoMes(usuarioId, AppTimeZone.hoje()));
         BigDecimal faturas = nz(faturaRepository.sumValorFaturasPendentesByUsuarioId(usuarioId));
-        BigDecimal obrig = fixas.add(faturas);
+        YearMonth ymObrig = AppTimeZone.mesAtual();
+        BigDecimal parcelasCaixa = nz(transacaoRepository.sumParcelasEmprestimoPrevistasNoMes(
+            usuarioId, ymObrig.atDay(1).atStartOfDay(), ymObrig.atEndOfMonth().atTime(23, 59, 59)));
+        BigDecimal obrig = fixas.add(faturas).add(parcelasCaixa);
         BigDecimal disponivel = saldo.subtract(obrig);
 
         BigDecimal pct;
@@ -256,10 +259,18 @@ public class PrevisaoFluxoCaixaService {
         }
         dto.setDiasAteSaldoNegativo(diasNeg);
 
-        boolean escudoCritico = mesesEscudo != null && mesesEscudo.compareTo(BigDecimal.valueOf(6)) < 0;
-        boolean colisao15 = diasNeg != null && diasNeg <= 15;
-        boolean recomendar = escudoCritico || colisao15 || dto.isProjecaoNegativa();
-        dto.setProtocoloOtimizacaoRecomendado(recomendar);
+        boolean caixaNegativo;
+        try {
+            SaldoService.ProjecaoMesCaixa oficial = saldoService.calcularProjecaoMes(usuarioId);
+            dto.setSaldoProjetadoFimMes(oficial.saldoProjetadoFimMes());
+            caixaNegativo = oficial.saldoProjetadoFimMes().compareTo(BigDecimal.ZERO) < 0;
+        } catch (RuntimeException e) {
+            BigDecimal projetadoChart = dto.getSaldoProjetadoFimMes();
+            caixaNegativo = dto.isProjecaoNegativa()
+                || (projetadoChart != null && projetadoChart.compareTo(BigDecimal.ZERO) < 0);
+        }
+        dto.setProjecaoNegativa(caixaNegativo);
+        dto.setProtocoloOtimizacaoRecomendado(caixaNegativo);
     }
 
     private BigDecimal somarContasFixasRestantesNoMes(Long usuarioId, LocalDate referencia) {

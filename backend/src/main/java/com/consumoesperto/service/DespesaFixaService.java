@@ -8,6 +8,7 @@ import com.consumoesperto.model.DespesaFixa;
 import com.consumoesperto.model.Usuario;
 import com.consumoesperto.repository.ContaBancariaRepository;
 import com.consumoesperto.repository.DespesaFixaRepository;
+import com.consumoesperto.repository.TransacaoRepository;
 import com.consumoesperto.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.text.NumberFormat;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,6 +29,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +46,7 @@ public class DespesaFixaService {
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final JarvisProtocolService jarvisProtocolService;
     private final TextMatcherService textMatcherService;
+    private final TransacaoRepository transacaoRepository;
 
     @Transactional(readOnly = true)
     public Map<Long, String> mapearNomesPorId(Long usuarioId) {
@@ -64,19 +69,19 @@ public class DespesaFixaService {
     }
 
     /**
-     * Soma valores cuja data efetiva de vencimento no mês de {@code referencia} ainda não ocorreu (inclui o próprio dia).
+     * Soma valores de despesas fixas ainda não realizadas neste mês.
+     * Inclui vencidas no mês que continuam em aberto; exclui as já lançadas como DESPESA CONFIRMADA
+     * (descrição igual ou prefixo {@code Despesa fixa:}).
      */
     @Transactional(readOnly = true)
     public BigDecimal somarValorRestanteNoMes(Long usuarioId, LocalDate referencia) {
-        int d0 = referencia.getDayOfMonth();
-        YearMonth ym = YearMonth.from(referencia);
-        int ultimo = ym.lengthOfMonth();
+        Set<String> realizadas = descricoesRealizadasNoMes(usuarioId, referencia);
         BigDecimal sum = BigDecimal.ZERO;
         for (DespesaFixa d : despesaFixaRepository.findByUsuarioIdOrderByDiaVencimentoAscIdAsc(usuarioId)) {
-            int efetivo = diaEfetivoNoMes(d.getDiaVencimento(), ultimo);
-            if (efetivo >= d0) {
-                sum = sum.add(nz(d.getValor()));
+            if (realizadas.contains(chaveRealizacao(d.getDescricao()))) {
+                continue;
             }
+            sum = sum.add(nz(d.getValor()));
         }
         return sum.setScale(2, RoundingMode.HALF_UP);
     }
@@ -89,8 +94,12 @@ public class DespesaFixaService {
         int d0 = referencia.getDayOfMonth();
         YearMonth ym = YearMonth.from(referencia);
         int ultimo = ym.lengthOfMonth();
+        Set<String> realizadas = descricoesRealizadasNoMes(usuarioId, referencia);
         Map<Integer, BigDecimal> map = new LinkedHashMap<>();
         for (DespesaFixa d : despesaFixaRepository.findByUsuarioIdOrderByDiaVencimentoAscIdAsc(usuarioId)) {
+            if (realizadas.contains(chaveRealizacao(d.getDescricao()))) {
+                continue;
+            }
             int efetivo = diaEfetivoNoMes(d.getDiaVencimento(), ultimo);
             if (efetivo <= d0) {
                 continue;
@@ -299,5 +308,29 @@ public class DespesaFixaService {
             .replaceAll("\\s+", " ")
             .trim();
         return n;
+    }
+
+    /** Chave para casar cadastro de fixa com lançamento já confirmado no mês. */
+    static String chaveRealizacao(String raw) {
+        String n = normalizeDesc(raw);
+        if (n.startsWith("despesa fixa ")) {
+            n = n.substring("despesa fixa ".length()).trim();
+        }
+        return n;
+    }
+
+    private Set<String> descricoesRealizadasNoMes(Long usuarioId, LocalDate referencia) {
+        YearMonth ym = YearMonth.from(referencia);
+        LocalDateTime inicio = ym.atDay(1).atStartOfDay();
+        LocalDateTime fimMes = ym.atEndOfMonth().atTime(23, 59, 59);
+        List<String> descricoes = transacaoRepository.findDescricoesDespesaConfirmadaNoPeriodo(
+            usuarioId, inicio, fimMes);
+        if (descricoes == null || descricoes.isEmpty()) {
+            return Set.of();
+        }
+        return descricoes.stream()
+            .map(DespesaFixaService::chaveRealizacao)
+            .filter(s -> !s.isBlank())
+            .collect(Collectors.toSet());
     }
 }

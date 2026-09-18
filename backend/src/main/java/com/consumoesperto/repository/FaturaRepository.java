@@ -62,13 +62,25 @@ public interface FaturaRepository extends JpaRepository<Fatura, Long> {
         @Param("fim") LocalDateTime fim
     );
 
-    /** Soma faturas ainda não quitadas (abertas, parciais, vencidas, previstas). */
-    @Query("SELECT COALESCE(SUM(f.valorFatura), 0) FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId "
+    /**
+     * Soma o restante de caixa das faturas ainda não quitadas (abertas, parciais, vencidas, previstas).
+     * Equivale a {@link com.consumoesperto.model.Fatura#valorRestanteCaixa()} agregado.
+     */
+    @Query("SELECT COALESCE(SUM(CASE "
+        + "WHEN (COALESCE(f.valorFatura, f.valorTotal, 0) - COALESCE(f.valorPago, 0)) > 0 "
+        + "THEN (COALESCE(f.valorFatura, f.valorTotal, 0) - COALESCE(f.valorPago, 0)) "
+        + "ELSE 0 END), 0) FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId "
         + "AND f.status NOT IN (com.consumoesperto.model.Fatura$StatusFatura.PAGA, com.consumoesperto.model.Fatura$StatusFatura.CANCELADA)")
     BigDecimal sumValorFaturasPendentesByUsuarioId(@Param("usuarioId") Long usuarioId);
 
-    /** Faturas não quitadas com vencimento no mês — obrigação bottom-up da projeção. */
-    @Query("SELECT COALESCE(SUM(f.valorFatura), 0) FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId "
+    /**
+     * Restante de caixa das faturas não quitadas com vencimento no mês.
+     * PARCIAL usa valorFatura − valorPago; PAGA/CANCELADA ficam de fora.
+     */
+    @Query("SELECT COALESCE(SUM(CASE "
+        + "WHEN (COALESCE(f.valorFatura, f.valorTotal, 0) - COALESCE(f.valorPago, 0)) > 0 "
+        + "THEN (COALESCE(f.valorFatura, f.valorTotal, 0) - COALESCE(f.valorPago, 0)) "
+        + "ELSE 0 END), 0) FROM Fatura f WHERE f.cartaoCredito.usuario.id = :usuarioId "
         + "AND f.status NOT IN (com.consumoesperto.model.Fatura$StatusFatura.PAGA, com.consumoesperto.model.Fatura$StatusFatura.CANCELADA) "
         + "AND f.dataVencimento >= :inicio AND f.dataVencimento <= :fim")
     BigDecimal sumValorFaturasPendentesNoMes(

@@ -16,7 +16,8 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Protocolo Sentinela — projeção com patrimônio multicarteira, colchão sazonal e alerta tático via IA.
+ * Protocolo Sentinela — margem sobre a projeção de caixa do mês ({@link SaldoService#calcularProjecaoMes}),
+ * colchão sazonal e alerta tático via IA. Não usa património líquido (passivo de longo prazo).
  */
 @Service
 @RequiredArgsConstructor
@@ -81,10 +82,7 @@ public class SentinelaProtocolService {
             .setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal receitasPrevistas = projecao.receitasPrevistasConsolidadas();
-        BigDecimal saldoMarginal = projecao.patrimonioLiquido()
-            .add(receitasPrevistas)
-            .subtract(projecao.despesasPrevistas())
-            .subtract(somaFixas)
+        BigDecimal saldoMarginal = projecao.saldoProjetadoFimMes()
             .subtract(deltaNova)
             .setScale(2, RoundingMode.HALF_UP);
 
@@ -93,11 +91,12 @@ public class SentinelaProtocolService {
         NivelAlertaSentinela nivel = classificarNivel(saldoMarginal, saldoAjustado);
 
         log.info(
-            "[JARVIS-LOG] Sentinela margem userId={} patrimonio={} colchao={} saldoMarginal={} ajustado={} nivel={}",
-            usuarioId, projecao.patrimonioLiquido(), colchaoValor, saldoMarginal, saldoAjustado, nivel);
+            "[JARVIS-LOG] Sentinela margem userId={} saldoEmConta={} projetado={} colchao={} saldoMarginal={} ajustado={} nivel={}",
+            usuarioId, projecao.saldoEmConta(), projecao.saldoProjetadoFimMes(),
+            colchaoValor, saldoMarginal, saldoAjustado, nivel);
 
         return new SentinelaMargemDTO(
-            projecao.patrimonioLiquido(),
+            projecao.saldoEmConta(),
             receitasPrevistas,
             projecao.despesasPrevistas(),
             somaFixas,
@@ -131,7 +130,7 @@ public class SentinelaProtocolService {
             + "Emita um *alerta tático* breve (máximo 5 linhas), calmo e acionável. "
             + "Responda via JSON {\"texto\":\"...\"} apenas.";
 
-        String userPrompt = "Patrimônio: " + BRL.format(dto.patrimonioLiquido()) + ".\n"
+        String userPrompt = "Saldo em contas: " + BRL.format(dto.patrimonioLiquido()) + ".\n"
             + "Colchão sazonal: " + BRL.format(dto.colchaoVirtual()) + ".\n"
             + "Saldo marginal bruto: " + BRL.format(dto.saldoMarginal()) + ".\n"
             + "Saldo marginal ajustado: " + BRL.format(dto.saldoMarginalAjustado()) + ".\n"

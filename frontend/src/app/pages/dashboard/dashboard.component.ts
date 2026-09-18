@@ -1934,9 +1934,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   get protocoloCautelaAtivo(): boolean {
+    if (this.visaoMensal) {
+      const proj = this.numMetrica('projecaoMes');
+      return proj < 0 || !!this.previsaoFuturoChart?.projecaoNegativa;
+    }
     return !!(
       this.previsaoFuturoChart?.projecaoNegativa ||
-      this.previsaoFuturoChart?.protocoloOtimizacaoRecomendado ||
       (this.sugestoesContencaoJarvis?.length ?? 0) > 0 ||
       (this.sugestoesModoViagemJarvis?.length ?? 0) > 0
     );
@@ -1944,7 +1947,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   get exibirBotaoOtimizacaoProtocolo(): boolean {
     const p = this.previsaoFuturoChart;
-    return !!p && (!!p.projecaoNegativa || !!p.protocoloOtimizacaoRecomendado);
+    if (this.visaoMensal) {
+      return this.numMetrica('projecaoMes') < 0 || !!p?.projecaoNegativa;
+    }
+    return !!p && !!p.projecaoNegativa;
   }
 
   executarOtimizacaoProtocolo(): void {

@@ -65,7 +65,7 @@ public class SentinelaBufferSazonalService {
 
     private ColchaoComPatrimonio calcularColchaoInterno(Long usuarioId, Long contaReferenciaId) {
         BigDecimal patrimonio = saldoService.patrimonioLiquido(usuarioId);
-        BigDecimal saldoConta = resolverSaldoConta(usuarioId, contaReferenciaId, patrimonio);
+        BigDecimal saldoConta = resolverSaldoConta(usuarioId, contaReferenciaId);
 
         if (usuarioId == null) {
             return new ColchaoComPatrimonio(
@@ -124,9 +124,9 @@ public class SentinelaBufferSazonalService {
         return new ColchaoComPatrimonio(resultado, patrimonio, saldoConta);
     }
 
-    private BigDecimal resolverSaldoConta(Long usuarioId, Long contaReferenciaId, BigDecimal patrimonioFallback) {
+    private BigDecimal resolverSaldoConta(Long usuarioId, Long contaReferenciaId) {
         if (contaReferenciaId == null) {
-            return patrimonioFallback;
+            return saldoService.saldoEmConta(usuarioId);
         }
         try {
             ContaBancaria conta = contaBancariaService.buscarEntidade(contaReferenciaId, usuarioId);
@@ -134,7 +134,7 @@ public class SentinelaBufferSazonalService {
                 ? conta.getSaldoAtual().setScale(2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
         } catch (Exception e) {
-            return patrimonioFallback;
+            return saldoService.saldoEmConta(usuarioId);
         }
     }
 }

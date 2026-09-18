@@ -39,7 +39,7 @@ A flag **não** tira a parcela do património líquido. Ver [`CALCULOS_FINANCEIR
 
 Referência: mês corrente (`AppTimeZone`). Histórico só `CONFIRMADA`; projeção rotulada como projeção (`PREVISTO` permitido).
 
-- Receitas e despesas **confirmadas** do mês; resultado; **projeção do mês** (`SaldoService.calcularProjecaoMes` / composição bottom-up).
+- Receitas e despesas **confirmadas** do mês; resultado; **projeção do mês** = liquidez atual + entradas ainda não realizadas − saídas ainda não realizadas (`SaldoService.calcularProjecaoMes`). Não parte do património líquido.
 - Fatura do mês: confirmado, pendente, projetado, vencimento, dias até fechamento. **Só faturas cuja competência (fechamento/vencimento) cai neste mês** — fatura do mês seguinte não aparece na Mensal.
 - **Parcela do mês** de cada empréstimo (quantidade e valor) — **sem** saldo devedor nem total contratado.
 - Fixas, assinaturas e agendamentos do mês.
@@ -59,7 +59,7 @@ Referência: mês corrente (`AppTimeZone`). Histórico só `CONFIRMADA`; projeç
 
 ## Insights (não misturar)
 
-- **Mensal:** categoria que mais pesou, orçamento a estourar, fatura alta, safe-to-spend baixo, parcela relevante, saldo projetado até ao fim do mês.
+- **Mensal:** categoria que mais pesou, orçamento a estourar, fatura alta, safe-to-spend baixo, parcela relevante, saldo projetado até ao fim do mês. Protocolo de cautela só se a **projeção de caixa do mês** for negativa.
 - **Geral:** evolução patrimonial, variação da dívida total, progresso de metas, tendência de Score, reserva/Escudo baixo.
 
 ## Notificações J.A.R.V.I.S.
@@ -75,7 +75,7 @@ E.D.I.T.H. pode narrar o texto; **nunca calcula**. Offline → template determin
 
 ## Total da categoria recorrente
 
-O **número** da categoria «Fixas / assinaturas / agendamentos» no comprometido do mês é o das **despesas fixas** da composição (`ComposicaoProjecaoMesService.partesObrigacoesMes().fixas()`), a mesma fonte da projeção. Assinaturas e agendamentos fora de cartão aparecem como detalhe. Agendamento com `cartaoCreditoId` pertence à fatura, não a esta categoria.
+O **número** da categoria «Fixas / assinaturas / agendamentos» no comprometido do mês é o das **despesas fixas restantes** da composição (`ComposicaoProjecaoMesService.partesObrigacoesMes().fixas()`), a mesma fonte da projeção. Não há FK de agendamento→fixa: a deduplicação é não somar agendamento/assinatura no cálculo. Assinaturas e agendamentos fora de cartão aparecem como detalhe. Agendamento com `cartaoCreditoId` pertence à fatura, não a esta categoria.
 
 ## Auditoria de reuso (R2)
 

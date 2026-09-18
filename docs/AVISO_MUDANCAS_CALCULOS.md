@@ -34,4 +34,6 @@ O painel passou a ter **Visão Mensal** (padrão) e **Visão Geral**. Na Mensal,
 
 J.A.R.V.I.S. envia um resumo da visão mensal à segunda-feira e um da visão geral no dia 28, no WhatsApp.
 
+A **projeção do mês** (Visão Mensal) parte da **liquidez atual** e só soma eventos **ainda não realizados** até ao fim do mês. Quem tem empréstimo de longo prazo e caixa saudável deixa de ver um número sempre negativo no card principal. O património líquido na Visão Geral continua a descontar o passivo total.
+
 ---

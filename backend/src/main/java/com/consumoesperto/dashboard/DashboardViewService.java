@@ -154,7 +154,8 @@ public class DashboardViewService {
         itens.add(cardItem("resultadoMes", "Resultado do mês", resultado, "Receitas − despesas confirmadas",
             resultado.signum() >= 0 ? "positivo" : "negativo"));
         itens.add(cardItem("projecaoMes", "Projeção do mês", projecaoMes,
-            "Saldo projetado até o fim do mês (inclui previstos)", "neutro"));
+            "Liquidez atual + entradas ainda não realizadas − saídas ainda não realizadas do mês",
+            projecaoMes.signum() >= 0 ? "positivo" : "negativo"));
         itens.add(cardItem("faturaMes", "Fatura do mês", faturaMesTotal,
             "Já inclui parcelas de compras no cartão", "negativo"));
         itens.add(cardItem("parcelaMes", "Parcela do mês", parcelaMesTotal,

@@ -1,6 +1,5 @@
 package com.consumoesperto.service;
 
-import com.consumoesperto.config.ForecastProjecaoConfig;
 import com.consumoesperto.dto.ProjecaoMesResumoDTO;
 import com.consumoesperto.dto.RendaConfigDTO;
 import com.consumoesperto.dto.SerieProjecaoSafraDTO;
@@ -50,7 +49,6 @@ public class SaldoService {
     private final PlanejamentoFiscalService planejamentoFiscalService;
     private final ConciliacaoAuditoriaService conciliacaoAuditoriaService;
     private final DespesaFixaService despesaFixaService;
-    private final ForecastProjecaoConfig forecastProjecaoConfig;
     private final ComposicaoProjecaoMesService composicaoProjecaoMesService;
 
     public SaldoService(
@@ -65,7 +63,6 @@ public class SaldoService {
         @Lazy PlanejamentoFiscalService planejamentoFiscalService,
         @Lazy ConciliacaoAuditoriaService conciliacaoAuditoriaService,
         DespesaFixaService despesaFixaService,
-        ForecastProjecaoConfig forecastProjecaoConfig,
         ComposicaoProjecaoMesService composicaoProjecaoMesService
     ) {
         this.transacaoRepository = transacaoRepository;
@@ -79,7 +76,6 @@ public class SaldoService {
         this.planejamentoFiscalService = planejamentoFiscalService;
         this.conciliacaoAuditoriaService = conciliacaoAuditoriaService;
         this.despesaFixaService = despesaFixaService;
-        this.forecastProjecaoConfig = forecastProjecaoConfig;
         this.composicaoProjecaoMesService = composicaoProjecaoMesService;
     }
 
@@ -91,12 +87,20 @@ public class SaldoService {
     ) {}
 
     /**
-     * Projeção de fechamento do mês corrente — fonte única para Forecast, Sentinela e alertas.
-     * {@code receitasPrevistas} = gap salarial mensal; {@code receitasFiscaisPrevistas} = 13º/IR ainda PREVISTO.
+     * Projeção de caixa no fechamento do mês corrente — fonte única para Forecast, Sentinela, briefs e alertas.
+     * <pre>
+     *   liquidez atual
+     * + entradas ainda não realizadas até o fim do mês
+     * − saídas ainda não realizadas até o fim do mês
+     * − variável Anti-Susto aplicável
+     * </pre>
+     * Parte do {@link #saldoEmConta} (liquidez), não do património líquido.
+     * Eventos já CONFIRMADA já estão no saldo e não voltam a entrar.
+     * {@code receitasPrevistas} = gap salarial restante; {@code receitasFiscaisPrevistas} = 13º/IR ainda PREVISTO.
      */
     public record ProjecaoMesCaixa(
         YearMonth competencia,
-        BigDecimal patrimonioLiquido,
+        BigDecimal saldoEmConta,
         BigDecimal gastoAtual,
         BigDecimal gastoProjetado,
         BigDecimal rendaLiquida,
@@ -111,16 +115,35 @@ public class SaldoService {
         public BigDecimal receitasPrevistasConsolidadas() {
             return receitasPrevistas.add(receitasFiscaisPrevistas);
         }
+
+        /**
+         * Nome legado do ponto de partida da projeção — é saldo em conta, não património líquido.
+         */
+        public BigDecimal patrimonioLiquido() {
+            return saldoEmConta;
+        }
     }
 
-    /** Série cascata M, M+1, … — saldo final de cada mês alimenta o patrimônio inicial do seguinte. */
+    /** Série cascata M, M+1, … — saldo de caixa final de cada mês alimenta o saldo inicial do seguinte. */
     public record SerieProjecaoSafra(List<ProjecaoMesCaixa> meses) {}
 
     /**
-     * Saldo exibido no dashboard: soma das carteiras ativas ou, sem multicarteira, saldo derivado de transações.
+     * Saldo em conta (liquidez): soma das carteiras ativas ou, sem multicarteira, saldo derivado de transações.
+     * Não desconta o passivo de empréstimos — isso pertence a {@link #patrimonioLiquido}.
      */
     public BigDecimal saldoContaCorrente(Long usuarioId) {
-        return patrimonioLiquido(usuarioId);
+        return saldoEmConta(usuarioId);
+    }
+
+    /**
+     * Dinheiro nas contas hoje. Fonte do ponto de partida da projeção de caixa do mês.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal saldoEmConta(Long usuarioId) {
+        if (usaMulticarteira(usuarioId)) {
+            return nz(contaBancariaService.somarSaldosAtivos(usuarioId));
+        }
+        return nz(saldoConfirmado(usuarioId));
     }
 
     @Transactional(readOnly = true)
@@ -134,12 +157,7 @@ public class SaldoService {
      */
     @Transactional(readOnly = true)
     public BigDecimal patrimonioLiquido(Long usuarioId) {
-        BigDecimal ativos;
-        if (usaMulticarteira(usuarioId)) {
-            ativos = contaBancariaService.somarSaldosAtivos(usuarioId);
-        } else {
-            ativos = saldoConfirmado(usuarioId);
-        }
+        BigDecimal ativos = saldoEmConta(usuarioId);
         BigDecimal passivoEmprestimo = nz(transacaoRepository.sumPassivoEmprestimoAtivo(usuarioId));
         return nz(ativos).subtract(passivoEmprestimo).setScale(2, RoundingMode.HALF_UP);
     }
@@ -164,22 +182,21 @@ public class SaldoService {
     }
 
     /**
-     * Projeção de um mês específico. Meses futuros exigem {@code patrimonioInicial} (saldo cascata do mês anterior).
+     * Projeção de um mês específico. Meses futuros exigem {@code saldoInicial} (caixa cascata do mês anterior).
      */
     @Transactional(readOnly = true)
-    public ProjecaoMesCaixa calcularProjecaoMes(Long usuarioId, YearMonth ym, BigDecimal patrimonioInicial) {
+    public ProjecaoMesCaixa calcularProjecaoMes(Long usuarioId, YearMonth ym, BigDecimal saldoInicial) {
         YearMonth mesAtual = AppTimeZone.mesAtual();
         if (ym.isBefore(mesAtual)) {
             throw new IllegalArgumentException("Projeção disponível apenas para o mês corrente e meses futuros.");
         }
         if (ym.equals(mesAtual)) {
-            return calcularProjecaoMesCorrente(usuarioId, patrimonioInicial);
+            return calcularProjecaoMesCorrente(usuarioId, saldoInicial);
         }
         ProjecaoMesCaixa ref = calcularProjecaoMesCorrente(usuarioId, null);
-        BigDecimal mediaDiaria = ref.gastoAtual().divide(
-            BigDecimal.valueOf(Math.max(1, ref.diaAtual())), 2, RoundingMode.HALF_UP);
-        BigDecimal patrimonioBase = patrimonioInicial != null ? patrimonioInicial : ref.saldoProjetadoFimMes();
-        return calcularProjecaoMesFuturo(usuarioId, ym, patrimonioBase, mediaDiaria);
+        BigDecimal mediaDiaria = mediaDiariaVariavelCorrente(usuarioId);
+        BigDecimal caixaBase = saldoInicial != null ? saldoInicial : ref.saldoProjetadoFimMes();
+        return calcularProjecaoMesFuturo(usuarioId, ym, caixaBase, mediaDiaria);
     }
 
     /**
@@ -190,20 +207,18 @@ public class SaldoService {
         int total = Math.max(1, mesesParaFrente + 1);
         List<ProjecaoMesCaixa> meses = new ArrayList<>(total);
         YearMonth ym = AppTimeZone.mesAtual();
-        BigDecimal patrimonioCascata = null;
 
         ProjecaoMesCaixa corrente = calcularProjecaoMesCorrente(usuarioId, null);
         meses.add(corrente);
-        patrimonioCascata = corrente.saldoProjetadoFimMes();
+        BigDecimal caixaCascata = corrente.saldoProjetadoFimMes();
 
-        BigDecimal mediaDiaria = corrente.gastoAtual().divide(
-            BigDecimal.valueOf(Math.max(1, corrente.diaAtual())), 2, RoundingMode.HALF_UP);
+        BigDecimal mediaDiaria = mediaDiariaVariavelCorrente(usuarioId);
 
         for (int i = 1; i < total; i++) {
             ym = ym.plusMonths(1);
-            ProjecaoMesCaixa proximo = calcularProjecaoMesFuturo(usuarioId, ym, patrimonioCascata, mediaDiaria);
+            ProjecaoMesCaixa proximo = calcularProjecaoMesFuturo(usuarioId, ym, caixaCascata, mediaDiaria);
             meses.add(proximo);
-            patrimonioCascata = proximo.saldoProjetadoFimMes();
+            caixaCascata = proximo.saldoProjetadoFimMes();
         }
         return new SerieProjecaoSafra(meses);
     }
@@ -212,24 +227,24 @@ public class SaldoService {
     public SerieProjecaoSafraDTO calcularProjecaoSafraDto(Long usuarioId, int mesesParaFrente) {
         SerieProjecaoSafra safra = calcularProjecaoSafra(usuarioId, mesesParaFrente);
         SerieProjecaoSafraDTO dto = new SerieProjecaoSafraDTO();
-        BigDecimal patrimonioAnterior = null;
+        BigDecimal caixaAnterior = null;
         for (ProjecaoMesCaixa p : safra.meses()) {
             ProjecaoMesResumoDTO m = new ProjecaoMesResumoDTO();
             m.setCompetencia(p.competencia().toString());
             m.setRotuloMes(formatarRotuloMes(p.competencia()));
-            m.setPatrimonioInicial(patrimonioAnterior != null ? patrimonioAnterior : p.patrimonioLiquido());
-            m.setPatrimonioLiquido(p.patrimonioLiquido());
+            m.setPatrimonioInicial(caixaAnterior != null ? caixaAnterior : p.saldoEmConta());
+            m.setPatrimonioLiquido(p.saldoEmConta());
             m.setReceitasPrevistas(p.receitasPrevistas());
             m.setReceitasFiscaisPrevistas(p.receitasFiscaisPrevistas());
             m.setDespesasPrevistas(p.despesasPrevistas());
             m.setSaldoProjetadoFimMes(p.saldoProjetadoFimMes());
             dto.getMeses().add(m);
-            patrimonioAnterior = p.saldoProjetadoFimMes();
+            caixaAnterior = p.saldoProjetadoFimMes();
         }
         return dto;
     }
 
-    private ProjecaoMesCaixa calcularProjecaoMesCorrente(Long usuarioId, BigDecimal patrimonioInicialOverride) {
+    private ProjecaoMesCaixa calcularProjecaoMesCorrente(Long usuarioId, BigDecimal saldoInicialOverride) {
         YearMonth ym = AppTimeZone.mesAtual();
         LocalDate hoje = AppTimeZone.hoje();
         LocalDateTime inicio = ym.atDay(1).atStartOfDay();
@@ -241,7 +256,9 @@ public class SaldoService {
 
         BigDecimal gastoAtual = nz(transacaoRepository.sumConfirmadaByUsuarioIdAndTipoAndPeriodo(
             usuarioId, Transacao.TipoTransacao.DESPESA, inicio, fimHoje));
-        BigDecimal mediaDiaria = gastoAtual.divide(BigDecimal.valueOf(diaAtual), 2, RoundingMode.HALF_UP);
+        BigDecimal gastoVariavel = nz(transacaoRepository.sumDespesaVariavelConfirmadaPeriodo(
+            usuarioId, inicio, hoje.plusDays(1).atStartOfDay()));
+        BigDecimal mediaDiaria = gastoVariavel.divide(BigDecimal.valueOf(diaAtual), 2, RoundingMode.HALF_UP);
         BigDecimal gastoProjetado = mediaDiaria.multiply(BigDecimal.valueOf(diasNoMes)).setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal rendaLiquida = rendaConfigService.getRendaMensalEstimada(usuarioId);
@@ -255,42 +272,46 @@ public class SaldoService {
         BigDecimal receitasPrevistas = calcularReceitasPrevistasMes(
             usuarioId, rendaLiquida, receitasSalariaisConfirmadas, diaAtual, diasNoMes, hoje);
 
-        BigDecimal despesasPrevistas;
-        if (ProjecaoMesCaixaSupport.usarModoAntiSusto(diaAtual, forecastProjecaoConfig.getDiaLiminarAntiSusto())) {
-            despesasPrevistas = composicaoProjecaoMesService.comporDespesasPrevistasMes(
-                usuarioId, ym, hoje, mediaDiaria);
-            gastoProjetado = gastoAtual.add(despesasPrevistas).setScale(2, RoundingMode.HALF_UP);
-        } else {
-            despesasPrevistas = gastoProjetado.subtract(gastoAtual).max(BigDecimal.ZERO)
-                .setScale(2, RoundingMode.HALF_UP);
-        }
+        BigDecimal despesasPrevistas = composicaoProjecaoMesService.comporDespesasPrevistasMes(
+            usuarioId, ym, hoje, mediaDiaria);
+        gastoProjetado = gastoAtual.add(despesasPrevistas).setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal receitasFiscaisBrutas = nz(
             planejamentoFiscalService.somarReceitasPrevistasNoMes(usuarioId, ym));
         BigDecimal receitasFiscaisPrevistas = calcularReceitasFiscaisLiquidasNoMes(
             usuarioId, ym, inicio, fimMes, receitasFiscaisBrutas);
 
-        BigDecimal patrimonio = patrimonioInicialOverride != null
-            ? nz(patrimonioInicialOverride)
-            : nz(patrimonioLiquido(usuarioId));
-        BigDecimal saldoProjetado = patrimonio
+        BigDecimal caixa = saldoInicialOverride != null
+            ? nz(saldoInicialOverride)
+            : nz(saldoEmConta(usuarioId));
+        BigDecimal saldoProjetado = caixa
             .add(receitasPrevistas)
             .add(receitasFiscaisPrevistas)
             .subtract(despesasPrevistas)
             .setScale(2, RoundingMode.HALF_UP);
 
         return new ProjecaoMesCaixa(
-            ym, patrimonio, gastoAtual, gastoProjetado, rendaLiquida,
+            ym, caixa, gastoAtual, gastoProjetado, rendaLiquida,
             receitasPrevistas, receitasFiscaisPrevistas, despesasPrevistas,
             saldoProjetado, diaAtual, diasNoMes
         );
     }
 
-    /** M+1, M+2… — patrimônio inicial = saldo cascata; obrigações bottom-up compartilhadas com a Sentinela. */
+    /** Média diária só de gasto variável (sem fatura, empréstimo, parcela de cartão ou débito de fixa). */
+    private BigDecimal mediaDiariaVariavelCorrente(Long usuarioId) {
+        YearMonth ym = AppTimeZone.mesAtual();
+        LocalDate hoje = AppTimeZone.hoje();
+        int diaAtual = Math.max(1, hoje.getDayOfMonth());
+        BigDecimal gastoVariavel = nz(transacaoRepository.sumDespesaVariavelConfirmadaPeriodo(
+            usuarioId, ym.atDay(1).atStartOfDay(), hoje.plusDays(1).atStartOfDay()));
+        return gastoVariavel.divide(BigDecimal.valueOf(diaAtual), 2, RoundingMode.HALF_UP);
+    }
+
+    /** M+1, M+2… — saldo inicial = caixa cascata; obrigações bottom-up compartilhadas com a Sentinela. */
     private ProjecaoMesCaixa calcularProjecaoMesFuturo(
         Long usuarioId,
         YearMonth ym,
-        BigDecimal patrimonioInicial,
+        BigDecimal saldoInicial,
         BigDecimal mediaDiariaReferencia
     ) {
         LocalDateTime inicio = ym.atDay(1).atStartOfDay();
@@ -318,15 +339,15 @@ public class SaldoService {
         BigDecimal receitasFiscaisPrevistas = calcularReceitasFiscaisLiquidasNoMes(
             usuarioId, ym, inicio, fimMes, receitasFiscaisBrutas);
 
-        BigDecimal patrimonio = nz(patrimonioInicial);
-        BigDecimal saldoProjetado = patrimonio
+        BigDecimal caixa = nz(saldoInicial);
+        BigDecimal saldoProjetado = caixa
             .add(receitasPrevistas)
             .add(receitasFiscaisPrevistas)
             .subtract(despesasPrevistas)
             .setScale(2, RoundingMode.HALF_UP);
 
         return new ProjecaoMesCaixa(
-            ym, patrimonio, gastoAtual, gastoProjetado, rendaLiquida,
+            ym, caixa, gastoAtual, gastoProjetado, rendaLiquida,
             receitasPrevistas, receitasFiscaisPrevistas, despesasPrevistas,
             saldoProjetado, 1, diasNoMes
         );
@@ -390,7 +411,7 @@ public class SaldoService {
     }
 
     /**
-     * Receitas fiscais PREVISTO no mês (13º/IR). Confirmadas em conta já compõem {@link #patrimonioLiquido}
+     * Receitas fiscais PREVISTO no mês (13º/IR). Confirmadas em conta já compõem {@link #saldoEmConta}
      * e não entram aqui — a query filtra {@code statusConferencia = PREVISTO}.
      */
     @Transactional(readOnly = true)
@@ -399,7 +420,7 @@ public class SaldoService {
     }
 
     /**
-     * Impacto adicional de uma nova despesa na projeção (evita duplicar o que já está no patrimônio).
+     * Impacto adicional de uma nova despesa na projeção (evita duplicar o que já saiu do saldo em conta).
      * Confirmada em conta sem fatura: já debitada via {@link SaldoMovimentacaoService} → zero.
      * Pendente ou só cartão/fatura: reduz a projeção pelo valor.
      */
